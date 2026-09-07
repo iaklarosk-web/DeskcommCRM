@@ -137,3 +137,6 @@ backups/
 # commit posterior de remoção não tira o blob.
 .qa-backups/
 *.dump
+
+# DIRETRIZ v2 (F00-T05, D08): lista das pastas varridas pelo inventario de env vars — versionada de proposito
+!.envscan-dirs
