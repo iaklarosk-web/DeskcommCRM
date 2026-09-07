@@ -9,7 +9,7 @@
 # Fontes: (a) process.env.NOME em código; (b) chaves do z.object de lib/env.ts (lê process.env inteiro).
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
-DIRS=(app lib workers scripts supabase hooks components proxy.ts instrumentation.ts instrumentation-client.ts next.config.ts sentry.server.config.ts sentry.edge.config.ts)
+DIRS=(app lib src workers scripts supabase hooks components proxy.ts instrumentation.ts instrumentation-client.ts next.config.ts sentry.server.config.ts sentry.edge.config.ts)
 printf '%s\n' "${DIRS[@]}" > .envscan-dirs
 MARK='# ==== inventário por grep (scripts/env-inventory.sh, F00-T05) — gerado, não editar abaixo ===='
 TMP=$(mktemp)
