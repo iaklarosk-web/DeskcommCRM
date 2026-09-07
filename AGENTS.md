@@ -1,5 +1,10 @@
 # AGENTS.md
 
+## 0. Herdado do Deskcomm (ADR-001)
+Stack: Next.js 16 · React 19 · TypeScript 6 · Tailwind 4 · Zod 4 · Vitest 4 · Playwright 1 · Sentry 10 · Supabase · Node ≥22 · pnpm 9.15.9 (só a major). `CLAUDE.md` é a doutrina do código herdado: vale onde não contradiz este arquivo e `docs/DIRETRIZ.md`.
+Rota: Zod → guard (`lib/auth/require-role.ts`) → `organization_id` explícito → `audit()` → `ok()`/`fail()`; snake_case; `_cents`; `lib/logger.ts`, nunca `console.log`; PT-BR; `getUser()`, nunca `getSession()`; token só em header, no banco só hash.
+Schema: `supabase/baseline.sql` é o que o self-host aplica — mudança = migration + apêndice idempotente + MANIFEST; migration aplicada não se edita; função nova em `public` termina com `revoke execute … from public, anon`. `lib/supabase/admin.ts` bypassa RLS. `.env*` não se abre nem se loga. Nunca "Deskcomm" em código de usuário. Nenhum serviço `build:`-only no compose de produção; `pnpm test:shell` é o gate do kit. `gov:verify` não cobre `test:db`/`test:e2e`. Marque CONFIRMADO ou INFERIDO.
+
 ## 1. O que é este projeto
 CRM SaaS multi-tenant com atendimento por WhatsApp e IA, construído sobre o repositório DeskcommCRM (Next.js + Supabase + workers Node). Fase 1 = piloto Deka Sucos em 5 blocos (WhatsApp/Inbox, agente de IA + base de conhecimento, handoff, lembrete de pedido PJ, CRM mínimo). A Deka é o primeiro tenant, nunca o único: `demo2` existe desde a F01 e roda a mesma suíte.
 
@@ -9,7 +14,7 @@ CRM SaaS multi-tenant com atendimento por WhatsApp e IA, construído sobre o rep
 3. Código do Deskcomm: fonte de verdade sobre o ESTADO ATUAL, nunca sobre requisitos.
 4. `BUILD-STATE.md`: estado da construção.
 
-Onde está cada coisa: `docs/decisions/ADR-nnn.md` (único registro de decisão); `docs/migration/deskcomm-audit.md` e `target-state.md` (saída da F00); `docs/tenants/deka.seed.yaml`, `demo2.seed.yaml`; `docs/ai-eval/cases.yaml`; `scripts/verify.sh`, `scripts/create-tenant.sh`; `FINAL-VALIDATION.md` (relatório final único; histórico de fases fica no BUILD-STATE); `.env.example` (gerado por grep no código, com arquivo:linha).
+Onde está cada coisa: `docs/decisions/` (ADR-nnn.md, único registro de decisão); `docs/migration/deskcomm-audit.md` e `target-state.md` (saída da F00); `docs/tenants/deka.seed.yaml`, `demo2.seed.yaml`; docs/ai-eval/cases.yaml (F04); `scripts/verify.sh`, scripts/create-tenant.sh (F01); `FINAL-VALIDATION.md` (relatório final único; histórico de fases fica no BUILD-STATE); `.env.example` (template herdado + bloco gerado por grep com arquivo:linha, ADR-004).
 
 ## 3. Estado e retomada
 Toda sessão começa assim: `git fetch`, `git rev-parse HEAD`, ler `BUILD-STATE.md`. Compare `head_commit` com o HEAD real. Execute o que está em `next_task`. Nada além disso sem fechar a task atual.
@@ -47,10 +52,10 @@ Fase 1 roda com `WHATSAPP_MODE=mock` e `AI_PROVIDER=mock`; o `verify.sh` força 
 ## 6. Quando parar
 Pare e registre BLOCKER quando a task exigir: decisão comercial (preço, plano, nome); custo novo; deploy em produção; envio de mensagem real a pessoa; restore de backup sobre banco em uso ou de produção (restore em banco vazio de staging é seu, D36); uso de dados reais de clientes; contradição de nível (b) da seção 7 (D11).
 Credencial ausente para validação REAL não bloqueia: feche a fase com mock e marque `NOT VALIDATED (real)` no BUILD-STATE (D12).
-Protocolo no Codex Cloud (não existe "perguntar e esperar"; a run termina num diff/PR):
+Protocolo (ambiente: Claude Code na VPS, git nativo — não há "perguntar e esperar" dentro de uma task):
 1. Escreva o BLOCKER no BUILD-STATE: id, tipo (lista acima), o que precisa, desde quando. Mude `status: BLOCKED`.
-2. Commit na branch `blocker/<id>` com `git status --short` colado.
-3. Encerre a task. A próxima run lê o BUILD-STATE e retoma quando o dono fechar o BLOCKER.
+2. Commit na branch da fase com `git status --short` colado.
+3. Encerre a task. A sessão seguinte lê o BUILD-STATE e retoma quando o dono fechar o BLOCKER.
 
 ## 7. Contradições
 (a) Resolvível pela hierarquia da seção 2: decida, registre ADR, siga.
@@ -68,4 +73,14 @@ Fase pronta: `./scripts/verify.sh` sai 0 nos dois tenants e o bloco VERIFY SUMMA
 
 ## 10. Formato de commit e de ADR
 Commit: título `Fnn-Tmm: <verbo no presente> <objeto>`; corpo com três linhas: o que mudou; prova (comando + contagem/denominador); o que não foi verificado.
-ADR em `docs/decisions/ADR-nnn.md` com seis campos: contexto; decisão; alternativas rejeitadas; consequências; data; commit. ADR-001 = o que foi mantido do AGENTS.md e docs/current-state.md do Deskcomm. ADR-002 = dimensão do embedding. ADR-003 = mapa de roles do Deskcomm para `platform_admin`, `tenant_admin`, `attendant`.
+ADR em `docs/decisions/` com seis campos: contexto; decisão; alternativas rejeitadas; consequências; data; commit. ADR-001 = o que foi mantido do AGENTS.md e docs/current-state.md do Deskcomm. ADR-002 = dimensão do embedding. ADR-003 = mapa de roles do Deskcomm para `platform_admin`, `tenant_admin`, `attendant`.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
