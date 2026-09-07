@@ -195,6 +195,12 @@ beforeAll(() => {
             values (v_org, 'mock', 'rls-inv-' || v_org::text);
         end if;
 
+        -- tenant_settings (migration 0221): a configuracao por tenant (§5.2).
+        if not exists (select 1 from public.tenant_settings where organization_id = v_org) then
+          insert into public.tenant_settings (organization_id, key, value)
+            values (v_org, 'branding.name', '"RLS Invariant"'::jsonb);
+        end if;
+
         if not exists (select 1 from public.catalog_products where organization_id = v_org) then
           insert into public.catalog_products
             (organization_id, codigo, nome, preco_cents)
@@ -278,6 +284,11 @@ export const TABLES = [
   // policy nenhuma de propósito — só service role grava, e o controle disso é
   // o grant (revoke de authenticated + grant select), não predicado.
   "channel_accounts",
+  // migration 0221 — a configuração por tenant (§5.2). A leitura é org-scoped
+  // sem gate de papel (a UI de configuração lê pelo membro); a ESCRITA não tem
+  // policy de propósito — só setSetting (service role) grava, e o controle é
+  // o grant, não predicado.
+  "tenant_settings",
   // ⚠️ `webhook_lead_captures` (migration 0174) NÃO entra nesta lista, e a
   // ausência é deliberada: a policy dela exige `manager`, e o usuário semeado
   // aqui é `agent` — o controle positivo falharia por ACERTO, e a "correção"
