@@ -18487,3 +18487,83 @@ alter table public.webhook_quarantine enable row level security;
 revoke all on public.webhook_quarantine from anon;
 revoke all on public.webhook_quarantine from authenticated;
 grant all on public.webhook_quarantine to service_role;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Apêndice 0220 — fundação de RLS (F01-T03). Par idempotente da migration
+-- 20260907170000_0220 (D08). Mesmo SQL; comentários de intenção na migration.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+create or replace function public.current_organization_id() returns uuid
+language plpgsql stable as $$
+declare
+  v text;
+begin
+  v := nullif(current_setting('app.organization_id', true), '');
+  if v is not null then
+    return v::uuid;
+  end if;
+  -- Fora do Supabase (Postgres efêmero das provas) auth.jwt() não existe;
+  -- resolução em runtime + guarda tornam a função utilizável nos dois mundos.
+  begin
+    v := nullif(auth.jwt() ->> 'organization_id', '');
+  exception
+    when undefined_function then v := null;
+  end;
+  return v::uuid;
+end
+$$;
+
+comment on function public.current_organization_id() is
+  'Tenant corrente para policies novas (§5.15): GUC app.organization_id (posto por withTenant, §5.1) ou claim organization_id do JWT. NULL = sem tenant — policy que usa esta função nega por comparação com NULL.';
+
+revoke execute on function public.current_organization_id() from public;
+revoke execute on function public.current_organization_id() from anon;
+grant execute on function public.current_organization_id() to authenticated;
+grant execute on function public.current_organization_id() to service_role;
+
+-- G-54: revoga anon de toda tabela de tenant, dinamicamente.
+do $$
+declare
+  t record;
+begin
+  for t in
+    select g.table_name
+      from information_schema.role_table_grants g
+     where g.grantee = 'anon'
+       and g.table_schema = 'public'
+       and exists (select 1 from pg_tables pt
+                    where pt.schemaname = 'public' and pt.tablename = g.table_name)
+       and exists (select 1 from information_schema.columns c
+                    where c.table_schema = 'public'
+                      and c.table_name = g.table_name
+                      and c.column_name = 'organization_id')
+     group by g.table_name
+  loop
+    execute format('revoke all on table public.%I from anon', t.table_name);
+  end loop;
+end
+$$;
+
+-- Verificação (G-24): a migration termina lendo o que afirmou.
+do $$
+declare
+  restantes int;
+begin
+  select count(distinct g.table_name) into restantes
+    from information_schema.role_table_grants g
+   where g.grantee = 'anon'
+     and g.table_schema = 'public'
+     and exists (select 1 from pg_tables pt
+                  where pt.schemaname = 'public' and pt.tablename = g.table_name)
+     and exists (select 1 from information_schema.columns c
+                  where c.table_schema = 'public'
+                    and c.table_name = g.table_name
+                    and c.column_name = 'organization_id');
+  if restantes <> 0 then
+    raise exception 'G-54 não cumprido: % tabela(s) de tenant ainda com grant a anon', restantes;
+  end if;
+  if to_regprocedure('public.current_organization_id()') is null then
+    raise exception 'current_organization_id() não existe após a migration';
+  end if;
+end
+$$;

@@ -1,0 +1,16 @@
+# Allowlist de tabelas GLOBAIS (§5.15): podem existir sem organization_id.
+# Fonte da prova rls-coverage (tests/invariants/rls-coverage.test.ts) — uma por
+# linha; comentário começa com #. Tabela nova sem organization_id que não entrar
+# aqui REPROVA a varredura; entrar aqui é afirmar "esta tabela é da plataforma,
+# não de um tenant" — afirmação que o revisor do commit está assinando.
+ai_models
+ai_pricing
+organizations
+platform_admins
+platform_branding
+platform_google_oauth
+system_update_runs
+system_version
+user_recovery_codes
+watchdog_cursors
+webhook_quarantine
