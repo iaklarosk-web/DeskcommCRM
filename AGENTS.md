@@ -1,9 +1,9 @@
 # AGENTS.md
 
-## 0. Herdado do Deskcomm (ADR-001)
-Stack: Next.js 16 · React 19 · TypeScript 6 · Tailwind 4 · Zod 4 · Vitest 4 · Playwright 1 · Sentry 10 · Supabase · Node ≥22 · pnpm 9.15.9 (só a major). `CLAUDE.md` é a doutrina do código herdado: vale onde não contradiz este arquivo e `docs/DIRETRIZ.md`.
+## 0. Herdado (ADR-001)
+Stack: Next.js 16 · React 19 · TypeScript 6 · Tailwind 4 · Zod 4 · Vitest 4 · Playwright 1 · Sentry 10 · Node ≥22 · pnpm 9.15.9. `CLAUDE.md` é a doutrina do código herdado: vale onde não contradiz este arquivo e `docs/DIRETRIZ.md`.
 Rota: Zod → guard (`lib/auth/require-role.ts`) → `organization_id` explícito → `audit()` → `ok()`/`fail()`; snake_case; `_cents`; `lib/logger.ts`, nunca `console.log`; PT-BR; `getUser()`, nunca `getSession()`; token só em header, no banco só hash.
-Schema: `supabase/baseline.sql` é o que o self-host aplica — mudança = migration + apêndice idempotente + MANIFEST; migration aplicada não se edita; função nova em `public` termina com `revoke execute … from public, anon`. `lib/supabase/admin.ts` bypassa RLS. `.env*` não se abre nem se loga. Nunca "Deskcomm" em código de usuário. Nenhum serviço `build:`-only no compose de produção; `pnpm test:shell` é o gate do kit. `gov:verify` não cobre `test:db`/`test:e2e`. Marque CONFIRMADO ou INFERIDO.
+Schema: `supabase/baseline.sql` é o que o self-host aplica — mudança = migration + apêndice idempotente + MANIFEST; migration aplicada não se edita; função nova em `public` leva `revoke execute … from public, anon`. `.env*` não se abre nem se loga. Nunca "Deskcomm" em código de usuário. Nenhum serviço `build:`-only no compose de produção (`pnpm test:shell`).
 
 ## 1. O que é este projeto
 CRM SaaS multi-tenant com atendimento por WhatsApp e IA, construído sobre o repositório DeskcommCRM (Next.js + Supabase + workers Node). Fase 1 = piloto Deka Sucos em 5 blocos (WhatsApp/Inbox, agente de IA + base de conhecimento, handoff, lembrete de pedido PJ, CRM mínimo). A Deka é o primeiro tenant, nunca o único: `demo2` existe desde a F01 e roda a mesma suíte.
@@ -14,7 +14,7 @@ CRM SaaS multi-tenant com atendimento por WhatsApp e IA, construído sobre o rep
 3. Código do Deskcomm: fonte de verdade sobre o ESTADO ATUAL, nunca sobre requisitos.
 4. `BUILD-STATE.md`: estado da construção.
 
-Onde está cada coisa: `docs/decisions/` (ADR-nnn.md, único registro de decisão); `docs/migration/deskcomm-audit.md` e `target-state.md` (saída da F00); `docs/tenants/deka.seed.yaml`, `demo2.seed.yaml`; docs/ai-eval/cases.yaml (F04); `scripts/verify.sh`, scripts/create-tenant.sh (F01); `FINAL-VALIDATION.md` (relatório final único; histórico de fases fica no BUILD-STATE); `.env.example` (template herdado + bloco gerado por grep com arquivo:linha, ADR-004).
+Onde está cada coisa: `docs/decisions/` (ADR-nnn.md, único registro de decisão); `docs/migration/deskcomm-audit.md` e `target-state.md` (saída da F00); `docs/tenants/deka.seed.yaml`, `demo2.seed.yaml`; docs/ai-eval/cases.yaml (F04); `scripts/verify.sh`, scripts/create-tenant.sh (F01); `FINAL-VALIDATION.md` (relatório final único; histórico de fases fica no BUILD-STATE); `.env.example` (ADR-004).
 
 ## 3. Estado e retomada
 Toda sessão começa assim: `git fetch`, `git rev-parse HEAD`, ler `BUILD-STATE.md`. Compare `head_commit` com o HEAD real. Execute o que está em `next_task`. Nada além disso sem fechar a task atual.
