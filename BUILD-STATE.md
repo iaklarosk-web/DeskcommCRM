@@ -1,9 +1,9 @@
 ---
-updated_at: 2026-09-07T18:10:00Z
-head_commit: 1f68e801   # F01-T09; o commit da T10 é o seguinte a este
+updated_at: 2026-09-07T18:50:00Z
+head_commit: 6f7c56fc   # F01-T11; o commit do fechamento da F01 é o seguinte a este
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
-current_phase: F01
-next_task: F01-T11
+current_phase: F02
+next_task: F02-T01
 status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
@@ -12,18 +12,19 @@ build_env: "Claude Code na VPS (srv1958191), git nativo, tmux; Supabase local vi
 verify_summary_last: |
   VERIFY SUMMARY
   build=ok lint=ok typecheck=ok
-  unit=7502/7503 integration=pending db=1236/1238 e2e=pending baseline_n0=8997
-  isolation: tables=pending ops=4 dirs=2 leaks=pending
-  rbac: roles=3 denied_expected=pending denied_actual=pending
-  entitlement: usage_events_written=pending
+  unit=7536/7537 integration=6/6 db=1264/1266 e2e=pending baseline_n0=8997
+  isolation: tables=110 ops=4 dirs=2 leaks=0 (material_cross_org=86/110)
+  rls-coverage: tables_with_org_id=110 policies_found=106 missing=0 service_only_with_grant=0
+  rbac: roles=3 denied_expected=17 denied_actual=17
+  entitlement: usage_events_written=2
   ai_eval: cases=pending pass=pending unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=pending
   handoff: ai_msgs_after_handoff=pending summary=pending assignee=pending notify=pending
   reminder: runs=pending sent=pending duplicates=pending
   webhook: replay=pending stored=pending tables_checked=pending
   replicability: e2e[deka]=pending e2e[demo2]=pending src_diff_lines=pending grep_deka_in_src=0
-  secrets: files_scanned=pending findings=pending
-  tests_deleted=0 tests_skipped=15 mutants_killed=pending
-  STATUS: READY (F00)
+  secrets: files_scanned=337 findings=0
+  tests_deleted=0 tests_skipped=15 mutants_killed=1/1
+  STATUS: READY (F01)
 ---
 
 # BUILD-STATE
@@ -32,7 +33,7 @@ verify_summary_last: |
 | Fase | Nome | Estado: `pending` / `in_progress` / `done(verify=<data> <sha>)` |
 |---|---|---|
 | F00 | Auditoria do Deskcomm, verify.sh, ADR-001..003, baseline N0 | done(verify=2026-09-07 2a23537e) |
-| F01 | Fundação: TenantContext, TenantConfiguration, Entitlement mínimo, seeds deka + demo2, create-tenant.sh | pending |
+| F01 | Fundação: TenantContext, TenantConfiguration, Entitlement mínimo, seeds deka + demo2, create-tenant.sh | done(verify=2026-09-07 6f7c56fc) |
 | F02 | CRM mínimo (customers, companies, products, orders, interactions, tasks, notes) | pending |
 | F03 | WhatsApp in/out via ChannelAdapter WAHA + Inbox + estados da conversa | pending |
 | F04 | Agente de IA + base de conhecimento + Action Policy + 9 tools | pending |
@@ -49,7 +50,8 @@ verify_summary_last: |
 | IA + RAG | REFAZER (agente) / ADAPTAR (RAG) | `lib/agent-engine/agent/inbound-turn.ts` (3.391 linhas), `workers/ai-response-worker.ts:75`, `lib/ai/embeddings/chave.ts:58-59`, `supabase/baseline.sql:1058` (`vector(1536)`) @ c85f7d7 | `tests/invariants/rag-acervo-da-organizacao.test.ts` e unitários de `lib/agent-engine` | dois stacks de IA; ADR-002 provisório; F04 |
 | CRM (clientes, produtos, pedidos) | ADAPTAR | `supabase/baseline.sql:1324` (`contacts`), `:1696-1717` (`orders` morta, e-commerce), migrations 0204 (`catalog_products`), 0210 (`crm_tasks`) @ c85f7d7 | invariantes de RLS/escopo (9, em db) | herdado; `orders` refeita e Nuvemshop removida na F02 |
 | Workers / filas, CI / scripts | ADAPTAR | `supabase/baseline.sql:1522-1539` (`event_log`), `:6473` (`job_queue`), `docker/scheduler/entrypoint.sh:59-85` (21 crons) @ c85f7d7; CI: `verify`, `invariants`, `build-and-size`, `e2e`, `imagens-ok` | `tests/unit/cron-routes-scheduled.test.ts` | duas filas; ADR na F03; scripts reais: `typecheck lint test:unit test:db test:e2e build` (não existe `test:integration` — F03 cria) |
-| TenantContext, TenantConfiguration, Entitlement, Action Policy, Handoff, Lembrete PJ, Notificações | CRIAR (Action Policy, Lembrete, Notificações) / ADAPTAR (TenantContext sobre `lib/supabase/admin.ts`, TenantConfiguration sobre `organizations.settings`, Entitlement sobre `llm_calls`+`ai_budgets`) / REFAZER (Handoff) | ver `docs/migration/target-state.md` | — | F01–F05 |
+| TenantContext, TenantConfiguration, Entitlement | CONSTRUÍDOS (F01) | `src/tenant-context/` (fromSession/fromJob/fromWebhook/forEachEligibleTenant/withTenant + GUC), `src/tenant-config/` (schema 24 chaves, validateSeed TODO-), `src/entitlement/` (6 capabilities, ai_usage_events deny-all), `src/rbac/matrix.ts` (D15) | unit 8+9+6+8; integration 6/6; migrations 0219–0222 `aplicada` (dev) | feito; F03 pluga webhook/rotas |
+| Action Policy, Handoff, Lembrete PJ, Notificações | CRIAR/REFAZER | ver `docs/migration/target-state.md` | — | F03–F05 |
 | Migrations | — | 201 arquivos em `supabase/migrations/` (cadeia não sobe do zero); `supabase/baseline.sql` aplicado no banco de dev em 2026-09-07 = **`aplicada`** (117 tabelas, 162 policies, extensão `vector` presente); `verificada` só após F01-T03/T04 | — | baseline `aplicada` |
 Regra: `a_auditar` não existe mais (F00 fechou a classificação). Contagem da matriz: `reutilizar=6 adaptar=13 refazer=2 criar=3 remover=1` (25 linhas).
 
@@ -101,6 +103,7 @@ Tipos: `credential_real`, `commercial`, `cost`, `production`, `real_message`, `r
 | Fase | Data | Commit | VERIFY SUMMARY resumido |
 |---|---|---|---|
 | F00 | 2026-09-07 | 2a23537e | build/lint/typecheck ok; unit=7502/7503 db=1236/1238 N0=8997 (e2e do N0: 259/290, 11 falhas de ambiente); STATUS READY (F00) |
+| F01 | 2026-09-07 | 6f7c56fc | T01–T11 completas; unit=7536/7537 integration=6/6 db=1264/1266; isolation tables=110 leaks=0; rbac 17/17; secrets 337/0; mutants 1/1; STATUS READY (F01) |
 
 ## Regra de atualização
 Migrations aparecem na tabela de módulos com um de três estados: `escrita`, `aplicada`, `verificada` (G-24). Ao fechar uma task: só `next_task`, `head_commit`, `updated_at`; a prova da task fica no corpo do commit (D37). Ao fechar uma fase: cabeçalho inteiro, linha da fase, linhas de módulos tocados, `verify_summary_last`, uma linha no histórico. Ao abrir ou fechar BLOCKER: tabela de BLOCKERS e `status`. Nunca a cada linha de código.
