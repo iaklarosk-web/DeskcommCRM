@@ -3,13 +3,16 @@
  * de o seed inteiro passar. Recebe o OBJETO já parseado do YAML (quem parseia
  * é o chamador; este módulo não escolhe parser).
  *
- * A regra do placeholder (invariante 3): o valor `TODO-DEKA` — inclusive a
- * forma anotada `TODO-DEKA (perguntado em <data>, não sabe)` — é sentinela de
- * pendência: a chave é ACEITA, a checagem de tipo é pulada e a ocorrência
- * conta em `seed_todos`. Sem isso o deka.seed.yaml de partida (que a §5.21
- * manda existir com placeholders) seria rejeitado por tipo e o create-tenant
- * não criaria os dois tenants da F01-T06. Qualquer outro valor é validado
- * normalmente.
+ * A regra do placeholder (invariante 3 da §5.2): valor com o prefixo `TODO-`
+ * — a forma que a §5.21 fixa para o seed de partida, inclusive a anotada
+ * `TODO-<tenant> (perguntado em <data>, não sabe)` — é sentinela de pendência:
+ * a chave é ACEITA, a checagem de tipo é pulada e a ocorrência conta em
+ * `seed_todos`. Sem isso o seed de partida (que a §5.21 manda existir com
+ * placeholders) seria rejeitado por tipo e o create-tenant não criaria os dois
+ * tenants da F01-T06. O prefixo é genérico DE PROPÓSITO (D06: nenhum nome de
+ * cliente em src/ — o DoD da T06 mede `grep -ril <tenant> src/` = 0); o valor
+ * literal nos seeds continua o que a DIRETRIZ fixa. Qualquer outro valor é
+ * validado normalmente.
  */
 import { incrementCounter } from "@/src/obs/counters";
 
@@ -18,12 +21,12 @@ import { validar } from "./validators";
 
 export interface ResultadoDoSeed {
   errors: string[];
-  /** Ocorrências de TODO-DEKA aceitas como pendência. */
+  /** Ocorrências de sentinela TODO- aceitas como pendência. */
   seed_todos: number;
 }
 
 function eTodoPendente(v: unknown): boolean {
-  return typeof v === "string" && v.startsWith("TODO-DEKA");
+  return typeof v === "string" && v.startsWith("TODO-");
 }
 
 /** Conta sentinelas dentro de um valor-objeto (ex.: campos do reminder). */
