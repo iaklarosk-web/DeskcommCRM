@@ -204,6 +204,16 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "da organização viraram venda, e quem o lê é o servidor com o admin client " +
       "filtrando organization_id à mão (a tela `/app/settings/conversoes`).",
   },
+  // ─── migration 0222 (F01-T08) — mesma postura deny-all das três acima ───
+  {
+    tabela: "ai_usage_events",
+    razao:
+      "tests/invariants/uso-de-ia-e-server-side.test.ts — privilégio NENHUM " +
+      "para anon e authenticated, `permission denied` medido sob `set role`, " +
+      "RLS ligada, zero policies. É o livro-razão de custo de IA de todos os " +
+      "tenants; só `recordUsage` (service role, via withTenant) escreve, e a " +
+      "leitura do tenant chega por agregação server-side na Fase 2.",
+  },
 ];
 
 /**
