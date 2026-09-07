@@ -1,0 +1,234 @@
+# deka.seed.yaml — seed do tenant `deka` (distribuidora de sucos e polpas).
+#
+# O QUE É: a forma completa do seed exigida pela DIRETRIZ-v2 §5.21, com
+# placeholders `TODO-DEKA` onde ainda não existe dado. É assim que a §5.21
+# manda o arquivo viver no repositório até a coleta: "o repositório carrega um
+# `deka.seed.yaml` com placeholders marcados `TODO-DEKA` e o `verify.sh` conta
+# `seed_todos=N` (a Fase 1 pode fechar com N > 0; o piloto não)".
+#
+# QUEM PREENCHE: o proprietário, junto com o dono da Deka. Não o agente, não a IA.
+#
+# EM QUAL ETAPA: Etapa 7 de 12 da seção 11 da DIRETRIZ (conversa de 20 minutos),
+# usando `docs/deka/ROTEIRO-DEKA.md`. Os itens 13 a 21 do roteiro alimentam este
+# arquivo; os itens 1 a 6 e o 24 alimentam a meta D27, que vai para o BUILD-STATE
+# pela folha `docs/deka/META-PILOTO-D27.md`.
+#
+# O QUE `TODO-DEKA` SIGNIFICA: "fato da empresa, ainda não coletado". Nunca troque
+# um `TODO-DEKA` por um valor plausível: valor inventado aqui vira regra de negócio
+# errada em produção, com cara de dado confirmado. Se o dono não souber a resposta,
+# escreva `TODO-DEKA (perguntado em <data>, não sabe)` — continua contando como
+# pendência, que é o comportamento certo.
+#
+# DADO REAL DE CLIENTE DA DEKA NÃO ENTRA NESTE REPOSITÓRIO (D11). Nome, telefone,
+# empresa e endereço de cliente são carregados fora do repo, direto no banco do
+# tenant. Por isso o bloco `customers:` fica vazio aqui, de propósito.
+#
+# ISTO É CONFIGURAÇÃO, NÃO CÓDIGO (D06): nenhuma regra da Deka mora em `src/`
+# (`grep -ril deka src/` = 0). O que a Deka tem de particular está neste arquivo.
+#
+# CONTAGEM (`seed_todos` do verify.sh): cada `TODO-DEKA` está numa linha própria.
+# Use o comando que ignora este cabeçalho, senão as menções explicativas dele
+# entram na conta:
+#     grep "TODO-DEKA" docs/tenants/deka.seed.yaml | grep -vc "^#"
+# Em 03/09/2026 o comando acima conta 59 pendencias reais; `grep -c "TODO-DEKA"` sozinho
+# conta 68, porque soma as 9 mencoes em linha de comentario iniciada por #.
+#
+# DIVERGÊNCIAS DE SCHEMA (estado em 03/09/2026):
+#   RESOLVIDAS na DIRETRIZ (achado B-07 da revisão de 03/09/2026): §5.21 passou a
+#   pedir os seis campos de §5.2 sem apelido — `enabled`, `weekday`, `hour` (int
+#   0-23), `cutoff_hours`, `message_template`, `period`. Este arquivo já segue a
+#   forma corrigida; `text` e `hour` como string não existem mais.
+#   ABERTA: `branding` — §5.21 pede {logo_url, color}; §5.2 chama de
+#   `primary_color` e acrescenta `name`. Achado C-14, ainda não consertado.
+
+tenant:
+  slug: deka
+  name: TODO-DEKA            # razão social ou nome de fantasia que a IA usa ao se apresentar
+# `timezone` e a marca saíram daqui: vivem em `settings.business.timezone` e
+# `settings.branding` (§5.2), como a §5.21 corrigida em 03/09/2026 exige.
+
+# Etapa 7 / roteiro item 19: quem recebe o que a IA não resolve, e o substituto
+# quando essa pessoa falta. Sem nome aqui a conversa fica em `waiting_human` sem dono.
+users:
+  - email: TODO-DEKA
+    name: TODO-DEKA
+    role: tenant_admin
+  - email: TODO-DEKA
+    name: TODO-DEKA
+    role: attendant
+
+# Etapa 6 (número de WhatsApp) e roteiro item 22 (aceite do risco de ban).
+# `provider: mock` até existir número dedicado; vira `waha` só depois do aceite
+# escrito (D04). O `test_number` abaixo é fictício e nunca foi discado: serve
+# apenas para o seed parsear em dev.
+channel_accounts:
+  - provider: mock
+    account_ref: deka-mock
+    test_number: "+5500000000001"   # FICTÍCIO. O número real da Deka nunca entra no repo.
+
+# Etapa 7 / roteiro item 13: suco de laranja por embalagem (300 ml, 500 ml, 1 L…),
+# polpas por sabor e tamanho, e se o preço PJ difere do balcão.
+# As três entradas abaixo são a FORMA, não o catálogo: apague-as e escreva uma
+# entrada por item que a Deka citou. Confirmação da Etapa 7:
+# `grep -c "^  - name:" docs/tenants/deka.seed.yaml` = número de produtos citados.
+products:
+  - name: TODO-DEKA
+    sku: TODO-DEKA
+    size: TODO-DEKA
+    unit: TODO-DEKA
+    price_cents: TODO-DEKA
+    active: true
+  - name: TODO-DEKA
+    sku: TODO-DEKA
+    size: TODO-DEKA
+    unit: TODO-DEKA
+    price_cents: TODO-DEKA
+    active: true
+  - name: TODO-DEKA
+    sku: TODO-DEKA
+    size: TODO-DEKA
+    unit: TODO-DEKA
+    price_cents: TODO-DEKA
+    active: true
+
+# VAZIO DE PROPÓSITO (D11). Cliente da Deka é dado real de terceiro: nome,
+# telefone e empresa são carregados fora do repositório, direto no banco do
+# tenant, depois do aceite. O bloco existe para que o schema esteja completo.
+# `customers` é opcional em §5.21; fictícios só no `demo2`.
+customers: []
+
+settings:
+  branding:
+    name: TODO-DEKA                  # nome exibido; costuma ser igual a tenant.name
+    logo_url: TODO-DEKA              # arquivo enviado pelo dono; vazio ("") é aceito até lá
+    primary_color: TODO-DEKA         # hex, ex. "#1F7A3F"
+
+  business:
+    timezone: America/Sao_Paulo      # fuso do tenant; define a hora do lembrete PJ
+    phone: TODO-DEKA                 # E.164 do WhatsApp da empresa
+    address: TODO-DEKA               # endereço da fábrica/expedição
+    hours: TODO-DEKA                 # roteiro item 17
+    delivery_days: TODO-DEKA         # roteiro item 15; lista de int 0–6
+    delivery_regions: TODO-DEKA      # roteiro item 15; lista de strings
+    cancellation_policy: TODO-DEKA   # roteiro item 16; na Fase 1 cancelar é sempre handoff (§3.2)
+
+  # OBRIGATÓRIA (§5.21). É a regra D23: o lembrete recorrente PJ.
+  # Roteiro item 3 (horário de corte — o dado mais importante da conversa),
+  # item 9 (a frase que o vendedor já manda hoje; peça a frase EXATA) e
+  # item 10 (o que acontece com quem responde depois do corte).
+  # Mudar isto depois é 0 linha de código e 1 Setting (§5.2).
+  orders.recurring_reminder:
+    enabled: true             # liga o Job 5.12; false deixa o lembrete PJ morto sem avisar
+    weekday: TODO-DEKA        # int 0-6, dia do disparo no fuso de business.timezone
+    hour: TODO-DEKA           # int 0-23, hora do disparo
+    cutoff_hours: TODO-DEKA   # horas sem resposta até virar tarefa para o atendente
+    period: weekly            # Fase 1 só tem `weekly`; é a chave de idempotência (ISO week)
+    message_template: TODO-DEKA  # frase literal do vendedor, com {{customer.name}} e {{last_order.summary}}
+
+  handoff:
+    assignment: queue         # Fase 1 só tem `queue` (§5.2); `round_robin` é Fase 2
+    queue_roles: ["attendant"]
+
+  # OBRIGATÓRIA (§5.21): ai.system_prompt.
+  # O texto abaixo é ESQUELETO. A estrutura (o que a IA pode e não pode fazer) é
+  # do sistema e vale para qualquer tenant; os buracos marcados são fatos da
+  # Deka e só o dono preenche. Não escreva aqui nenhuma política que não tenha
+  # saído da boca dele.
+  ai:
+    enabled: true
+    confidence_threshold: 0.6
+    unknown_answer: "Não tenho essa informação aqui. Vou chamar alguém da equipe para te responder."
+    system_prompt: |
+      Você atende pelo WhatsApp da empresa
+        TODO-DEKA
+      que é uma distribuidora de sucos e polpas.
+
+      Tom e forma:
+      - Responda em português do Brasil, frases curtas, sem emoji.
+      - Trate o cliente como a empresa trata; se não souber o tratamento, use "você".
+      - Nunca prometa prazo, preço ou disponibilidade que não esteja no catálogo
+        ou nas perguntas frequentes deste tenant.
+
+      O que a empresa faz e não faz (preencher):
+        TODO-DEKA
+
+      Horário de atendimento e o que responder fora dele (roteiro item 17):
+        TODO-DEKA
+
+      Pedido: o cliente fixo normalmente muda só a quantidade (roteiro item 7).
+      Quando ele mandar quantidade, registre pela ferramenta de pedido; não confirme
+      pedido "de cabeça" e não invente item que não está no catálogo.
+
+      Horário de corte — depois dele o pedido não entra na produção do dia:
+        TODO-DEKA
+      O que fazer com quem responde depois do corte (roteiro item 10):
+        TODO-DEKA
+
+      Pedido mínimo, múltiplos e caixa fechada (roteiro item 14):
+        TODO-DEKA
+
+      Formas de pagamento e prazo para PJ (roteiro item 18):
+        TODO-DEKA
+
+      Cancelamento e alteração: na Fase 1 você NUNCA cancela sozinho — cancelar é
+      sempre handoff para uma pessoa. A política que você pode citar é:
+        TODO-DEKA
+
+      Quando escalar para uma pessoa:
+      - Cancelamento, reclamação, cobrança, negociação de preço ou desconto.
+      - Qualquer pergunta cuja resposta não esteja nas perguntas frequentes deste
+        tenant: responda com a mensagem de "não sei" e, na segunda vez, escale.
+      - Qualquer pedido de exceção à regra de corte ou de entrega.
+
+      Nunca invente: preço, prazo, estoque, endereço, nome de funcionário.
+      Se faltar informação, diga que vai chamar alguém — isso é resposta correta.
+
+  actions:
+    confirm_from_risk: medium
+
+  conversation:
+    auto_resolve_hours: 48
+
+# Roteiro item 21: as 10 a 20 perguntas que os clientes mais fazem, com a resposta
+# que o dono dá hoje. As PERGUNTAS abaixo são estrutura: são as que qualquer
+# operação de distribuição recebe, e servem para guiar a conversa. As RESPOSTAS
+# são fato da empresa e ficam `TODO-DEKA` até ele falar — resposta inventada aqui
+# é a IA mentindo com a voz da Deka.
+# §5.21 exige ≥10 no `deka`; a Etapa 7 pede 20. Acrescente as que ele citar.
+faq:
+  - q: "Qual o horário de atendimento de vocês?"
+    a: TODO-DEKA
+  - q: "Até que dia e hora eu posso mandar o pedido para receber esta semana?"
+    a: TODO-DEKA
+  - q: "Em que dias vocês entregam?"
+    a: TODO-DEKA
+  - q: "Vocês entregam na minha região?"
+    a: TODO-DEKA
+  - q: "Tem horário certo para a entrega chegar?"
+    a: TODO-DEKA
+  - q: "Qual o prazo entre eu fechar o pedido e receber?"
+    a: TODO-DEKA
+  - q: "Tem pedido mínimo? Precisa comprar caixa fechada?"
+    a: TODO-DEKA
+  - q: "Quais formas de pagamento vocês aceitam?"
+    a: TODO-DEKA
+  - q: "Para empresa vocês vendem a prazo? Em quantos dias?"
+    a: TODO-DEKA
+  - q: "O preço para empresa é diferente do preço de balcão?"
+    a: TODO-DEKA
+  - q: "Quais sabores de polpa vocês têm?"
+    a: TODO-DEKA
+  - q: "Em quais tamanhos o suco vem?"
+    a: TODO-DEKA
+  - q: "Tem esse produto disponível hoje?"
+    a: TODO-DEKA
+  - q: "Qual a validade e como eu tenho que guardar o produto?"
+    a: TODO-DEKA
+  - q: "Posso alterar a quantidade depois de ter mandado o pedido?"
+    a: TODO-DEKA
+  - q: "Como faço para cancelar um pedido?"
+    a: TODO-DEKA
+  - q: "Veio produto errado ou faltando na entrega. Como resolve?"
+    a: TODO-DEKA
+  - q: "Vocês emitem nota fiscal?"
+    a: TODO-DEKA
