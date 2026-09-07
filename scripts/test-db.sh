@@ -77,7 +77,12 @@ TEMPLATE="inv_baseline"
 # Esta forma é idêntica nos dois: caminho completo, seis X, sem depender de como
 # cada `mktemp` interpreta `-t`.
 CARIMBO="$(mktemp "${TMPDIR:-/tmp}/deskcomm-test-db-carimbo.XXXXXX")"
-MEDIDOS=("$BASELINE" "$ROOT/tests/invariants" "$ROOT/scripts/test-db.sh" "$ROOT/vitest.db.config.ts")
+# Parametrização (F01-T02): scripts/test-integration.sh reusa ESTA máquina toda
+# (container efêmero, molde, banco por arquivo, detector de árvore viva) trocando
+# só a suíte e a config. Sem os envs, o comportamento é o test:db de sempre.
+SUITE_DIR="${TEST_DB_SUITE_DIR:-$ROOT/tests/invariants}"
+VITEST_CONFIG="${TEST_DB_VITEST_CONFIG:-vitest.db.config.ts}"
+MEDIDOS=("$BASELINE" "$SUITE_DIR" "$ROOT/scripts/test-db.sh" "$ROOT/$VITEST_CONFIG")
 
 arvore_mexeu() {
   find "${MEDIDOS[@]}" -type f -newer "$CARIMBO" 2>/dev/null | head -20
@@ -353,12 +358,12 @@ drop database if exists postgres with (force);
 create database postgres template $TEMPLATE;
 SQL
 
-echo "==> invariantes: vitest (tests/invariants) — banco novo por ARQUIVO, ordem sorteada"
+echo "==> suíte: vitest ($SUITE_DIR via $VITEST_CONFIG) — banco novo por ARQUIVO, ordem sorteada"
 # `--sequence.shuffle.files`: com o isolamento por arquivo a ordem deixa de ser
 # variável escondida, e sortear é o que impede a próxima colisão de fixture de
 # ficar dormente até alguém renomear um arquivo.
 TEST_DB_CONTAINER="$CONTAINER" TEST_DB_TEMPLATE="$TEMPLATE" TEST_DB_PORT="$PORT" \
-  vitest run --config vitest.db.config.ts --sequence.shuffle.files=true "$@"
+  vitest run --config "$VITEST_CONFIG" --sequence.shuffle.files=true "$@"
 
 # A RECUSA. Vem depois do vitest e ANTES da palavra "verde", porque o que se
 # recusa aqui é o próprio resultado — inclusive um resultado que passou.

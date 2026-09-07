@@ -29,6 +29,10 @@ export default defineConfig({
       ".claude/**",
       "tests/e2e/**",
       "tests/invariants/**",
+      // tests/integration/** roda no runner próprio (pnpm test:integration,
+      // F01-T02): precisa do Postgres efêmero com baseline; no vitest unitário
+      // cairia com ECONNREFUSED.
+      "tests/integration/**",
       "tests/journeys/**",
     ],
   },

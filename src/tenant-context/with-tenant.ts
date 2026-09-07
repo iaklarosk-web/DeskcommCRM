@@ -15,6 +15,7 @@
  */
 import type pg from "pg";
 
+import { getServicePool, type ServicePool } from "./db";
 import { TenantResolutionError, type TenantCtx } from "./types";
 
 /** Aceita qualquer versão de UUID; rejeita todo o resto (inclui injeção). */
@@ -24,25 +25,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export type TenantDb = Pick<pg.PoolClient, "query">;
 
 interface WithTenantDeps {
-  pool?: Pick<pg.Pool, "connect">;
-}
-
-let poolSingleton: pg.Pool | undefined;
-
-/**
- * Lazy e por import dinâmico de propósito: importar `lib/env` valida o
- * ambiente inteiro no load, e quem testa withTenant com pool injetado não
- * deve pagar (nem depender de) um `.env` completo.
- */
-async function getPool(): Promise<Pick<pg.Pool, "connect">> {
-  if (!poolSingleton) {
-    const [{ createPool }, { env }] = await Promise.all([
-      import("@/lib/agent-engine/db/pool"),
-      import("@/lib/env"),
-    ]);
-    poolSingleton = createPool(env.SUPABASE_DB_URL);
-  }
-  return poolSingleton;
+  pool?: ServicePool;
 }
 
 export async function withTenant<T>(
@@ -54,7 +37,7 @@ export async function withTenant<T>(
     throw new TenantResolutionError(ctx?.source ?? "session", "invalid_organization_id");
   }
 
-  const pool = deps.pool ?? (await getPool());
+  const pool = deps.pool ?? (await getServicePool());
   const client = await pool.connect();
   try {
     await client.query("begin");

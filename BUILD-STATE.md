@@ -1,9 +1,9 @@
 ---
-updated_at: 2026-09-07T12:40:00Z
-head_commit: f61737ca   # F00-T08; o commit da T01 é o seguinte a este
+updated_at: 2026-09-07T13:00:00Z
+head_commit: 52a7d4d4   # F01-T01; o commit da T02 é o seguinte a este
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
 current_phase: F01
-next_task: F01-T02
+next_task: F01-T03
 status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"

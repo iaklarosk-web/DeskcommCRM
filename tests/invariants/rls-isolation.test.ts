@@ -187,6 +187,14 @@ beforeAll(() => {
             values (v_org, v_contact, 'email', 'rls-invariant@exemplo.test', now() + interval '7 days');
         end if;
 
+        -- channel_accounts (migration 0219): o mapa provider+account_key da
+        -- resolucao de webhook. account_key derivada da org para nao colidir
+        -- no unique (provider, account_key) entre os dois tenants do seed.
+        if not exists (select 1 from public.channel_accounts where organization_id = v_org) then
+          insert into public.channel_accounts (organization_id, provider, account_key)
+            values (v_org, 'mock', 'rls-inv-' || v_org::text);
+        end if;
+
         if not exists (select 1 from public.catalog_products where organization_id = v_org) then
           insert into public.catalog_products
             (organization_id, codigo, nome, preco_cents)
@@ -264,6 +272,12 @@ export const TABLES = [
   // controle positivo passaria por acerto. Quem mede a escrita é a rota, em
   // `tests/unit/tarefas-rota-nao-tem-porta-dos-fundos.test.ts`.
   "crm_tasks",
+  // migration 0219 — o mapa (provider, account_key) → organization_id que o
+  // TenantContext consulta para resolver webhook. A leitura é org-scoped sem
+  // gate de papel (o atendente vê os canais da própria org); a ESCRITA não tem
+  // policy nenhuma de propósito — só service role grava, e o controle disso é
+  // o grant (revoke de authenticated + grant select), não predicado.
+  "channel_accounts",
   // ⚠️ `webhook_lead_captures` (migration 0174) NÃO entra nesta lista, e a
   // ausência é deliberada: a policy dela exige `manager`, e o usuário semeado
   // aqui é `agent` — o controle positivo falharia por ACERTO, e a "correção"
