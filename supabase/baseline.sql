@@ -18185,7 +18185,199 @@ create trigger trg_contacts_anonimizado_limpa_custom_fields
   for each row
   when (new.is_anonymized = true and coalesce(old.is_anonymized, false) = false)
   execute function public.fn_contato_anonimizado_limpa_campos_personalizados();
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Apêndice 0219 — channel_accounts + webhook_quarantine (F01-T02, §5.1).
+-- Par idempotente da migration 20260907150000_0219 (D08). Mesmo SQL, mesma
+-- ordem; comentários de intenção vivem na migration.
+-- ═══════════════════════════════════════════════════════════════════════════
 
+create table if not exists public.channel_accounts (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  provider text not null,
+  account_key text not null,
+  status text not null default 'active',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint channel_accounts_provider_conhecido
+    check (provider in ('waha', 'meta_cloud', 'mock')),
+  constraint channel_accounts_status_conhecido
+    check (status in ('active', 'disabled'))
+);
+
+comment on table public.channel_accounts is
+  'Mapa (provider, account_key) -> organization_id do TenantContext (§5.1). fromWebhook resolve o tenant AQUI, nunca do payload. F03-T03 adapta whatsapp_connections para esta tabela.';
+
+delete from public.channel_accounts a
+  using public.channel_accounts b
+ where a.provider = b.provider
+   and a.account_key = b.account_key
+   and a.created_at < b.created_at;
+
+create unique index if not exists channel_accounts_provider_account_uk
+  on public.channel_accounts (provider, account_key);
+create index if not exists channel_accounts_org_idx
+  on public.channel_accounts (organization_id);
+
+alter table public.channel_accounts enable row level security;
+
+drop policy if exists channel_accounts_select on public.channel_accounts;
+create policy channel_accounts_select on public.channel_accounts
+  for select to authenticated
+  using (organization_id in (select public.fn_user_org_ids()));
+
+revoke all on public.channel_accounts from anon;
+revoke all on public.channel_accounts from authenticated;
+grant select on public.channel_accounts to authenticated;
+grant all on public.channel_accounts to service_role;
+
+create table if not exists public.webhook_quarantine (
+  id uuid primary key default gen_random_uuid(),
+  provider text not null,
+  account_key text not null,
+  payload jsonb,
+  reason text not null,
+  received_at timestamptz not null default now()
+);
+
+comment on table public.webhook_quarantine is
+  'Webhook sem match em channel_accounts (§5.1 invariante 3): 1 linha aqui, 0 em messages, resposta 202. Sem organization_id de propósito — o tenant é exatamente o que não se conseguiu resolver. Server-side only: RLS ligada sem policies e grants revogados de anon/authenticated (service_only, D35).';
+
+create index if not exists webhook_quarantine_received_idx
+  on public.webhook_quarantine (received_at);
+
+alter table public.webhook_quarantine enable row level security;
+
+revoke all on public.webhook_quarantine from anon;
+revoke all on public.webhook_quarantine from authenticated;
+grant all on public.webhook_quarantine to service_role;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Apêndice 0220 — fundação de RLS (F01-T03). Par idempotente da migration
+-- 20260907170000_0220 (D08). Mesmo SQL; comentários de intenção na migration.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+create or replace function public.current_organization_id() returns uuid
+language plpgsql stable as $$
+declare
+  v text;
+begin
+  v := nullif(current_setting('app.organization_id', true), '');
+  if v is not null then
+    return v::uuid;
+  end if;
+  -- Fora do Supabase (Postgres efêmero das provas) auth.jwt() não existe;
+  -- resolução em runtime + guarda tornam a função utilizável nos dois mundos.
+  begin
+    v := nullif(auth.jwt() ->> 'organization_id', '');
+  exception
+    when undefined_function then v := null;
+  end;
+  return v::uuid;
+end
+$$;
+
+comment on function public.current_organization_id() is
+  'Tenant corrente para policies novas (§5.15): GUC app.organization_id (posto por withTenant, §5.1) ou claim organization_id do JWT. NULL = sem tenant — policy que usa esta função nega por comparação com NULL.';
+
+revoke execute on function public.current_organization_id() from public;
+revoke execute on function public.current_organization_id() from anon;
+grant execute on function public.current_organization_id() to authenticated;
+grant execute on function public.current_organization_id() to service_role;
+
+-- G-54: revoga anon de toda tabela de tenant, dinamicamente.
+do $$
+declare
+  t record;
+begin
+  for t in
+    select g.table_name
+      from information_schema.role_table_grants g
+     where g.grantee = 'anon'
+       and g.table_schema = 'public'
+       and exists (select 1 from pg_tables pt
+                    where pt.schemaname = 'public' and pt.tablename = g.table_name)
+       and exists (select 1 from information_schema.columns c
+                    where c.table_schema = 'public'
+                      and c.table_name = g.table_name
+                      and c.column_name = 'organization_id')
+     group by g.table_name
+  loop
+    execute format('revoke all on table public.%I from anon', t.table_name);
+  end loop;
+end
+$$;
+
+-- Verificação (G-24): a migration termina lendo o que afirmou.
+do $$
+declare
+  restantes int;
+begin
+  select count(distinct g.table_name) into restantes
+    from information_schema.role_table_grants g
+   where g.grantee = 'anon'
+     and g.table_schema = 'public'
+     and exists (select 1 from pg_tables pt
+                  where pt.schemaname = 'public' and pt.tablename = g.table_name)
+     and exists (select 1 from information_schema.columns c
+                  where c.table_schema = 'public'
+                    and c.table_name = g.table_name
+                    and c.column_name = 'organization_id');
+  if restantes <> 0 then
+    raise exception 'G-54 não cumprido: % tabela(s) de tenant ainda com grant a anon', restantes;
+  end if;
+  if to_regprocedure('public.current_organization_id()') is null then
+    raise exception 'current_organization_id() não existe após a migration';
+  end if;
+end
+$$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Apêndice 0221 — tenant_settings (F01-T05). Par idempotente da migration
+-- 20260907190000_0221 (D08). Mesmo SQL; comentários de intenção na migration.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+create table if not exists public.tenant_settings (
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  key text not null,
+  value jsonb not null,
+  schema_version int not null default 1,
+  source text not null default 'seed',
+  updated_by uuid,
+  updated_at timestamptz not null default now(),
+  primary key (organization_id, key),
+  constraint tenant_settings_source_conhecida
+    check (source in ('seed', 'tenant_admin', 'template'))
+);
+
+comment on table public.tenant_settings is
+  'Settings por tenant (§5.2, D21). Só src/tenant-config lê e escreve (invariante 4); chave fora do schema.ts é UnknownSettingError, nunca linha aqui. source guarda a origem para a regra de merge (template não sobrescreve tenant_admin).';
+
+alter table public.tenant_settings enable row level security;
+
+-- Leitura para membros da organização (idioma herdado; o predicado novo
+-- current_organization_id() cobre o caminho service/GUC quando as policies
+-- migrarem — ver target-state §Decisões da F01-T03). Escrita só por service
+-- role via setSetting.
+drop policy if exists tenant_settings_select on public.tenant_settings;
+create policy tenant_settings_select on public.tenant_settings
+  for select to authenticated
+  using (organization_id in (select public.fn_user_org_ids()));
+
+revoke all on public.tenant_settings from anon;
+revoke all on public.tenant_settings from authenticated;
+grant select on public.tenant_settings to authenticated;
+grant all on public.tenant_settings to service_role;
+
+-- Verificação (G-24).
+do $$
+begin
+  if not exists (select 1 from pg_tables where schemaname = 'public'
+                  and tablename = 'tenant_settings' and rowsecurity) then
+    raise exception 'tenant_settings ausente ou sem RLS';
+  end if;
+end
+$$;
 
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
@@ -18420,197 +18612,3 @@ notify pgrst, 'reload schema';
 -- em produção (engolido, fire-and-forget), e o aviso ficava aberto pra sempre.
 alter table public.agent_inbox_items
   add column if not exists resolved_at timestamptz;
-
--- ═══════════════════════════════════════════════════════════════════════════
--- Apêndice 0219 — channel_accounts + webhook_quarantine (F01-T02, §5.1).
--- Par idempotente da migration 20260907150000_0219 (D08). Mesmo SQL, mesma
--- ordem; comentários de intenção vivem na migration.
--- ═══════════════════════════════════════════════════════════════════════════
-
-create table if not exists public.channel_accounts (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations(id) on delete cascade,
-  provider text not null,
-  account_key text not null,
-  status text not null default 'active',
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  constraint channel_accounts_provider_conhecido
-    check (provider in ('waha', 'meta_cloud', 'mock')),
-  constraint channel_accounts_status_conhecido
-    check (status in ('active', 'disabled'))
-);
-
-comment on table public.channel_accounts is
-  'Mapa (provider, account_key) -> organization_id do TenantContext (§5.1). fromWebhook resolve o tenant AQUI, nunca do payload. F03-T03 adapta whatsapp_connections para esta tabela.';
-
-delete from public.channel_accounts a
-  using public.channel_accounts b
- where a.provider = b.provider
-   and a.account_key = b.account_key
-   and a.created_at < b.created_at;
-
-create unique index if not exists channel_accounts_provider_account_uk
-  on public.channel_accounts (provider, account_key);
-create index if not exists channel_accounts_org_idx
-  on public.channel_accounts (organization_id);
-
-alter table public.channel_accounts enable row level security;
-
-drop policy if exists channel_accounts_select on public.channel_accounts;
-create policy channel_accounts_select on public.channel_accounts
-  for select to authenticated
-  using (organization_id in (select public.fn_user_org_ids()));
-
-revoke all on public.channel_accounts from anon;
-revoke all on public.channel_accounts from authenticated;
-grant select on public.channel_accounts to authenticated;
-grant all on public.channel_accounts to service_role;
-
-create table if not exists public.webhook_quarantine (
-  id uuid primary key default gen_random_uuid(),
-  provider text not null,
-  account_key text not null,
-  payload jsonb,
-  reason text not null,
-  received_at timestamptz not null default now()
-);
-
-comment on table public.webhook_quarantine is
-  'Webhook sem match em channel_accounts (§5.1 invariante 3): 1 linha aqui, 0 em messages, resposta 202. Sem organization_id de propósito — o tenant é exatamente o que não se conseguiu resolver. Server-side only: RLS ligada sem policies e grants revogados de anon/authenticated (service_only, D35).';
-
-create index if not exists webhook_quarantine_received_idx
-  on public.webhook_quarantine (received_at);
-
-alter table public.webhook_quarantine enable row level security;
-
-revoke all on public.webhook_quarantine from anon;
-revoke all on public.webhook_quarantine from authenticated;
-grant all on public.webhook_quarantine to service_role;
-
--- ═══════════════════════════════════════════════════════════════════════════
--- Apêndice 0220 — fundação de RLS (F01-T03). Par idempotente da migration
--- 20260907170000_0220 (D08). Mesmo SQL; comentários de intenção na migration.
--- ═══════════════════════════════════════════════════════════════════════════
-
-create or replace function public.current_organization_id() returns uuid
-language plpgsql stable as $$
-declare
-  v text;
-begin
-  v := nullif(current_setting('app.organization_id', true), '');
-  if v is not null then
-    return v::uuid;
-  end if;
-  -- Fora do Supabase (Postgres efêmero das provas) auth.jwt() não existe;
-  -- resolução em runtime + guarda tornam a função utilizável nos dois mundos.
-  begin
-    v := nullif(auth.jwt() ->> 'organization_id', '');
-  exception
-    when undefined_function then v := null;
-  end;
-  return v::uuid;
-end
-$$;
-
-comment on function public.current_organization_id() is
-  'Tenant corrente para policies novas (§5.15): GUC app.organization_id (posto por withTenant, §5.1) ou claim organization_id do JWT. NULL = sem tenant — policy que usa esta função nega por comparação com NULL.';
-
-revoke execute on function public.current_organization_id() from public;
-revoke execute on function public.current_organization_id() from anon;
-grant execute on function public.current_organization_id() to authenticated;
-grant execute on function public.current_organization_id() to service_role;
-
--- G-54: revoga anon de toda tabela de tenant, dinamicamente.
-do $$
-declare
-  t record;
-begin
-  for t in
-    select g.table_name
-      from information_schema.role_table_grants g
-     where g.grantee = 'anon'
-       and g.table_schema = 'public'
-       and exists (select 1 from pg_tables pt
-                    where pt.schemaname = 'public' and pt.tablename = g.table_name)
-       and exists (select 1 from information_schema.columns c
-                    where c.table_schema = 'public'
-                      and c.table_name = g.table_name
-                      and c.column_name = 'organization_id')
-     group by g.table_name
-  loop
-    execute format('revoke all on table public.%I from anon', t.table_name);
-  end loop;
-end
-$$;
-
--- Verificação (G-24): a migration termina lendo o que afirmou.
-do $$
-declare
-  restantes int;
-begin
-  select count(distinct g.table_name) into restantes
-    from information_schema.role_table_grants g
-   where g.grantee = 'anon'
-     and g.table_schema = 'public'
-     and exists (select 1 from pg_tables pt
-                  where pt.schemaname = 'public' and pt.tablename = g.table_name)
-     and exists (select 1 from information_schema.columns c
-                  where c.table_schema = 'public'
-                    and c.table_name = g.table_name
-                    and c.column_name = 'organization_id');
-  if restantes <> 0 then
-    raise exception 'G-54 não cumprido: % tabela(s) de tenant ainda com grant a anon', restantes;
-  end if;
-  if to_regprocedure('public.current_organization_id()') is null then
-    raise exception 'current_organization_id() não existe após a migration';
-  end if;
-end
-$$;
-
--- ═══════════════════════════════════════════════════════════════════════════
--- Apêndice 0221 — tenant_settings (F01-T05). Par idempotente da migration
--- 20260907190000_0221 (D08). Mesmo SQL; comentários de intenção na migration.
--- ═══════════════════════════════════════════════════════════════════════════
-
-create table if not exists public.tenant_settings (
-  organization_id uuid not null references public.organizations(id) on delete cascade,
-  key text not null,
-  value jsonb not null,
-  schema_version int not null default 1,
-  source text not null default 'seed',
-  updated_by uuid,
-  updated_at timestamptz not null default now(),
-  primary key (organization_id, key),
-  constraint tenant_settings_source_conhecida
-    check (source in ('seed', 'tenant_admin', 'template'))
-);
-
-comment on table public.tenant_settings is
-  'Settings por tenant (§5.2, D21). Só src/tenant-config lê e escreve (invariante 4); chave fora do schema.ts é UnknownSettingError, nunca linha aqui. source guarda a origem para a regra de merge (template não sobrescreve tenant_admin).';
-
-alter table public.tenant_settings enable row level security;
-
--- Leitura para membros da organização (idioma herdado; o predicado novo
--- current_organization_id() cobre o caminho service/GUC quando as policies
--- migrarem — ver target-state §Decisões da F01-T03). Escrita só por service
--- role via setSetting.
-drop policy if exists tenant_settings_select on public.tenant_settings;
-create policy tenant_settings_select on public.tenant_settings
-  for select to authenticated
-  using (organization_id in (select public.fn_user_org_ids()));
-
-revoke all on public.tenant_settings from anon;
-revoke all on public.tenant_settings from authenticated;
-grant select on public.tenant_settings to authenticated;
-grant all on public.tenant_settings to service_role;
-
--- Verificação (G-24).
-do $$
-begin
-  if not exists (select 1 from pg_tables where schemaname = 'public'
-                  and tablename = 'tenant_settings' and rowsecurity) then
-    raise exception 'tenant_settings ausente ou sem RLS';
-  end if;
-end
-$$;
