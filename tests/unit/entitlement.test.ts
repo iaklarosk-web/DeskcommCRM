@@ -8,6 +8,8 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { gravarLinhaDoVerify } from "../lib/verify-metrics";
+
 import {
   CAPABILITIES,
   entitlement,
@@ -68,7 +70,9 @@ describe("entitlement", () => {
 
     // Assert
     expect(fake.inserts).toHaveLength(2);
-    console.log(`entitlement: usage_events_written=${fake.inserts.length}`);
+    const linha = `entitlement: usage_events_written=${fake.inserts.length}`;
+    console.log(linha);
+    gravarLinhaDoVerify("entitlement", linha);
     // custo calculado LOCALMENTE (pricing.ts), na posição do estimated_cost_cents
     expect(fake.inserts[0]?.values?.[6]).toBe(estimatedCostCents("gpt-4o-mini", 100_000, 10_000));
     expect(fake.inserts[0]?.values?.[6]).toBe(2); // 100k×0.015 + 10k×0.06 por 1k = 1.5 + 0.6 → 2

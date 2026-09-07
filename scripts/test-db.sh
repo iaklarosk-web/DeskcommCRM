@@ -344,6 +344,15 @@ echo "==> modo UPDATE: re-aplicando baseline.sql COM ON_ERROR_STOP=1 (idempotên
 psql_install < "$BASELINE"
 echo "    ✓ update ok (zero erro na re-aplicação)"
 
+# Gancho de SABOTAGEM (F01-T11, G-38): os mutantes de tests/mutants/ aplicam um
+# SQL no MOLDE depois do baseline (ex.: policy `using (true)`) e esperam a
+# suíte ficar VERMELHA — gate que não fica vermelho com policy sabotada não
+# prova isolamento nenhum. Sem o env, nada muda.
+if [ -n "${TEST_DB_POS_BASELINE_SQL:-}" ]; then
+  echo "==> SABOTAGEM: aplicando ${TEST_DB_POS_BASELINE_SQL} ao molde (mutante — o verde aqui deve virar vermelho na suíte)"
+  psql_install < "$TEST_DB_POS_BASELINE_SQL"
+fi
+
 echo "==> banco \`postgres\` a partir do molde (o setupFile o recria a cada arquivo)"
 # Criar aqui, ALÉM do reset por arquivo, tem dois motivos medidos:
 #  - `docker exec … psql -d postgres` (o que se digita para depurar o container)

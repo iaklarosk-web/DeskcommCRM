@@ -5,6 +5,8 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { gravarLinhaDoVerify } from "../lib/verify-metrics";
+
 import {
   can,
   MATRIZ,
@@ -62,7 +64,9 @@ describe("rbac — matriz D15 (roles=3)", () => {
 
     // Assert — a linha do VERIFY
     expect(deniedActual).toBe(deniedExpected);
-    console.log(`rbac: roles=3 denied_expected=${deniedExpected} denied_actual=${deniedActual}`);
+    const linha = `rbac: roles=3 denied_expected=${deniedExpected} denied_actual=${deniedActual}`;
+    console.log(linha);
+    gravarLinhaDoVerify("rbac", linha);
     expect(deniedExpected).toBeGreaterThan(10);
   });
 

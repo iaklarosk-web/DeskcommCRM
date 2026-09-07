@@ -25,6 +25,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { gravarLinhaDoVerify } from "../lib/verify-metrics";
 import { sql } from "./gov-helpers";
 
 const ORG_A = "150a0000-0000-4000-8000-00000000000a";
@@ -411,9 +412,9 @@ describe("isolation-varredura — K tabelas × 4 ops × 2 direções (§5.15)", 
       semeadasB,
       `motor de geração cobriu só ${semeadasB}/${tabs.length}; primeiras falhas: ${falhasExemplo.join(" | ")}`,
     ).toBeGreaterThan((tabs.length * 2) / 3);
-    console.log(
-      `isolation: tables=${tabs.length} ops=4 dirs=2 leaks=0 (material_cross_org=${semeadasB}/${tabs.length})`,
-    );
+    const linha = `isolation: tables=${tabs.length} ops=4 dirs=2 leaks=0 (material_cross_org=${semeadasB}/${tabs.length})`;
+    console.log(linha);
+    gravarLinhaDoVerify("isolation", linha);
     expect(tabs.length).toBeGreaterThan(100);
   });
 });

@@ -21,6 +21,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { gravarLinhaDoVerify } from "../lib/verify-metrics";
 import { sql } from "./gov-helpers";
 
 const RAIZ = path.resolve(__dirname, "../..");
@@ -127,9 +128,9 @@ describe("rls-coverage — catálogo completo de RLS (§5.15)", () => {
     const k = comOrg.length;
     const p = comOrg.filter((t) => comPolicy.has(t)).length;
     // Os zeros são os das asserções acima: se chegou aqui, valem.
-    console.log(
-      `rls-coverage: tables_with_org_id=${k} policies_found=${p} missing=0 service_only_with_grant=0`,
-    );
+    const linha = `rls-coverage: tables_with_org_id=${k} policies_found=${p} missing=0 service_only_with_grant=0`;
+    console.log(linha);
+    gravarLinhaDoVerify("rls-coverage", linha);
     expect(k).toBeGreaterThan(100);
     expect(p).toBeGreaterThan(100);
   });
