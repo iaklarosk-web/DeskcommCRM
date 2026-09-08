@@ -83,6 +83,24 @@ describe("rls-coverage — catálogo completo de RLS (§5.15)", () => {
     linhas(`select distinct tablename from pg_policies where schemaname = 'public';`),
   );
 
+  it("service_only declara tabelas existentes com RLS ligada", () => {
+    // Um merge pode inserir linhas do catálogo de MIGRATIONS nesta seção.
+    // Sem conferir o catálogo, timestamps viram falsas exceções e passam
+    // silenciosamente pelo teste de grants (a tabela inexistente não tem grant).
+    const existentes = new Set([...comOrg, ...semOrg]);
+    expect(
+      [...serviceOnly].filter((t) => !existentes.has(t)),
+      "service_only contém nome que não é tabela pública — confira a estrutura do MANIFEST",
+    ).toEqual([]);
+    const comRls = new Set(
+      linhas(`select tablename from pg_tables where schemaname = 'public' and rowsecurity;`),
+    );
+    expect(
+      [...serviceOnly].filter((t) => !comRls.has(t)),
+      "service_only exige RLS ligada mesmo quando os grants já negam acesso ao cliente",
+    ).toEqual([]);
+  });
+
   it("toda tabela sem organization_id está na allowlist de globais", () => {
     const foraDaAllowlist = semOrg.filter((t) => !globais.has(t));
     expect(

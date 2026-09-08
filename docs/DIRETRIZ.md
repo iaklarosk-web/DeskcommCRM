@@ -1,6 +1,6 @@
 # DIRETRIZ v2 — CRM SaaS multi-tenant com IA sobre o DeskcommCRM
 
-**Versão 2.0 · 03/09/2026 · substitui integralmente "Construção CRM" v1 (Guias 00–09).** Este arquivo vive em `docs/DIRETRIZ.md`. O `AGENTS.md` (seção 9) é o que o agente relê a cada tarefa e aponta para cá.
+**Versão 2.1 · revisão de escopo em 08/09/2026 · substitui integralmente "Construção CRM" v1 (Guias 00–09).** Este arquivo vive em `docs/DIRETRIZ.md`. O `AGENTS.md` (seção 9) é o que o agente relê a cada tarefa e aponta para cá.
 
 ## 0. Como usar este documento
 
@@ -10,7 +10,7 @@ Hierarquia de leitura (D09): `AGENTS.md` diz *como* trabalhar; este documento di
 
 Marcações usadas: `[DECIDIDO]` fechado pelo proprietário; `[DEFAULT]` valor que vale até o proprietário mudar; `[ADR-F0]` o agente decide na Fase 0 e registra ADR; `[DADO]` fato com fonte; `[HIPÓTESE]` aposta declarada, testável; `[OPINIÃO]` preferência do proprietário. O agente constrói o que está em `[DECIDIDO]` e `[DEFAULT]`; nunca transforma `[HIPÓTESE]` em requisito por conta própria.
 
-Numeração de fases: **F00–F07** é a única (D07). Tasks são `Fnn-Tmm`. Nenhuma outra numeração existe.
+Numeração de fases: **F00–F17** (D07): F00–F07 conservam os IDs do piloto técnico; F08–F17 descrevem operação real e SaaS comercial. Tasks são `Fnn-Tmm`; as tasks comerciais serão decompostas antes da execução de cada fase.
 
 ## 1. Diretriz mestre
 
@@ -43,7 +43,7 @@ O agente decide sozinho tudo que a seção 2 já fechou e tudo que é escolha in
 
 ### 1.6 O que é sucesso
 
-Para a construção: `STATUS: READY (staging)` no VERIFY SUMMARY, colado no `FINAL-VALIDATION.md`, com `BLOCKER-PROD` aberto (seção 8). Para o produto: a meta do piloto (D27), preenchida com a Deka antes da F01 e lida pelo proprietário — não pelo construtor — ao fim do período combinado.
+Para a construção: `STATUS: READY (staging)` no VERIFY SUMMARY, colado no `FINAL-VALIDATION.md`, com `BLOCKER-PROD` aberto (seção 8). Para o produto: a meta do piloto (D27), preenchida com a Deka antes do piloto real e lida pelo proprietário — não pelo construtor — ao fim do período combinado.
 
 ## 2. Decisões fechadas
 
@@ -54,10 +54,10 @@ A tabela abaixo é a seção de maior autoridade deste documento. Cada linha res
 | D01 | Estratégia | [DECIDIDO] Híbrida sobre o repositório existente DeskcommCRM (brownfield). Nenhuma fase "cria projeto/Git/lint/CI do zero": a Fase 0 audita o que existe e as fases seguintes adaptam. O AGENTS.md e o docs/current-state.md já existentes no Deskcomm são lidos na Fase 0 e substituídos/mesclados pelo AGENTS.md do v2 (ADR-001 registra o que foi mantido). |
 | D02 | Stack | [DECIDIDO] Next.js (herdado) + Supabase (Postgres, RLS, Auth, Storage, pgvector) + workers Node (herdados) + Redis se já existir no repo. Provedor de IA: OpenAI; modelo de chat e de embedding são configuração (`AI_CHAT_MODEL`, `AI_EMBEDDING_MODEL`); a dimensão do embedding é fixada na Fase 0 (ADR-002) porque congela o schema pgvector. Mudança de stack só via ADR aprovado pelo proprietário. |
 | D03 | Hosting | [DEFAULT] Docker Compose numa VPS (app Next.js + workers + WAHA + Redis + Postgres apontando para Supabase gerenciado). Pendência do proprietário: confirmar antes da Fase F06 (deploy em staging). Até lá, tudo roda local/CI. |
-| D04 | WhatsApp | [DECIDIDO] WAHA (já existente no Deskcomm) atrás de um `ChannelAdapter`; Meta Cloud API é o segundo adapter, Fase 2. Regras: número DEDICADO de teste em desenvolvimento/staging; o número real da Deka só entra com aceite escrito dela do risco de banimento (método não oficial), registrado no BUILD-STATE. |
-| D05 | Escopo | [DECIDIDO] **Fase 1 = piloto Deka**, 5 blocos: (1) WhatsApp in/out + Inbox; (2) Agente de IA + base de conhecimento do tenant; (3) Handoff IA→humano com resumo e notificação; (4) Pedido recorrente PJ + lembrete (regra específica, não motor genérico); (5) CRM mínimo (clientes, empresas, produtos, pedidos, histórico, tarefas). **Fase 2 = SaaS** (só depois de 2º cliente real com preço na mesa): Entitlement completo (planos/flags/limites/créditos), Platform Admin com criação de tenant por UI, support session, onboarding wizard, templates por segmento, white-label, billing/gateway, Google Calendar, Instagram, e-mail inbound, webchat, motor genérico de automação, pipeline/oportunidades, dashboard. **Fora:** mobile nativo, marketplace, API pública. |
+| D04 | WhatsApp | [DECIDIDO, confirmado 08/09/2026] Deka usará WAHA agora, atrás de `ChannelAdapter`; API oficial não é requisito do piloto. Meta Cloud permanece opção posterior, cuja prioridade comercial será decidida. Número dedicado de teste em desenvolvimento/staging; conexão do número real da Deka segue o aceite registrado do método não oficial e a autorização de produção. |
+| D05 | Escopo | [DECIDIDO, entrevista 08/09/2026] **Piloto Deka, F00–F09:** WhatsApp/Inbox, IA/conhecimento, handoff, pedido recorrente PJ e CRM mínimo com pedidos do dia, impressão e conferência. **Entrega final, F10–F17:** SaaS online de CRM completo, versátil por configuração, com marca do proprietário, administração da plataforma, logins próprios por cliente, assinatura/cobrança, onboarding completo pela plataforma, CRM comercial, autonomia de IA configurável, WhatsApp, chat do site e agenda integrada. Instagram e e-mail de entrada ficam para evolução posterior; e-mail transacional integra o SaaS. ERP, estoque completo, fiscal e outros produtos complementares serão avaliados depois; mobile nativo, marketplace e API pública continuam fora. O gate de segunda empresa de D32 permanece para executar a expansão. |
 | D06 | Multi-tenant | [DECIDIDO] Restrição desde a Fase 1, não bloco de construção: nada hardcoded para a Deka (`grep -ril deka src/` = 0); todo tenant nasce por `scripts/create-tenant.sh` + seed YAML; RLS por `organization_id` (nome herdado do Deskcomm) em toda tabela tenant-aware; dois tenants existem desde a F01 (`deka` e `demo2`) e a mesma suíte roda nos dois. |
-| D07 | Numeração | [DECIDIDO] Uma única numeração: fases **F00–F07** (Fase 1 do produto) e tasks `Fnn-Tmm`. As numerações dos guias originais (0–14, 0–13, 0–67, 00–21, 0–16) deixam de existir. |
+| D07 | Numeração | [DECIDIDO] F00–F07 conservam as tasks do piloto em staging; F08–F09 cobrem serviços reais e piloto; F10–F17 cobrem validação comercial e SaaS. Uma numeração `Fnn-Tmm`, ampliada em 08/09/2026 sem renumerar tasks existentes. §7.9 registra entregas e critérios comerciais; decompô-las antes de executar. |
 | D08 | Arquivos de controle | [DECIDIDO] Raiz: `AGENTS.md` (regras do agente, ≤ 9,5 KB), `BUILD-STATE.md` (estado, campo `next_task:`; 85 linhas em 03/09/2026 — cresce só quando uma tabela ganha linha, nunca por histórico de task), `README.md`. `docs/DIRETRIZ.md` (este documento v2). `docs/decisions/ADR-nnn.md` (único registro de decisão). `docs/migration/deskcomm-audit.md` e `target-state.md` (saída da Fase 0). `docs/tenants/deka.seed.yaml`, `docs/tenants/demo2.seed.yaml`. `docs/ai-eval/cases.yaml`. `.envscan-dirs` (uma pasta por linha, saída da F00-T05; é a fonte das pastas para a prova de F01-T09). `scripts/verify.sh`, `scripts/create-tenant.sh`. `FINAL-VALIDATION.md` (relatório final único; não existe FINAL-DELIVERY-REPORT nem PHASE-REPORT — histórico de fases fica no BUILD-STATE). `.env.example` gerado por grep no código com arquivo:linha. |
 | D09 | Hierarquia | [DECIDIDO] 1. `AGENTS.md` (como o agente trabalha) → 2. `docs/DIRETRIZ.md` (o que construir; dentro dele, a seção "Decisões fechadas" prevalece sobre qualquer outra) → 3. código do Deskcomm (fonte de verdade sobre o ESTADO ATUAL, nunca sobre requisitos) → 4. `BUILD-STATE.md` (estado da construção). |
 | D10 | Contradição | [DECIDIDO] Dois níveis: (a) resolvível pela hierarquia D09 → o agente decide, registra ADR, segue; (b) de escopo, negócio, custo ou irreversibilidade → BLOCKER no BUILD-STATE e para. |
@@ -72,12 +72,12 @@ A tabela abaixo é a seção de maior autoridade deste documento. Cada linha res
 | D19 | Handoff | [DECIDIDO] Gatilhos (lista única): pedido explícito do cliente; ação `high`/`blocked` solicitada; confiança abaixo do limiar configurado; pergunta fora da base de conhecimento após 1 tentativa; reclamação/insatisfação detectada; erro do provedor de IA; regra do tenant. Resumo (campos únicos): `customer`, `intent`, `summary` (≥1 frase), `last_messages` (5), `pending_action`, `reason`, `suggested_next_step`. Após handoff: `ai_messages_after_handoff = 0` (verificado). |
 | D20 | Tenant fora de sessão | [DECIDIDO] Módulo `TenantContext`: sessão (JWT → organization_id), worker (job sem `organization_id` no payload é rejeitado e contado), webhook (tabela `channel_accounts`: número/sessão WAHA → organization_id; sem match → quarentena + contador), cron (uma execução por tenant elegível). Toda chamada com service role passa por `withTenant(ctx)`; proibido filtro manual solto. |
 | D21 | Configuração do tenant | [DECIDIDO] Módulo `TenantConfiguration`: schema versionado com chaves, defaults e validação (`tenant_settings`). Escritores: seed YAML, tenant_admin (UI de configuração), templates (Fase 2: merge que não sobrescreve chave já editada). A regra do lembrete PJ mora aqui (`orders.recurring_reminder`: dia da semana, hora, horas de corte, texto). |
-| D22 | CRM Fase 1 | [DECIDIDO] Entidades: `customers`, `companies`, `products` (com tamanho/unidade/preço), `orders` + `order_items` (status: draft, confirmed, in_production, delivered, cancelled), `interactions` (timeline), `tasks`, `notes`. Pipeline e oportunidades: Fase 2. |
+| D22 | CRM Fase 1 | [DECIDIDO, revisão 08/09/2026] Entidades lógicas: clientes, empresas, produtos, pedidos/itens, histórico, tarefas e notas. `customers/products` não impõem renome físico: preservar `contacts/catalog_products` e seus vínculos, ampliando lacunas. Pedido: `draft, confirmed, in_production, delivered, cancelled`; data prevista explícita, snapshots de itens/preço/unidade, revisão e conferência auditável. F02 inclui lista por produto/entrega, impressão e conferência; regra de data, corte, embalagem e preço depende da descoberta. Pipeline/oportunidades na expansão SaaS. |
 | D23 | Automação Fase 1 | [DECIDIDO] Uma regra específica: lembrete recorrente PJ (job por tenant, config em `tenant_settings`, idempotente por `(tenant, customer, período)`), que envia mensagem pelo Action Policy (`send_message`, executor `automation`) e registra a resposta do cliente via IA (`update_order_quantity`). Motor genérico QUANDO/SE/ENTÃO: Fase 2. |
 | D24 | Evidência | [DECIDIDO] "Pronto" = saída observada com contagem e denominador, colada no BUILD-STATE/FINAL-VALIDATION. Nunca "funcionando", "adequado", "quando apropriado". Zero sem denominador não é resultado (G-03). Toda declaração de pronto lista o que NÃO foi verificado (G-04). |
 | D25 | verify.sh | [DECIDIDO] Artefato da Fase 0, revisado pelo proprietário antes da F01, mudanças só via ADR. Imprime o bloco `VERIFY SUMMARY` (campos e formato definidos na seção 8.3, que prevalece sobre qualquer outra grafia do bloco). Linha final `STATUS: READY (Fnn)` por fase; `STATUS: READY (staging)` só em F07 com todos os campos. É a única prova aceita para READY. |
 | D26 | Deploy/piloto | [DECIDIDO] Condição de parada do agente termina em staging com mock e `BLOCKER-PROD` aberto. Produção, mensagem real, restore, piloto Deka = tarefas humanas com checklist próprio. |
-| D27 | Meta do piloto | [DEFAULT] Placeholders a preencher pelo proprietário com a Deka ANTES da F01: mensagens/dia hoje, % resolvidas pela IA sem handoff (meta), % pedidos PJ registrados via WhatsApp (meta), pedidos perdidos por esquecimento (meta zero), duração do piloto (dias), critério de invalidação (ex.: inbox não aberto por 7 dias). Sem meta, o piloto não começa — mas a construção F00–F06 pode. |
+| D27 | Meta do piloto | [DEFAULT] Placeholders a preencher pelo proprietário com a Deka antes do piloto real: mensagens/dia hoje, % resolvidas pela IA sem handoff (meta), % pedidos PJ registrados via WhatsApp (meta), pedidos perdidos por esquecimento (meta zero), duração do piloto (dias), critério de invalidação (ex.: inbox não aberto por 7 dias). Sem meta, o piloto não começa — mas a construção F00–F06 pode. |
 | D28 | Nome da plataforma | [DEFAULT] `PLATFORM_NAME` em configuração; branding mínimo por tenant (nome, logo, cor) já na Fase 1 porque o Deskcomm já tem white-label. Domínio próprio por tenant: Fase 2. |
 | D29 | Auditoria Fase 0 | [DECIDIDO] Cinco classes: REUTILIZAR / ADAPTAR / REFAZER / CRIAR / REMOVER. Matriz cita, por módulo, arquivo:linha @ commit; para cada policy RLS, o predicado `USING/WITH CHECK` literal (G-47). Saída literal dos sete passos de 6.1 (`pnpm typecheck`, `pnpm lint`, `pnpm test:unit`, `pnpm test:db`, `pnpm test:integration`, `pnpm test:e2e`, `pnpm build` ou equivalentes encontrados) colada no relatório, com N0 = testes verdes de baseline gravado no BUILD-STATE. |
 | D30 | Testes | [DECIDIDO] Regras herdadas dos gotchas: prova de RLS varre `pg_tables`/`pg_policies` (G-26); migrations terminam com revoke/grant explícito (G-54); gatilhos com efeito externo são AFTER e idempotência conta em todas as tabelas tocadas (G-57); toda suíte nasce com um mutante (G-38); fixtures de webhook são payloads reais versionados (G-42); `.skip/.only` = 0; nenhum teste deletado; asserção de saldo antes/depois para consumo de IA (G-20); testes de IA comparam com o registro-fonte, não com coerência (G-35). |
@@ -93,6 +93,14 @@ A tabela abaixo é a seção de maior autoridade deste documento. Cada linha res
 | D35 | `tenant_settings` é uma linha por chave (`organization_id, key, value jsonb, source`), para que o merge de template da Fase 2 conheça a origem de cada chave. Grants: `anon = 0` em toda tabela; `authenticated` revogado nas tabelas marcadas `service_only` no manifest de migrations — a marcação é obrigatória na criação de qualquer tabela sem UI; nas demais, grant só onde há policy (prova: `tabelas com grant a authenticated sem policy = 0` e `tabelas service_only com grant a authenticated = 0`). |
 | D36 | Restore de backup **em staging, sobre banco vazio criado para o teste** é tarefa do agente (F06); restore sobre produção ou dados reais é humano (D11). O campo `provider_calls_at_zero_balance=0` é provado na Fase 1 com um dublê de Entitlement que devolve `allowed=false` só no teste. Campos do VERIFY SUMMARY de fases futuras imprimem `pending`; campo obrigatório em `pending` força `NOT READY`. Um tenant efêmero `demo3` prova "como criar um tenant novo" na F07 e é removido ao fim. |
 | D37 | Formato de commit: título `Fnn-Tmm: <verbo> <objeto>`; corpo com três linhas — o que mudou, prova com contagem/denominador, o que não foi verificado. BLOCKER tem cinco campos (id, tipo D11, o que precisa, desde quando, branch); `status: BLOCKED` encerra a run sem diff. O aceite escrito da Deka fica fora do repositório; no BUILD-STATE entra só "recebido em <data>, por <nome>". |
+
+| D38 | [DECIDIDO, 08/09/2026] Entrega final é SaaS online comercial: proprietário com login/painel de administração global; cliente com identidade própria e dados isolados por empresa. Cadastro pode anteceder pagamento para contratar/recuperar conta, mas o uso operacional do CRM é liberado após confirmação confiável da assinatura/pagamento. Não basta o navegador voltar de um checkout. |
+| D39 | [DECIDIDO, 08/09/2026] Entrada completa pela plataforma: cadastro, contratação, conexão WhatsApp e configuração guiada da IA, com ajuda opcional. Administração inclui empresas, acessos, planos, assinaturas, uso, suporte e auditoria; suporte operacional preserva motivo, escopo, expiração e restrição de escrita. Cada empresa administra sua própria equipe dentro do plano. |
+| D40 | [DECIDIDO, 08/09/2026] Primeiro CRM completo e versátil; segmentos ainda não escolhidos. Autonomia da IA configurável por empresa e ação: permitir, exigir aprovação humana ou transferir/bloquear. A configuração não supera isolamento, autorização nem limites comerciais; presets iniciais supervisionados seguem D33. Produtos adjacentes podem ser futuros projetos integrados. |
+| D41 | [DECIDIDO, 08/09/2026] Primeira versão comercial completa exige WhatsApp, chat do site e agenda integrada. Instagram, e-mail de entrada e demais canais não bloqueiam seu aceite. Agenda de clientes e equipe dentro do CRM com Google Agenda sincronizada, confirmada pelo proprietário. Criar, alterar, cancelar, verificar disponibilidade/fuso e tratar conflitos; regras detalhadas de sincronização ainda serão desenhadas. E-mail transacional para autenticação e cobrança é necessário. |
+| D42 | [AUTORIZADO, 08/09/2026] Integrar DeskcommCRM v1.17.0 (`db58c3fb`), revalidar fundação e atualizar desenho F02; ADR-006/007/008. Preservar motor, handoff e ServiceBoundary adaptando requisitos. Esta autorização não implementa F02 inteira, não promove produção e não escolhe preço, gateway, prazo ou orçamento. |
+| D43 | [DECISÃO TÉCNICA, ADR-007] Revalidação explícita de fase já concluída é distinta de prontidão da fase atual. Skips são medidos pelo runner e falhas esperadas são dívida identificada; a allowlist herdada é nominal, não pode crescer silenciosamente e nunca autoriza READY. Campos obrigatórios ausentes, falhas, métricas inválidas, regressões e mutantes sobreviventes reprovam. N0 compara apenas as suítes realmente executadas, preservando o baseline histórico. |
+| D44 | [DECIDIDO, 08/09/2026] Atraso de assinatura: avisar e conceder prazo de regularização; depois bloquear novas operações, preservando dados e acesso à cobrança. Dias de carência, notificações e regras de reativação/retencão permanecem para revisão antes da cobrança real. |
 
 ### 2.2 Decisões que só o proprietário toma
 
@@ -145,7 +153,17 @@ Quem lê o resultado é o proprietário. Validação sem meta declarada não com
 
 ### 3.4 Gate da Fase 2
 
-A Fase 2 (SaaS: planos, Platform Admin, templates, white-label completo, billing) começa quando existe um **segundo cliente real** do mesmo ICP com preço aceito na mesa — não quando `demo2` passa nos testes. `demo2` prova que o código aceita outro tenant; só um cliente prova que outro tenant quer entrar. Até lá, tudo que é Fase 2 fica especificado na seção 5.20 e não entra no backlog.
+A Fase 2 (SaaS: planos, Platform Admin, templates, white-label completo, billing) começa quando existe um **segundo cliente real** com perfil de uso identificado e preço aceito na mesa — não quando `demo2` passa nos testes. `demo2` prova que o código aceita outro tenant; só um cliente prova que outro tenant quer entrar. Até lá, a expansão fica planejada em §5.20/§7.9, sem execução comercial antecipada; segmentos ainda não foram escolhidos.
+
+### 3.5 Entrega comercial confirmada na entrevista de 08/09/2026
+
+O proprietário opera um SaaS com sua marca e seu painel de administração. A empresa cliente se cadastra, contrata, recebe acesso após confirmação da assinatura/pagamento, conecta o WhatsApp e configura a IA por um fluxo guiado. Seus usuários entram com identidades próprias e operam apenas os dados/autorização da empresa. Um login pode gerenciar mais de uma membership quando autorizado; pagamento não concede poderes de administrador da plataforma.
+
+O aceite comercial inclui CRM de atendimento e vendas (cadastros, histórico, pedidos, tarefas, funis, oportunidades, relatórios e configuração), WhatsApp e chat do site com passagem IA/humano, agenda integrada, automações e autonomia da IA por empresa/ação. A operação inclui planos, cobrança, limites de consumo, assinatura, cancelamento, suporte, recuperação de conta, backup restaurável e atualização sem perda de dados. Definir o alvo de carga, o nível de suporte e os objetivos de recuperação antes da prova final.
+
+Ainda não há segmentos comerciais escolhidos. Deka valida um caso de uso; `demo2` valida configuração/isolamento, e uma segunda empresa real valida replicabilidade comercial. Preços, gateway, dias de carência, detalhes de sincronização da agenda, nome/domínio, prazo, orçamento e metas operacionais continuam pendentes. Google Agenda sincronizada está confirmada; atraso terá aviso e prazo antes do bloqueio de novas operações, preservando dados e cobrança. Não há aprovação de prazo, preço ou contratação de serviço nesta entrevista. Templates e domínios por cliente no roadmap são extensão planejada; a exigência confirmada de marca é a do SaaS do proprietário, e a profundidade de white-label será decidida antes da F16.
+
+F07 encerra o marco técnico em staging; F17 encerra a primeira versão comercial aceita. Manutenção e novas versões continuam depois. A condição de parada de §8.4 se refere à construção do piloto, não à entrega final do produto.
 
 ## 4. Escopo por fases
 
@@ -162,9 +180,11 @@ A Fase 2 (SaaS: planos, Platform Admin, templates, white-label completo, billing
 
 Branding mínimo por tenant (nome, logo, cor) entra na F01 porque o Deskcomm já tem white-label; custa uma chave de configuração, não um módulo.
 
-### 4.2 Fase 2 — SaaS (só após o gate 3.4)
+### 4.2 Expansão SaaS — execução após o gate 3.4
 
-Entitlement com planos reais (seeds `PLAN_A/B/C` até nomeação), Platform Admin com criação de tenant por UI e support session auditada, onboarding wizard, templates por segmento (merge que respeita chave editada, D21), white-label com domínio próprio, billing e gateway, créditos de IA com bloqueio ao esgotar, Google Calendar (adapter + IA agendando), Instagram (só API oficial), e-mail inbound e webchat como Channel Adapters, motor genérico de automação QUANDO/SE/ENTÃO (a regra PJ da Fase 1 vira a primeira automação migrada), pipeline e oportunidades, dashboard, papéis extras e personalizados, push. A seção 5.20 diz, módulo a módulo, o que muda quando cada item entra — nenhum exige refazer a Fase 1.
+Planos/cobrança e limites reais, administração da plataforma, logins próprios, entrada guiada com ativação paga, CRM comercial ampliado, WhatsApp/chat do site, Google Agenda sincronizada, automações e IA configurável. Marca do proprietário obrigatória; profundidade de templates, white-label e domínios por cliente a fechar antes da F16. Assinatura em atraso tem aviso e carência antes do bloqueio operacional, com dados e cobrança preservados; dias a definir.
+
+Instagram, e-mail de entrada e demais canais permanecem evolução posterior. §5.20 é mapa de extensão dos módulos, não condição para antecipar todo item herdado no primeiro aceite; D38–D44 e §7.9 definem o recorte comercial atual.
 
 ### 4.3 Fora de escopo
 
@@ -172,7 +192,7 @@ Mobile nativo, marketplace, API pública, WhatsApp por método não oficial em n
 
 ### 4.4 O que mudou em relação ao v1
 
-O "MVP" do v1 tinha 48 capacidades e 163 tasks, com a Deka na task ~150; ~35% era infraestrutura de venda para clientes que não existem. A Fase 1 do v2 tem 5 blocos e 77 tasks (8 na F00, 69 em F01–F07), a Deka é configurada na F01 (seed) e testada em todas as fases seguintes, e o que era "MVP" virou Fase 2 condicionada a demanda. Nada foi descartado: está especificado na seção 5.20 e na 4.2, pronto para entrar quando o gate abrir.
+O "MVP" do v1 tinha 48 capacidades e 163 tasks, com a Deka na task ~150; ~35% era infraestrutura de venda para clientes que não existem. A Fase 1 do v2 tem 5 blocos e 81 tasks (8 na F00, 73 em F01–F07), após acrescentar quatro tasks à F02 em 08/09/2026, a Deka é configurada na F01 (seed) e testada em todas as fases seguintes, e o que era "MVP" virou Fase 2 condicionada a demanda. Nada foi descartado: está especificado na seção 5.20 e na 4.2, pronto para entrar quando o gate abrir.
 
 
 ## 5. Arquitetura por módulos
@@ -723,31 +743,35 @@ Saída de F01: obrigatórios `build lint typecheck`, `unit integration db`, `bas
 
 Não entra: Platform Admin por UI, support session, onboarding wizard, planos/flags, papéis extras, domínio por tenant (D05 Fase 2). Login e senha são herdados; só se tocam se a matriz F00 marcou ADAPTAR.
 
-### 7.3 F02 — CRM Core
+### 7.3 F02 — CRM e pedidos do dia
 
-Objetivo: as sete entidades D22 existem com RLS, API e telas; a mesma suíte passa nos dois tenants.
+Objetivo: operar clientes, empresas, catálogo e pedidos pela UI e obter lista por produto/entrega, impressão e conferência nos dois tenants. O contrato detalhado é `docs/design/F02-pedidos-do-dia.md` no fork (ADR-008). A data de entrega é explícita; a relação com produção e corte depende da descoberta.
 
-Pré-condição: `F01=done`, `isolation: leaks=0`.
+Pré-condição: F01 revalidada após v1.17.0, `isolation: leaks=0`; dívida herdada nominal pode ter saneamento planejado enquanto a construção prossegue. READY da nova fase exige dívida zero conforme D43/ADR-007; registrar tratamento não substitui corrigir. Decisões comerciais que afetem o schema devem estar fechadas antes da task dependente.
 
-| ID | Task | Módulo | Prova |
+| ID | Task | Módulo | Prova a implementar |
 |---|---|---|---|
-| F02-T01 | Migrations `customers` (flag PJ recorrente, telefone E.164), `companies`, `products` (tamanho, unidade, preço); RLS + revoke/grant. | Banco/RLS | `isolation: tables=K+3 leaks=0`; `rls-coverage missing=0` |
-| F02-T02 | `orders` + `order_items`; status `draft, confirmed, in_production, delivered, cancelled` com tabela de transições. | CRM Core, Banco/RLS | `pnpm test:unit -t order-status`: `valid=6/6 invalid_rejected=14/14` (20 pares) |
-| F02-T03 | `interactions`, `tasks`, `notes`; escrita em cliente/pedido gera `interaction` por gatilho AFTER (G-57). | CRM Core, Banco/RLS | `pnpm test:db -t timeline`: 6 escritas → `interactions=6/6`; `isolation: tables=K+8` |
-| F02-T04 | API CRUD das 7 entidades via `withTenant`, entrada validada por schema, erros com código. | API | `grep -rL "withTenant" src/app/api/**/route.ts \| wc -l` = 0; `crm-api: entities=7 ops=4 tenants=2 pass=56/56` |
-| F02-T05 | Adaptar telas do Deskcomm (matriz F00) para clientes: lista, busca, cadastro, edição, perfil com timeline. Estados vazio e erro visíveis. | CRM Core | `pnpm test:e2e -g crm-customers` = 8/8 em deka e 8/8 em demo2 (1 vazio, 1 erro por tenant) |
-| F02-T06 | Telas de produtos e pedidos: criar com itens, mudar status pela tabela, cancelar. | CRM Core | `pnpm test:e2e -g crm-orders` = 6/6 por tenant |
-| F02-T07 | Seeds com produtos e clientes PJ por YAML; `create-tenant.sh` carrega. | TenantConfiguration | `customers=Nc products=Np` iguais a `yq '.customers \| length'` e `.products \| length`, 2 tenants |
-| F02-T08 | Tela de configuração do tenant (nome, telefone, endereço, horário, branding D28) gravando em `tenant_settings`. | TenantConfiguration | `pnpm test:e2e -g tenant-settings` = 4/4 por tenant; valor lido por query = digitado |
-| F02-T09 | Atualizar `docs/migration/deskcomm-audit.md`: linhas CRM com commit resolvedor. | Observabilidade | `grep -c "CRM.*@ [0-9a-f]\{7\}" docs/migration/deskcomm-audit.md` = n/n linhas CRM |
+| F02-T01 | Inventário, extensão de clientes/empresas e catálogo/unidades; mapear contratos sobre `contacts/catalog_products`, sem renome obrigatório. | CRM, Banco/RLS | IDs/leitores preservados; relações recusam tenant cruzado; `rls-coverage missing=0`; quantidade de tabelas vem do catálogo real |
+| F02-T02 | Pedido/itens com data de entrega, origem, snapshots, revisão e transições; compatibilidade do `orders` herdado. | CRM, Banco/RLS | Instalação/upgrade preservam dados; todos os pares válidos/ilegais comprovados; concorrência recusa revisão vencida |
+| F02-T03 | Histórico, tarefas e notas ligados a cliente/pedido; eventos únicos, sem lead fictício. | CRM | Escritas geram eventos rastreáveis uma vez; timeline herdada preservada; catálogo de RLS completo |
+| F02-T04 | API autorizada das entidades sobre handlers compatíveis e TenantContext; validar entrada, papel, tenant e efeitos. | API | Matriz de operações/papéis em dois tenants com denominador; IDs cruzados, sessão sem autorização e escrita de suporte somente leitura negados |
+| F02-T05 | Telas de clientes/empresas e perfil com histórico, busca, vazio e erro. | CRM | Jornada de cadastro/edição/busca e vínculos nos dois tenants; vazio/erro distinguíveis |
+| F02-T06 | Telas de catálogo/pedidos: itens, total, confirmação humana, status, cancelamento e pendências. | CRM | Operador registra/confere pedido; total bate com fonte; estados ilegais rejeitados nos dois tenants |
+| F02-T07 | Seeds fictícios de produtos/clientes/pedidos com mapeamento herdado. | Configuração | Duas execuções não duplicam; contagem igual ao YAML; cenários cobrem duas empresas |
+| F02-T08 | Configuração comercial confirmada/identidade/branding e pendências. | Configuração | Valor validado escrito é o lido; mudança de config não reescreve snapshot confirmado |
+| F02-T10 | Lista do dia por produto e entrega, com pendências, recorte/fuso explícitos. | CRM | Soma de todos os itens elegíveis, inclusive além da primeira página; rascunhos/cancelados excluídos; pendências visíveis |
+| F02-T11 | Impressão e reimpressão da lista/pedido. | CRM | Recorte/revisões correspondem à tela; páginas não perdem itens; impressão não confirma nem entrega pedido |
+| F02-T12 | Conferência por item/revisão; parcial, completa, desfeita e invalidada por alteração. | CRM, Auditoria | Repetição segura, ator/data registrados, revisão antiga recusada; conferir não altera venda |
+| F02-T09 | Atualizar auditoria/matriz com implementação e commits reais após T10–T12. | Observabilidade | Cada afirmação tem arquivo:linha/commit e prova observada |
+| F02-T13 | Jornada F02 integrada e critérios no verificador por ADR. | Observabilidade | Matriz do desenho passa nos dois tenants; controles obrigatórios passam; validação visual/real ausente explicitada |
 
-Saída de F02: `e2e=N/N` e `replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0` obrigatórios; `isolation: tables=K+8` (as 7 entidades de D22 mais `order_items`, que é tabela física e conta no catálogo).
+Ordem: T01 → T02 → T03 → T04; T05–T08 pelas dependências; T10 → T11/T12 → T09 → T13. IDs anteriores permanecem. Saída: E2E por tenant, replicabilidade sem alteração em `src/`, isolamento com tabelas físicas medidas (não pressupor `K+8`) e provas da lista/impressão/conferência.
 
-Não entra: pipeline/oportunidades, campos personalizados, tags livres, pesquisa global, dashboard (D05 Fase 2).
+Não entra: estoque, fiscal, cobrança de pedidos, rota de entrega, IA/WhatsApp reais nem pipeline/oportunidades nesta fase.
 
 ### 7.4 F03 — Conversation + Channel Adapter + Inbox
 
-Objetivo: mensagem do WAHA (ou mock) vira cliente, conversa e mensagem no tenant certo, uma vez só; o atendente opera pelo Inbox com estado visível.
+Objetivo: mensagem do WAHA (ou mock) vira cliente, conversa e mensagem no tenant certo, uma vez só; o atendente opera pelo Inbox com estado visível. Adaptar o ciclo existente e preservar `ServiceBoundary`, demanda e revisão; mapear D16 sem criar uma segunda máquina de estados concorrente.
 
 Pré-condição: `F02=done`, `e2e[deka]=ok e2e[demo2]=ok`.
 
@@ -770,7 +794,7 @@ Não entra: Meta Cloud API, Instagram, e-mail inbound, webchat (D05 Fase 2); nú
 
 ### 7.5 F04 — AI Agent + Knowledge/RAG + Action Policy + tools Fase 1
 
-Objetivo: a IA responde só com o contexto do tenant, age só pelo catálogo, e 30 casos com resposta esperada provam isso com provedor mock.
+Objetivo: adaptar o motor de IA existente para responder só com o contexto do tenant e agir pelo catálogo; 30 casos provam o contrato com mock. Aprovação de texto assistido é distinta da confirmação comercial do pedido. Preservar proveniência do turno e unificar registros de consumo.
 
 Pré-condição: `F03=done`, `webhook: stored=1`.
 
@@ -794,7 +818,7 @@ Não entra: motor genérico, múltiplos agentes, IA de vendas, créditos/bloquei
 
 ### 7.6 F05 — Handoff + Notificações + Recurring Reminder + uso de IA
 
-Objetivo: a conversa passa para um humano com resumo e notificação, a IA cala depois disso, e o lembrete PJ dispara uma vez por período.
+Objetivo: adaptar handoff/silêncio existentes, com resumo e notificação, e disparar o lembrete PJ uma vez por período. Timeout de ausência de resposta, fechamento de produção e janela/data de entrega são conceitos distintos; parâmetros/exceções exigem descoberta, e chave do lembrete não limita o cliente a um pedido semanal.
 
 Pré-condição: `F04=done`, `ai_eval: pass=M/M`.
 
@@ -807,7 +831,7 @@ Pré-condição: `F04=done`, `ai_eval: pass=M/M`.
 | F05-T05 | Notificações internas e e-mail mock para os 6 eventos de 5.16: `handoff.created`, `task.assigned`, `confirmation.requested`, `customer.replied_while_human`, `reminder.no_reply`, `job.blocked`. | Notificações | `handoff: notify=+1`; `notifications: events=6 rows=6/6 email_outbox=6/6` |
 | F05-T06 | Recurring Reminder: job por tenant elegível (cron via TenantContext); config `orders.recurring_reminder`; clientes PJ recorrentes; idempotente por `(tenant, customer, período)`. | Recurring Reminder, Workers | `reminder: runs=2 sent=1 duplicates=0`, somando `reminder_runs`, `messages`, `mock_outbox` (G-57) |
 | F05-T07 | Envio pela ação `send_message` com executor `automation`; nenhuma chamada ao adapter fora do catálogo. | Action Policy, Recurring Reminder | `grep -rn "adapter.send\|channelAdapter" src/ \| grep -v src/actions/ \| wc -l` = 0; `audit_rows` = envios |
-| F05-T08 | Resposta ao lembrete: IA interpreta quantidade e chama `update_order_quantity` (by_risk); sem resposta até o corte → `task` + notificação. | AI Agent, Recurring Reminder | `reminder-reply: scenarios=3 pass=3/3`; `order_items.quantity` conferido por query 2/2 |
+| F05-T08 | Resposta ao lembrete: IA interpreta quantidade e chama `update_order_quantity` (by_risk); sem resposta até o timeout configurado → `task` + notificação; resposta após fechamento da produção segue exceção/avaliação humana configurada, sem assumir a entrega automaticamente. | AI Agent, Recurring Reminder | `reminder-reply: scenarios=3 pass=3/3`; `order_items.quantity` conferido por query 2/2 |
 | F05-T09 | Tela de uso de IA para tenant_admin (tokens, custo por período). | Entitlement | `pnpm test:e2e -g ai-usage`: valor exibido = `sum(ai_usage_events)`, 2/2 |
 | F05-T10 | verify.sh v1.3 (ADR): `handoff` e `reminder`; mutantes: sem guarda de T04 → `ai_msgs_after_handoff≥1`; sem chave do lembrete → `duplicates=1`. | Observabilidade | `mutants_killed=5/5` |
 
@@ -860,6 +884,25 @@ Saída de F07: todos os campos obrigatórios; `STATUS: READY (staging)`. A ordem
 Não entra: produção, mensagem real, tenant Deka real, piloto (D26; checklist em 8.6); templates por segmento e onboarding wizard (D05 Fase 2).
 
 
+### 7.9 Roadmap de operação real e SaaS comercial — F08–F17
+
+Estas fases ampliam o destino do produto conforme entrevista de 08/09/2026. São planejamento, não fases implementadas nem autorização de produção/cobrança. Tasks, provedores e metas serão detalhados antes de cada execução, conservando D11–D13.
+
+| Fase | Entrega | Critério de saída |
+|---|---|---|
+| F08 — Serviços reais e produção inicial | WAHA e IA reais, e-mail transacional, domínio, operador, orçamento, backup/retorno e dados Deka autorizados | Jornadas reais conferidas, configuração sem placeholders, aceite de produção e smoke após deploy |
+| F09 — Piloto Deka | Operação acompanhada: pedidos, separação, tempo, adesão e custo/qualidade da IA | Baseline/metas comparados com números e denominadores; decidir continuar, corrigir/repetir ou encerrar |
+| F10 — Segunda empresa real | Validar outro cliente e preço aceito; segmento ainda não definido | Operação por configuração sem código específico; preço aceito. Abre o gate de expansão; venda assistida pode validar demanda antes do gateway |
+| F11 — Administração e entrada guiada | Painel/login do proprietário, empresas/equipes/suporte, cadastro e wizard WhatsApp/IA; preparar ativação dependente de F12 | Empresa conclui configuração sem editar código/banco; suporte auditado e limitado; nenhum acesso operacional gratuito por falha no fluxo |
+| F12 — Assinatura, planos e cobrança | Contratação, pagamento, liberação de acesso, capacidades/limites/uso, mudança de plano, cancelamento e conciliação | Pagamento confiável ativa uma vez; eventos duplicados/fora de ordem não duplicam acesso/cobrança; aviso/carência/bloqueio implementados com dias definidos; custos reais medidos e ciclo autorizado validado |
+| F13 — CRM comercial completo | Funis/oportunidades, campos configuráveis, papéis/filas, histórico, tarefas, pedidos e relatórios | Jornadas e permissões passam; indicadores conferem com origem; evolução preserva dados/vínculos |
+| F14 — WhatsApp, chat do site e agenda | Completar jornadas integradas dos canais comerciais e agenda de clientes/equipe com Google Agenda sincronizada; conexão guiada, disponibilidade, fuso e conflitos | Mensagens e eventos reais isolados por empresa; criar/alterar/cancelar agenda consistente; reconexão/revogação testadas. Instagram/e-mail de entrada/Meta Cloud posterior não são pré-requisitos automáticos |
+| F15 — Automação e IA configurável | Autonomia por empresa/ação, aprovações, handoff, regras, limites, pausa, auditoria e conhecimento | Permitir/aprovar/bloquear/transferir respeitados; repetição segura; custo e qualidade reais medidos; nenhum efeito fora da política |
+| F16 — Marca e versatilidade | Marca do SaaS, experiência coerente e presets configuráveis. Definir profundidade de templates, white-label e domínio por cliente antes de construir | Nova empresa configura seu uso sem código; atualização preserva escolhas; identidade visual/domínio corretos para o escopo acordado |
+| F17 — Operação e aceite comercial | Capacidade, recuperação, suporte, atualização, documentação e regressão final | Jornada cadastro → pagamento → acesso → WhatsApp/IA/chat/agenda → operação → cancelamento/recuperação validada; carga/recuperação medidas; nenhum defeito crítico/alto aberto; aceite da versão pelo proprietário |
+
+Dependências: F00/F01 → F02 → F03 → F04 → F05 → F06 → F07 → F08 → F09 → F10. F11/F12 são desenvolvidas em conjunto para fechar o onboarding pago; F13–F16 podem ter trabalho paralelo com seus contratos definidos. F17 reúne os critérios. WhatsApp oficial e novos canais só entram por decisão posterior. Prioridade informada: começar o quanto antes, sem data fixada. Orçamento recomendado, aberto para revisão: até R$300/mês adicionais no piloto se a VPS comportar, e R$600–1.200/mês na preparação comercial; premissas no orçamento proposto. Nenhum valor aprovado nem autorização de gasto.
+
 ## 8. Definition of Done, verify.sh e condição de parada
 
 O documento original tinha 7 Definitions of Done divergentes, 326 critérios de "pronto" e 8 com prova nomeada. Esta seção tem uma DoD, um bloco de saída e uma condição de parada. Critério sem comando ou campo nomeado, com número e denominador, não é critério (D24).
@@ -882,38 +925,46 @@ Uma task está pronta quando os 5 itens abaixo têm prova. Sem um deles, a task 
 | Item | Prova | Origem |
 |---|---|---|
 | Suíte nova nasce com mutante | se a task cria uma suíte (arquivo novo em `tests/`), cria também `tests/mutants/<suite>.sh` que sabota a mudança, roda o subteste e espera vermelho; `mutants_killed` sobe em 1 por suíte nova, não por task (D30, G-38) | G-38, D30 |
-| `pnpm typecheck && pnpm lint && pnpm test:unit && pnpm test:db && pnpm test:integration` verdes sem `.skip`/`.only` (nomes da lista do AGENTS.md; `pnpm test` não existe) | saída literal colada; `tests_skipped=0` calculado por `grep -rnE "\.(skip\|only)\(" tests src \| wc -l` | D30 |
+| `pnpm typecheck && pnpm lint && pnpm test:unit && pnpm test:db && pnpm test:integration` verdes sem `.skip`/`.only` (nomes da lista do AGENTS.md; `pnpm test` não existe) | saída e JSON do runner colados; `tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0`; `--allowOnly=false` | D30 |
 | Nenhum arquivo em `tests/` deletado | `git diff --diff-filter=D --name-only <commit-F00> -- tests \| wc -l` = 0 | D30 |
 | `BUILD-STATE.md` com `next_task:` avançado | `grep "^next_task:" BUILD-STATE.md` mostra a task seguinte; o número da prova está no corpo do commit (D37), não no BUILD-STATE | D08, D37 |
 | `git status --short` colado no commit | corpo do commit contém o bloco; arquivos fora da task não aparecem | D31, G-63 |
 
 ### 8.3 Contrato do `scripts/verify.sh`
 
+Revisão ADR-007: `./scripts/verify.sh --revalidate F01` exige F01 historicamente concluída e produz `REVALIDATED (F01)` ou `REVALIDATED WITH DEBT (F01)`, nunca READY da fase atual. Somente três identidades herdadas de `c85f7d72` são reconhecidas: skip de rate limit inbound e falhas esperadas de agenda em andamento/opt-out pausado. Qualquer regressão ou dívida nova reprova. A execução normal exige dívida zero; a revalidação não encerra F02. Campos futuros continuam pending.
+
 Artefato da F00, revisado pelo proprietário antes de F01; muda só por ADR (D25). Cada versão (v1 F01-T11, v1.1 F03-T10, v1.2 F04-T11, v1.3 F05-T10) acrescenta campos, nunca remove.
 
-Comportamento fixo: exporta `WHATSAPP_MODE=mock AI_PROVIDER=mock` antes de qualquer passo, ignorando o `.env` local; imprime EXATAMENTE o bloco abaixo como últimas linhas; sai 0 se a linha `STATUS` for `READY (Fnn)` da fase corrente lida do BUILD-STATE ou `READY (staging)`, e 1 se for `NOT READY`. `READY (staging)` só conta como saída 0 quando `current_phase: F07`; em qualquer fase anterior, imprimir `READY (staging)` é erro e força saída 1. Campo de fase futura imprime `pending` e não conta; campo obrigatório na fase atual com `pending` ou abaixo do mínimo força `NOT READY`.
+Comportamento: força `WHATSAPP_MODE=mock AI_PROVIDER=mock`; imprime os campos abaixo (valores ilustrativos). Modo normal só sai 0 com READY de fase suportada e controles/dívida limpos. Revalidação explícita sai 0 com REVALIDATED, incluindo WITH DEBT apenas para a allowlist nominal; não fecha a fase corrente. Qualquer falha/violação/relatório incompleto sai 1 com NOT READY. Campos futuros imprimem pending; obrigatório ausente reprova. READY (staging) exige F07 e execução no ambiente correspondente, ainda sem gate implementado nesta integração.
 
-```
+```text
 VERIFY SUMMARY
-build=ok lint=ok typecheck=ok
-unit=N/N integration=N/N db=N/N e2e=N/N baseline_n0=N0
+scope=phase|revalidation phase=Fnn current_phase=Fnn
+build=ok lint=ok typecheck=ok shell=ok
+unit=N/N integration=N/N db=N/N e2e=pending baseline_n0=N0
+baseline_comparable: scope=unit+db passed=N required=N full_n0=pending
 isolation: tables=K ops=4 dirs=2 leaks=0
+rls-coverage: tables_with_org_id=K policies_found=P missing=0 service_only_with_grant=0
 rbac: roles=3 denied_expected=D denied_actual=D
 entitlement: usage_events_written=U
-ai_eval: cases=M pass=M/M unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0
-handoff: ai_msgs_after_handoff=0 summary=present assignee=present notify=+1
-reminder: runs=2 sent=1 duplicates=0
-webhook: replay=2 stored=1 tables_checked=T
-replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0
+ai_eval: cases=pending pass=pending unknown=pending injection=pending cross_tenant=pending provider_calls_at_zero_balance=pending
+handoff: ai_msgs_after_handoff=pending summary=pending assignee=pending notify=pending
+reminder: runs=pending sent=pending duplicates=pending
+webhook: replay=pending stored=pending tables_checked=pending
+replicability: e2e[deka]=pending e2e[demo2]=pending src_diff_lines=pending grep_deka_in_src=0
 secrets: files_scanned=F findings=0
-tests_deleted=0 tests_skipped=0 mutants_killed=Q/Q
-STATUS: READY (Fnn) | READY (staging) | NOT READY
+tests_deleted=0 tests_skipped=N expected_failures=N tests_failed=0 tests_pending=0 mutants_killed=Q/Q
+debt_known=N skip_only_occurrences=N violations=0
+debt: <identidade nominal, se houver>
+violation: <causa, se houver>
+STATUS: READY (Fnn) | REVALIDATED (Fnn) | REVALIDATED WITH DEBT (Fnn) | NOT READY
 ```
 
 | Campo | Como é calculado | Mínimo Fase 1 | Obrigatório a partir de |
 |---|---|---|---|
-| `build lint typecheck` | exit 0 de `pnpm build`, `pnpm lint`, `pnpm typecheck` | `ok` nos 3 | F01 |
-| `unit integration db e2e` | passados/total por runner, ambos os tenants | passados = total; soma ≥ `baseline_n0` | F01 (`e2e` F02) |
+| `build lint typecheck shell` | exit 0 dos quatro comandos correspondentes | `ok` nos 4 | F01 |
+| `unit integration db e2e` | Sucessos funcionais/total por runner; expected failures separados | READY: passados=total. Revalidação: só dívida nominal. Comparar componentes correspondentes do baseline; E2E atual não executado permanece pending | F01 (`e2e` F02) |
 | `baseline_n0` | N0 gravado em F00 (D29); prova que nenhum teste sumiu | igual ao BUILD-STATE | F01 |
 | `isolation` | K = tabelas de `public` com `organization_id`, lido de `information_schema` na hora; tentativas K×4×2; `leaks` = tentativas com linha lida ou afetada | `leaks=0`, K = tabelas tenant-aware do target-state | F01 |
 | `rbac` | D = células "nega" da matriz em código; `denied_actual` = quantas retornaram 403 | `denied_actual=denied_expected`, `roles=3` | F01 |
@@ -925,20 +976,23 @@ STATUS: READY (Fnn) | READY (staging) | NOT READY
 | `replicability` | e2e em deka e demo2 na mesma árvore; `src_diff_lines` = `git diff --numstat -- src/ \| awk '{s+=$1+$2} END {print s+0}'` entre as duas; `grep_deka_in_src` = `grep -ril deka src/ \| wc -l` | tudo `ok` e 0 | `grep_deka` F01; e2e duplo F02 |
 | `secrets` | F = `git ls-files src scripts supabase workers \| wc -l` (as pastas que 5.18 varre; `docs/` e comentários ficam fora — G-51); achados por padrão de chave/token/senha | `findings=0`, F = arquivos das pastas varridas | F01 |
 | `tests_deleted` | arquivos removidos de `tests/` desde o commit de F00 | 0 | F01 |
-| `tests_skipped` | ocorrências de `.skip(`/`.only(` em `tests` e `src` | 0 | F01 |
+| `tests_skipped` | Testes skipped/todo/disabled no JSON do runner (ADR-007); `expected_failures`, `tests_failed`, `tests_pending` separados | Todos 0 para READY; revalidação distingue dívida nominal | F01 |
+| `skip_only_occurrences` | Ocorrências textuais em `tests/src`, inclusive comentários/fixtures; não é contagem de testes executados | Informativo; seleção `.only` é proibida pelo runner | F01 |
+| `baseline_comparable` | Soma de unit+db observados contra os mesmos componentes do baseline histórico | Não diminuir; `full_n0=pending` até E2E atual | F01 |
+| `scope` / `debt_known` / `violations` | Modo phase/revalidation, dívida nominal e violações da régua | READY exige dívida/violações 0; revalidação com dívida tem status próprio | F01 |
 | `mutants_killed` | Q scripts em `tests/mutants/`; morto = subteste vermelho com a sabotagem | Q/Q, Q ≥ 5 em F07 | F01 |
-| `STATUS` | `READY (Fnn)` quando todos os obrigatórios da fase atual (lida do BUILD-STATE) batem; `READY (staging)` só na F07, com todos os campos obrigatórios e rodado em staging; senão `NOT READY` | — | F01 |
+| `STATUS` | READY no modo normal com dívida zero; REVALIDATED ou REVALIDATED WITH DEBT apenas na revalidação explícita; NOT READY em qualquer violação. Staging depende de F07 | Nunca usar revalidação F01 para fechar F02 | F01 |
 
 O bloco é colado na íntegra no corpo do commit ao fechar cada task (D37), em `verify_summary_last` do BUILD-STATE ao fechar cada fase, e no FINAL-VALIDATION.md em F07. O BUILD-STATE nunca recebe o bloco por task. É a única prova aceita para `READY (staging)` (D25). Bloco sem o log do script no mesmo commit não vale.
 
-### 8.4 Condição de parada
+### 8.4 Condição de parada do marco técnico do piloto (F07)
 
 ```
 OBJETIVO (como ele disse): CRM SaaS multi-tenant com IA sobre o DeskcommCRM, piloto Deka, Fase 1 nos 5 blocos de D05, pronto em staging para o proprietário decidir a produção.
 ESTADO FINAL: BUILD-STATE.md com F00..F07 fechadas, FINAL-VALIDATION.md com 8 seções e o bloco colado, BLOCKER-PROD aberto em branch blocker/PROD, nenhum outro BLOCKER aberto.
 PROVA: scripts/verify.sh rodado em staging com WHATSAPP_MODE=mock AI_PROVIDER=mock termina em STATUS: READY (staging) e exit 0, com isolation leaks=0 sobre tables=K (K = tabelas tenant-aware do target-state), ai_eval pass=M/M com M≥30 (unknown=6 injection=10 cross_tenant=5), handoff ai_msgs_after_handoff=0 sobre H≥3, reminder runs=2 sent=1 duplicates=0, webhook replay=2 stored=1 tables_checked≥4, replicability src_diff_lines=0 grep_deka_in_src=0, tests_deleted=0 tests_skipped=0 mutants_killed=Q/Q com Q≥5, e smoke: pass=6/6 na linha do BUILD-STATE.
 RESTRIÇÕES: sem deploy em produção; sem mensagem a pessoa real; sem número real da Deka; sem restore sobre banco em uso; sem dados reais de clientes; sem custo novo; sem apagar ou pular teste; sem deka em src/; sem git na sessão Cowork; contradição de escopo, negócio, custo ou irreversibilidade vira BLOCKER e encerra a run (D10, D11).
-TETO: 15 turnos por fase, 120 no total, ou 3 turnos seguidos com VERIFY SUMMARY idêntico
+TETO: 15 turnos por fase, 120 no marco F00–F07, ou 3 turnos seguidos com VERIFY SUMMARY idêntico
 LINHA PRONTA: "verify.sh em staging imprimiu READY (staging) com todos os campos obrigatórios de F07, FINAL-VALIDATION.md tem as 8 seções com o bloco colado e BLOCKER-PROD está aberto."
 PRÉ-VOO: verificável pela transcrição? sim, pelo bloco e pelo exit code. / fecha trapaceando? só editando testes, seeds ou o bloco à mão; tests_deleted, tests_skipped, baseline_n0, src_diff_lines e mutants_killed fecham cada um desses caminhos. / irreversível no caminho? não: staging com mock, banco de restore separado, produção atrás de BLOCKER. / zero conta como sucesso? só ao lado do denominador (tables=K, cases=M, handoffs=H, files_scanned=F). / precisa de auto mode? sim para rodar suíte, Compose e scripts em staging; não para produção, que é humano.
 RISCO: o agente fecha F06 sem hosting confirmado (D03) ou fecha "verificado em staging" rodando o bloco localmente; mitigação: pré-condição hosting_confirmed=yes e o log do run de staging (F06-T06 para subir, F07-T01 para rodar o bloco lá dentro; F06-T08 é o CI de PR) colado junto do bloco.
@@ -953,7 +1007,7 @@ RISCO: o agente fecha F06 sem hosting confirmado (D03) ou fecha "verificado em s
 | IA não inventa | escreve "a IA respondeu de forma coerente" | cada caso do dataset tem `expected` vindo do registro-fonte (G-35); `unknown=6` exige o texto `unknown_answer` literal; `pass=M/M` |
 | Handoff | mostra 1 conversa que mudou de estado | `ai_msgs_after_handoff=0` sobre H ≥ 3 com `msgs_after` > 0; `summary` = 7/7 campos; `notify=+1` por handoff |
 | Entitlement/uso | "registra uso" sem linha no banco | `usage_events_written=U` lido de `ai_usage_events` após a run; saldo antes/depois (G-20); `provider_calls_at_zero_balance=0` com `attempts=3` |
-| Testes passam | apaga ou marca `.skip` no teste que falha | `tests_deleted=0` por `git diff --diff-filter=D`, `tests_skipped=0` por grep, soma dos totais ≥ `baseline_n0` |
+| Testes passam | apaga ou marca `.skip` no teste que falha | `tests_deleted=0` por `git diff --diff-filter=D`, `tests_skipped=0` pelo runner, falhas esperadas separadas, `.only` recusado e baseline comparado por suítes executadas |
 | Sem regressão | roda só o teste novo | o bloco roda a suíte inteira nos 2 tenants; `baseline_n0` no bloco |
 | Webhook idempotente | conta só `messages` | `tables_checked=T` ≥ 4, duplicata somada em todas (G-57); fixture real versionada (G-42) |
 | Lembrete PJ | roda o job 1× e vê 1 envio | `runs=2 sent=1 duplicates=0` somando 3 tabelas; mutante remove a chave e espera `duplicates=1` |
@@ -990,7 +1044,7 @@ Relatório final único (D08). Oito seções curtas, nesta ordem, com esses tít
 O agente não escreve "projeto concluído". Escreve o bloco, as 8 seções e a lista do que não foi verificado; o proprietário decide o resto.
 
 
-## 9. AGENTS.md (texto pronto para a raiz do repositório)
+## 9. AGENTS.md (modelo histórico do pacote inicial; regras atuais na raiz)
 
 O bloco abaixo é copiado verbatim para `/AGENTS.md` na raiz do repositório; na F00 o Codex o mescla com o AGENTS.md herdado do Deskcomm e registra em ADR-001 o que manteve (D01). Ele fica abaixo de 9,5 KB (9.500 bytes) de propósito: o Codex relê este arquivo a cada tarefa, e é aqui, não em documentação separada, que as regras vindas dos gotchas precisam estar — parafraseadas por extenso, nunca só pelo id. Os identificadores `G-nn` são rastreabilidade para a lista pessoal do proprietário e não apontam para nenhum arquivo do repositório; se um id aparecer sem a regra escrita ao lado, a regra é que está faltando.
 
@@ -1069,7 +1123,7 @@ ADR em `docs/decisions/ADR-nnn.md` com seis campos: contexto; decisão; alternat
 ```
 
 
-## 10. BUILD-STATE.md (modelo; 85 linhas em 03/09/2026)
+## 10. BUILD-STATE.md (modelo histórico; não representa o estado atual)
 
 O bloco abaixo é o `BUILD-STATE.md` inicial da raiz do repositório (D08). Ele substitui o modelo original de 1.490 linhas: o cabeçalho YAML é lido por máquina (`next_task` diz ao Codex o que fazer na próxima run), a tabela de módulos nasce vazia de propósito e a F00 a preenche com o estado REAL do Deskcomm, nunca com "não iniciado" para o que já existe (D01, D29). Nenhuma credencial entra neste arquivo.
 
@@ -1218,7 +1272,7 @@ Classificação: config (o número de teste não é segredo; a sessão do WAHA e
 Confirmação: o aparelho recebe uma mensagem enviada do seu celular pessoal e o número aparece no seed.
 
 ### Etapa 7 de 12: conversa de 20 minutos com a Deka
-O que fazer: sente com quem manda na Deka e faça quatro perguntas fechadas (é o teste de que o piloto existe de verdade): (a) quantas mensagens por dia chegam hoje no WhatsApp da empresa; (b) quem, pelo nome, vai sentar no inbox e atender o que a IA escalar; (c) a Deka aceita, por escrito, colocar o número da empresa num robô não oficial que pode ser banido, ou prefere pagar a API oficial (Fase 2); (d) o que ela faria diferente amanhã se isso já existisse. Saia da conversa com nome, número e volume, ou não há piloto. Na mesma conversa, colete o que o seed precisa.
+O que fazer: sente com quem manda na Deka e faça quatro perguntas fechadas (é o teste de que o piloto existe de verdade): (a) quantas mensagens por dia chegam hoje no WhatsApp da empresa; (b) quem, pelo nome, vai sentar no inbox e atender o que a IA escalar; (c) a Deka aceita, por escrito, colocar o número da empresa num robô não oficial que pode ser banido, (a decisão atual é WAHA; API oficial não entra agora); (d) o que ela faria diferente amanhã se isso já existisse. Saia da conversa com nome, número e volume, ou não há piloto. Na mesma conversa, colete o que o seed precisa.
 Onde: presencial ou chamada. Anote no próprio `docs/tenants/deka.seed.yaml`.
 Valor capturado e destino:
 - D27 no BUILD-STATE: mensagens/dia hoje; meta de % resolvidas pela IA sem handoff; meta de % pedidos PJ registrados via WhatsApp; meta de pedidos perdidos por esquecimento (zero); duração do piloto em dias; critério de invalidação (ex.: inbox não aberto por 7 dias).
@@ -1272,14 +1326,14 @@ Confirmação: cada linha da tabela tem numerador, denominador e meta; nenhuma l
 | 4 Supabase dev | F00 (F00-T04 consulta `pg_policies` e `pg_tables` no banco de dev; sem banco, a sub-matriz de RLS não existe) |
 | 5 OpenAI + modelos | F00 exige ADR-002: sem modelo escolhido por você, o ADR registra a dimensão herdada do schema como decisão provisória e marca `provisório`; F04 real fica `NOT VALIDATED (real)` sem a chave |
 | 6 Número de teste | F03 real fica `NOT VALIDATED (real)`; a fase fecha com mock |
-| 7 Conversa com a Deka | F01 (seed da Deka sem catálogo e regra PJ); piloto não começa sem D27 |
+| 7 Conversa com a Deka | Dados comerciais antes das tasks dependentes F02/F05; placeholders permitem a fundação; piloto real não começa sem D27 |
 | 8 Hosting | F06 (deploy em staging) |
 | 9 Revisão do verify.sh | F01 (o `verify.sh` só vale como prova depois de congelado) |
 | 10 Itens de produção | Promoção para produção |
 | 11 Aprovação escrita + número real | Promoção para produção e primeiro envio real |
 | 12 Leitura do piloto | Gate da Fase 2 |
 
-Resumo: F00 precisa de 1 a 4; F01 precisa de 7 e 9; F04 real precisa de 5; F06 precisa de 8; produção precisa de 10 e 11; a Fase 2 precisa de 12 e de um segundo cliente real.
+Resumo: F00 precisa de 1 a 4; F01 precisa de 9; dados de 7 precedem tasks dependentes e piloto real; F04 real precisa de 5; F06 precisa de 8; produção precisa de 10 e 11; a Fase 2 precisa de 12 e de um segundo cliente real.
 
 
 ## 12. Rastreabilidade — do v1 para o v2
@@ -1293,7 +1347,7 @@ Resumo: F00 precisa de 1 a 4; F01 precisa de 7 e 9; F04 real precisa de 5; F06 p
 | Guia 02 — Auditoria, arquitetura e plano (84 seções) | Fase 0, arquitetura-alvo, testes, protocolo do agente, insumos | 5, 6, 2 (D01, D29), 11 |
 | Guia 03 — Especificação executável (95 seções, 67 fases) | fases por feature | 5 (por módulo) e 7 (por fase F01–F07); Fase 2 em 5.20 |
 | Guia 04 — Revisão de consistência e gaps (68 seções) | correções e decisões | absorvido em 2 (D01–D37) |
-| Guia 05 — Backlog executável (163 tasks) | tasks por fase | 7 (77 tasks F00–F07, uma prova cada) |
+| Guia 05 — Backlog executável (163 tasks) | tasks por fase | 6/7 (81 tasks F00–F07; critérios de saída por task) |
 | Guia 06 — AGENTS.md "instruções permanentes" (82 seções) | regras de engenharia | 9 (AGENTS.md ≤ 9,5 KB) e 5 (invariantes por módulo) |
 | Guia 07 — Pré-execução e checklist (46 seções) | contas, credenciais, env vars, dados da Deka | 11 (wizard de 12 etapas) e 2.2 |
 | Guia 08 — DoD + AGENTS.md + BUILD-STATE + README (4.886 linhas) | critérios de pronto, arquivos de controle | 8 (DoD, verify.sh, condição de parada), 9, 10 |
@@ -1333,4 +1387,4 @@ Resumo: F00 precisa de 1 a 4; F01 precisa de 7 e 9; F04 real precisa de 5; F06 p
 
 ### 12.3 O que ficou de fora de propósito
 
-Prazos e custos continuam ausentes porque não há dado para eles: o v1 não tinha nenhum e inventar um seria `[SEM LASTRO]`. O que existe é o teto de turnos por fase (8.4) e a pendência de orçamento OpenAI (11, etapa 5). Depois da F00 o BUILD-STATE terá N0 e a matriz de reaproveitamento — a primeira base honesta para estimar.
+Prazo desejado: começar o quanto antes, sem data fixada. Há orçamento proposto com preços oficiais e hipóteses de volume em `docs/diretriz/ORCAMENTO-PROPOSTO.md` no planejamento e `docs/product/ORCAMENTO-PROPOSTO.md` no fork. Os tetos sugeridos aguardam revisão e não autorizam gasto. F00/F01 têm evidência histórica; integração e medição operacional refinam as próximas estimativas.
