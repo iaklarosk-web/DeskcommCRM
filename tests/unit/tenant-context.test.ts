@@ -134,6 +134,45 @@ describe("TenantContext", () => {
         reason: "no_membership",
       });
     });
+
+    it.each([
+      ["full", "active"],
+      ["full", "expired"],
+      ["full", "revoked"],
+      ["support_readonly", "active"],
+      ["support_readonly", "expired"],
+      ["support_readonly", "revoked"],
+    ] as const)("não converte suporte %s/%s em membership comum", async (access_mode, status) => {
+      vi.mocked(loadAuthUser).mockResolvedValue({
+        ...authUser(),
+        is_platform_admin: true,
+        organizations: [],
+        support: {
+          id: "33333333-3333-4333-8333-333333333333",
+          organization_id: ORG_ID,
+          actor_user_id: USER_ID,
+          auth_session_id: "44444444-4444-4444-8444-444444444444",
+          previous_organization_id: null,
+          expires_at: "2026-09-08T18:00:00Z",
+          name: "Org de Teste",
+          locale: "pt-BR",
+          access_mode,
+          status,
+        },
+      });
+      // O upstream pode resolver uma organização por suporte sem membership.
+      vi.mocked(resolveActiveOrg).mockResolvedValue({
+        orgId: ORG_ID,
+        name: "Org de Teste",
+        role: access_mode === "full" ? "admin" : "viewer",
+      });
+
+      await expect(fromSession()).rejects.toMatchObject({
+        source: "session",
+        reason: "support_session_not_supported",
+      });
+      expect(resolveActiveOrg).not.toHaveBeenCalled();
+    });
   });
 
   describe("withTenant", () => {

@@ -2,28 +2,29 @@
 
 ## 0. Herdado (ADR-001)
 Stack: Next.js 16 · React 19 · TypeScript 6 · Tailwind 4 · Zod 4 · Vitest 4 · Playwright 1 · Sentry 10 · Node ≥22 · pnpm 9.15.9. `CLAUDE.md` é a doutrina do código herdado: vale onde não contradiz este arquivo e `docs/DIRETRIZ.md`.
+Integração v1.17.0: WAHA 2026.7.2, engine NOWEB, sem bloqueio por tier; imagem upstream fixada, nunca republicada. Preservar `ServiceBoundary`, demanda/revisão e guardas de suporte. ADR-006 registra a conciliação com a F01.
 Rota: Zod → guard (`lib/auth/require-role.ts`) → `organization_id` explícito → `audit()` → `ok()`/`fail()`; snake_case; `_cents`; `lib/logger.ts`, nunca `console.log`; PT-BR; `getUser()`, nunca `getSession()`; token só em header, no banco só hash.
 Schema: `supabase/baseline.sql` é o que o self-host aplica — mudança = migration + apêndice idempotente + MANIFEST; migration aplicada não se edita; função nova em `public` leva `revoke execute … from public, anon`. `.env*` não se abre nem se loga. Nunca "Deskcomm" em código de usuário. Nenhum serviço `build:`-only no compose de produção (`pnpm test:shell`).
 
 ## 1. O que é este projeto
-CRM SaaS multi-tenant com atendimento por WhatsApp e IA, construído sobre o repositório DeskcommCRM (Next.js + Supabase + workers Node). Fase 1 = piloto Deka Sucos em 5 blocos (WhatsApp/Inbox, agente de IA + base de conhecimento, handoff, lembrete de pedido PJ, CRM mínimo). A Deka é o primeiro tenant, nunca o único: `demo2` existe desde a F01 e roda a mesma suíte.
+CRM SaaS multi-tenant sobre DeskcommCRM. Piloto Deka: WhatsApp/Inbox, IA/conhecimento, handoff, lembrete PJ e CRM/pedidos do dia. `demo2` existe desde F01 com a mesma suíte. SaaS final: D38–D44.
 
 ## 2. Leia nesta ordem
 1. `AGENTS.md` (este arquivo: como você trabalha).
-2. `docs/DIRETRIZ.md` (o que construir). Dentro dele, a seção "Decisões fechadas" (D01..D37) vence qualquer outro trecho.
+2. `docs/DIRETRIZ.md` (o que construir). Dentro dele, a seção "Decisões fechadas" (D01..D44) vence qualquer outro trecho; D38–D44 e ADR-009 registram a entrega comercial confirmada.
 3. Código do Deskcomm: fonte de verdade sobre o ESTADO ATUAL, nunca sobre requisitos.
 4. `BUILD-STATE.md`: estado da construção.
 
 Onde está cada coisa: `docs/decisions/` (ADR-nnn.md, único registro de decisão); `docs/migration/deskcomm-audit.md` e `target-state.md` (saída da F00); `docs/tenants/deka.seed.yaml`, `demo2.seed.yaml`; docs/ai-eval/cases.yaml (F04); `scripts/verify.sh`, scripts/create-tenant.sh (F01); `FINAL-VALIDATION.md` (relatório final único; histórico de fases fica no BUILD-STATE); `.env.example` (ADR-004).
 
 ## 3. Estado e retomada
-Toda sessão começa assim: `git fetch`, `git rev-parse HEAD`, ler `BUILD-STATE.md`. Compare `head_commit` com o HEAD real. Execute o que está em `next_task`. Nada além disso sem fechar a task atual.
+Início: `git fetch`, `git rev-parse HEAD`, ler BUILD-STATE e comparar `head_commit`. Executar `next_task`, salvo redirecionamento autorizado pelo usuário.
 Se `status: BLOCKED` e o BLOCKER continua aberto, não avance: encerre a run sem diff.
-Afirmação antiga sobre o código não é fato: remeça antes de confiar (G-23). Toda afirmação nova cita `arquivo:linha @ commit`.
-Atualize o BUILD-STATE ao fechar uma task (só `next_task`), ao fechar uma fase (bloco inteiro + VERIFY SUMMARY) e ao abrir um BLOCKER. Nunca a cada linha de código.
+Remeça afirmações antigas (G-23); novas citam `arquivo:linha @ commit`.
+BUILD-STATE: atualizar ao fechar task (`next_task`), fase (bloco + VERIFY SUMMARY) ou abrir BLOCKER.
 
 ## 4. Comandos
-Os nomes reais vêm do `package.json` auditado na F00 e ficam registrados em `docs/migration/deskcomm-audit.md`. Nunca invente script. Referência de nomes esperados: `pnpm typecheck`, `pnpm lint`, `pnpm test:unit`, `pnpm test:integration`, `pnpm test:db`, `pnpm test:e2e`, `pnpm ai:eval`, `pnpm build`, `./scripts/verify.sh`. Script ausente vira linha na auditoria, não invenção. Exceção: os scripts que uma task da DIRETRIZ §7 nomeia explicitamente são criados por essa task — a lista vive nas tasks, não aqui, para não envelhecer sozinha (em 03/09/2026: `verify.sh`, `create-tenant.sh`, `ai:eval`, `test:integration`, `smoke.sh`, `from-scratch.sh`, `backup.sh`, `restore.sh`) — inventar é criar script que nenhuma task pede.
+Comandos reais: `package.json` e `docs/migration/deskcomm-audit.md`. Referência: `pnpm typecheck`, `pnpm lint`, `pnpm test:unit`, `pnpm test:integration`, `pnpm test:db`, `pnpm test:e2e`, `pnpm ai:eval`, `pnpm build`, `./scripts/verify.sh`. Não inventar script ausente: registrar na auditoria. Criar scripts quando explicitamente previstos nas tasks da DIRETRIZ §7.
 Fase 1 roda com `WHATSAPP_MODE=mock` e `AI_PROVIDER=mock`; o `verify.sh` força os dois.
 `scripts/verify.sh` nasce na F00, é revisado pelo dono antes da F01 e depois só muda via ADR (D25). É a única prova aceita para READY.
 
@@ -69,7 +70,8 @@ Seu: nomes de arquivo, estrutura interna, escolha entre libs já presentes no re
 ## 9. Definition of Done (resumo; texto completo em `docs/DIRETRIZ.md` §8)
 Task pronta: código + teste com mutante morto + typecheck e lint verdes + linha no BUILD-STATE com contagem.
 Fase pronta: `./scripts/verify.sh` sai 0 nos dois tenants e o bloco VERIFY SUMMARY está colado no BUILD-STATE.
-`STATUS: READY (staging)` só com VERIFY SUMMARY colado, `tests_deleted=0`, `tests_skipped=0` e `BLOCKER-PROD` aberto (D25, D26). Sem o bloco, não é READY.
+`STATUS: READY (staging)` só com VERIFY SUMMARY colado, `tests_deleted=0`, `tests_skipped=0` e `BLOCKER-PROD` aberto (D25, D26). Sem bloco, sem READY.
+ADR-007: `--revalidate F01` reexecuta a fundação sem fechar F02. Skips/falhas esperadas vêm do runner; dívida herdada nominal só permite `REVALIDATED WITH DEBT`, nunca READY. Contagem textual fica em `skip_only_occurrences`.
 
 ## 10. Formato de commit e de ADR
 Commit: título `Fnn-Tmm: <verbo no presente> <objeto>`; corpo com três linhas: o que mudou; prova (comando + contagem/denominador); o que não foi verificado.
