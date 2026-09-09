@@ -9,6 +9,13 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/logger";
 import type { Json } from "@/lib/database.types";
+import {
+  collectOperationalOrderExport,
+  type OperationalOrderEventRow,
+  type OperationalOrderRow,
+  type OperationalOrderSavedSnapshot,
+} from "@/src/crm/orders/export";
+import type { TenantCtx } from "@/src/tenant-context";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -219,6 +226,10 @@ export interface ExportPayload {
   messages_recent: MessageRow[];
   leads: LeadRow[];
   orders: OrderRow[];
+  /** Sempre preenchido pelo coletor real; opcional só preserva fixtures anteriores. */
+  operational_orders?: OperationalOrderRow[];
+  operational_order_events?: OperationalOrderEventRow[];
+  operational_order_saved_snapshots?: OperationalOrderSavedSnapshot[];
   activities: ActivityRow[];
   appointments: AppointmentRow[];
   tasks: TaskRow[];
@@ -247,6 +258,7 @@ interface CollectArgs {
   requestId: string;
   contactId: string | null;
   externalCustomerId: string | null;
+  tenantCtx?: TenantCtx;
 }
 
 const RECENT_MESSAGES_LIMIT = 100;
@@ -511,6 +523,14 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
   }
 
   // Activities — direct contact_id on crm_lead_activities.
+  // Operational orders are independent from legacy ecommerce `orders`. Failure is fatal:
+  // a successful export missing this block would falsely claim completeness.
+  const operational = contactId
+    ? await collectOperationalOrderExport(
+        args.tenantCtx ?? { organization_id: organizationId, source: "job" },
+        contactId,
+      )
+    : { orders: [], events: [], saved_snapshots: [] };
   let activities: ActivityRow[] = [];
   if (contactId) {
     const { data, error } = await admin
@@ -749,6 +769,9 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     messages_recent,
     leads,
     orders,
+    operational_orders: operational.orders,
+    operational_order_events: operational.events,
+    operational_order_saved_snapshots: operational.saved_snapshots,
     activities,
     appointments,
     tasks,
@@ -780,6 +803,9 @@ function emptyPayload(
     messages_recent: [],
     leads: [],
     orders: [],
+    operational_orders: [],
+    operational_order_events: [],
+    operational_order_saved_snapshots: [],
     activities: [],
     appointments: [],
     tasks: [],

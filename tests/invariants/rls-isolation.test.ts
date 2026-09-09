@@ -101,6 +101,10 @@ beforeAll(() => {
       v_stage uuid;
       v_agent uuid;
       v_version uuid;
+      v_company uuid;
+      v_product uuid;
+      v_order uuid;
+      v_receipt uuid;
       v_boundary jsonb;
     begin
       foreach v_org in array array['${ORG_A}'::uuid, '${ORG_B}'::uuid] loop
@@ -235,6 +239,57 @@ beforeAll(() => {
             values (v_org, 'RLS-' || v_org::text, 'Produto de invariante', 100);
         end if;
 
+        if not exists (select 1 from public.crm_companies where organization_id = v_org) then
+          insert into public.crm_companies (organization_id, legal_name)
+            values (v_org, 'Empresa de invariante ' || v_org::text);
+        end if;
+
+        select id into v_company from public.crm_companies
+          where organization_id = v_org limit 1;
+        select id into v_product from public.catalog_products
+          where organization_id = v_org limit 1;
+
+        -- F02-T02: pedido, item e journal são tabelas de domínio legíveis por
+        -- membro. O recibo que ancora a idempotência é privado e tem prova
+        -- dedicada em f02-t02-order-schema.test.ts.
+        select id into v_order from public.crm_orders
+          where organization_id = v_org limit 1;
+        if v_order is null then
+          insert into public.crm_orders
+            (organization_id, contact_id, company_id, company_name_snapshot,
+             source, status, created_by_actor_type)
+            values (v_org, v_contact, v_company, 'Empresa no momento do pedido',
+                    'ui', 'draft', 'user')
+            returning id into v_order;
+        end if;
+        if not exists (select 1 from public.crm_order_items where organization_id = v_org) then
+          insert into public.crm_order_items
+            (organization_id, order_id, position, requested_text, product_id,
+             product_name_snapshot, sale_unit_snapshot, quantity,
+             unit_price_cents, currency_snapshot, line_total_cents)
+            values (v_org, v_order, 1, 'Item sintético do invariante', v_product,
+                    'Produto no momento do pedido', 'un', 1.000,
+                    100, 'BRL', 100);
+        end if;
+        select id into v_receipt from public.crm_order_command_receipts
+          where organization_id = v_org and order_id = v_order limit 1;
+        if v_receipt is null then
+          insert into public.crm_order_command_receipts
+            (organization_id, operation, idempotency_key, request_hash,
+             actor_type, order_id, response_body, completed_at)
+            values (v_org, 'create_draft', 'rls-invariant-' || v_org::text,
+                    decode(repeat('00', 32), 'hex'), 'user', v_order,
+                    '{}'::jsonb, now())
+            returning id into v_receipt;
+        end if;
+        if not exists (select 1 from public.crm_order_events where organization_id = v_org) then
+          insert into public.crm_order_events
+            (organization_id, receipt_id, order_id, contact_id, order_revision,
+             event_type, changes, actor_type)
+            values (v_org, v_receipt, v_order, v_contact, 1,
+                    'draft_created', '{}'::jsonb, 'user');
+        end if;
+
         -- crm_tasks (migration 0210): o que o time combinou fazer, com prazo.
         -- Entra COM o vínculo de lead porque a tarefa presa a um negócio é o
         -- caso que cruza duas tabelas tenant-aware — se a policy vazasse, o
@@ -300,6 +355,13 @@ export const TABLES = [
   // exige `manager` — esse segundo eixo é medido em
   // `tests/invariants/catalogo-so-gestor-muda-preco.test.ts`, não aqui.
   "catalog_products",
+  // F02-T01 — empresa cliente, separada de organizations (o tenant).
+  "crm_companies",
+  // F02-T02 — domínio operacional somente leitura para membros. O recibo de
+  // comando fica fora desta lista porque authenticated não possui SELECT.
+  "crm_orders",
+  "crm_order_items",
+  "crm_order_events",
   // migration 0210 — as tarefas do CRM. A leitura é org-scoped sem gate de papel
   // (o `viewer` precisa ver o que o time combinou); a ESCRITA exige `agent`, e
   // esse segundo eixo NÃO é medido aqui — o usuário semeado é `agent`, então o

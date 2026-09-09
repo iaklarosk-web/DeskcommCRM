@@ -23,6 +23,10 @@ export interface Contact {
   source: string;
   source_metadata: Record<string, unknown>;
   custom_fields: Record<string, unknown>;
+  /** Empresa cliente opcional, sempre isolada pela organization_id no PATCH. */
+  company_id: string | null;
+  /** Marcador comercial; false é valor válido e não ausência. */
+  recurring: boolean;
   created_at: string;
   updated_at: string;
   last_activity_at: string | null;
