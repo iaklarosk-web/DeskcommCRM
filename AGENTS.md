@@ -11,7 +11,7 @@ CRM SaaS multi-tenant sobre DeskcommCRM. Piloto Deka: WhatsApp/Inbox, IA/conheci
 
 ## 2. Leia nesta ordem
 1. `AGENTS.md` (este arquivo: como você trabalha).
-2. `docs/DIRETRIZ.md` (o que construir). Dentro dele, a seção "Decisões fechadas" (D01..D44) vence qualquer outro trecho; D38–D44 e ADR-009 registram a entrega comercial confirmada.
+2. `docs/DIRETRIZ.md` (o que construir). Dentro dele, a seção "Decisões fechadas" (D01..D46) vence qualquer outro trecho; D38–D44 e ADR-009 registram a entrega comercial confirmada; D45/D46 e ADR-011/012 autorizam a construção e os contratos operacionais.
 3. Código do Deskcomm: fonte de verdade sobre o ESTADO ATUAL, nunca sobre requisitos.
 4. `BUILD-STATE.md`: estado da construção.
 

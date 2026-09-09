@@ -1,6 +1,6 @@
 # DIRETRIZ v2 — CRM SaaS multi-tenant com IA sobre o DeskcommCRM
 
-**Versão 2.1 · revisão de escopo em 08/09/2026 · substitui integralmente "Construção CRM" v1 (Guias 00–09).** Este arquivo vive em `docs/DIRETRIZ.md`. O `AGENTS.md` (seção 9) é o que o agente relê a cada tarefa e aponta para cá.
+**Versão 2.2 · construção autorizada em 09/09/2026 · substitui integralmente "Construção CRM" v1 (Guias 00–09).** Este arquivo vive em `docs/DIRETRIZ.md`. O `AGENTS.md` (seção 9) é o que o agente relê a cada tarefa e aponta para cá.
 
 ## 0. Como usar este documento
 
@@ -101,6 +101,8 @@ A tabela abaixo é a seção de maior autoridade deste documento. Cada linha res
 | D42 | [AUTORIZADO, 08/09/2026] Integrar DeskcommCRM v1.17.0 (`db58c3fb`), revalidar fundação e atualizar desenho F02; ADR-006/007/008. Preservar motor, handoff e ServiceBoundary adaptando requisitos. Esta autorização não implementa F02 inteira, não promove produção e não escolhe preço, gateway, prazo ou orçamento. |
 | D43 | [DECISÃO TÉCNICA, ADR-007] Revalidação explícita de fase já concluída é distinta de prontidão da fase atual. Skips são medidos pelo runner e falhas esperadas são dívida identificada; a allowlist herdada é nominal, não pode crescer silenciosamente e nunca autoriza READY. Campos obrigatórios ausentes, falhas, métricas inválidas, regressões e mutantes sobreviventes reprovam. N0 compara apenas as suítes realmente executadas, preservando o baseline histórico. |
 | D44 | [DECIDIDO, 08/09/2026] Atraso de assinatura: avisar e conceder prazo de regularização; depois bloquear novas operações, preservando dados e acesso à cobrança. Dias de carência, notificações e regras de reativação/retencão permanecem para revisão antes da cobrança real. |
+| D45 | [AUTORIZADO, 09/09/2026] Construir por fases conforme a sequência e os aceites vigentes, começando pela F02; amplia o escopo de D42. Planejamento e revisões críticas com modelos mais fortes; execução delimitada com modelos mais econômicos, escolhidos pelo agente com esforço proporcional ao risco. Registrar consumo observado e equivalente de API separadamente da cobrança da assinatura, sem inventar fatura por tarefa. Pedido típico, unidades, preços e entrega continuam pendentes com a Deka; seguir com fixtures e campos configuráveis, sem inferir regra comercial. Detalhes no ADR-011. |
+| D46 | [DECISÃO TÉCNICA, 09/09/2026, ADR-012] Identidade lógica preservada em contacts/catalog_products; empresa-cliente em crm_companies. Pedido operacional em crm_orders/crm_order_items, sem relaxar contratos ou reinterpretar estados de orders externo. Relações novas incluem tenant; unidades legadas ficam não definidas. Escrita operacional atômica por serviço autorizado, revisão e recibo idempotente; evento canônico do pedido integra a ficha com origem visível, preservando a visibilidade das atividades de lead. Implementação e aceite exigem provas próprias. |
 
 ### 2.2 Decisões que só o proprietário toma
 

@@ -1,17 +1,17 @@
 ---
-updated_at: 2026-09-08T22:44:25Z
-head_commit: a86ca7c4234722d8422e833dbefcaf986fad1797   # commit de código validado; este fechamento altera apenas documentação
+updated_at: 2026-09-09T19:06:56Z
+head_commit: c81a59b8c45e60c5584f61532cd2ef83c3efedaf   # checkpoint de código T01/T02 e telas; F02 permanece em andamento
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
-plan_version: "2.1 (2026-09-08); D38–D44; ADR-006…010"
+plan_version: "2.2 (2026-09-09); D38–D46; ADR-006…012"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
 current_phase: F02
-next_task: F02-T01
+next_task: F02-T03
 status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
 hosting_confirmed: no          # confirmar D03 antes da F06; orçamento proposto não aprova contratação
 build_env: "Codex na VPS, worktree DeskcommCRM-v1.17.0; validação em serviços/bancos descartáveis; WHATSAPP_MODE=mock AI_PROVIDER=mock"
-verify_summary_last_context: "COMPOSIÇÃO DOCUMENTADA de execuções concluídas; ADR-007; evidência em docs/migration/evidence/revalidation-f01-v117.txt"
+verify_summary_last_context: "HISTÓRICO de 08/09/2026, anterior à construção F02. Provas focais atuais abaixo; nenhum novo gate completo publicado."
 verify_summary_last: |
   VERIFY SUMMARY
   scope=revalidation phase=F01 current_phase=F02
@@ -38,19 +38,39 @@ verify_summary_last: |
 
 # BUILD-STATE
 
-Plano vigente: [DIRETRIZ v2.1](docs/DIRETRIZ.md), decisões D38–D44 e [ADR-009](docs/decisions/ADR-009-entrega-comercial-e-entrevista.md), conforme entrevista de 08/09/2026. F00/F01 possuem fechamento histórico anterior à integração. O desenho F02 foi atualizado; **F02-T01 continua pendente e a implementação de F02 não foi iniciada por esta revisão**.
+Plano vigente: [DIRETRIZ v2.2](docs/DIRETRIZ.md), decisões D45–D46 e [ADR-011](docs/decisions/ADR-011-construcao-por-fases-e-consumo.md). **A construção por fases está autorizada e F02 está em andamento** na branch `codex/f02-crm-pedidos`. Cadastros/API/UI e saneamento das três dívidas estão implementados com provas focais. Pedidos operacionais já têm domínio, migrations, comandos transacionais, API, telas e histórico. As jornadas de cadastros e pedidos passaram no navegador. Tipos, lint e build passaram; as dez falhas da regressão global passaram nas rechecagens focais. O checkpoint de T01/T02 está registrado; a próxima task é T03. F02 e as partes ainda incompletas de T04–T06 não recebem `done` por esse checkpoint.
 
 O destino é um SaaS comercial com marca do proprietário, painel/login da administração da plataforma e identidade própria dos clientes. O onboarding inclui cadastro, contratação, conexão WhatsApp e configuração guiada de IA, com ajuda opcional; o acesso operacional depende de confirmação confiável da assinatura/pagamento. A primeira versão comercial inclui WhatsApp, chat do site, agenda de clientes/equipe com Google Agenda sincronizada e e-mail transacional. Instagram/e-mail de entrada e ERP/adjacentes são evolução posterior. F07 é marco técnico em staging; F17 é aceite comercial da versão.
 
+## Construção F02 — evidência parcial de 09/09/2026
+
+Checkpoint de código `c81a59b8`, precedido por saneamento em `30b693ae` e backend em `d06ad310`. [Evidência e proveniência](docs/migration/evidence/construction-f02-t01-t02-20260909.txt). As contagens abaixo não substituem o resumo histórico nem representam `READY`:
+
+| Recorte medido | Resultado observado | Limite |
+|---|---|---|
+| Cadastros: schema/RLS, instalação e reaplicação | 93/93 | Banco descartável; não valida regras comerciais da Deka |
+| Pedidos: schema/RLS, instalação e reaplicação | 107/107 | Migrations 9006/9007; tipos gerados no sandbox local |
+| Serviço de pedidos | 20/20; mutante de troca de contato 1/1 | Transações, concorrência, replay, isolamento, snapshots e LGPD. Ampliação do export também passou novamente em 20/20 |
+| Cadastros no navegador | 1/1, três etapas internas, zero skips/retries | Empresas, produtos/unidades e vínculo do contato; duas organizações fictícias e viewer |
+| Regressão unitária, três partes | 8.079/8.089, 761 arquivos, zero testes pendentes | Dez falhas localizadas; todas passaram nas rechecagens focais, não é uma execução integral verde |
+| Primeiras correções de compatibilidade | 25/25 | UUID em HTTP/local e identidade auditada de empresa |
+| API, suporte, CI, inventário e export focal | 20/20 | Registro de specs no CI não comprova execução no GitHub |
+| Pedidos no navegador | 2/2, zero skips/retries/flaky | Duas jornadas A/B; quatro organizações/quatro usuários removidos, oito tabelas de domínio sem resíduos por jornada |
+| Build atual, tipos e lint | exit 0 nos três | Build 358,5s, 1.908 entradas sem alteração, bundle com host local; lint 356 warnings herdados |
+
+A tentativa unitária única terminou externamente com código 143 e sem relatório final; causa não estabelecida. As três partes seguintes cobriram os 761 arquivos do manifesto. As partes 1/2 precedem as correções de UUID/auditoria; a parte 3 as sucede. Relatórios e tentativas permanecem em `.verify-logs/f02-global-current/`; rechecagens focais têm nomes próprios. Nenhum resultado parcial é apresentado como uma execução integral verde.
+
+A rechecagem final de UI/i18n e guardas passou em 67/67; mutantes de confirmação com pendência, de suporte e de escopo do export passaram em 1/1 cada. As dez falhas originais foram reconciliadas por arquivo/nome com casos aprovados nas rechecagens. A proteção nova contra descarte de item sem descrição também passou. As três dívidas herdadas foram transformadas em casos normais, corrigidas e verificadas focalmente; o verificador de F02 ainda precisa ser ampliado na T13. T03 possui propostas, serviço/schema com provas focais 13/13 e 7/7, API 15/15 e export 3/3 em diretório temporário, sem migration ou API promovida nesta árvore. Esses resultados não concluem T03. A data que rege a lista, unidades/preços reais, impressão e conferência permanecem pendentes com a Deka. F03 segue dependente da conclusão de F02.
+
 ## Revalidação da F01 sobre v1.17.0 — 08/09/2026
 
-**REVALIDATED WITH DEBT (F01)** no commit de código `a86ca7c4234722d8422e833dbefcaf986fad1797`: build/lint/typecheck/shell aprovados; unitários 7965/7966, integração 6/6, banco 1499/1501, mutantes 2/2 e nenhuma nova violação. [Evidência e proveniência](docs/migration/evidence/revalidation-f01-v117.txt). As três dívidas herdadas são a classificação de compromisso em andamento, opt-out de acompanhamento pausado e o skip de rate limit; continuam impedindo READY no gate normal. Isolamento: 117 tabelas, quatro operações em duas direções, leaks=0; provas com linhas entre empresas em 90/117 tabelas. A contagem de policies do verificador não é o total de policies do catálogo. E2E da combinação e serviços reais continuam pendentes.
+**REVALIDATED WITH DEBT (F01)** no commit de código `a86ca7c4234722d8422e833dbefcaf986fad1797`: build/lint/typecheck/shell aprovados; unitários 7965/7966, integração 6/6, banco 1499/1501, mutantes 2/2 e nenhuma nova violação. [Evidência e proveniência](docs/migration/evidence/revalidation-f01-v117.txt). As três dívidas herdadas são a classificação de compromisso em andamento, opt-out de acompanhamento pausado e o skip de rate limit; naquele resultado impediam READY no gate normal. Na árvore atual foram corrigidas, com casos antes marcados convertidos em testes normais e mutantes; falta publicar o novo gate completo. Isolamento: 117 tabelas, quatro operações em duas direções, leaks=0; provas com linhas entre empresas em 90/117 tabelas. A contagem de policies do verificador não é o total de policies do catálogo. E2E da combinação e serviços reais continuam pendentes.
 
-A [ADR-006](docs/decisions/ADR-006-integracao-v1.17.0.md) fixa a release `db58c3fb` e preserva a fundação de `960a469`. A [ADR-007](docs/decisions/ADR-007-verify-revalidacao.md) distingue revalidação de F01, dívida nominal e prontidão: resultado com dívida não é `READY`, e revalidar F01 não conclui F02. Tentativas que falharam e repetições permanecem identificadas na evidência. O cabeçalho contém o resultado composto atual. O resumo literal de **07/09/2026** foi preservado na seção histórica abaixo, com sua terminologia e contagens antigas.
+A [ADR-006](docs/decisions/ADR-006-integracao-v1.17.0.md) fixa a release `db58c3fb` e preserva a fundação de `960a469`. A [ADR-007](docs/decisions/ADR-007-verify-revalidacao.md) distingue revalidação de F01, dívida nominal e prontidão: resultado com dívida não é `READY`, e revalidar F01 não conclui F02. Tentativas que falharam e repetições permanecem identificadas na evidência. O cabeçalho preserva o resultado composto histórico de 08/09/2026. O resumo literal de **07/09/2026** foi preservado na seção histórica abaixo, com sua terminologia e contagens antigas.
 
 A prova reproduzível de atualização a partir do baseline F01 está em [scripts/verify/upgrade-f01-v117/README.md](scripts/verify/upgrade-f01-v117/README.md), com [evidência observada](docs/migration/evidence/upgrade-f01-v117.txt). Ela cobre o banco descartável e não substitui a bateria completa nem demonstra serviços reais.
 
-## Fases (D07; plano v2.1)
+## Fases (D07; plano v2.2)
 
 `done` em F00/F01 registra o fechamento histórico de 07/09/2026. A revalidação da combinação com v1.17.0 está separada acima. F08–F17 têm objetivos e critérios em DIRETRIZ §7.9; suas tasks serão decompostas antes da execução.
 
@@ -58,7 +78,7 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 |---|---|---|
 | F00 | Auditoria, verificador, ADR-001…003 e baseline N0 | done(verify=2026-09-07 2a23537e) |
 | F01 | TenantContext, TenantConfiguration, Entitlement mínimo, seeds deka/demo2 e criação de tenant | done(verify=2026-09-07 6f7c56fc) — histórico; revalidação v1.17.0 com dívida em 08/09/2026 |
-| F02 | CRM mínimo e pedidos do dia: clientes/empresas, catálogo, pedidos/itens, histórico, tarefas/notas, lista por produto/entrega, impressão e conferência | pending — próxima task F02-T01; desenho revisto, produto por construir |
+| F02 | CRM mínimo e pedidos do dia: clientes/empresas, catálogo, pedidos/itens, histórico, tarefas/notas, lista por produto/entrega, impressão e conferência | in_progress — checkpoint T01/T02 com E2E; próxima T03; lista/impressão/conferência e gate final pendentes |
 | F03 | WhatsApp de entrada/saída via WAHA, adaptação do ChannelAdapter, Inbox e ciclo das conversas | pending |
 | F04 | Adaptar o motor de IA/RAG, Action Policy e nove ferramentas ao contrato CRM-OS | pending |
 | F05 | Adaptar handoff e notificações; criar regra de lembrete PJ sobre infraestrutura existente | pending |
