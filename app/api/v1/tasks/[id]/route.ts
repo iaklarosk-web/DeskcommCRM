@@ -27,7 +27,7 @@ import { PRIORIDADES_DA_TAREFA, SITUACOES_DA_TAREFA, type Tarefa } from "@/lib/t
 export const dynamic = "force-dynamic";
 
 const COLUNAS =
-  "id, organization_id, title, description, due_date, priority, status, lead_id, contact_id, assigned_to, created_by, created_at, updated_at";
+  "id, organization_id, title, description, due_date, priority, status, lead_id, contact_id, order_id, revision, assigned_to, created_by, created_at, updated_at";
 
 const edicaoSchema = z
   .object({
@@ -72,12 +72,61 @@ export async function PATCH(req: NextRequest, ctx: Contexto): Promise<Response> 
   // A situação ANTES da edição decide se esta é a vez em que a tarefa fechou.
   // Sem ler antes, marcar "concluída" duas vezes emitiria duas linhas na
   // timeline do negócio — e a segunda seria mentira.
-  const { data: antes } = await supabase
+  const { data: antes, error: erroAntes } = await supabase
     .from("crm_tasks")
-    .select("status")
+    .select("status,order_id,contact_id")
     .eq("id", id)
     .eq("organization_id", authz.org.orgId)
     .maybeSingle();
+
+  if (erroAntes) {
+    if (erroAntes.code === "PGRST116") {
+      return fail("not_found", t("Tarefa não encontrada."), 404, { requestId });
+    }
+    return fail("internal_error", t("Erro ao salvar a tarefa."), 500, { requestId });
+  }
+  if (!antes) {
+    return fail("not_found", t("Tarefa não encontrada."), 404, { requestId });
+  }
+  if ((antes as { order_id?: string | null }).order_id) {
+    return fail(
+      "state_conflict",
+      t("Esta tarefa pertence a um pedido. Use o pedido para alterá-la."),
+      409,
+      { requestId },
+    );
+  }
+
+  const contatoParaValidar =
+    typeof parsed.data.contact_id === "string"
+      ? parsed.data.contact_id
+      : parsed.data.title !== undefined || parsed.data.description !== undefined
+        ? ((antes as { contact_id?: string | null }).contact_id ?? null)
+        : null;
+  if (contatoParaValidar) {
+    const { data: contact, error: contactError } = await supabase
+      .from("contacts")
+      .select("id,is_anonymized,is_merged_into")
+      .eq("organization_id", authz.org.orgId)
+      .eq("id", contatoParaValidar)
+      .maybeSingle();
+    if (contactError) {
+      return fail("internal_error", t("Erro ao salvar a tarefa."), 500, { requestId });
+    }
+    if (!contact) {
+      return fail("not_found", t("Contato não encontrado."), 404, { requestId });
+    }
+    if (contact.is_anonymized || contact.is_merged_into) {
+      return fail(
+        "contact_unavailable",
+        t(
+          "O contato principal não está disponível — ele pode ter sido anonimizado ou já mesclado em outro.",
+        ),
+        422,
+        { requestId },
+      );
+    }
+  }
 
   const { data, error } = await supabase
     .from("crm_tasks")
@@ -88,6 +137,27 @@ export async function PATCH(req: NextRequest, ctx: Contexto): Promise<Response> 
     .single();
 
   if (error) {
+    if (error.code === "40P01") {
+      return fail(
+        "state_conflict",
+        t("Outra operação ocorreu ao mesmo tempo. Tente novamente."),
+        409,
+        { requestId },
+      );
+    }
+    if (
+      error.code === "23514" ||
+      (error.code === "23503" && /crm_tasks_contact/i.test(error.message))
+    ) {
+      return fail(
+        "contact_unavailable",
+        t(
+          "O contato principal não está disponível — ele pode ter sido anonimizado ou já mesclado em outro.",
+        ),
+        422,
+        { requestId },
+      );
+    }
     if (error.code === "PGRST116") {
       return fail("not_found", t("Tarefa não encontrada."), 404, { requestId });
     }
@@ -137,6 +207,31 @@ export async function DELETE(_req: NextRequest, ctx: Contexto): Promise<Response
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 
   const supabase = await createClient();
+  const { data: existente, error: erroExistente } = await supabase
+    .from("crm_tasks")
+    .select("order_id")
+    .eq("id", id)
+    .eq("organization_id", authz.org.orgId)
+    .maybeSingle();
+
+  if (erroExistente) {
+    if (erroExistente.code === "PGRST116") {
+      return fail("not_found", t("Tarefa não encontrada."), 404, { requestId });
+    }
+    return fail("internal_error", t("Erro ao apagar a tarefa."), 500, { requestId });
+  }
+  if (!existente) {
+    return fail("not_found", t("Tarefa não encontrada."), 404, { requestId });
+  }
+  if ((existente as { order_id?: string | null }).order_id) {
+    return fail(
+      "state_conflict",
+      t("Esta tarefa pertence a um pedido. Use o pedido para alterá-la."),
+      409,
+      { requestId },
+    );
+  }
+
   // `.select()` no delete para saber se ALGUMA linha saiu. Sem isso, apagar uma
   // tarefa de outra organização devolveria 200 — e a tela sumiria com a linha
   // do próprio usuário na próxima recarga, sem que nada tivesse sido apagado.

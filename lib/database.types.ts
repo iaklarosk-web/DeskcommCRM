@@ -4354,6 +4354,61 @@ export type Database = {
           },
         ]
       }
+      crm_notes: {
+        Row: {
+          actor_user_id: string
+          body: string
+          contact_id: string
+          created_at: string
+          id: string
+          order_id: string | null
+          organization_id: string
+          redacted_at: string | null
+        }
+        Insert: {
+          actor_user_id: string
+          body: string
+          contact_id: string
+          created_at?: string
+          id: string
+          order_id?: string | null
+          organization_id: string
+          redacted_at?: string | null
+        }
+        Update: {
+          actor_user_id?: string
+          body?: string
+          contact_id?: string
+          created_at?: string
+          id?: string
+          order_id?: string | null
+          organization_id?: string
+          redacted_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_notes_contact_tenant_fkey"
+            columns: ["organization_id", "contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "crm_notes_order_contact_tenant_fkey"
+            columns: ["organization_id", "order_id", "contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_orders"
+            referencedColumns: ["organization_id", "id", "contact_id"]
+          },
+          {
+            foreignKeyName: "crm_notes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_order_command_receipts: {
         Row: {
           actor_id: string | null
@@ -4777,6 +4832,137 @@ export type Database = {
           },
         ]
       }
+      crm_task_command_receipts: {
+        Row: {
+          actor_id: string | null
+          actor_type: string
+          command_type: string
+          created_at: string
+          id: string
+          organization_id: string
+          request_hash: string
+          result_status: string
+          result_task_id: string
+          result_task_revision: number
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_type: string
+          command_type: string
+          created_at?: string
+          id: string
+          organization_id: string
+          request_hash: string
+          result_status: string
+          result_task_id: string
+          result_task_revision: number
+        }
+        Update: {
+          actor_id?: string | null
+          actor_type?: string
+          command_type?: string
+          created_at?: string
+          id?: string
+          organization_id?: string
+          request_hash?: string
+          result_status?: string
+          result_task_id?: string
+          result_task_revision?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_task_command_receipts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_task_events: {
+        Row: {
+          actor_id: string | null
+          actor_type: string
+          contact_id: string
+          created_at: string
+          event_type: string
+          from_status: string | null
+          id: string
+          order_id: string
+          organization_id: string
+          task_id: string
+          task_revision: number
+          to_status: string
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_type: string
+          contact_id: string
+          created_at?: string
+          event_type: string
+          from_status?: string | null
+          id: string
+          order_id: string
+          organization_id: string
+          task_id: string
+          task_revision: number
+          to_status: string
+        }
+        Update: {
+          actor_id?: string | null
+          actor_type?: string
+          contact_id?: string
+          created_at?: string
+          event_type?: string
+          from_status?: string | null
+          id?: string
+          order_id?: string
+          organization_id?: string
+          task_id?: string
+          task_revision?: number
+          to_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_task_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_task_events_receipt_fkey"
+            columns: [
+              "organization_id",
+              "id",
+              "task_id",
+              "task_revision",
+              "to_status",
+            ]
+            isOneToOne: false
+            referencedRelation: "crm_task_command_receipts"
+            referencedColumns: [
+              "organization_id",
+              "id",
+              "result_task_id",
+              "result_task_revision",
+              "result_status",
+            ]
+          },
+          {
+            foreignKeyName: "crm_task_events_task_order_contact_fkey"
+            columns: ["organization_id", "task_id", "order_id", "contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_tasks"
+            referencedColumns: [
+              "organization_id",
+              "id",
+              "order_id",
+              "contact_id",
+            ]
+          },
+        ]
+      }
       crm_tasks: {
         Row: {
           assigned_to: string | null
@@ -4787,8 +4973,10 @@ export type Database = {
           due_date: string | null
           id: string
           lead_id: string | null
+          order_id: string | null
           organization_id: string
           priority: string
+          revision: number
           status: string
           title: string
           updated_at: string
@@ -4802,8 +4990,10 @@ export type Database = {
           due_date?: string | null
           id?: string
           lead_id?: string | null
+          order_id?: string | null
           organization_id: string
           priority?: string
+          revision?: number
           status?: string
           title: string
           updated_at?: string
@@ -4817,8 +5007,10 @@ export type Database = {
           due_date?: string | null
           id?: string
           lead_id?: string | null
+          order_id?: string | null
           organization_id?: string
           priority?: string
+          revision?: number
           status?: string
           title?: string
           updated_at?: string
@@ -4832,11 +5024,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "crm_tasks_contact_tenant_fkey"
+            columns: ["organization_id", "contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
             foreignKeyName: "crm_tasks_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "crm_leads"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_tasks_order_contact_tenant_fkey"
+            columns: ["organization_id", "order_id", "contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_orders"
+            referencedColumns: ["organization_id", "id", "contact_id"]
           },
           {
             foreignKeyName: "crm_tasks_organization_id_fkey"

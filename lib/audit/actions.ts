@@ -464,7 +464,9 @@ export const AUDIT_ACTIONS = [
   // exatamente o que se disputa depois de um cliente ficar sem retorno.
   "crm_task.created",
   "crm_task.updated",
+  "crm_task.status_changed",
   "crm_task.deleted",
+  "crm_note.created",
   "organization.switched",
 ] as const;
 

@@ -76,6 +76,19 @@ describe("F02-T01 — empresas e campos comerciais", () => {
       drop policy contacts_f02_write_delete_guard on public.contacts;
       alter table public.contacts drop column company_id, drop column recurring;
       alter table public.catalog_products drop column sale_unit;
+      -- O baseline atual já contém 9006/9008. Para reproduzir o instante
+      -- anterior à 9005, retire também as FKs posteriores que passaram a usar
+      -- o índice composto criado por ela. O ROLLBACK restaura todas ao final.
+      alter table public.crm_notes
+        drop constraint crm_notes_contact_tenant_fkey;
+      alter table public.crm_tasks
+        drop constraint crm_tasks_contact_tenant_fkey;
+      alter table public.crm_order_events
+        drop constraint crm_order_events_contact_tenant_fkey;
+      alter table public.crm_orders
+        drop constraint crm_orders_contact_tenant_fkey;
+      alter table public.crm_order_items
+        drop constraint crm_order_items_product_tenant_fkey;
       drop index public.contacts_org_id_unique;
       drop index public.catalog_products_org_id_unique;
       ${seed}

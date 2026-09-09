@@ -48,6 +48,11 @@ class ReadQuery {
     this.filters.push(`${field(key)}=${this.parameter(value)}`);
     return this;
   }
+  is(key: string, value: null) {
+    if (value !== null) throw Error("IS aceita somente null nesta ponte");
+    this.filters.push(`${field(key)} is null`);
+    return this;
+  }
   in(key: string, values: unknown[]) {
     this.filters.push(`${field(key)}=any(${this.parameter(values)})`);
     return this;
@@ -197,7 +202,7 @@ beforeAll(async () => {
 });
 
 it("exporta entrega/aviso do titular, exclui outro contato/tenant e material privado", async () => {
-  const data = await collectExportData(request);
+  const data = await collectExportData(request, { pool });
   expect(data.meeting_deliveries).toHaveLength(2);
   expect(data.meeting_deliveries.find((row) => row.id === job)).toMatchObject({
     appointment_id: appointment,
@@ -232,7 +237,7 @@ it("exporta entrega/aviso do titular, exclui outro contato/tenant e material pri
 });
 
 it("contato da outra organização não dá footprint nem dados das novas tabelas", async () => {
-  const data = await collectExportData({ ...request, contactId: outsider });
+  const data = await collectExportData({ ...request, contactId: outsider }, { pool });
   expect(data.no_local_footprint).toBe(true);
   expect(data.meeting_deliveries).toEqual([]);
   expect(data.appointment_notices).toEqual([]);
@@ -240,7 +245,7 @@ it("contato da outra organização não dá footprint nem dados das novas tabela
 
 it("sem identificador conserva contrato vazio e não visita tabelas pessoais", async () => {
   queries.length = 0;
-  const data = await collectExportData({ ...request, contactId: null });
+  const data = await collectExportData({ ...request, contactId: null }, { pool });
   expect(data.no_local_footprint).toBe(true);
   expect(data.meeting_deliveries).toEqual([]);
   expect(data.appointment_notices).toEqual([]);
@@ -267,23 +272,39 @@ it("aviso ligado a compromisso fora do recorte de 500 também é exportado", asy
     "insert into agent_inbox_items(id,organization_id,kind,ref_kind,ref_id,title) values($1,$2,'other','appointment',$3,'Aviso antigo')",
     [oldNotice, org, old],
   );
-  const data = await collectExportData(request);
+  const data = await collectExportData(request, { pool });
   expect(data.appointments).toHaveLength(500);
   expect(data.appointments.some((row) => row.id === old)).toBe(false);
   expect(data.appointment_notices.some((row) => row.id === oldNotice)).toBe(true);
 });
 
 it("baseline completo reaplicado preserva job transactional_delivery e ambas as constraints", async () => {
-  const redacted = randomUUID(), oldAppointment = randomUUID();
+  const redacted = randomUUID(),
+    oldAppointment = randomUUID();
   const originalDate = "2026-08-01T10:00:00.000Z";
-  await pool.query("insert into contacts(id,organization_id,is_anonymized,anonymized_at) values($1,$2,true,$3)", [redacted, org, originalDate]);
-  await pool.query("insert into calendar_appointments(id,organization_id,contact_id,title,starts_at,ends_at,status) values($1,$2,$3,'Legado',now(),now()+interval '1 hour','completed')", [oldAppointment, org, redacted]);
+  await pool.query(
+    "insert into contacts(id,organization_id,is_anonymized,anonymized_at) values($1,$2,true,$3)",
+    [redacted, org, originalDate],
+  );
+  await pool.query(
+    "insert into calendar_appointments(id,organization_id,contact_id,title,starts_at,ends_at,status) values($1,$2,$3,'Legado',now(),now()+interval '1 hour','completed')",
+    [oldAppointment, org, redacted],
+  );
   const oldNotices: string[] = [];
   for (const kind of ["other", "appointment_outcome_required", "appointment_recovery_review"]) {
-    const id = randomUUID(); oldNotices.push(id);
-    await pool.query("insert into agent_inbox_items(id,organization_id,kind,ref_kind,ref_id,title,body) values($1,$2,$3,'appointment',$4,'Legado','RESIDUO-ANTERIOR-0229')", [id, org, kind, oldAppointment]);
+    const id = randomUUID();
+    oldNotices.push(id);
+    await pool.query(
+      "insert into agent_inbox_items(id,organization_id,kind,ref_kind,ref_id,title,body) values($1,$2,$3,'appointment',$4,'Legado','RESIDUO-ANTERIOR-0229')",
+      [id, org, kind, oldAppointment],
+    );
   }
-  const controls = (await pool.query("select to_jsonb(n) data from agent_inbox_items n where ref_id=any($1::uuid[]) order by id", [[neighborAppointment, otherAppointment]])).rows;
+  const controls = (
+    await pool.query(
+      "select to_jsonb(n) data from agent_inbox_items n where ref_id=any($1::uuid[]) order by id",
+      [[neighborAppointment, otherAppointment]],
+    )
+  ).rows;
   const before = (await pool.query("select to_jsonb(j) r from job_queue j where id=$1", [job]))
     .rows[0].r;
   const container = process.env.TEST_DB_CONTAINER;
@@ -316,11 +337,27 @@ it("baseline completo reaplicado preserva job transactional_delivery e ambas as 
     writeFileSync(evidencePath, `${result.stdout}\n${result.stderr}\nexit=${result.status}`);
   expect(result.error).toBeUndefined();
   expect(result.status, result.stderr).toBe(0);
-  const cleaned = (await pool.query("select body,ref_id,status from agent_inbox_items where id=any($1::uuid[])", [oldNotices])).rows;
+  const cleaned = (
+    await pool.query("select body,ref_id,status from agent_inbox_items where id=any($1::uuid[])", [
+      oldNotices,
+    ])
+  ).rows;
   expect(cleaned).toHaveLength(3);
-  for (const row of cleaned) expect(row).toEqual({ body: "Contato anonimizado.", ref_id: null, status: "resolved" });
-  expect((await pool.query("select anonymized_at from contacts where id=$1", [redacted])).rows[0].anonymized_at.toISOString()).toBe(originalDate);
-  expect((await pool.query("select to_jsonb(n) data from agent_inbox_items n where ref_id=any($1::uuid[]) order by id", [[neighborAppointment, otherAppointment]])).rows).toEqual(controls);
+  for (const row of cleaned)
+    expect(row).toEqual({ body: "Contato anonimizado.", ref_id: null, status: "resolved" });
+  expect(
+    (
+      await pool.query("select anonymized_at from contacts where id=$1", [redacted])
+    ).rows[0].anonymized_at.toISOString(),
+  ).toBe(originalDate);
+  expect(
+    (
+      await pool.query(
+        "select to_jsonb(n) data from agent_inbox_items n where ref_id=any($1::uuid[]) order by id",
+        [[neighborAppointment, otherAppointment]],
+      )
+    ).rows,
+  ).toEqual(controls);
   expect(
     (await pool.query("select to_jsonb(j) r from job_queue j where id=$1", [job])).rows[0].r,
   ).toEqual(before);
@@ -342,40 +379,92 @@ it("baseline completo reaplicado preserva job transactional_delivery e ambas as 
 });
 
 it("avisos de presença/recuperação e Meet são exportados e redigidos sem recriação tardia", async () => {
-  const subject = randomUUID(), sibling = randomUUID(), foreign = randomUUID();
+  const subject = randomUUID(),
+    sibling = randomUUID(),
+    foreign = randomUUID();
   const rows: Array<{ contact: string; org: string; appointment: string; sentinel: string }> = [];
-  for (const [contact, tenant] of [[subject, org], [sibling, org], [foreign, otherOrg]]) {
-    const id = randomUUID(), sentinel = `TITULO-PESSOAL-${id}`;
-    await pool.query("insert into contacts(id,organization_id,name) values($1,$2,'Titular')", [contact, tenant]);
-    await pool.query("insert into calendar_appointments(id,organization_id,contact_id,title,starts_at,ends_at,status) values($1,$2,$3,$4,now()-interval '3 hours',now()-interval '2 hours','confirmed')", [id, tenant, contact, sentinel]);
+  for (const [contact, tenant] of [
+    [subject, org],
+    [sibling, org],
+    [foreign, otherOrg],
+  ]) {
+    const id = randomUUID(),
+      sentinel = `TITULO-PESSOAL-${id}`;
+    await pool.query("insert into contacts(id,organization_id,name) values($1,$2,'Titular')", [
+      contact,
+      tenant,
+    ]);
+    await pool.query(
+      "insert into calendar_appointments(id,organization_id,contact_id,title,starts_at,ends_at,status) values($1,$2,$3,$4,now()-interval '3 hours',now()-interval '2 hours','confirmed')",
+      [id, tenant, contact, sentinel],
+    );
     for (const kind of ["other", "appointment_recovery_review"])
-      await pool.query("insert into agent_inbox_items(organization_id,kind,ref_kind,ref_id,title,body) values($1,$2,'appointment',$3,'Aviso de compromisso',$4)", [tenant, kind, id, sentinel]);
+      await pool.query(
+        "insert into agent_inbox_items(organization_id,kind,ref_kind,ref_id,title,body) values($1,$2,'appointment',$3,'Aviso de compromisso',$4)",
+        [tenant, kind, id, sentinel],
+      );
     rows.push({ contact: contact!, org: tenant!, appointment: id, sentinel });
   }
   await pool.query("select fn_appointment_confirmation_sweep(500,now())");
   const subjectRow = rows[0]!;
-  const notices = async (row: typeof subjectRow) => (await pool.query("select to_jsonb(n) data from agent_inbox_items n where organization_id=$1 and ref_kind='appointment' and ref_id=$2 order by id", [row.org, row.appointment])).rows.map(r => r.data);
+  const notices = async (row: typeof subjectRow) =>
+    (
+      await pool.query(
+        "select to_jsonb(n) data from agent_inbox_items n where organization_id=$1 and ref_kind='appointment' and ref_id=$2 order by id",
+        [row.org, row.appointment],
+      )
+    ).rows.map((r) => r.data);
   const before = await notices(subjectRow);
-  expect(before.map(n => n.kind).sort()).toEqual(["appointment_outcome_required", "appointment_recovery_review", "other"]);
-  expect(before.every(n => n.body.includes(subjectRow.sentinel))).toBe(true);
-  const exported = await collectExportData({ ...request, contactId: subject });
-  expect(exported.appointment_notices.map(n => n.id).sort()).toEqual(before.map(n => n.id).sort());
-  expect(exported.appointment_notices.every(n => n.body?.includes(subjectRow.sentinel))).toBe(true);
-  for (const control of rows.slice(1)) expect(JSON.stringify(exported)).not.toContain(control.sentinel);
+  expect(before.map((n) => n.kind).sort()).toEqual([
+    "appointment_outcome_required",
+    "appointment_recovery_review",
+    "other",
+  ]);
+  expect(before.every((n) => n.body.includes(subjectRow.sentinel))).toBe(true);
+  const exported = await collectExportData({ ...request, contactId: subject }, { pool });
+  expect(exported.appointment_notices.map((n) => n.id).sort()).toEqual(
+    before.map((n) => n.id).sort(),
+  );
+  expect(exported.appointment_notices.every((n) => n.body?.includes(subjectRow.sentinel))).toBe(
+    true,
+  );
+  for (const control of rows.slice(1))
+    expect(JSON.stringify(exported)).not.toContain(control.sentinel);
   const controls = await Promise.all(rows.slice(1).map(notices));
-  await pool.query("update contacts set is_anonymized=true,anonymized_at=now() where organization_id=$1 and id=$2", [org, subject]);
-  const after = (await pool.query("select to_jsonb(n) data from agent_inbox_items n where id=any($1::uuid[]) order by id", [before.map(n => n.id)])).rows.map(r => r.data);
+  await pool.query(
+    "update contacts set is_anonymized=true,anonymized_at=now() where organization_id=$1 and id=$2",
+    [org, subject],
+  );
+  const after = (
+    await pool.query(
+      "select to_jsonb(n) data from agent_inbox_items n where id=any($1::uuid[]) order by id",
+      [before.map((n) => n.id)],
+    )
+  ).rows.map((r) => r.data);
   expect(after).toHaveLength(3);
-  for (const notice of after) expect(notice).toMatchObject({ status: "resolved", ref_id: null, body: "Contato anonimizado." });
+  for (const notice of after)
+    expect(notice).toMatchObject({
+      status: "resolved",
+      ref_id: null,
+      body: "Contato anonimizado.",
+    });
   expect(JSON.stringify(after)).not.toContain(subjectRow.sentinel);
   expect(await Promise.all(rows.slice(1).map(notices))).toEqual(controls);
-  await pool.query("update calendar_appointments set confirmation_next_at=null where id=$1", [subjectRow.appointment]);
+  await pool.query("update calendar_appointments set confirmation_next_at=null where id=$1", [
+    subjectRow.appointment,
+  ]);
   await pool.query("select fn_appointment_confirmation_sweep(500,now()+interval '3 days')");
   expect(await notices(subjectRow)).toEqual([]);
   const event = randomUUID();
-  await pool.query("insert into event_log(id,organization_id,event_type,entity_kind,entity_id,payload) values($1,$2,'appointment.outcome_confirmed','appointment',$3,'{\"appointment_revision\":1}')", [event, org, subjectRow.appointment]);
-  const receipt = (await pool.query("select fn_appointment_recover($1,$2) result", [org, event])).rows[0].result;
+  await pool.query(
+    "insert into event_log(id,organization_id,event_type,entity_kind,entity_id,payload) values($1,$2,'appointment.outcome_confirmed','appointment',$3,'{\"appointment_revision\":1}')",
+    [event, org, subjectRow.appointment],
+  );
+  const receipt = (await pool.query("select fn_appointment_recover($1,$2) result", [org, event]))
+    .rows[0].result;
   expect(receipt).toMatchObject({ appointment_id: subjectRow.appointment, result: "stale" });
   expect(await notices(subjectRow)).toEqual([]);
-  expect((await collectExportData({ ...request, contactId: subject })).appointment_notices).toEqual([]);
+  expect(
+    (await collectExportData({ ...request, contactId: subject }, { pool })).appointment_notices,
+  ).toEqual([]);
 });

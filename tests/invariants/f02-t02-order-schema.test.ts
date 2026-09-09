@@ -298,6 +298,13 @@ describe("F02-T02 — schema de pedidos operacionais", () => {
   it("aplica o upgrade duas vezes e preserva o orders legado", () => {
     const result = sql(`
       begin;
+      -- O baseline atual contém 9008. Retira somente as FKs posteriores que
+      -- referenciam crm_orders para reconstruir o instante anterior à 9006;
+      -- o ROLLBACK restaura o domínio T03 depois da prova.
+      alter table public.crm_tasks
+        drop constraint crm_tasks_order_contact_tenant_fkey;
+      alter table public.crm_notes
+        drop constraint crm_notes_order_contact_tenant_fkey;
       drop table public.crm_order_events;
       drop table public.crm_order_command_receipts;
       drop table public.crm_order_items;
