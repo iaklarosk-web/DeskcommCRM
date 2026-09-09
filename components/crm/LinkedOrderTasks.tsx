@@ -347,7 +347,7 @@ function TasksScope({ orderId, canEdit, onSaved }: LinkedOrderTasksProps) {
           <form onSubmit={submit} className="space-y-3">
             <p className="text-sm font-medium">{t(editing ? "Editar tarefa" : "Nova tarefa")}</p>
             <div className="space-y-1">
-              <label htmlFor={`${fieldId}-title`} className="text-sm">
+              <label htmlFor={`${fieldId}-title`} className="block text-sm">
                 {t("Título da tarefa")}
               </label>
               <Input
@@ -361,7 +361,7 @@ function TasksScope({ orderId, canEdit, onSaved }: LinkedOrderTasksProps) {
               />
             </div>
             <div className="space-y-1">
-              <label htmlFor={`${fieldId}-description`} className="text-sm">
+              <label htmlFor={`${fieldId}-description`} className="block text-sm">
                 {t("Descrição da tarefa")}
               </label>
               <Textarea
@@ -374,7 +374,7 @@ function TasksScope({ orderId, canEdit, onSaved }: LinkedOrderTasksProps) {
               />
             </div>
             <div className="space-y-1">
-              <label htmlFor={`${fieldId}-due`} className="text-sm">
+              <label htmlFor={`${fieldId}-due`} className="block text-sm">
                 {t("Prazo da tarefa")}
               </label>
               <Input

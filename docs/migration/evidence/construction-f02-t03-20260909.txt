@@ -51,7 +51,7 @@ Achado 1: FK composta da 9008 validava tarefas legadas sem reconciliar vínculo 
 
 REVALIDAÇÃO APÓS A REVISÃO INDEPENDENTE
 9008 imutável: SHA256 717d7cd02bc0dce47a91e2fb8cba127225253f913870ac0234b626f35fa63072.
-9009: 20260909191659_9009_crm_tarefas_legado_seguro.sql, SHA256 159b6600d8f0df95c876c786a50eb4ca0db8353f5ddd3003e7ef23334c92bbde; aplicada no sandbox próprio em transação, exit 0. Tipos regenerados pelo Supabase CLI coincidem byte a byte com lib/database.types.ts. Baseline contém exatamente as duas migrations e o MANIFEST explica a dependência temporal.
+9009: 20260909191659_9009_crm_tarefas_legado_seguro.sql, SHA256 159b6600d8f0df95c876c786a50eb4ca0db8353f5ddd3003e7ef23334c92bbde; aplicada no sandbox próprio em transação, exit 0. Tipos regenerados pelo Supabase CLI coincidem byte a byte com lib/database.types.ts. Naquele checkpoint, o baseline continha as duas migrations; a consolidação posterior abaixo corrige sua ordem e elimina a declaração redundante somente no baseline. O MANIFEST explica a dependência temporal.
 Schema: .verify-logs/f02-t03-review/schema.json, 145/146; a única falha ocorreu no preparo de simulação legada, por trigger diferido da baseline posterior ainda pendente antes do DDL. SET CONSTRAINTS ALL IMMEDIATE completa só esse preparo; nenhuma asserção ou migration foi reduzida. schema-recheck.json, 10/10. Catálogo de 146 casos reconciliado em duas execuções, sem afirmar uma execução única verde de 146.
 Integração: integration.json, 37/37 em três arquivos, incluindo rollback de reparo e deadlock forçado. Com anonimização confirmada, nenhum texto pessoal tardio pode ficar na tarefa. API converte 40P01 em conflito repetível; valida contato/organização antes da escrita e trata FK/contato inválido sem efeito lateral.
 Mutante 22: guard de tarefa removido; asserção nominal de texto pessoal tardio falha. Mutante detectado 1/1, exit 0; banco e scratch descartados.
@@ -70,3 +70,11 @@ Build final após 9009/API e tradução: exit 0, 320,4s; 1.927 entradas sem muda
 Browser-04 final: 2/2 numa única execução após as correções, zero skips/retries/flaky; 235,7s no relatório (239,9s wrapper). Cada jornada removeu 2 organizações/2 usuários e verificou 12 tabelas com zero resíduos; total de 4 organizações/4 usuários próprios removidos. Auditoria append-only preservada.
 .verify-logs/f02-t03-review/browser-04/result.json: sha256=0f433c9fcf7e09d749f73206632c4f0d5d3f3a6eb0e533138f71a74544dfa4b9
 Checkpoint local concluído em 2026-09-09T20:58:20Z; CI do novo commit será acompanhado separadamente. F02 permanece IN_PROGRESS.
+
+CI DO CHECKPOINT T03 ef4e32ec — RESULTADO POSTERIOR
+Run34404264413: invariants191/191 arquivos,1556/1556 testes aprovados. Verify: typecheck, lint e channel-provider aprovados; unit767 arquivos,8190/8193, três falhas. O shell seguinte não executou devido à falha unitária. As falhas foram baseline-constraint-reconstruida (FK de contato legada declarada duas vezes), varredura-anon-e-o-ultimo-bloco (appendices9009/9008 após varredura) e tailwind-tokens (quatro labels sem display de bloco em notas/tarefas). Reparos estão em preparação; as migrations aplicadas permanecem imutáveis. Não é CI integral verde.
+
+REPAROS LOCAIS DA CI T03 — 2026-09-09
+9009 e 9008 foram movidas antes da varredura final anon no baseline; só 9009 reconstrói a FK compartilhada nesse baseline idempotente. Arquivos de migration já aplicados permanecem byte a byte intactos. ADR013 e MANIFEST descrevem a consolidação. Quatro labels da UI ganharam display block.
+Provas focais: baseline + tailwind 26/26 unitários; banco com baseline instalado e reaplicado 27/27 (hardening-definer-varredura, gov-hardening-anon-definer, f02-t03-work-schema). Adicionalmente, gate de papéis e manifest 21/21; os leitores crm-summary/timeline agora saem da dívida de rotas sem gate. A nova CI completa ainda depende de publicar estes reparos.
+Run34404264411 de imagens concluiu com sucesso: app/worker/scheduler e smoke de boot. PR não publica imagem e promover-stable foi pulado por condição. Isso não é deploy.

@@ -68,6 +68,13 @@ campos tocados, e desvincula somente esses casos. A segunda aplicação não cri
 novo reparo ou audit. O rótulo 9009 é um forward-fix; seu timestamp anterior é
 a dependência explícita para instalações que ainda não aplicaram a 9008.
 
+No baseline idempotente, esse vínculo tem um único ponto canônico de
+reconstrução: o bloco 9009 saneia os dados, cria e valida
+`crm_tasks_contact_tenant_fkey`; o bloco 9008 pressupõe essa pós-condição e não
+a declara novamente. Isso não reescreve as migrations aplicadas: ambas
+preservam suas guardas históricas. Os dois apêndices precedem a varredura final
+de privilégios de `anon`, que continua sendo o último bloco do baseline.
+
 A redação antiga reagia apenas à transição inicial de anonimização. Para que
 uma escrita tardia não recoloque texto pessoal, um trigger privado de tarefa
 trava o contato com `FOR SHARE` e mantém título e descrição redigidos quando o
