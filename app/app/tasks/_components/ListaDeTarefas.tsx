@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
@@ -52,6 +53,7 @@ function Linha({
 
   const encerrada = estaEncerrada(tarefa);
   const atrasada = estaAtrasada(tarefa);
+  const canEditHere = podeEditar && !tarefa.order_id;
 
   const rotuloDaPrioridade: Record<PrioridadeDaTarefa, string> = {
     low: t("Baixa"),
@@ -81,7 +83,7 @@ function Linha({
         role="checkbox"
         aria-checked={encerrada}
         aria-label={encerrada ? t("Reabrir a tarefa") : t("Marcar como concluída")}
-        disabled={ocupada || !podeEditar}
+        disabled={ocupada || !canEditHere}
         onClick={() => comBloqueio(() => aoAlternarConcluida(tarefa))}
         className={cn(
           "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-md border transition-colors",
@@ -94,12 +96,7 @@ function Linha({
       </button>
 
       <div className="min-w-0 flex-1">
-        <p
-          className={cn(
-            "text-sm font-medium",
-            encerrada && "text-muted-foreground line-through",
-          )}
-        >
+        <p className={cn("text-sm font-medium", encerrada && "text-muted-foreground line-through")}>
           {tarefa.title}
         </p>
         {tarefa.description ? (
@@ -115,7 +112,9 @@ function Linha({
           >
             {rotuloDaPrioridade[tarefa.priority]}
           </span>
-          <span className={cn("text-muted-foreground", atrasada && "font-semibold text-destructive")}>
+          <span
+            className={cn("text-muted-foreground", atrasada && "font-semibold text-destructive")}
+          >
             {tarefa.due_date
               ? new Date(tarefa.due_date).toLocaleString(tag, {
                   day: "2-digit",
@@ -126,10 +125,18 @@ function Linha({
               : t("Sem prazo")}
           </span>
         </div>
+        {tarefa.order_id && (
+          <Link
+            className="mt-2 inline-block rounded-md text-xs font-medium text-primary underline underline-offset-4"
+            href={`/app/orders/${encodeURIComponent(tarefa.order_id)}#tarefas`}
+          >
+            {t("Gerenciar no pedido")}
+          </Link>
+        )}
       </div>
 
-      {podeEditar ? (
-        <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+      {canEditHere ? (
+        <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
           <Button
             variant="ghost"
             size="icon"
@@ -209,7 +216,7 @@ export function ListaDeTarefas({
         <section key={grupo.faixa}>
           <h2
             className={cn(
-              "mb-1 px-3 text-xs font-semibold uppercase tracking-wider",
+              "mb-1 px-3 text-xs font-semibold tracking-wider uppercase",
               grupo.faixa === "atrasada" ? "text-destructive" : "text-muted-foreground",
             )}
           >

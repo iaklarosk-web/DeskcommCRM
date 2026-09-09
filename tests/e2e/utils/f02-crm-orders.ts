@@ -31,6 +31,10 @@ export async function cleanupF02Orders(fixture: F02Fixture) {
     "crm_order_items",
     "crm_order_events",
     "crm_order_command_receipts",
+    "crm_tasks",
+    "crm_notes",
+    "crm_task_events",
+    "crm_task_command_receipts",
     "crm_companies",
     "contacts",
     "catalog_products",
@@ -42,8 +46,7 @@ export async function cleanupF02Orders(fixture: F02Fixture) {
       .from(table)
       .select("*", { count: "exact", head: true })
       .in("organization_id", organizations);
-    if (remaining.error || remaining.count !== 0)
-      errors.push(`${table}: limpeza não comprovada`);
+    if (remaining.error || remaining.count !== 0) errors.push(`${table}: limpeza não comprovada`);
   }
   if (errors.length) throw new Error(`Cleanup de pedidos incompleto: ${errors.join("; ")}`);
   return {
@@ -71,36 +74,30 @@ export async function seedF02Orders(): Promise<F02OrdersFixture> {
   ) as F02OrdersFixture["customers"];
   try {
     for (const [key, data] of Object.entries(customers)) {
-      const company = await db
-        .from("crm_companies")
-        .insert({
-          id: data.companyId,
-          organization_id: data.orgId,
-          legal_name: `Empresa ${data.name}`,
-        });
+      const company = await db.from("crm_companies").insert({
+        id: data.companyId,
+        organization_id: data.orgId,
+        legal_name: `Empresa ${data.name}`,
+      });
       if (company.error) throw company.error;
-      const contact = await db
-        .from("contacts")
-        .insert({
-          id: data.contactId,
-          organization_id: data.orgId,
-          display_name: data.name,
-          company_id: data.companyId,
-          recurring: true,
-        });
+      const contact = await db.from("contacts").insert({
+        id: data.contactId,
+        organization_id: data.orgId,
+        display_name: data.name,
+        company_id: data.companyId,
+        recurring: true,
+      });
       if (contact.error) throw contact.error;
-      const product = await db
-        .from("catalog_products")
-        .insert({
-          id: data.productId,
-          organization_id: data.orgId,
-          codigo: `PED-${fixture.suffix}`,
-          nome: `Produto de pedidos ${key} ${fixture.suffix}`,
-          preco_cents: 1250,
-          moeda: "BRL",
-          sale_unit: "cx",
-          ativo: true,
-        });
+      const product = await db.from("catalog_products").insert({
+        id: data.productId,
+        organization_id: data.orgId,
+        codigo: `PED-${fixture.suffix}`,
+        nome: `Produto de pedidos ${key} ${fixture.suffix}`,
+        preco_cents: 1250,
+        moeda: "BRL",
+        sale_unit: "cx",
+        ativo: true,
+      });
       if (product.error) throw product.error;
     }
     return { ...fixture, customers };

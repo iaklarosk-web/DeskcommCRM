@@ -5,6 +5,10 @@ import { randomId } from "@/lib/random-id";
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";
+import { CrmNotes } from "@/components/crm/CrmNotes";
+import { LinkedOrderTasks } from "@/components/crm/LinkedOrderTasks";
+import { TaskHistory } from "@/components/crm/TaskHistory";
+import { useCrmAuthorNames } from "@/hooks/crm/useCrmAuthorNames";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
@@ -51,6 +55,8 @@ export function OrderDetailClient({
 }) {
   const t = useT();
   const locale = useTagDeIdioma();
+  const authorNames = useCrmAuthorNames();
+  const [taskHistoryVersion, setTaskHistoryVersion] = React.useState(0);
   const [order, setOrder] = React.useState<OrderView | null>(null);
   const [error, setError] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
@@ -320,6 +326,25 @@ export function OrderDetailClient({
         {t("Total")}: {displayMoney(order.total_cents, order.currency, t)}
       </p>
       <OrderHistory orderId={order.id} revision={order.revision} />
+      <CrmNotes
+        contactId={order.contact_id}
+        orderId={order.id}
+        canEdit={podeEditar}
+        authorNames={authorNames}
+      />
+      <section id="tarefas" className="scroll-mt-6" aria-label={t("Tarefas do pedido")}>
+        <LinkedOrderTasks
+          orderId={order.id}
+          canEdit={podeEditar}
+          onSaved={() => setTaskHistoryVersion((current) => current + 1)}
+        />
+      </section>
+      <TaskHistory
+        contactId={order.contact_id}
+        orderId={order.id}
+        authorNames={authorNames}
+        reloadKey={taskHistoryVersion}
+      />
       {needsReload && (
         <Button disabled={saving} onClick={() => void load()}>
           {t("Recarregar pedido")}

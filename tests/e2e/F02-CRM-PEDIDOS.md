@@ -4,7 +4,7 @@
 Cada jornada cria suas próprias duas organizações fictícias, um manager
 membro de ambas, um viewer da organização A, empresas clientes, contatos e
 produtos. Requer o sandbox exclusivo e as guardas descritas em
-[F02-CRM-CADASTROS.md](F02-CRM-CADASTROS.md), com as migrations 9005–9007.
+[F02-CRM-CADASTROS.md](F02-CRM-CADASTROS.md), com as migrations 9005–9009 (9009 é pré-requisito da 9008 pelo timestamp).
 
 O teste dispara autenticação local, consultas e gravações de cadastros e
 pedidos no banco descartável. Não chama WhatsApp, IA, e-mail externo ou
@@ -31,16 +31,19 @@ do operador.
 
 A fixture encerra removendo somente as organizações cujos IDs registrou e
 seus usuários próprios. A cascata é necessária para o domínio com histórico e
-chaves restritivas. O cleanup verifica ausência de registros em oito tabelas
+chaves restritivas. O cleanup verifica ausência de registros em doze tabelas
 do domínio e anexa suas contagens ao relatório do Playwright. Qualquer falha
 de limpeza reprova a jornada; não há exclusão por prefixo/e-mail nem procura
 por dados de terceiros. Resultados observados ficam no BUILD-STATE, sem
 transformar este roteiro em declaração de aprovação.
 
-O denominador do cleanup são essas oito tabelas de domínio, e não todo o
+O denominador do cleanup são essas doze tabelas de domínio, e não todo o
 banco. Registros de auditoria seguem a retenção append-only do produto;
 não se remove essa proteção para limpar uma fixture. O sandbox local é
 descartado ao encerrar a validação, e o runner de CI é descartável. Uma sonda
-local em transação confirmou a cascata nas oito tabelas com `service_role`,
+local em transação confirmou a cascata no recorte então existente de oito
+tabelas com `service_role`,
 incluindo itens, recibos e eventos; o `ROLLBACK` deixou zero organizações da
-sonda. O teste de navegador repete a verificação com os dados de sua jornada.
+sonda. A fixture compartilhada agora repete a verificação para esse recorte e
+para tarefas, notas, eventos de tarefa e recibos de comando, totalizando doze
+tabelas.

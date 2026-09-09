@@ -7,6 +7,11 @@ const { get, post } = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
 vi.mock("@/lib/api/client", () => ({ apiClient: { get, post } }));
 // O histórico tem sua própria suíte; as filas de GET abaixo medem o comando e a releitura.
 vi.mock("@/app/app/orders/_history", () => ({ OrderHistory: () => null }));
+// Notas e tarefas têm sua própria suíte; aqui a fila de GET mede o pedido.
+vi.mock("@/components/crm/CrmNotes", () => ({ CrmNotes: () => null }));
+vi.mock("@/components/crm/LinkedOrderTasks", () => ({ LinkedOrderTasks: () => null }));
+vi.mock("@/components/crm/TaskHistory", () => ({ TaskHistory: () => null }));
+vi.mock("@/hooks/crm/useCrmAuthorNames", () => ({ useCrmAuthorNames: () => ({}) }));
 
 import { OrderDetailClient } from "@/app/app/orders/[id]/_client";
 import { OrdersClient } from "@/app/app/orders/_client";
