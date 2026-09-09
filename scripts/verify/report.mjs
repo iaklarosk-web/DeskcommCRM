@@ -3,12 +3,9 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Exact identities from c85f7d72, not an interchangeable allowance (ADR-007).
-export const KNOWN_DEBT = [
-  { suite: "db", file: "tests/invariants/webhooks-inbound.test.ts", title: "rate limit 429 após estourar a janela — coberto por unit test do fallback in-memory", kind: "skipped" },
-  { suite: "unit", file: "tests/unit/agenda-separar-historico.test.tsx", title: "o compromisso EM ANDAMENTO ainda é Próximos — começou, mas não terminou", kind: "expected_failure" },
-  { suite: "db", file: "tests/invariants/followup-reactivity.test.ts", title: "STOP alcança também o enrollment PAUSADO MANUALMENTE — opt-out não abre exceção de estado", kind: "expected_failure" },
-];
+// Dívidas de c85f7d72 saneadas: não podem reaparecer nem em revalidação.
+// As identidades e resultados históricos permanecem na evidência de ADR-007.
+export const KNOWN_DEBT = [];
 const integer = (n) => Number.isSafeInteger(n) && n >= 0;
 
 export function phaseContext(state, requestedPhase) {

@@ -9,6 +9,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const modulePath = process.env.VERIFY_GATE_MODULE ?? path.join(ROOT, "scripts/verify/report.mjs");
 const { evaluate, parseSuite, phaseContext, KNOWN_DEBT, render, collect } = await import(pathToFileURL(modulePath).href);
+// Identidades históricas, somente como tentativas de regressão contra o gate atual.
+const RETIRED_DEBT = [
+  { suite: "db", file: "tests/invariants/webhooks-inbound.test.ts", title: "rate limit 429 após estourar a janela — coberto por unit test do fallback in-memory", kind: "skipped" },
+  { suite: "unit", file: "tests/unit/agenda-separar-historico.test.tsx", title: "o compromisso EM ANDAMENTO ainda é Próximos — começou, mas não terminou", kind: "expected_failure" },
+  { suite: "db", file: "tests/invariants/followup-reactivity.test.ts", title: "STOP alcança também o enrollment PAUSADO MANUALMENTE — opt-out não abre exceção de estado", kind: "expected_failure" },
+];
 const state = `current_phase: F02
 baseline_n0: 7
 f00_commit: c85f7d72
@@ -131,25 +137,26 @@ test("real failures and unfinished tests are never inherited debt", () => {
     assert.equal(evaluate(data).exitCode, 1);
   }
 });
-test("exact inherited debt is visible and never becomes READY", () => {
-  const data = input(); KNOWN_DEBT.forEach((entry) => addDebt(data, entry));
-  const result = evaluate(data);
-  assert.equal(result.exitCode, 0);
-  assert.equal(result.status, "REVALIDATED WITH DEBT (F01)");
-  assert.equal(result.suites.db.skipped, 1);
-  assert.equal(result.suites.unit.expectedFailures + result.suites.db.expectedFailures, 2);
-  assert.equal(result.suites.unit.passed, 2);
-  assert.equal(result.debt.length, 3);
-  assert.match(render(data, result), /tests_skipped=1 expected_failures=2/);
-  data.context.revalidation = false;
-  assert.equal(evaluate(data).exitCode, 1);
+test("retired debt cannot return in revalidation or normal readiness", () => {
+  assert.deepEqual(KNOWN_DEBT, []);
+  for (const entry of RETIRED_DEBT) {
+    for (const revalidation of [true, false]) {
+      const data = input(); data.context.revalidation = revalidation;
+      addDebt(data, entry);
+      const result = evaluate(data);
+      assert.equal(result.exitCode, 1);
+      assert.equal(result.status, "NOT READY");
+      assert.equal(result.debt.length, 1);
+      assert.ok(result.errors.includes("Dívida nova ou não reconhecida: 1"));
+    }
+  }
 });
 test("new skip cannot spend an inherited skip allowance", () => {
-  const data = input(); addDebt(data, { ...KNOWN_DEBT[0], title: "a different skipped behavior" });
+  const data = input(); addDebt(data, { ...RETIRED_DEBT[0], title: "a different skipped behavior" });
   assert.equal(evaluate(data).exitCode, 1);
 });
 test("duplicate inherited debt identity cannot increase the allowance", () => {
-  const data = input(); addDebt(data, KNOWN_DEBT[0]); addDebt(data, KNOWN_DEBT[0]);
+  const data = input(); addDebt(data, RETIRED_DEBT[0]); addDebt(data, RETIRED_DEBT[0]);
   assert.equal(evaluate(data).exitCode, 1);
 });
 test("reduced unit baseline cannot be compensated by new DB tests", () => {
