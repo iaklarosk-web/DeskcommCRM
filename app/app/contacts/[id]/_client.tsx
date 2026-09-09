@@ -23,6 +23,7 @@ import { PropostasDeDado } from "@/components/contacts/PropostasDeDado";
 import { ConversaNoDossie } from "@/components/kanban/ConversaNoDossie";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
+import { CommercialLink } from "./_commercial-link";
 
 interface Props {
   contactId: string;
@@ -59,6 +60,10 @@ export function ContactDetailClient({ contactId }: Props) {
   const contact = q.data.data;
   const isAdmin =
     (user.is_platform_admin && !user.support) || (activeOrg && ROLE_RANK[activeOrg.role] >= ROLE_RANK.admin);
+  const podeEditarVinculo =
+    !contact.is_anonymized &&
+    user.support?.access_mode !== "support_readonly" &&
+    ((user.is_platform_admin && !user.support) || Boolean(activeOrg && ROLE_RANK[activeOrg.role] >= ROLE_RANK.agent));
 
   // Uma decisão, um lugar (lib/contacts/rotulo-do-contato.ts). Esta tela era
   // uma das DUAS que ignoravam o telefone: contato com número e sem nome
@@ -112,6 +117,14 @@ export function ContactDetailClient({ contactId }: Props) {
       </header>
 
       <ConversaNoDossie conversa={contact.conversa} />
+
+      <CommercialLink
+        contactId={contactId}
+        companyId={contact.company_id}
+        recurring={contact.recurring}
+        podeEditar={podeEditarVinculo}
+        onSaved={() => void q.refetch()}
+      />
 
       {/* ANTES das abas, e não dentro de uma delas: é o único conteúdo desta
           tela que PEDE uma ação. Enterrado numa aba, viraria pendência que só

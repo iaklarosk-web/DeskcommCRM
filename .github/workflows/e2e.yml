@@ -274,6 +274,8 @@ jobs:
     env:
       # Provider controlado; preview/assistência executam core, ferramentas e gates reais.
       INTERNAL_AGENT_RUN_STUB: "true"
+      # Banco descartável deste runner; fixtures F02 só aceitam loopback.
+      F02_E2E_SANDBOX_ID: f02-crm-cadastros-disposable
       SPECS_PARTE_1: >-
         pre-go-live-whatsapp.spec.ts
         smoke.spec.ts auth.spec.ts error-pages.spec.ts
@@ -300,6 +302,7 @@ jobs:
         lote-no-quadro-do-funil.spec.ts
         importar-leads-planilha.spec.ts
         relatorio-de-atividades.spec.ts
+        f02-crm-cadastros.spec.ts
       # ⚠️ A ORDEM DESTA LISTA NÃO DECIDE A ORDEM DE EXECUÇÃO. O Playwright
       # ordena os arquivos por CAMINHO, não pela ordem em que são passados na
       # linha de comando. Medido no run 31838253496: `marca-logo.spec.ts` estava
@@ -596,6 +599,7 @@ jobs:
         inbox-abas-espelham-o-comando.spec.ts
         moeda-da-organizacao.spec.ts
         zona-de-perigo-apaga-dados-de-teste.spec.ts
+        f02-crm-orders.spec.ts
 
       FORA_DO_CI: >-
         vps-fresh-onboarding.spec.ts

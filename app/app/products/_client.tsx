@@ -35,6 +35,7 @@ interface Rascunho {
   custo: string;
   quantidade: string;
   controla_estoque: boolean;
+  sale_unit: string;
 }
 
 const VAZIO: Rascunho = {
@@ -46,6 +47,7 @@ const VAZIO: Rascunho = {
   custo: "",
   quantidade: "0",
   controla_estoque: true,
+  sale_unit: "",
 };
 
 function doRascunho(
@@ -66,6 +68,9 @@ function doRascunho(
     custo_cents,
     controla_estoque: r.controla_estoque,
     quantidade: Number(r.quantidade) || 0,
+    // Vazio não inventa uma unidade para o legado; a API recebe null só quando
+    // o operador escolhe limpar num PATCH, não neste formulário de criação.
+    ...(r.sale_unit.trim() ? { sale_unit: r.sale_unit.trim() } : {}),
   };
 }
 
@@ -303,6 +308,20 @@ export function ProdutosClient({
                 {t("Serve para o atendente saber até onde pode negociar. Não aparece para o cliente.")}
               </span>
             </label>
+            <label className="text-sm">
+              {t("Unidade de venda")} <span className="text-muted-foreground">{t("(opcional)")}</span>
+              <input
+                value={rascunho.sale_unit}
+                onChange={(e) => setRascunho({ ...rascunho, sale_unit: e.target.value })}
+                placeholder={t("Ex.: caixa, kg")}
+                maxLength={32}
+                className="mt-1 h-9 w-full rounded-md border px-3"
+                data-testid="produto-unidade-venda"
+              />
+              <span className="mt-1 block text-xs text-muted-foreground">
+                {t("Informe como este produto é vendido. Não convertemos unidades automaticamente.")}
+              </span>
+            </label>
           </div>
 
           <label className="mt-3 flex items-center gap-2 text-sm">
@@ -355,6 +374,7 @@ export function ProdutosClient({
                 <p className="text-xs text-muted-foreground">
                   {p.codigo}
                   {p.marca ? ` · ${p.marca}` : ""}
+                  {` · ${p.sale_unit ?? t("Unidade não definida")}`}
                   {p.controla_estoque
                     ? ` · ${p.quantidade} ${t("em estoque")}`
                     : ` · ${t("sem controle de estoque")}`}
