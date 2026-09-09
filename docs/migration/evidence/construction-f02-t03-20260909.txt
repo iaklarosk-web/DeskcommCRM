@@ -1,0 +1,72 @@
+CONSTRUÇÃO F02-T03 — notas e tarefas humanas vinculadas
+Registro: 2026-09-09T19:37:29.154474+00:00
+Base publicada: 4b70c9291fb17e13a71f2fed5aba091c9fc158bb; Código T03 validado localmente: e14c72c57b1183012492ebd5a2e258f425c960ba; backend b7054be0. Os dois achados posteriores foram corrigidos e revalidados.
+Migration CLI: 20260909191700_9008_crm_notas_e_tarefas_vinculadas.sql. Aplicada apenas no sandbox próprio f02-crm-cadastros.
+Sem READY F02 e sem produção.
+
+RESULTADOS OBSERVADOS — execuções identificadas, sem soma como uma suíte única
+.verify-logs/f02-t03-current/core-static.json: passed=28/28, failed=0, pending=0; sha256=ade322f0d2b76954c181e6a379dc336f5918dc4e57357ad7562b909f27e26bcb
+.verify-logs/f02-t03-current/api-history-unit.json: passed=30/30, failed=0, pending=0; sha256=1906ee70cdd26ca6adcc667d14d3bae1068e7b8ba85759597870c1a74bd78d9f
+.verify-logs/f02-t03-current/service-integration.json: passed=34/35, failed=1, pending=0; sha256=9109eefab525939ef292fbf65a670711de1a7b131d7280677b9343576f31fd24
+.verify-logs/f02-t03-current/service-integration-recheck.json: passed=15/15, failed=0, pending=0; sha256=6ccacf7609fb59b7d1fed533d895b123cd6f6b8bc5f793839adbb985ee3e150c
+.verify-logs/f02-t03-current/schema-invariants.json: passed=34/143, failed=2, pending=107; sha256=422d52f9c46dc5b7c6e5a68bd166747bd955d17cbe66379aa824ae287dfb9cd2
+.verify-logs/f02-t03-current/schema-invariants-recheck.json: passed=121/121, failed=0, pending=0; sha256=53d452e27b26a8cf979b21ec4b2b24169f60813311cc6174c48efc0201d6ca27
+
+Serviço: primeiro conjunto orders 20/20 e work 14/15. A prova nova de rollback falhou antes do trigger esperado porque omitia anonymized_at exigido pelo CHECK do contato. Corrigidos apenas os dois UPDATE da fixture, work 15/15 passou; contratos de produção intactos.
+Schema: primeiro conjunto com 7 arquivos aprovou schema T03 7/7, scanner LGPD 9/9 e agenda/export 6/6. Dois casos de reconstrução de schema falharam por FKs posteriores e duas suítes RLS não executaram seus 107 casos por nota de fixture sem ID obrigatório. Corrigidos só os preparos; os 4 arquivos passaram 121/121 na rechecagem. Catálogo de 7 arquivos reconciliado 143/143, sem chamar de execução única.
+Mutantes 20 (receipt exposto) e 21 (journal omitido): 2/2, exit 0 cada, asserções nominais observadas, bancos descartáveis removidos. Não houve edição de invariants durante o mutante 20; configs/scratch dentro do worktree.
+UI independente: 55/55 em 5 arquivos; lint em 16 TS/TSX sem avisos, typecheck focal exit 0 e 3/3 mutantes observados. Evidências em /tmp/crm-t03-ui-promote-bvggb6s5; não substitui build/navegador.
+Dicionário: 5.366 pares anteriores preservados, 53 novos, zero alterados/removidos/duplicados.
+
+CI DO CHECKPOINT ANTERIOR (não contém T03)
+PR2: https://github.com/iaklarosk-web/DeskcommCRM/pull/2
+Run 34393452946 @4b70c929: verify SUCCESS — unit 761 arquivos, 8100/8100, typecheck/lint/shell aprovados. Invariants FAILURE — 190 arquivos, 1529/1535; seis falhas em scanner LGPD, agenda/export e reconstrução T01. Correções revalidadas localmente acima.
+Run 34393453004: imagens app/worker/scheduler e boot aprovados. Workflow pull_request não publica imagens (push condition github.event_name != pull_request); stable pulado como condição esperada.
+
+BUILD, TIPOS, LINT E NAVEGADOR — checkpoint local
+Primeiro build: exit 0, 362,6s, 1.927 entradas sem alterações. A jornada A revelou uma falha real: GET /tasks omitia order_id/revision; o backend protegia a escrita vinculada, mas a lista mostrava controles legados. Corrigidas as projeções dos dois handlers de tarefas. Teste regressivo de GET/PATCH: 15/15 e ESLint focal exit 0.
+Build após correção: exit 0, 100,4s, 1.927 entradas sem alterações, bundle local. Nenhuma alteração de app ocorreu durante esse build.
+Typecheck inicial: exit 134 por esgotamento do heap Node de 2 GB. Com 3 GB, exit 2 identificou somente retorno Promise<string[]> no E2E e tipos de mocks do export. Corrigidos os testes, preservadas suas asserções; typecheck final com 3 GB: exit 0, 15,5s. Export focal 3/3; matriz E2E 4/4; ESLint nos testes corrigidos exit 0.
+Lint global: exit 0, 190,6s; complementado após a correção de projeção por ESLint dos dois handlers e regressão de tarefas, exit 0.
+Browser-01: marcador de sandbox incorreto no comando local; a guarda recusou os dois casos antes de criar fixtures. Não foi falha de autorização do produto nem validação verde.
+Browser-02: B aprovada e A falhou pela projeção descrita acima (1/2). Em cada jornada foram removidas 2 organizações e 2 usuários; 12 tabelas de domínio conferidas, zero linhas restantes.
+Browser-03: executou somente A após corrigir e reconstruir; 1/1, zero retries/skips/flaky, 110,5s no relatório Playwright. Cleanup removeu 2 organizações e 2 usuários e conferiu 12 tabelas, zero linhas restantes. A/B estão reconciliadas em duas execuções identificadas, não em uma nova execução única 2/2.
+A auditoria append-only do sandbox é preservada até descartar o banco. Não integra a contagem das 12 tabelas de domínio.
+Inspeção visual pelo agente: duas capturas desktop de pedido e perfil de A, legíveis sem sobreposição observada. Não equivale ao aceite visual humano; mobile/tema escuro não inspecionados nesta jornada.
+
+LIMITES ATUAIS
+Sem envio WAHA/IA/e-mail, assinatura/cobrança real, dados de terceiros, produção ou aceite Deka.
+Históricos por origem preservam leitores/cursor antigos. Journal de tarefa identifica ocorrência/revisão/estado, não snapshot de textos anteriores.
+T03 não fecha T04–T13 por inferência. Data operacional, unidades/preços/entrega reais, impressão e conferência continuam pendentes com a Deka.
+
+ARTEFATOS LOCAIS DO CHECKPOINT (conteúdo de usuário/credenciais não versionado)
+.verify-logs/f02-t03-current/work-build-recheck-result.json: sha256=a49da4a11dcd96e7e95956635aef3da95ae099fd3d0176435cbf864647fe1aac
+.verify-logs/f02-t03-current/typecheck-final.json: sha256=8b08fbdbb54b84b18a0011b6dea13225cbb567543f49e54783f1de75c85d92fa
+.verify-logs/f02-t03-current/lint.log: sha256=3969ddec3be8687819333d8aa940e3fdcc594512a492f24c68494ec265bcd436
+.verify-logs/f02-t03-current/browser-02/result.json: sha256=51d57749d088eb5e2c5aaf0386e84f407d501de7b24a0e66a722806203ff70dc
+.verify-logs/f02-t03-current/browser-03/result.json: sha256=1a91b6edfbca3088fabb01e0ec5760898f3180bb56c2131e612e8a625a2f1584
+
+REVISÃO INDEPENDENTE APÓS AS PROVAS ACIMA
+Achado 1: FK composta da 9008 validava tarefas legadas sem reconciliar vínculo task A/contact B, admitido pelo schema anterior. Achado 2: a API legada permitia escrever texto novo após anonimização; o trigger 0210 só observava a transição inicial. Correções de compatibilidade/anonimização implementadas na 9009 e nos handlers legados. Nenhum commit T03 foi publicado com esses problemas conhecidos.
+
+REVALIDAÇÃO APÓS A REVISÃO INDEPENDENTE
+9008 imutável: SHA256 717d7cd02bc0dce47a91e2fb8cba127225253f913870ac0234b626f35fa63072.
+9009: 20260909191659_9009_crm_tarefas_legado_seguro.sql, SHA256 159b6600d8f0df95c876c786a50eb4ca0db8353f5ddd3003e7ef23334c92bbde; aplicada no sandbox próprio em transação, exit 0. Tipos regenerados pelo Supabase CLI coincidem byte a byte com lib/database.types.ts. Baseline contém exatamente as duas migrations e o MANIFEST explica a dependência temporal.
+Schema: .verify-logs/f02-t03-review/schema.json, 145/146; a única falha ocorreu no preparo de simulação legada, por trigger diferido da baseline posterior ainda pendente antes do DDL. SET CONSTRAINTS ALL IMMEDIATE completa só esse preparo; nenhuma asserção ou migration foi reduzida. schema-recheck.json, 10/10. Catálogo de 146 casos reconciliado em duas execuções, sem afirmar uma execução única verde de 146.
+Integração: integration.json, 37/37 em três arquivos, incluindo rollback de reparo e deadlock forçado. Com anonimização confirmada, nenhum texto pessoal tardio pode ficar na tarefa. API converte 40P01 em conflito repetível; valida contato/organização antes da escrita e trata FK/contato inválido sem efeito lateral.
+Mutante 22: guard de tarefa removido; asserção nominal de texto pessoal tardio falha. Mutante detectado 1/1, exit 0; banco e scratch descartados.
+Unit-final.json: 56/56, cinco arquivos (tarefas legadas, manifest, baseline, piso de migrations e i18n); exit 0. Lint focal das APIs e testes de tarefas também exit 0.
+Build final após 9009/API e tradução: exit 0, 320,4s; 1.927 entradas sem mudança durante compilação, controle positivo do bundle local. Typecheck global com heap 3 GB: exit 0, 37,9s. ESLint final dos seis arquivos alterados após a revisão: exit 0, 17,2s. O lint global anterior permanece identificado acima.
+.verify-logs/f02-t03-review/schema.json: sha256=f7942e350fef603f446756a1e3947e5d8f19fc3ea5e22993533931e4d25a8b7e
+.verify-logs/f02-t03-review/schema-recheck.json: sha256=e1765eb6c1870fcb08ad5758c8ed482bdc6813c1ac1ba3214a9048c9b6da4b43
+.verify-logs/f02-t03-review/integration.json: sha256=d7d3dd8f1bbfc38b38e7ba916ab59652b426858adb2590bdcb08fdbdcfd16f29
+.verify-logs/f02-t03-review/mutant-22.log: sha256=99e85e440dbb9413b20650fe03f68b23f790cc6bf7563f9304027f0bab26cdc9
+.verify-logs/f02-t03-review/unit-final.json: sha256=388dd187153ad54a2750646ab4130f77c5933a0714b8d2c5b1974fb0674a5135
+.verify-logs/f02-t03-review/build-final-result.json: sha256=67a0a7a7141672da5ddf38d28f74bed7ea740c7900773f741bb156b5d26c2e0b
+.verify-logs/f02-t03-review/types-final.json: sha256=5b3ff42a612003b52f7dab67f6e3295fe7e975688a40c0ffabbce177082fbf36
+.verify-logs/f02-t03-review/lint-final.json: sha256=325669fac77ec66d87938622b12a7513f2b5a53ee5bf9eb186c250cae271b4b8
+.verify-logs/f02-t03-review/migration-local.log: sha256=2a2e8e26f544a70d36513745f6f7119643d0bb28e049c048156a2efe361a9229
+.verify-logs/f02-t03-review/types-generation.log: sha256=59b13bef32cb02340bd975993f6eba19788abb1042fd3ade57fef3c82d8010df
+Browser-04 final: 2/2 numa única execução após as correções, zero skips/retries/flaky; 235,7s no relatório (239,9s wrapper). Cada jornada removeu 2 organizações/2 usuários e verificou 12 tabelas com zero resíduos; total de 4 organizações/4 usuários próprios removidos. Auditoria append-only preservada.
+.verify-logs/f02-t03-review/browser-04/result.json: sha256=0f433c9fcf7e09d749f73206632c4f0d5d3f3a6eb0e533138f71a74544dfa4b9
+Checkpoint local concluído em 2026-09-09T20:58:20Z; CI do novo commit será acompanhado separadamente. F02 permanece IN_PROGRESS.

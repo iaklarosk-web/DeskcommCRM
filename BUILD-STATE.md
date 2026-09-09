@@ -1,11 +1,11 @@
 ---
-updated_at: 2026-09-09T19:06:56Z
-head_commit: c81a59b8c45e60c5584f61532cd2ef83c3efedaf   # checkpoint de código T01/T02 e telas; F02 permanece em andamento
+updated_at: 2026-09-09T20:58:20Z
+head_commit: e14c72c57b1183012492ebd5a2e258f425c960ba   # código T03 validado localmente; F02 permanece em andamento
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
-plan_version: "2.2 (2026-09-09); D38–D46; ADR-006…012"
+plan_version: "2.2 (2026-09-09); D38–D46; ADR-006…013"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
 current_phase: F02
-next_task: F02-T03
+next_task: F02-T04
 status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
@@ -38,7 +38,7 @@ verify_summary_last: |
 
 # BUILD-STATE
 
-Plano vigente: [DIRETRIZ v2.2](docs/DIRETRIZ.md), decisões D45–D46 e [ADR-011](docs/decisions/ADR-011-construcao-por-fases-e-consumo.md). **A construção por fases está autorizada e F02 está em andamento** na branch `codex/f02-crm-pedidos`. Cadastros/API/UI e saneamento das três dívidas estão implementados com provas focais. Pedidos operacionais já têm domínio, migrations, comandos transacionais, API, telas e histórico. As jornadas de cadastros e pedidos passaram no navegador. Tipos, lint e build passaram; as dez falhas da regressão global passaram nas rechecagens focais. O checkpoint de T01/T02 está registrado; a próxima task é T03. F02 e as partes ainda incompletas de T04–T06 não recebem `done` por esse checkpoint.
+Plano vigente: [DIRETRIZ v2.2](docs/DIRETRIZ.md), decisões D45–D46 e [ADR-011](docs/decisions/ADR-011-construcao-por-fases-e-consumo.md). **A construção por fases está autorizada e F02 está em andamento** na branch `codex/f02-crm-pedidos`. Cadastros/API/UI e saneamento das três dívidas estão implementados com provas focais. Pedidos operacionais já têm domínio, migrations, comandos transacionais, API, telas e histórico. As jornadas de cadastros e pedidos passaram no navegador. Tipos, lint e build passaram; as dez falhas da regressão global passaram nas rechecagens focais. Os checkpoints T01/T02 e T03 estão registrados, com revisão independente e provas locais. F02 e as partes ainda incompletas de T04–T06 não recebem `done` por esse checkpoint.
 
 O destino é um SaaS comercial com marca do proprietário, painel/login da administração da plataforma e identidade própria dos clientes. O onboarding inclui cadastro, contratação, conexão WhatsApp e configuração guiada de IA, com ajuda opcional; o acesso operacional depende de confirmação confiável da assinatura/pagamento. A primeira versão comercial inclui WhatsApp, chat do site, agenda de clientes/equipe com Google Agenda sincronizada e e-mail transacional. Instagram/e-mail de entrada e ERP/adjacentes são evolução posterior. F07 é marco técnico em staging; F17 é aceite comercial da versão.
 
@@ -60,7 +60,13 @@ Checkpoint de código `c81a59b8`, precedido por saneamento em `30b693ae` e backe
 
 A tentativa unitária única terminou externamente com código 143 e sem relatório final; causa não estabelecida. As três partes seguintes cobriram os 761 arquivos do manifesto. As partes 1/2 precedem as correções de UUID/auditoria; a parte 3 as sucede. Relatórios e tentativas permanecem em `.verify-logs/f02-global-current/`; rechecagens focais têm nomes próprios. Nenhum resultado parcial é apresentado como uma execução integral verde.
 
-A rechecagem final de UI/i18n e guardas passou em 67/67; mutantes de confirmação com pendência, de suporte e de escopo do export passaram em 1/1 cada. As dez falhas originais foram reconciliadas por arquivo/nome com casos aprovados nas rechecagens. A proteção nova contra descarte de item sem descrição também passou. As três dívidas herdadas foram transformadas em casos normais, corrigidas e verificadas focalmente; o verificador de F02 ainda precisa ser ampliado na T13. T03 possui propostas, serviço/schema com provas focais 13/13 e 7/7, API 15/15 e export 3/3 em diretório temporário, sem migration ou API promovida nesta árvore. Esses resultados não concluem T03. A data que rege a lista, unidades/preços reais, impressão e conferência permanecem pendentes com a Deka. F03 segue dependente da conclusão de F02.
+A rechecagem final de UI/i18n e guardas passou em 67/67; mutantes de confirmação com pendência, de suporte e de escopo do export passaram em 1/1 cada. As dez falhas originais foram reconciliadas por arquivo/nome com casos aprovados nas rechecagens. A proteção nova contra descarte de item sem descrição também passou. As três dívidas herdadas foram transformadas em casos normais, corrigidas e verificadas focalmente; o verificador de F02 ainda precisa ser ampliado na T13. No checkpoint T01/T02, T03 ainda tinha propostas em diretório temporário: serviço/schema 13/13 e 7/7, API 15/15 e export 3/3. A promoção e as provas atuais estão na seção T03 abaixo; aquelas provas preparatórias não concluíam a task. A data que rege a lista, unidades/preços reais, impressão e conferência permanecem pendentes com a Deka. F03 segue dependente da conclusão de F02.
+
+## F02-T03 — checkpoint local validado
+
+Código `e14c72c5`, precedido pelo backend `b7054be0`. A [ADR-013](docs/decisions/ADR-013-notas-e-tarefas-de-pedidos.md) e as migrations 9008/9009 acrescentam notas humanas, tarefas vinculadas, histórico canônico e proteção das tarefas legadas. A 9009 repara vínculos cruzados antes da FK da 9008 e impede texto pessoal tardio após anonimização; a 9008 aplicada permaneceu imutável. [Evidência T03](docs/migration/evidence/construction-f02-t03-20260909.txt): integração 37/37, schema/RLS/LGPD 146/146 reconciliados em duas execuções, UI 55/55, unit final 56/56 e mutantes de banco 3/3 + UI 3/3. Falhas de preparação e rechecagens estão preservadas. Build final estável (1.927 entradas), typecheck e lint global/focal saíram 0. Browser final A/B: 2/2 numa execução após as correções, sem retries/skips/flaky; por jornada, 2 organizações/2 usuários removidos e 12 tabelas de domínio sem resíduos. Tipos regenerados coincidem com a árvore. T04–T08 seguem com trabalho preparado e pendências próprias; não é um gate integral F02.
+
+O GitHub concluiu uma regressão integral do checkpoint anterior `4b70c929`: **761 arquivos e 8.100 testes unitários aprovados**, além de tipos, lint, shell e imagens Docker. A suíte de banco desse checkpoint teve seis falhas; as correções estão identificadas e revalidadas localmente na evidência T03. Isso não substitui a próxima execução de CI nem o gate F02. A execução de imagens em PR constrói e testa, sem publicar ou promover `stable`.
 
 ## Revalidação da F01 sobre v1.17.0 — 08/09/2026
 
@@ -78,7 +84,7 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 |---|---|---|
 | F00 | Auditoria, verificador, ADR-001…003 e baseline N0 | done(verify=2026-09-07 2a23537e) |
 | F01 | TenantContext, TenantConfiguration, Entitlement mínimo, seeds deka/demo2 e criação de tenant | done(verify=2026-09-07 6f7c56fc) — histórico; revalidação v1.17.0 com dívida em 08/09/2026 |
-| F02 | CRM mínimo e pedidos do dia: clientes/empresas, catálogo, pedidos/itens, histórico, tarefas/notas, lista por produto/entrega, impressão e conferência | in_progress — checkpoint T01/T02 com E2E; próxima T03; lista/impressão/conferência e gate final pendentes |
+| F02 | CRM mínimo e pedidos do dia: clientes/empresas, catálogo, pedidos/itens, histórico, tarefas/notas, lista por produto/entrega, impressão e conferência | in_progress — checkpoints T01–T03; T04–T08 em construção; lista/impressão/conferência e gate final pendentes |
 | F03 | WhatsApp de entrada/saída via WAHA, adaptação do ChannelAdapter, Inbox e ciclo das conversas | pending |
 | F04 | Adaptar o motor de IA/RAG, Action Policy e nove ferramentas ao contrato CRM-OS | pending |
 | F05 | Adaptar handoff e notificações; criar regra de lembrete PJ sobre infraestrutura existente | pending |
