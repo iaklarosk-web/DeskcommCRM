@@ -2,12 +2,23 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseF02E2E } from "./f02-e2e.mjs";
+import { closedE2EPlan, hasClosedE2E, parseF02E2E } from "./f02-e2e.mjs";
 
 // Dívidas de c85f7d72 saneadas: não podem reaparecer nem em revalidação.
 // As identidades e resultados históricos permanecem na evidência de ADR-007.
 export const KNOWN_DEBT = [];
 const integer = (n) => Number.isSafeInteger(n) && n >= 0;
+
+/**
+ * Fases com gate implementado. ADR-018 acrescenta F03 sem afrouxar nada: F03
+ * herda TODOS os controles de F02 (sandbox descartável, snapshot SHA-256 dos
+ * inputs, E2E fechado) e acrescenta o campo `webhook` medido.
+ */
+const GATED_PHASES = ["F00", "F01", "F02", "F03"];
+
+/** §8.3: `webhook` é obrigatório a partir de F03; antes disso imprime pending. */
+const phaseNumber = (phase) => Number(phase.slice(1));
+const requiresWebhook = (phase) => phaseNumber(phase) >= phaseNumber("F03");
 
 export function phaseContext(state, requestedPhase) {
   const active = /^current_phase:\s*(F\d{2})\b/m.exec(state)?.[1];
@@ -70,7 +81,7 @@ export function evaluate(input) {
   const debt = [];
   const suites = {};
   const context = input.context;
-  if (!["F00", "F01", "F02"].includes(context.phase)) errors.push(`Fase ${context.phase} ainda sem gate completo; requisitos posteriores pendentes`);
+  if (!GATED_PHASES.includes(context.phase)) errors.push(`Fase ${context.phase} ainda sem gate completo; requisitos posteriores pendentes`);
   for (const name of ["typecheck", "lint", "build", "shell", "secrets"]) {
     if (input.exits[name] !== 0) errors.push(`${name}: comando falhou ou não executou`);
   }
@@ -85,7 +96,7 @@ export function evaluate(input) {
       errors.push(error.message);
     }
   }
-  if (context.phase === "F02") {
+  if (hasClosedE2E(context.phase)) {
     for (const name of ["inputs-before", "sandbox", "e2e-plan", "e2e", "inputs"]) {
       if (input.exits[name] !== 0) errors.push(`${name}: comando falhou ou não executou`);
     }
@@ -105,7 +116,7 @@ export function evaluate(input) {
       errors.push("sandbox: evidência segura ausente ou inválida");
     }
     try {
-      const parsed = parseF02E2E(input.reports["e2e-plan"], input.reports.e2e, input.root);
+      const parsed = parseF02E2E(input.reports["e2e-plan"], input.reports.e2e, input.root, context.phase);
       suites.e2e = parsed;
     } catch (error) {
       errors.push(error instanceof Error ? error.message : "e2e: relatório inválido");
@@ -157,6 +168,14 @@ export function evaluate(input) {
     if (rbac && (rbac.roles !== 3 || rbac.denied_expected < 1 || rbac.denied_expected !== rbac.denied_actual)) errors.push("RBAC fora do contrato");
     if (entitlement && entitlement.usage_events_written < 2) errors.push("Entitlement sem prova mínima de uso");
   }
+  // §8.3: mesma fixture 2x; linhas criadas em cada uma das T tabelas do
+  // pipeline. `stored=1` é o contrato — a segunda entrega não grava mensagem.
+  if (requiresWebhook(context.phase)) {
+    const webhook = metric("webhook", ["replay", "stored", "tables_checked"]);
+    if (webhook && (webhook.replay < 2 || webhook.stored !== 1 || webhook.tables_checked < 4)) {
+      errors.push("Webhook fora do contrato: exige replay>=2, stored=1, tables_checked>=4");
+    }
+  }
   const clean = errors.length === 0;
   const status = !clean ? "NOT READY" : context.revalidation
     ? `${debt.length ? "REVALIDATED WITH DEBT" : "REVALIDATED"} (${context.phase})`
@@ -185,7 +204,7 @@ export function collect(root, directory, context) {
   try { sandbox = JSON.parse(readFileSync(path.join(directory, "sandbox.json"), "utf8")); } catch { sandbox = null; }
   let inputs = null;
   try { inputs = JSON.parse(readFileSync(path.join(directory, "inputs.json"), "utf8")); } catch { inputs = null; }
-  for (const name of ["isolation", "rls-coverage", "rbac", "entitlement"]) metrics[name] = read(path.join(directory, "metrics", `${name}.line`));
+  for (const name of ["isolation", "rls-coverage", "rbac", "entitlement", "webhook"]) metrics[name] = read(path.join(directory, "metrics", `${name}.line`));
   metrics.secrets = read(path.join(directory, "secrets.log"));
   let testsDeleted = null, tenantReferences = null, skipOnlyOccurrences = null;
   try {
@@ -210,12 +229,15 @@ export function collect(root, directory, context) {
 export function render(input, result) {
   const fraction = (name) => result.suites[name] ? `${result.suites[name].passed}/${result.suites[name].total}` : "pending";
   const ok = (name) => input.exits[name] === 0 ? "ok" : "fail";
-  const expectedSuiteCount = input.context.phase === "F02" ? 4 : 3;
+  const closed = hasClosedE2E(input.context.phase);
+  const expectedSuiteCount = closed ? 4 : 3;
   const count = (key) => Object.keys(result.suites).length === expectedSuiteCount
     ? Object.values(result.suites).reduce((sum, suite) => sum + suite[key], 0) : "pending";
   const e2e = result.suites.e2e;
-  const replicability = input.context.phase === "F02"
-    ? `replicability: e2e[fictitious_A_B]=${fraction("e2e")} specs=${e2e ? `${e2e.specs}/${e2e.requiredSpecs}` : "pending"} grep_deka_in_src=${input.tenantReferences ?? "pending"}`
+  const requiredSpecs = closed ? closedE2EPlan(input.context.phase).specs.length : null;
+  const specFraction = e2e ? `${e2e.specs}/${e2e.requiredSpecs}` : requiredSpecs ? `pending/${requiredSpecs}` : "pending";
+  const replicability = closed
+    ? `replicability: e2e[fictitious_A_B]=${fraction("e2e")} specs=${specFraction} grep_deka_in_src=${input.tenantReferences ?? "pending"}`
     : `replicability: e2e[deka]=pending e2e[demo2]=pending src_diff_lines=pending grep_deka_in_src=${input.tenantReferences ?? "pending"}`;
   return [
     "VERIFY SUMMARY",
@@ -223,12 +245,12 @@ export function render(input, result) {
     `build=${ok("build")} lint=${ok("lint")} typecheck=${ok("typecheck")} shell=${ok("shell")}`,
     `unit=${fraction("unit")} integration=${fraction("integration")} db=${fraction("db")} e2e=${fraction("e2e")} baseline_n0=${input.context.baseline.total}`,
     `baseline_comparable: scope=unit+db passed=${result.corePassed} required=${result.baselineCore} full_n0=pending`,
-    `e2e_scope: F02-required passed=${fraction("e2e")} specs=${e2e ? `${e2e.specs}/${e2e.requiredSpecs}` : "pending"}`,
+    `e2e_scope: ${input.context.phase}-required passed=${fraction("e2e")} specs=${specFraction}`,
     ...["isolation", "rls-coverage", "rbac", "entitlement"].map((name) => input.metrics[name] ?? `${name}: pending`),
     "ai_eval: cases=pending pass=pending unknown=pending injection=pending cross_tenant=pending provider_calls_at_zero_balance=pending",
     "handoff: ai_msgs_after_handoff=pending summary=pending assignee=pending notify=pending",
     "reminder: runs=pending sent=pending duplicates=pending",
-    "webhook: replay=pending stored=pending tables_checked=pending",
+    input.metrics.webhook ?? "webhook: replay=pending stored=pending tables_checked=pending",
     replicability,
     input.metrics.secrets ?? "secrets: pending",
     `tests_deleted=${input.testsDeleted ?? "pending"} tests_skipped=${count("skipped")} expected_failures=${count("expectedFailures")} tests_failed=${count("failed")} tests_pending=${count("pending")} mutants_killed=${input.mutants.killed ?? "pending"}/${input.mutants.total ?? "pending"}`,

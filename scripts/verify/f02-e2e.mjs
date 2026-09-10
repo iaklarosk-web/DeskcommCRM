@@ -16,12 +16,48 @@ export const REQUIRED_F02_E2E_SPECS = Object.freeze([
 export const EXPECTED_F02_E2E_TESTS = 13;
 export const F02_SANDBOX_ID = "f02-crm-cadastros-disposable";
 
+/**
+ * F03 ACRESCENTA, nunca substitui (ADR-018): o conjunto obrigatório da fase é o
+ * de F02 mais a spec de inbox de §7.4. As sete specs e os treze testes de F02
+ * continuam obrigatórios dentro do conjunto de F03 — o denominador já provado
+ * não diminui.
+ *
+ * A jornada de inbox roda as sete ações nas DUAS organizações fictícias, que é
+ * o "7/7 por tenant" exigido pela prova de F03-T09: 14 testes numa spec.
+ *
+ * O sandbox descartável continua com a identidade criada na F02: é o mesmo
+ * ambiente fechado em loopback, e trocar o rótulo só invalidaria o contrato já
+ * provado sem mudar nada do que ele garante.
+ */
+export const REQUIRED_F03_E2E_SPECS = Object.freeze([
+  ...REQUIRED_F02_E2E_SPECS,
+  "tests/e2e/f03-inbox.spec.ts",
+]);
+
+export const EXPECTED_F03_E2E_TESTS = EXPECTED_F02_E2E_TESTS + 14;
+
+/** Fases com gate fechado de navegador. O nome deste arquivo é histórico. */
+const CLOSED_E2E_PHASES = Object.freeze({
+  F02: { specs: REQUIRED_F02_E2E_SPECS, tests: EXPECTED_F02_E2E_TESTS },
+  F03: { specs: REQUIRED_F03_E2E_SPECS, tests: EXPECTED_F03_E2E_TESTS },
+});
+
+export function hasClosedE2E(phase) {
+  return Object.hasOwn(CLOSED_E2E_PHASES, phase);
+}
+
 const loopback = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
 const integer = (value) => Number.isSafeInteger(value) && value >= 0;
 const INPUT_DIRECTORIES = ["app", "components", "hooks", "lib", "src", "public", "types", "tests", "scripts", "config"];
 
 function fail(message) {
-  throw new Error(`F02 E2E: ${message}`);
+  throw new Error(`E2E fechado: ${message}`);
+}
+
+export function closedE2EPlan(phase) {
+  const plan = CLOSED_E2E_PHASES[phase];
+  if (!plan) fail(`fase ${phase} não tem gate fechado de navegador`);
+  return plan;
 }
 
 function parseEnvFile(filename) {
@@ -262,16 +298,17 @@ function declarations(report, root, label, actual) {
   return { rows, files };
 }
 
-export function parseF02E2E(plan, actual, root) {
+export function parseF02E2E(plan, actual, root, phase = "F02") {
+  const { specs, tests: expectedTests } = closedE2EPlan(phase);
   const planned = declarations(plan, root, "inventário", false);
   const executed = declarations(actual, root, "execução", true);
-  const required = [...REQUIRED_F02_E2E_SPECS].sort();
+  const required = [...specs].sort();
   const plannedFiles = [...planned.files].sort();
   const executedFiles = [...executed.files].sort();
-  if (JSON.stringify(plannedFiles) !== JSON.stringify(required)) fail("inventário não contém exatamente as sete specs obrigatórias");
-  if (JSON.stringify(executedFiles) !== JSON.stringify(required)) fail("execução não contém exatamente as sete specs obrigatórias");
-  if (planned.rows.length !== EXPECTED_F02_E2E_TESTS) {
-    fail(`inventário deve conter ${EXPECTED_F02_E2E_TESTS} testes completos`);
+  if (JSON.stringify(plannedFiles) !== JSON.stringify(required)) fail(`inventário não contém exatamente as ${required.length} specs obrigatórias de ${phase}`);
+  if (JSON.stringify(executedFiles) !== JSON.stringify(required)) fail(`execução não contém exatamente as ${required.length} specs obrigatórias de ${phase}`);
+  if (planned.rows.length !== expectedTests) {
+    fail(`inventário deve conter ${expectedTests} testes completos`);
   }
   const plannedKeys = planned.rows.map((row) => row.key).sort();
   const executedKeys = executed.rows.map((row) => row.key).sort();
@@ -280,12 +317,12 @@ export function parseF02E2E(plan, actual, root) {
   }
   const stats = actual.stats;
   if (!stats || ![stats.expected, stats.unexpected, stats.flaky, stats.skipped].every(integer) ||
-      stats.expected !== EXPECTED_F02_E2E_TESTS || stats.unexpected !== 0 || stats.flaky !== 0 || stats.skipped !== 0) {
+      stats.expected !== expectedTests || stats.unexpected !== 0 || stats.flaky !== 0 || stats.skipped !== 0) {
     fail("denominadores do Playwright indicam falha, skip, retry ou execução parcial");
   }
   return {
-    passed: EXPECTED_F02_E2E_TESTS,
-    total: EXPECTED_F02_E2E_TESTS,
+    passed: expectedTests,
+    total: expectedTests,
     failed: 0,
     skipped: 0,
     pending: 0,
@@ -300,7 +337,8 @@ export function parseF02E2E(plan, actual, root) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [mode, root, output, beforeFile] = process.argv.slice(2);
   try {
-    if (mode === "specs") process.stdout.write(`${REQUIRED_F02_E2E_SPECS.join("\n")}\n`);
+    // `specs <fase>`: o verify.sh pede o inventário da fase que está rodando.
+    if (mode === "specs") process.stdout.write(`${closedE2EPlan(root ?? "F02").specs.join("\n")}\n`);
     else if (mode === "environment" && root && output) {
       writeFileSync(output, `${JSON.stringify(verifyF02Sandbox(root), null, 2)}\n`, { flag: "wx" });
     } else if (mode === "snapshot" && root && output) {

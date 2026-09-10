@@ -12,7 +12,9 @@ const { evaluate, parseSuite, phaseContext, KNOWN_DEBT, render, collect } = awai
 const helperPath = path.join(path.dirname(modulePath), "f02-e2e.mjs");
 const {
   EXPECTED_F02_E2E_TESTS,
+  EXPECTED_F03_E2E_TESTS,
   REQUIRED_F02_E2E_SPECS,
+  REQUIRED_F03_E2E_SPECS,
   compareF02Inputs,
   snapshotF02Inputs,
   verifyF02Sandbox,
@@ -63,15 +65,17 @@ function input() {
   };
 }
 const F02_SPEC_COUNTS = [1, 2, 2, 2, 3, 1, 2];
-function playwrightReport({ actual = false } = {}) {
-  const suites = REQUIRED_F02_E2E_SPECS.map((requiredFile, fileIndex) => {
+// ADR-018: F03 acrescenta a spec de inbox com 14 testes (7 ações x 2 tenants).
+const F03_SPEC_COUNTS = [...F02_SPEC_COUNTS, 14];
+function playwrightReport({ actual = false, specs = REQUIRED_F02_E2E_SPECS, counts = F02_SPEC_COUNTS, total = EXPECTED_F02_E2E_TESTS } = {}) {
+  const suites = specs.map((requiredFile, fileIndex) => {
     const file = path.basename(requiredFile);
     return {
       title: file,
       file,
       line: 0,
       column: 0,
-      specs: Array.from({ length: F02_SPEC_COUNTS[fileIndex] }, (_, testIndex) => ({
+      specs: Array.from({ length: counts[fileIndex] }, (_, testIndex) => ({
         title: `jornada ${fileIndex + 1}.${testIndex + 1}`,
         ok: true,
         id: `f02-${fileIndex + 1}-${testIndex + 1}`,
@@ -102,7 +106,7 @@ function playwrightReport({ actual = false } = {}) {
     suites,
     errors: [],
     stats: actual
-      ? { expected: EXPECTED_F02_E2E_TESTS, unexpected: 0, flaky: 0, skipped: 0 }
+      ? { expected: total, unexpected: 0, flaky: 0, skipped: 0 }
       : { expected: 0, unexpected: 0, flaky: 0, skipped: 0 },
   };
 }
@@ -456,4 +460,100 @@ if (args[0].startsWith('test:') && args[0] !== 'test:shell') {
     assert.match(readFileSync(path.join(evidence, "mutants/fixture/metrics/isolation.line"), "utf8"), /leaks=99/);
     assert.equal(JSON.parse(readFileSync(path.join(evidence, "summary.json"), "utf8")).context.active, "F02");
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// ─── ADR-018 — verify.sh v1.1: F03 herda os controles de F02 e mede `webhook` ──
+
+const stateF03 = `current_phase: F03
+baseline_n0: 7
+f00_commit: c85f7d72
+baseline_detail: "unit=2/2 db=2/2 e2e=3/3"
+| F01 | Fundação | done(verify=2026-09-07 6f7c56fc) |
+| F02 | CRM | done(verify=2026-09-10 03ec6a3b) |
+| F03 | Conversa | pending |
+`;
+const WEBHOOK_OK = "webhook: replay=2 stored=1 tables_checked=5";
+
+function f03Input() {
+  const data = f02Input();
+  data.context = phaseContext(stateF03);
+  const parametros = { specs: REQUIRED_F03_E2E_SPECS, counts: F03_SPEC_COUNTS, total: EXPECTED_F03_E2E_TESTS };
+  data.reports["e2e-plan"] = playwrightReport(parametros);
+  data.reports.e2e = playwrightReport({ ...parametros, actual: true });
+  data.metrics.webhook = WEBHOOK_OK;
+  return data;
+}
+
+test("F03 is a gated phase and reaches READY with the webhook line measured", () => {
+  const result = evaluate(f03Input());
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F03)");
+  const bloco = render(f03Input(), result);
+  assert.match(bloco, new RegExp(WEBHOOK_OK.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(bloco, /e2e_scope: F03-required passed=27\/27 specs=8\/8/);
+  assert.match(bloco, /replicability: e2e\[fictitious_A_B\]=27\/27 specs=8\/8/);
+});
+
+test("F03 keeps every F02 spec: dropping one is rejected, so the denominator never shrinks", () => {
+  for (const herdada of REQUIRED_F02_E2E_SPECS) {
+    assert.ok(REQUIRED_F03_E2E_SPECS.includes(herdada), `F03 perdeu a spec ${herdada}`);
+  }
+  assert.equal(REQUIRED_F03_E2E_SPECS.length, REQUIRED_F02_E2E_SPECS.length + 1);
+  assert.ok(EXPECTED_F03_E2E_TESTS > EXPECTED_F02_E2E_TESTS);
+  const data = f03Input();
+  const restantes = REQUIRED_F03_E2E_SPECS.filter((file) => file !== REQUIRED_F02_E2E_SPECS[0]);
+  const parametros = { specs: restantes, counts: F03_SPEC_COUNTS.slice(1), total: EXPECTED_F03_E2E_TESTS };
+  data.reports["e2e-plan"] = playwrightReport(parametros);
+  data.reports.e2e = playwrightReport({ ...parametros, actual: true });
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.some((erro) => /specs obrigatórias de F03/.test(erro)), result.errors.join("\n"));
+});
+
+test("missing webhook line makes otherwise green F03 fail", () => {
+  const data = f03Input();
+  delete data.metrics.webhook;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.includes("Métrica obrigatória ausente: webhook"), result.errors.join("\n"));
+  assert.match(render(data, result), /webhook: replay=pending stored=pending tables_checked=pending/);
+});
+
+for (const [rotulo, linha] of [
+  ["duplicata gravada", "webhook: replay=2 stored=2 tables_checked=5"],
+  ["sem reentrega", "webhook: replay=1 stored=1 tables_checked=5"],
+  ["pipeline raso", "webhook: replay=2 stored=1 tables_checked=3"],
+  ["campo pendente", "webhook: replay=2 stored=pending tables_checked=5"],
+]) test(`F03 rejects a webhook line out of contract: ${rotulo}`, () => {
+  const data = f03Input();
+  data.metrics.webhook = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, `linha aceita indevidamente: ${linha}`);
+  assert.ok(
+    result.errors.some((erro) => /webhook/i.test(erro)),
+    result.errors.join("\n"),
+  );
+});
+
+test("F02 keeps webhook pending without failing: the field is required only from F03", () => {
+  const data = f02Input();
+  delete data.metrics.webhook;
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F02)");
+  assert.match(render(data, result), /webhook: replay=pending stored=pending tables_checked=pending/);
+  assert.match(render(data, result), /e2e_scope: F02-required passed=13\/13 specs=7\/7/);
+});
+
+test("F03 still requires the disposable sandbox and the untouched input snapshot", () => {
+  for (const quebra of [
+    (data) => { data.sandbox = null; },
+    (data) => { data.inputs = { ...data.inputs, hash_after: "b".repeat(64), ok: false }; },
+    (data) => { data.exits.sandbox = 1; },
+  ]) {
+    const data = f03Input();
+    quebra(data);
+    const result = evaluate(data);
+    assert.equal(result.exitCode, 1);
+  }
 });

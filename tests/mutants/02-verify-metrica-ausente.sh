@@ -17,7 +17,11 @@ if VERIFY_GATE_MODULE="$scratch/report.mjs" node --test --test-name-pattern='mis
   echo 'MUTANTE VIVO: métrica ausente deixou o gate verde' >&2
   exit 1
 fi
-if ! rg -q '^not ok .*missing mandatory metric makes otherwise green F01 fail' "$scratch/result.log" || ! rg -q 'ERR_ASSERTION' "$scratch/result.log"; then
+# `grep -qE`, não `rg`: ripgrep não é dependência deste repositório. Sob o
+# shell que vendoriza rg o mutante passava; sob um shell sem ele, `rg` some,
+# o `if !` vira verdadeiro e o mutante se declarava VIVO por ausência de
+# ferramenta — um gate que só fecha numa máquina não é gate.
+if ! grep -qE '^not ok .*missing mandatory metric makes otherwise green F01 fail' "$scratch/result.log" || ! grep -qE 'ERR_ASSERTION' "$scratch/result.log"; then
   cat "$scratch/result.log" >&2
   echo 'MUTANTE VIVO: falhou sem a asserção esperada' >&2
   exit 1

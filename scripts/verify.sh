@@ -16,6 +16,15 @@ fi
 # Validate the requested completed phase before any expensive command.
 CONTEXT=$(node scripts/verify/report.mjs context "$ROOT" - "${REVALIDATE[@]}") || exit 1
 PHASE=$(node -e 'const value=JSON.parse(process.argv[1]); if(!/^F\d{2}$/.test(value.phase)) process.exit(1); process.stdout.write(value.phase)' "$CONTEXT") || exit 1
+# ADR-018: F03 herda integralmente os controles fechados da F02.
+# ADR-018: EXPECTED_SPECS é uma segunda afirmação INDEPENDENTE do inventário.
+# Se o módulo de specs for corrompido ou truncado, os dois números divergem e
+# o gate recusa — que era exatamente o papel do "!= 7" da v1.
+case "$PHASE" in
+  F02) CLOSED_E2E=1; EXPECTED_SPECS=7 ;;
+  F03) CLOSED_E2E=1; EXPECTED_SPECS=8 ;;
+  *)   CLOSED_E2E=0; EXPECTED_SPECS=0 ;;
+esac
 export WHATSAPP_MODE=mock AI_PROVIDER=mock CI=1
 export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=3072}"
 export VITEST_MAX_THREADS=1 VITEST_MAX_FORKS=1
@@ -45,7 +54,7 @@ skip_step() {
 }
 suite() {
   local name=$1 script=$2
-  if [ "$PHASE" = F02 ] && { [ "$name" = unit ] || [ "$name" = db ] || [ "$name" = integration ]; }; then
+  if [ "$CLOSED_E2E" = 1 ] && { [ "$name" = unit ] || [ "$name" = db ] || [ "$name" = integration ]; }; then
     step "$name" env NODE_OPTIONS=--max-old-space-size=1536 pnpm "$script" --maxWorkers=1 --allowOnly=false \
       --reporter=default --reporter="$ROOT/scripts/verify/reporter.mjs" \
       --outputFile="$LOG_DIR/$name.json"
@@ -68,7 +77,7 @@ e2e_suite() {
 
 F02_SANDBOX_OK=0
 F02_INPUTS_OK=0
-if [ "$PHASE" = F02 ]; then
+if [ "$CLOSED_E2E" = 1 ]; then
   if step inputs-before node scripts/verify/f02-e2e.mjs snapshot "$ROOT" "$LOG_DIR/inputs-before.json"; then
     F02_INPUTS_OK=1
   fi
@@ -79,7 +88,7 @@ fi
 
 step typecheck pnpm typecheck
 step lint pnpm lint
-if [ "$PHASE" = F02 ]; then
+if [ "$CLOSED_E2E" = 1 ]; then
   if [ "$F02_SANDBOX_OK" = 1 ] && [ "$F02_INPUTS_OK" = 1 ]; then
     step build pnpm e2e:build
   else
@@ -94,12 +103,12 @@ suite integration test:integration
 suite db test:db
 step secrets bash scripts/scan-secrets.sh
 
-if [ "$PHASE" = F02 ]; then
-  mapfile -t F02_SPECS < <(node scripts/verify/f02-e2e.mjs specs)
+if [ "$CLOSED_E2E" = 1 ]; then
+  mapfile -t F02_SPECS < <(node scripts/verify/f02-e2e.mjs specs "$PHASE")
   if [ "$F02_SANDBOX_OK" != 1 ] || [ "$(cat "$LOG_DIR/build.exit")" != 0 ]; then
     skip_step e2e-plan "sandbox ou build F02 falhou"
     skip_step e2e "inventário E2E indisponível"
-  elif [ "${#F02_SPECS[@]}" != 7 ]; then
+  elif [ "${#F02_SPECS[@]}" != "$EXPECTED_SPECS" ]; then
     skip_step e2e-plan "manifesto F02 inválido"
     skip_step e2e "inventário E2E indisponível"
   elif e2e_suite e2e-plan "${F02_SPECS[@]}" --list; then
@@ -121,7 +130,7 @@ for mutant in tests/mutants/*.sh; do
   fi
 done
 echo "$K/$Q" >"$LOG_DIR/mutants.count"
-if [ "$PHASE" = F02 ]; then
+if [ "$CLOSED_E2E" = 1 ]; then
   if [ "$F02_INPUTS_OK" = 1 ]; then
     step inputs node scripts/verify/f02-e2e.mjs compare "$ROOT" "$LOG_DIR/inputs.json" "$LOG_DIR/inputs-before.json"
   else
