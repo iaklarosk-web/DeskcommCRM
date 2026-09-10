@@ -1,5 +1,72 @@
 # deskcomm-audit — Auditoria F00 do DeskcommCRM
 
+## Checkpoint F02 concluído tecnicamente — 03ec6a3b56826ab882782efb1dd5185f47e52a8c
+
+Este checkpoint tem precedência sobre descrições históricas do estado atual.
+As medições F00/F01 preservadas abaixo continuam atribuídas a seus commits.
+D47 determina pausa após F02; D48 retira dados Deka dos gates de engenharia.
+[ADR-014](../decisions/ADR-014-F02-configuravel-e-pausas.md) e [desenho F02](../design/F02-pedidos-do-dia.md) registram o contrato genérico.
+
+| Superfície | Fonte no checkpoint | Implementação |
+|---|---|---|
+| Cliente e pedidos da ficha | `components/crm/ContactOrders.tsx:23` | Leitura paginada, vazio/erro e acesso ao pedido do contato. |
+| Empresas | `app/api/v1/companies/route.ts:49` | CRUD sob organização ativa; vínculo de empresa e snapshot do pedido. |
+| Catálogo | `lib/catalogo/listar.ts:33` | Busca literal e paginação; leitura e escrita têm policies por operação (9011). |
+| Pedidos/itens | `src/crm/orders/service.ts:115` | Comandos transacionais com identidade, revisão, snapshots, histórico e idempotência. |
+| Notas | `components/crm/CrmNotes.tsx:28` | Notas humanas vinculadas ao titular/pedido, sem lead fictício. |
+| Tarefas | `components/crm/LinkedOrderTasks.tsx:40` | Tarefas e histórico vinculados ao pedido. |
+| Configuração comercial | `src/tenant-config/commercial-service.ts:357` | Identidade/timezone/moeda canônicos em organizations; seis campos comerciais em tenant_settings; aliases antigos arquivados privadamente. |
+| Relatório diário | `src/crm/orders/daily.ts:345` | Data e critério explícitos; identidade canônica da empresa, consulta completa, grupos e centavos/milésimos exatos. |
+| Conferência | `src/crm/orders/checks-service.ts:119` | Quantidade conferida por item/revisão, separada da venda; recibos privados e histórico imutável. |
+| Seeds fictícios | `scripts/f02-fixture-writer.ts:185` | Opt-in em sandbox com marcador do banco; gravação idempotente. |
+| Exportação de pedidos | `src/crm/orders/export.ts:124` | Escopo pelo titular e organização; inclui journal de conferência sem recibos/chaves/hashes. |
+
+Branding permanece em `organizations.settings.branding`; o arquivo legado é a
+tabela privada `private.tenant_setting_alias_archive`, criada na 9010, com RLS,
+zero policies e nenhum grant direto a anon/authenticated/service_role. A fachada
+`src/tenant-config/settings.ts` lê os aliases da origem canônica e recusa escrita
+nesses aliases. Não é uma migração geral dos seis escritores de branding para
+`setSetting`; a descrição histórica que propunha isso não reflete a implementação.
+
+O journal de conferência da 9012 tem `USING (organization_id in (select
+public.fn_user_org_ids()))`; as leituras HTTP/RPC especificam também organização.
+O recibo privado mantém RLS, zero policies e nenhum grant de cliente. As provas
+medem tabelas existentes e o catálogo de policies; números F00 não são contagens
+atuais. O baseline preserva a varredura final de anon e migrações aplicadas são
+imutáveis. Nenhum dado `orders` externo foi apagado ou reinterpretado.
+
+[Evidência T04–T08](evidence/construction-f02-t04-t08-20260909.txt) preserva provas
+focais e tentativas. O gate05 sobre o código funcional `5f3df2cf` aprovou
+unit8380/8380, integração72/72, banco1585/1585 e E2E13/13, mas reprovou quatro
+mecanismos de teste (23/27 scripts mutantes). O checkpoint `4ec7bb56` corrigiu
+esses mecanismos, com controle RLS9/9, vazamentos8/8 e rechecagens02=1/1,03=5/5,26=5/5.
+O gate06 aprovou 27/27 scripts, mas encerrou NOT READY com E2E12/13 por uma espera
+insuficiente na lista do viewer. O checkpoint `03ec6a3b` sincroniza a resposta
+GET HTTP200, a fixture exata e sua exibição na UI
+(`tests/e2e/f02-crm-navigation.spec.ts:316-337`); a rechecagem A/B passou2/2.
+A CI34439000032 e o Docker34439000033 desse checkpoint passaram. O gate07 terminou
+com exit 0 em `4617.77s`, concluído às `2026-09-10T06:11:30Z`:
+unit8380/8380, integração72/72, DB1585/1585, E2E13/13 em sete specs,
+mutantes27/27, `tests_pending=0`, `debt_known=0` e zero violações. Os indicadores
+das fases futuras continuam `pending` e não entram no fechamento de F02.
+O verificador registrou `STATUS: READY (F02)` em
+`.verify-logs/f02-final-07/orchestration.log:15-33`; o término está em
+`.verify-logs/f02-final-07/result.json:1-4`. [Evidência T13](evidence/construction-f02-t13-20260909.txt)
+e [matriz das APIs](evidence/f02-t04-api-matrix.md). F02 conclui seu escopo técnico
+e a construção pausa antes de F03, conforme D47.
+
+Conforme a [ADR-015](../decisions/ADR-015-request-id-canonico-F02.md), 21 módulos e
+34 operações F02 usam o identificador canônico nos envelopes e auditorias.
+O E2E comprovou suporte somente leitura, quatro grupos de leitura/quatro recusas,
+duas auditorias correlacionadas e IDs gerado/ecoado. As 11 referências da tabela
+foram revalidadas contra o checkpoint acima; arquivos de aplicação não mudaram
+no reparo dos mecanismos de teste. Toda a execução usa fixtures fictícias e
+WhatsApp/IA mock. Aceite visual do proprietário, operação Deka, provedores
+reais, produção e E2E integral do upstream não foram validados. Esses limites
+permanecem explícitos, mas dados e operação Deka não bloqueiam a engenharia
+genérica concluída em F02, conforme D48.
+
+
 Saída da F00 (DIRETRIZ §6). Tudo abaixo cita `arquivo:linha @ c85f7d7`. O que não foi verificado está na seção 8.
 
 ## 0. Identificação

@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 
 import { counterTotal, resetCounters } from "@/src/obs/counters";
 import {
+  CanonicalSettingAliasError,
   getSetting,
   InvalidSettingError,
   listSchema,
@@ -43,6 +44,16 @@ function vi_query(
 ) {
   return async (text: string, values?: unknown[]) => {
     registro.push({ text, values });
+    if (/select timezone,settings from public\.organizations/.test(text)) {
+      return {
+        rows: [
+          {
+            timezone: "America/Sao_Paulo",
+            settings: {},
+          },
+        ],
+      };
+    }
     return /select value from public\.tenant_settings/.test(text) ? { rows } : { rows: [] };
   };
 }
@@ -80,14 +91,20 @@ describe("tenant-settings", () => {
     expect(SCHEMA_VERSION).toBe(1);
     expect(schema.length).toBeGreaterThanOrEqual(24);
     const semDefault = schema.filter((e) => e.default === undefined);
-    expect(semDefault.map((e) => e.key), "chave sem default").toEqual([]);
+    expect(
+      semDefault.map((e) => e.key),
+      "chave sem default",
+    ).toEqual([]);
     const enumSemValores = schema.filter((e) => e.tipo === "enum" && !e.valores?.length);
-    expect(enumSemValores.map((e) => e.key), "enum sem vocabulário").toEqual([]);
+    expect(
+      enumSemValores.map((e) => e.key),
+      "enum sem vocabulário",
+    ).toEqual([]);
   });
 
-  it("defaults_applied D/D: getSetting sem linha no banco devolve o default de CADA chave", async () => {
-    // Arrange
-    const { pool } = fakePool([]);
+  it("defaults_applied D/D: getSetting sem linha em tenant_settings devolve o default de CADA chave", async () => {
+    // Arrange — aliases leem a organização canônica em seu estado default.
+    const { pool } = fakePool();
 
     // Act + Assert — derivado do schema, uma chave por vez
     for (const entrada of listSchema()) {
@@ -125,7 +142,16 @@ describe("tenant-settings", () => {
       const promessa = setSetting(ctx, entrada.key, invalidoPara(entrada.tipo), "tenant_admin", {
         pool,
       });
-      await expect(promessa, entrada.key).rejects.toBeInstanceOf(InvalidSettingError);
+      const erro = await promessa.catch((caught: unknown) => caught);
+      if (entrada.canonical) {
+        expect(erro, entrada.key).toBeInstanceOf(CanonicalSettingAliasError);
+        expect(erro, entrada.key).toMatchObject({
+          key: entrada.key,
+          destination: entrada.canonical.destination,
+        });
+      } else {
+        expect(erro, entrada.key).toBeInstanceOf(InvalidSettingError);
+      }
       expect(queries, `${entrada.key}: escreveu apesar de inválido`).toEqual([]);
       rejeitadas += 1;
     }
@@ -160,9 +186,9 @@ describe("tenant-settings", () => {
     await expect(getSetting(ctx, "grupo.que_nao_existe", { pool })).rejects.toBeInstanceOf(
       UnknownSettingError,
     );
-    await expect(
-      setSetting(ctx, "outra.fantasma", true, "seed", { pool }),
-    ).rejects.toBeInstanceOf(UnknownSettingError);
+    await expect(setSetting(ctx, "outra.fantasma", true, "seed", { pool })).rejects.toBeInstanceOf(
+      UnknownSettingError,
+    );
     expect(counterTotal("settings_rejected")).toBe(2);
   });
 
@@ -170,7 +196,10 @@ describe("tenant-settings", () => {
     // Arrange — weekday como sentinela teria tipo errado se fosse validado
     const seed = {
       settings: {
-        branding: { name: "TODO-DEKA", primary_color: "TODO-DEKA (perguntado em 2026-09-05, não sabe)" },
+        branding: {
+          name: "TODO-DEKA",
+          primary_color: "TODO-DEKA (perguntado em 2026-09-05, não sabe)",
+        },
         business: { timezone: "America/Sao_Paulo" },
         "orders.recurring_reminder": {
           enabled: true,

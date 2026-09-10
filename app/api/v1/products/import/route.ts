@@ -170,6 +170,9 @@ export async function POST(req: NextRequest): Promise<Response> {
     controla_estoque: p.controla_estoque,
     quantidade: p.quantidade,
     origem: "planilha",
+    // Coluna ausente preserva a unidade de quem já existia; célula vazia é a
+    // limpeza explícita que o CSV consegue expressar.
+    ...(p.sale_unit === undefined ? {} : { sale_unit: p.sale_unit }),
   });
 
   const paraGravar = lido.produtos.map((p) =>
@@ -207,8 +210,15 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const novos = paraGravar.filter((p) => !antigos.has(p.codigo));
   const existentes = paraGravar.filter((p) => antigos.has(p.codigo));
-  await gravarEmLotes(novos);
-  await gravarEmLotes(existentes);
+  // Cada upsert recebe objetos com as mesmas chaves. Assim, se uma composição
+  // futura misturar linhas, o PostgREST não interpreta uma chave ausente como
+  // atualização da coluna para o lote inteiro.
+  const temUnidade = (produto: (typeof paraGravar)[number]) =>
+    Object.hasOwn(produto, "sale_unit");
+  for (const grupo of [novos, existentes]) {
+    await gravarEmLotes(grupo.filter(temUnidade));
+    await gravarEmLotes(grupo.filter((produto) => !temUnidade(produto)));
+  }
 
   const atualizados = existentes.length;
   const criados = Math.max(0, gravados - atualizados);
@@ -249,9 +259,9 @@ export async function GET(): Promise<Response> {
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 
   const modelo = [
-    "codigo,nome,marca,categoria,preco,custo,estoque",
-    "IP15-128,iPhone 15 128GB,Apple,Celular,5499.00,4100.00,3",
-    "PERF-212,212 VIP Men 100ml,Carolina Herrera,Perfume,449.90,280.00,7",
+    "codigo,nome,marca,categoria,preco,custo,estoque,unidade de venda",
+    "IP15-128,iPhone 15 128GB,Apple,Celular,5499.00,4100.00,3,un",
+    "PERF-212,212 VIP Men 100ml,Carolina Herrera,Perfume,449.90,280.00,7,frasco",
   ].join("\n");
 
   return new Response(`﻿${modelo}\n`, {

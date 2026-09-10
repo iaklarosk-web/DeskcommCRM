@@ -45,9 +45,7 @@ export function TarefasClient({ podeEditar }: { podeEditar: boolean }) {
     editarTarefa,
     apagarTarefa,
     alternarConcluida,
-  } = useTasks(
-    situacao === "aberto" ? { aberto: true } : { status: situacao },
-  );
+  } = useTasks(situacao === "aberto" ? { aberto: true } : { status: situacao });
 
   function abrirNova(dia?: string) {
     setEmEdicao(null);
@@ -57,6 +55,7 @@ export function TarefasClient({ podeEditar }: { podeEditar: boolean }) {
   }
 
   function abrirEdicao(tarefa: Tarefa) {
+    if (!podeEditar || tarefa.order_id) return;
     setEmEdicao(tarefa);
     setPrazoSugerido(undefined);
     setAberturas((n) => n + 1);
@@ -64,6 +63,7 @@ export function TarefasClient({ podeEditar }: { podeEditar: boolean }) {
   }
 
   async function salvar(entrada: NovaTarefa) {
+    if (!podeEditar || emEdicao?.order_id) return;
     if (emEdicao) await editarTarefa(emEdicao.id, entrada);
     else await criarTarefa(entrada);
   }
@@ -81,10 +81,7 @@ export function TarefasClient({ podeEditar }: { podeEditar: boolean }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Select
-            value={situacao}
-            onValueChange={(v) => setSituacao(v as FiltroDeSituacao)}
-          >
+          <Select value={situacao} onValueChange={(v) => setSituacao(v as FiltroDeSituacao)}>
             <SelectTrigger className="h-9 w-[168px] text-xs">
               <SelectValue />
             </SelectTrigger>

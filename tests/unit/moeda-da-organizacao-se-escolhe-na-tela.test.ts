@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  *
  * Este arquivo guarda as três coisas que fazem a escolha ser real:
  *
- *  1. o que a pessoa escolheu chega ao UPDATE (e não o padrão);
+ *  1. o que a pessoa escolheu chega à gravação canônica (e não o padrão);
  *  2. moeda fora da lista servida é recusada ANTES do banco;
  *  3. a lista servida é UMA — a mesma para o schema e para o seletor.
  *
@@ -37,28 +37,25 @@ import { tenantSchema } from "@/lib/schemas/settings";
 
 const ORG_ID = "22222222-2222-4222-8222-222222222222";
 
-/** O que a action mandou para o UPDATE — é sobre isto que as asserções falam. */
+/** Perfil, organização e ator enviados à RPC canônica de gravação. */
 let atualizado: Record<string, unknown> | null = null;
-/** O org id que o `.eq()` do UPDATE recebeu — admin client bypassa RLS, então este `.eq()` É a única cerca. */
 let orgIdAtualizado: string | null = null;
+let atorAtualizado: string | null = null;
+let gravacoes = 0;
 
 function adminFalso() {
   return {
-    from: () => ({
-      select: () => ({
-        eq: () => ({ maybeSingle: async () => ({ data: { settings: {} }, error: null }) }),
-      }),
-      update: (linha: Record<string, unknown>) => {
-        atualizado = linha;
-        return {
-          eq: async (_coluna: string, valor: string) => {
-            orgIdAtualizado = valor;
-            return { error: null };
-          },
-        };
-      },
-    }),
-    rpc: () => Promise.resolve({ error: null }),
+    rpc: (nome: string, args: Record<string, unknown>) => {
+      if (nome === "fn_update_organization_profile") {
+        atualizado = args.p_profile as Record<string, unknown>;
+        orgIdAtualizado = args.p_org as string;
+        atorAtualizado = args.p_actor as string;
+        gravacoes++;
+        return Promise.resolve({ data: 1, error: null });
+      }
+      if (nome === "emit_event") return Promise.resolve({ data: null, error: null });
+      throw new Error(`RPC inesperada: ${nome}`);
+    },
   };
 }
 
@@ -82,6 +79,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   atualizado = null;
   orgIdAtualizado = null;
+  atorAtualizado = null;
+  gravacoes = 0;
   vi.mocked(loadAuthUser).mockResolvedValue({
     id: "u1",
     is_platform_admin: false,
@@ -103,12 +102,11 @@ describe("a moeda da organização", () => {
     // ⚠️ MXN e não BRL: com o padrão chumbado este caso passaria verde e a
     // escolha da tela seria decorativa.
     expect(atualizado).toMatchObject({ currency: "MXN" });
-    // ⚠️ O admin client BYPASSA RLS por desenho (única policy de escrita de
-    // `organizations` é `orgs_write_platform_admin`) — o `.eq("id", orgId)`
-    // é a ÚNICA cerca entre "salvei a moeda da minha org" e "salvei a moeda
-    // de toda organização da instalação". Um `.eq()` esquecido escreveria em
-    // todo mundo e este teste continuaria verde sem esta linha.
+    // A RPC revalida a autorização no banco. A action deve enviar somente a
+    // organização ativa e o ator autenticado, sem aceitar identidade do form.
     expect(orgIdAtualizado).toBe(ORG_ID);
+    expect(atorAtualizado).toBe("u1");
+    expect(gravacoes).toBe(1);
   });
 
   it("recusa moeda que o produto não serve, antes do banco", () => {

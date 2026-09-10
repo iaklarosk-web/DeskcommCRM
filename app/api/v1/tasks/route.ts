@@ -1,4 +1,5 @@
 import { requireSupportWrite } from "@/lib/impersonate/support";
+import { getRequestId } from "@/lib/api/request-id";
 /**
  * GET  /api/v1/tasks — as tarefas da organização, em ordem de prazo.
  * POST /api/v1/tasks — cria uma tarefa.
@@ -23,7 +24,6 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  *     dado indo para um lugar que nenhuma lista, índice ou policy alcança.
  *     Falhar aberto na INFORMAÇÃO é o certo aqui: 500 com a mensagem do banco.
  */
-import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 import { z } from "zod";
 
@@ -39,7 +39,7 @@ export const dynamic = "force-dynamic";
 
 /** As colunas que a tela lê. Explícitas para o `select *` não vazar coluna nova. */
 const COLUNAS =
-  "id, organization_id, title, description, due_date, priority, status, lead_id, contact_id, assigned_to, created_by, created_at, updated_at";
+  "id, organization_id, title, description, due_date, priority, status, lead_id, contact_id, order_id, revision, assigned_to, created_by, created_at, updated_at";
 
 const criacaoSchema = z.object({
   title: z.string().trim().min(1).max(255),
@@ -64,7 +64,7 @@ const listaSchema = z.object({
 });
 
 export async function GET(req: NextRequest): Promise<Response> {
-  const requestId = randomUUID();
+  const requestId = getRequestId(req);
 
   const authz = await requireRole("viewer", { requestId, resource: "crm_tasks" });
   if (!authz.ok) return authz.response;
@@ -111,7 +111,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
-  const requestId = randomUUID();
+  const requestId = getRequestId(req);
 
   // `agent` e não `manager`: criar tarefa é o gesto de quem ATENDE, todo dia.
   const authz = await requireRole("agent", { requestId, resource: "crm_tasks" });
@@ -127,6 +127,30 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
 
   const supabase = await createClient();
+  if (parsed.data.contact_id) {
+    const { data: contact, error: contactError } = await supabase
+      .from("contacts")
+      .select("id,is_anonymized,is_merged_into")
+      .eq("organization_id", authz.org.orgId)
+      .eq("id", parsed.data.contact_id)
+      .maybeSingle();
+    if (contactError) {
+      return fail("internal_error", t("Erro ao salvar a tarefa."), 500, { requestId });
+    }
+    if (!contact) {
+      return fail("not_found", t("Contato não encontrado."), 404, { requestId });
+    }
+    if (contact.is_anonymized || contact.is_merged_into) {
+      return fail(
+        "contact_unavailable",
+        t(
+          "O contato principal não está disponível — ele pode ter sido anonimizado ou já mesclado em outro.",
+        ),
+        422,
+        { requestId },
+      );
+    }
+  }
   const { data, error } = await supabase
     .from("crm_tasks")
     .insert({
@@ -138,6 +162,27 @@ export async function POST(req: NextRequest): Promise<Response> {
     .single();
 
   if (error) {
+    if (error.code === "40P01") {
+      return fail(
+        "state_conflict",
+        t("Outra operação ocorreu ao mesmo tempo. Tente novamente."),
+        409,
+        { requestId },
+      );
+    }
+    if (
+      error.code === "23514" ||
+      (error.code === "23503" && /crm_tasks_contact/i.test(error.message))
+    ) {
+      return fail(
+        "contact_unavailable",
+        t(
+          "O contato principal não está disponível — ele pode ter sido anonimizado ou já mesclado em outro.",
+        ),
+        422,
+        { requestId },
+      );
+    }
     // 23503 = lead ou contato de outra organização (ou apagado no meio). A
     // recusa nomeia o campo porque quem lê é quem escolheu na tela.
     if (error.code === "23503") {

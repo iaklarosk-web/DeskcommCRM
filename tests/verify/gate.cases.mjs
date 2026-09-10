@@ -9,6 +9,20 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const modulePath = process.env.VERIFY_GATE_MODULE ?? path.join(ROOT, "scripts/verify/report.mjs");
 const { evaluate, parseSuite, phaseContext, KNOWN_DEBT, render, collect } = await import(pathToFileURL(modulePath).href);
+const helperPath = path.join(path.dirname(modulePath), "f02-e2e.mjs");
+const {
+  EXPECTED_F02_E2E_TESTS,
+  REQUIRED_F02_E2E_SPECS,
+  compareF02Inputs,
+  snapshotF02Inputs,
+  verifyF02Sandbox,
+} = await import(pathToFileURL(helperPath).href);
+// Identidades históricas, somente como tentativas de regressão contra o gate atual.
+const RETIRED_DEBT = [
+  { suite: "db", file: "tests/invariants/webhooks-inbound.test.ts", title: "rate limit 429 após estourar a janela — coberto por unit test do fallback in-memory", kind: "skipped" },
+  { suite: "unit", file: "tests/unit/agenda-separar-historico.test.tsx", title: "o compromisso EM ANDAMENTO ainda é Próximos — começou, mas não terminou", kind: "expected_failure" },
+  { suite: "db", file: "tests/invariants/followup-reactivity.test.ts", title: "STOP alcança também o enrollment PAUSADO MANUALMENTE — opt-out não abre exceção de estado", kind: "expected_failure" },
+];
 const state = `current_phase: F02
 baseline_n0: 7
 f00_commit: c85f7d72
@@ -48,6 +62,75 @@ function input() {
     },
   };
 }
+const F02_SPEC_COUNTS = [1, 2, 2, 2, 3, 1, 2];
+function playwrightReport({ actual = false } = {}) {
+  const suites = REQUIRED_F02_E2E_SPECS.map((requiredFile, fileIndex) => {
+    const file = path.basename(requiredFile);
+    return {
+      title: file,
+      file,
+      line: 0,
+      column: 0,
+      specs: Array.from({ length: F02_SPEC_COUNTS[fileIndex] }, (_, testIndex) => ({
+        title: `jornada ${fileIndex + 1}.${testIndex + 1}`,
+        ok: true,
+        id: `f02-${fileIndex + 1}-${testIndex + 1}`,
+        file,
+        line: 10 + testIndex,
+        column: 1,
+        tags: [],
+        tests: [{
+          timeout: 30_000,
+          annotations: [],
+          expectedStatus: "passed",
+          projectName: "chromium",
+          projectId: "chromium",
+          status: "expected",
+          results: actual ? [{ status: "passed", retry: 0, error: undefined, errors: [], annotations: [] }] : [],
+        }],
+      })),
+    };
+  });
+  return {
+    config: {
+      workers: 1,
+      fullyParallel: false,
+      forbidOnly: true,
+      rootDir: path.join(ROOT, "tests/e2e"),
+      projects: [{ name: "chromium", id: "chromium", retries: 0, repeatEach: 1, testDir: path.join(ROOT, "tests/e2e") }],
+    },
+    suites,
+    errors: [],
+    stats: actual
+      ? { expected: EXPECTED_F02_E2E_TESTS, unexpected: 0, flaky: 0, skipped: 0 }
+      : { expected: 0, unexpected: 0, flaky: 0, skipped: 0 },
+  };
+}
+function f02Input() {
+  const data = input();
+  data.context = phaseContext(state);
+  Object.assign(data.exits, { "inputs-before": 0, sandbox: 0, "e2e-plan": 0, e2e: 0, inputs: 0 });
+  data.reports["e2e-plan"] = playwrightReport();
+  data.reports.e2e = playwrightReport({ actual: true });
+  data.sandbox = {
+    ok: true,
+    sandbox: "f02-crm-cadastros-disposable",
+    api: "loopback:55421",
+    database: "loopback:55422/postgres",
+    app: "loopback:3102",
+    providers: { whatsapp: "mock", ai: "mock" },
+    credentials: { anon: "present", service_role: "present" },
+  };
+  data.inputs = {
+    ok: true,
+    algorithm: "sha256",
+    files_before: 321,
+    files_after: 321,
+    hash_before: "a".repeat(64),
+    hash_after: "a".repeat(64),
+  };
+  return data;
+}
 function addDebt(data, entry) {
   const existing = data.reports[entry.suite];
   const extra = report([{ title: entry.title, status: entry.kind === "expected_failure" ? "passed" : entry.kind,
@@ -72,6 +155,137 @@ test("refuses revalidation of a phase without a recorded completion", () => {
 test("normal F02 does not become ready with F01 evidence", () => {
   const data = input(); data.context = phaseContext(state);
   assert.equal(evaluate(data).exitCode, 1);
+});
+test("F02 becomes ready only with 13 clean tests from all seven explicit specs", () => {
+  const data = f02Input();
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.status, "READY (F02)");
+  assert.deepEqual([result.suites.e2e.passed, result.suites.e2e.total], [13, 13]);
+  assert.match(render(data, result), /e2e=13\/13/);
+  assert.match(render(data, result), /specs=7\/7/);
+  assert.match(render(data, result), /full_n0=pending/);
+  assert.match(render(data, result), /e2e_scope: F02-required passed=13\/13 specs=7\/7/);
+});
+for (const missing of REQUIRED_F02_E2E_SPECS) test(`F02 rejects missing required spec ${missing}`, () => {
+  const data = f02Input();
+  data.reports.e2e.suites = data.reports.e2e.suites.filter((suite) => suite.file !== path.basename(missing));
+  assert.equal(evaluate(data).exitCode, 1);
+});
+test("F02 rejects a filtered run even when every executed test passed", () => {
+  const data = f02Input();
+  data.reports.e2e.suites[1].specs.pop();
+  data.reports.e2e.stats.expected--;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.some((error) => /execução parcial/.test(error)));
+});
+test("F02 compares complete test titles and identities with the unfiltered inventory", () => {
+  const data = f02Input();
+  data.reports.e2e.suites[0].specs[0].title = "mesmo teste selecionado por outro título";
+  assert.equal(evaluate(data).exitCode, 1);
+});
+test("F02 rejects skip, failure, retry and flaky Playwright evidence", () => {
+  const mutations = [
+    (report) => {
+      const test = report.suites[0].specs[0].tests[0];
+      test.expectedStatus = "skipped"; test.status = "skipped"; test.results = [];
+      report.stats.expected--; report.stats.skipped++;
+    },
+    (report) => {
+      const test = report.suites[0].specs[0].tests[0];
+      test.status = "unexpected"; test.results[0].status = "failed"; test.results[0].errors = [{ message: "failure" }];
+      report.stats.expected--; report.stats.unexpected++;
+    },
+    (report) => {
+      const test = report.suites[0].specs[0].tests[0];
+      test.status = "flaky"; test.results.push({ status: "passed", retry: 1, error: undefined, errors: [], annotations: [] });
+      report.stats.expected--; report.stats.flaky++;
+    },
+  ];
+  for (const mutate of mutations) {
+    const data = f02Input(); mutate(data.reports.e2e);
+    assert.equal(evaluate(data).exitCode, 1);
+  }
+});
+test("F02 rejects non-serial, repeated, non-chromium or incomplete runner metadata", () => {
+  const mutations = [
+    (report) => { report.config.workers = 2; },
+    (report) => { report.config.projects[0].retries = 1; },
+    (report) => { report.config.projects[0].name = "webkit"; },
+    (report) => { report.errors.push({ message: "configuration failed" }); },
+    (report) => { report.stats.expected = 12; },
+  ];
+  for (const mutate of mutations) {
+    const data = f02Input(); mutate(data.reports.e2e);
+    assert.equal(evaluate(data).exitCode, 1);
+  }
+});
+test("F02 rejects missing process evidence or an untrusted sandbox", () => {
+  for (const mutate of [
+    (data) => { data.exits.e2e = null; },
+    (data) => { data.reports["e2e-plan"] = null; },
+    (data) => { data.sandbox.database = "loopback:54322/postgres"; },
+    (data) => { data.sandbox.providers.ai = "real"; },
+    (data) => { data.inputs.hash_after = "b".repeat(64); },
+  ]) {
+    const data = f02Input(); mutate(data);
+    assert.equal(evaluate(data).exitCode, 1);
+  }
+});
+test("F02 input snapshot stays equal when only excluded artifacts change", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "verify-f02-inputs-"));
+  try {
+    mkdirSync(path.join(dir, "src"));
+    mkdirSync(path.join(dir, ".verify-logs"));
+    writeFileSync(path.join(dir, "src/value.ts"), "export const value = 1;\n");
+    writeFileSync(path.join(dir, ".env.e2e"), "SECRET=never-hashed\n");
+    writeFileSync(path.join(dir, ".verify-logs/run.log"), "artifact\n");
+    const before = snapshotF02Inputs(dir);
+    assert.equal(compareF02Inputs(dir, before).ok, true);
+    writeFileSync(path.join(dir, ".verify-logs/run.log"), "changed artifact\n");
+    assert.equal(compareF02Inputs(dir, before).ok, true);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+test("F02 input snapshot detects a source change", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "verify-f02-inputs-change-"));
+  try {
+    mkdirSync(path.join(dir, "src"));
+    writeFileSync(path.join(dir, "src/value.ts"), "export const value = 1;\n");
+    const before = snapshotF02Inputs(dir);
+    writeFileSync(path.join(dir, "src/value.ts"), "export const value = 2;\n");
+    assert.equal(compareF02Inputs(dir, before).ok, false);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+test("F02 sandbox evidence accepts only the dedicated local ports and never contains credentials", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "verify-f02-sandbox-"));
+  const filename = path.join(dir, ".env.e2e");
+  const contents = [
+    "NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:55421",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY=anon-private-fixture",
+    "SUPABASE_SERVICE_ROLE_KEY=service-private-fixture",
+    "SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:55422/postgres",
+    "NEXT_PUBLIC_APP_URL=http://localhost:3102",
+  ].join("\n");
+  const environment = {
+    F02_E2E_SANDBOX_ID: "f02-crm-cadastros-disposable",
+    E2E_PORT: "3102",
+    WHATSAPP_MODE: "mock",
+    AI_PROVIDER: "mock",
+    CI: "1",
+  };
+  try {
+    writeFileSync(filename, contents);
+    const evidence = verifyF02Sandbox(dir, environment);
+    assert.equal(evidence.ok, true);
+    assert.doesNotMatch(JSON.stringify(evidence), /private-fixture/);
+    writeFileSync(filename, contents.replace(":55421", ":54321"));
+    assert.throws(() => verifyF02Sandbox(dir, environment), /porta 55421/);
+    writeFileSync(filename, `${contents}\nUNSAFE=$(touch should-not-run)`);
+    assert.throws(() => verifyF02Sandbox(dir, environment), /sintaxe recusada/);
+    writeFileSync(filename, `${contents}\nUNSAFE=fixture&/bin/true`);
+    assert.throws(() => verifyF02Sandbox(dir, environment), /sintaxe recusada/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 test("does not invent a phase or comparable baseline", () => {
   assert.throws(() => phaseContext("", "F01"), /current_phase/);
@@ -131,25 +345,26 @@ test("real failures and unfinished tests are never inherited debt", () => {
     assert.equal(evaluate(data).exitCode, 1);
   }
 });
-test("exact inherited debt is visible and never becomes READY", () => {
-  const data = input(); KNOWN_DEBT.forEach((entry) => addDebt(data, entry));
-  const result = evaluate(data);
-  assert.equal(result.exitCode, 0);
-  assert.equal(result.status, "REVALIDATED WITH DEBT (F01)");
-  assert.equal(result.suites.db.skipped, 1);
-  assert.equal(result.suites.unit.expectedFailures + result.suites.db.expectedFailures, 2);
-  assert.equal(result.suites.unit.passed, 2);
-  assert.equal(result.debt.length, 3);
-  assert.match(render(data, result), /tests_skipped=1 expected_failures=2/);
-  data.context.revalidation = false;
-  assert.equal(evaluate(data).exitCode, 1);
+test("retired debt cannot return in revalidation or normal readiness", () => {
+  assert.deepEqual(KNOWN_DEBT, []);
+  for (const entry of RETIRED_DEBT) {
+    for (const revalidation of [true, false]) {
+      const data = input(); data.context.revalidation = revalidation;
+      addDebt(data, entry);
+      const result = evaluate(data);
+      assert.equal(result.exitCode, 1);
+      assert.equal(result.status, "NOT READY");
+      assert.equal(result.debt.length, 1);
+      assert.ok(result.errors.includes("Dívida nova ou não reconhecida: 1"));
+    }
+  }
 });
 test("new skip cannot spend an inherited skip allowance", () => {
-  const data = input(); addDebt(data, { ...KNOWN_DEBT[0], title: "a different skipped behavior" });
+  const data = input(); addDebt(data, { ...RETIRED_DEBT[0], title: "a different skipped behavior" });
   assert.equal(evaluate(data).exitCode, 1);
 });
 test("duplicate inherited debt identity cannot increase the allowance", () => {
-  const data = input(); addDebt(data, KNOWN_DEBT[0]); addDebt(data, KNOWN_DEBT[0]);
+  const data = input(); addDebt(data, RETIRED_DEBT[0]); addDebt(data, RETIRED_DEBT[0]);
   assert.equal(evaluate(data).exitCode, 1);
 });
 test("reduced unit baseline cannot be compensated by new DB tests", () => {
@@ -199,6 +414,7 @@ test("shell orchestration isolates mutant evidence and honors custom log directo
     for (const sub of ["scripts/verify", "tests/mutants", "src", "bin"]) mkdirSync(path.join(dir, sub), { recursive: true });
     copyFileSync(path.join(ROOT, "scripts/verify.sh"), path.join(dir, "scripts/verify.sh"));
     copyFileSync(modulePath, path.join(dir, "scripts/verify/report.mjs"));
+    copyFileSync(helperPath, path.join(dir, "scripts/verify/f02-e2e.mjs"));
     writeFileSync(path.join(dir, "src/fixture.ts"), "export const fixture = true;\n");
     execFileSync("git", ["init", "-q"], { cwd: dir });
     execFileSync("git", ["add", "src/fixture.ts"], { cwd: dir });
@@ -210,8 +426,12 @@ test("shell orchestration isolates mutant evidence and honors custom log directo
     const healthy = input().metrics;
     const pnpm = path.join(dir, "bin/pnpm");
     writeFileSync(pnpm, `#!${process.execPath}
-const fs = require('node:fs'), path = require('node:path');
+const fs = require('node:fs'), path = require('node:path'), child = require('node:child_process');
 const args = process.argv.slice(2);
+if (args[0] === 'exec' && args[1] === 'bash') {
+  const run = child.spawnSync('bash', args.slice(2), { stdio: 'inherit', env: process.env });
+  process.exit(run.status ?? 1);
+}
 if (args[0].startsWith('test:') && args[0] !== 'test:shell') {
   if (!args.includes('--maxWorkers=1') || !args.includes('--allowOnly=false')) process.exit(2);
   const output = args.find(a => a.startsWith('--outputFile='))?.slice('--outputFile='.length);

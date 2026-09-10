@@ -40,6 +40,8 @@ export interface NavMetadata {
   section?: string;
   /** Ausente = viewer. Ver a regra de escolha abaixo. */
   minRole?: Role;
+  /** Ausente mantém o acesso de plataforma herdado; false exige escopo tenant. */
+  allowPlatform?: boolean;
   /** Ausente = só no hub. `true` = uso diário, sobe para o sidebar. */
   sidebar?: boolean;
   healthDot?: boolean;
@@ -180,6 +182,35 @@ export const NAV_CATALOG = [
     group: "crm",
     section: "O dia a dia da venda",
     sidebar: true,
+  },
+  {
+    href: "/app/companies",
+    label: "Empresas clientes",
+    description: "As empresas atendidas pela equipe, com razão social e CNPJ.",
+    icon: "Buildings",
+    group: "crm",
+    section: "O dia a dia da venda",
+    // Sem sidebar: é cadastro de referência, alcançável pelo inventário do CRM.
+  },
+  {
+    href: "/app/orders",
+    label: "Pedidos",
+    description: "Rascunhos, confirmações e entregas combinadas com cada cliente.",
+    icon: "Receipt",
+    group: "crm",
+    section: "O dia a dia da venda",
+    minRole: "agent",
+    // Sem sidebar: a lista fica no inventário CRM junto dos outros cadastros comerciais.
+  },
+  {
+    href: "/app/orders/daily",
+    label: "Pedidos do dia",
+    description: "Relatório diário",
+    icon: "Receipt",
+    group: "crm",
+    section: "O dia a dia da venda",
+    allowPlatform: false,
+    // Sem sidebar: o relatório fica no inventário CRM, acessível também pela lista de pedidos.
   },
   {
     // Extraída do PR #418 (@clinicacentrodosorrisosc-code). Fica no CRM e no
@@ -583,6 +614,16 @@ export const NAV_CATALOG = [
     group: "organizacao",
     section: "Sua empresa",
     minRole: "manager",
+  },
+  {
+    href: "/app/settings/commercial",
+    label: "Dados comerciais",
+    description: "Contato, atendimento, entrega e política comercial da empresa.",
+    icon: "Buildings",
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "viewer",
+    allowPlatform: false,
   },
   {
     href: "/app/settings/tenant",

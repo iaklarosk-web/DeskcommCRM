@@ -23448,6 +23448,1451 @@ begin
 end
 $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Apêndice 9005 — empresas e unidade de venda (F02-T01). Par idempotente da
+-- migration 20260909152202_9005. Mantém IDs e dados de contacts/catalog_products.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+create table if not exists public.crm_companies (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  legal_name text not null,
+  trade_name text,
+  cnpj text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+do $f02_t01$
+begin
+  if not exists (select 1 from pg_constraint where conrelid='public.crm_companies'::regclass and conname='crm_companies_legal_name_format') then
+    alter table public.crm_companies add constraint crm_companies_legal_name_format
+      check (legal_name=btrim(legal_name) and length(legal_name) between 1 and 200);
+  end if;
+  if not exists (select 1 from pg_constraint where conrelid='public.crm_companies'::regclass and conname='crm_companies_trade_name_format') then
+    alter table public.crm_companies add constraint crm_companies_trade_name_format
+      check (trade_name is null or (trade_name=btrim(trade_name) and length(trade_name) between 1 and 200));
+  end if;
+  if not exists (select 1 from pg_constraint where conrelid='public.crm_companies'::regclass and conname='crm_companies_cnpj_format') then
+    alter table public.crm_companies add constraint crm_companies_cnpj_format
+      check (cnpj is null or cnpj ~ '^[A-Z0-9]{12}[0-9]{2}$');
+  end if;
+end
+$f02_t01$;
+
+create unique index if not exists crm_companies_org_id_unique on public.crm_companies(organization_id,id);
+create unique index if not exists crm_companies_org_cnpj_unique on public.crm_companies(organization_id,cnpj) where cnpj is not null;
+create index if not exists crm_companies_org_legal_name_idx on public.crm_companies(organization_id,legal_name);
+
+alter table public.contacts add column if not exists company_id uuid;
+alter table public.contacts add column if not exists recurring boolean not null default false;
+create unique index if not exists contacts_org_id_unique on public.contacts(organization_id,id);
+create index if not exists contacts_org_company_id_idx on public.contacts(organization_id,company_id) where company_id is not null;
+
+do $f02_t01$
+begin
+  if not exists (select 1 from pg_constraint where conrelid='public.contacts'::regclass and conname='contacts_company_tenant_fkey') then
+    alter table public.contacts add constraint contacts_company_tenant_fkey
+      foreign key (organization_id,company_id)
+      references public.crm_companies(organization_id,id) on delete restrict;
+  end if;
+end
+$f02_t01$;
+
+alter table public.catalog_products add column if not exists sale_unit text;
+do $f02_t01$
+begin
+  if not exists (select 1 from pg_constraint where conrelid='public.catalog_products'::regclass and conname='catalog_products_sale_unit_format') then
+    alter table public.catalog_products add constraint catalog_products_sale_unit_format
+      check (sale_unit is null or (sale_unit=btrim(sale_unit) and length(sale_unit) between 1 and 32));
+  end if;
+end
+$f02_t01$;
+create unique index if not exists catalog_products_org_id_unique on public.catalog_products(organization_id,id);
+
+drop policy if exists contacts_f02_write_insert_guard on public.contacts;
+create policy contacts_f02_write_insert_guard on public.contacts as restrictive for insert to authenticated
+  with check (public.fn_role_at_least(organization_id,'agent'));
+drop policy if exists contacts_f02_write_update_guard on public.contacts;
+create policy contacts_f02_write_update_guard on public.contacts as restrictive for update to authenticated
+  using (public.fn_role_at_least(organization_id,'agent')) with check (public.fn_role_at_least(organization_id,'agent'));
+drop policy if exists contacts_f02_write_delete_guard on public.contacts;
+create policy contacts_f02_write_delete_guard on public.contacts as restrictive for delete to authenticated
+  using (public.fn_role_at_least(organization_id,'agent'));
+
+alter table public.crm_companies enable row level security;
+
+drop policy if exists crm_companies_select on public.crm_companies;
+create policy crm_companies_select on public.crm_companies for select to authenticated
+  using (organization_id in (select public.fn_user_org_ids()));
+drop policy if exists crm_companies_insert on public.crm_companies;
+create policy crm_companies_insert on public.crm_companies for insert to authenticated
+  with check (organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id,'agent'));
+drop policy if exists crm_companies_update on public.crm_companies;
+create policy crm_companies_update on public.crm_companies for update to authenticated
+  using (organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id,'agent'))
+  with check (organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id,'agent'));
+drop policy if exists crm_companies_delete on public.crm_companies;
+create policy crm_companies_delete on public.crm_companies for delete to authenticated
+  using (organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id,'agent'));
+
+drop policy if exists support_write_insert on public.crm_companies;
+create policy support_write_insert on public.crm_companies as restrictive for insert to authenticated
+  with check (public.fn_support_write_allowed(organization_id));
+drop policy if exists support_write_update on public.crm_companies;
+create policy support_write_update on public.crm_companies as restrictive for update to authenticated
+  using (public.fn_support_write_allowed(organization_id)) with check (public.fn_support_write_allowed(organization_id));
+drop policy if exists support_write_delete on public.crm_companies;
+create policy support_write_delete on public.crm_companies as restrictive for delete to authenticated
+  using (public.fn_support_write_allowed(organization_id));
+
+drop trigger if exists trg_crm_companies_updated_at on public.crm_companies;
+create trigger trg_crm_companies_updated_at before update on public.crm_companies
+  for each row execute function public.fn_set_updated_at();
+
+comment on table public.crm_companies is 'Empresas clientes de uma organização. Não se confunde com organizations, que representa o tenant.';
+comment on column public.crm_companies.cnpj is 'CNPJ canônico sem máscara: 12 posições alfanuméricas e 2 dígitos verificadores. NULL quando não informado.';
+comment on column public.contacts.company_id is 'Vínculo opcional à empresa cliente do mesmo tenant. A empresa vinculada não pode ser excluída antes de desfazer o vínculo.';
+comment on column public.contacts.recurring is 'Estado explícito de recorrência. false é o estado inicial e não classifica retroativamente o cliente.';
+comment on column public.catalog_products.sale_unit is 'Unidade comercial livre e curta. NULL significa que a operação ainda não configurou a unidade.';
+
+do $f02_t01$
+declare v_invalid integer; v_support integer; v_contact_roles integer;
+begin
+  if not exists (select 1 from pg_tables where schemaname='public' and tablename='crm_companies' and rowsecurity) then
+    raise exception 'crm_companies ausente ou sem RLS';
+  end if;
+  select count(*) into v_invalid from pg_constraint
+   where conrelid in ('public.crm_companies'::regclass,'public.contacts'::regclass,'public.catalog_products'::regclass)
+     and conname in ('crm_companies_legal_name_format','crm_companies_trade_name_format','crm_companies_cnpj_format','contacts_company_tenant_fkey','catalog_products_sale_unit_format')
+     and not convalidated;
+  if v_invalid<>0 then raise exception 'F02-T01 deixou % constraint(s) sem validação',v_invalid; end if;
+  select count(*) into v_support from pg_policy where polrelid='public.crm_companies'::regclass and not polpermissive
+    and polname in ('support_write_insert','support_write_update','support_write_delete');
+  if v_support<>3 then raise exception 'crm_companies requer 3 cercas de suporte; encontrou %',v_support; end if;
+  select count(*) into v_contact_roles from pg_policy where polrelid='public.contacts'::regclass and not polpermissive
+    and polname in ('contacts_f02_write_insert_guard','contacts_f02_write_update_guard','contacts_f02_write_delete_guard');
+  if v_contact_roles<>3 then raise exception 'contacts requer 3 cercas de role F02; encontrou %',v_contact_roles; end if;
+end
+$f02_t01$;
+
+notify pgrst, 'reload schema';
+
+revoke all on public.crm_companies from public, anon, authenticated;
+grant select,insert,update,delete on public.crm_companies to authenticated;
+grant all on public.crm_companies to service_role;
+revoke all on public.contacts,public.catalog_products from anon;
+grant select,insert,update,delete on public.contacts,public.catalog_products to authenticated;
+grant all on public.contacts,public.catalog_products to service_role;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Apêndice 9006 — pedidos operacionais (F02-T02). Par idempotente da migration
+-- 20260909160605_9006. O `orders` de e-commerce permanece intacto.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+create table if not exists public.crm_orders (
+ id uuid primary key default gen_random_uuid(),
+ organization_id uuid not null references public.organizations(id) on delete cascade,
+ contact_id uuid not null, company_id uuid, company_name_snapshot text,
+ source text not null, channel text, delivery_date date,
+ status text not null default 'draft', revision integer not null default 1,
+ currency text, total_cents integer,
+ created_by_actor_type text not null, created_by_actor_id uuid,
+ confirmed_at timestamptz, confirmed_by_actor_type text, confirmed_by_actor_id uuid,
+ status_changed_at timestamptz not null default now(), created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
+ constraint crm_orders_source_check check(source in('ui','ai','automation')),
+ constraint crm_orders_status_check check(status in('draft','confirmed','in_production','delivered','cancelled')),
+ constraint crm_orders_revision_check check(revision>=1),
+ constraint crm_orders_currency_check check(currency is null or currency~'^[A-Z]{3}$'),
+ constraint crm_orders_total_check check(total_cents is null or total_cents between 0 and 2147483647),
+ constraint crm_orders_actor_type_check check(created_by_actor_type in('user','ai','automation')),
+ constraint crm_orders_confirmation_actor_check check(confirmed_by_actor_type is null or confirmed_by_actor_type in('user','ai','automation')),
+ constraint crm_orders_confirmation_pair_check check((confirmed_at is null and confirmed_by_actor_type is null and confirmed_by_actor_id is null) or(confirmed_at is not null and confirmed_by_actor_type is not null)),
+ constraint crm_orders_company_snapshot_check check(company_name_snapshot is null or(company_name_snapshot=btrim(company_name_snapshot) and length(company_name_snapshot) between 1 and 200)),
+ constraint crm_orders_channel_check check(channel is null or(channel=btrim(channel) and length(channel) between 1 and 64))
+);
+create unique index if not exists crm_orders_org_id_unique on public.crm_orders(organization_id,id);
+create index if not exists crm_orders_org_contact_idx on public.crm_orders(organization_id,contact_id,created_at desc);
+create index if not exists crm_orders_org_company_idx on public.crm_orders(organization_id,company_id) where company_id is not null;
+create index if not exists crm_orders_org_delivery_status_idx on public.crm_orders(organization_id,delivery_date,status);
+do $f02_t02$ begin
+ if not exists(select 1 from pg_constraint where conrelid='public.crm_orders'::regclass and conname='crm_orders_contact_tenant_fkey') then
+  alter table public.crm_orders add constraint crm_orders_contact_tenant_fkey foreign key(organization_id,contact_id) references public.contacts(organization_id,id) on delete restrict;
+ end if;
+ if not exists(select 1 from pg_constraint where conrelid='public.crm_orders'::regclass and conname='crm_orders_company_tenant_fkey') then
+  alter table public.crm_orders add constraint crm_orders_company_tenant_fkey foreign key(organization_id,company_id) references public.crm_companies(organization_id,id) on delete restrict;
+ end if;
+end $f02_t02$;
+
+create table if not exists public.crm_order_items (
+ id uuid primary key default gen_random_uuid(), organization_id uuid not null references public.organizations(id) on delete cascade,
+ order_id uuid not null, position integer not null, requested_text text not null,
+ product_id uuid, product_name_snapshot text, sale_unit_snapshot text,
+ quantity numeric(12,3), unit_price_cents integer, currency_snapshot text, line_total_cents integer,
+ created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
+ constraint crm_order_items_position_check check(position>=1),
+ constraint crm_order_items_requested_text_check check(requested_text=btrim(requested_text) and length(requested_text) between 1 and 1000),
+ constraint crm_order_items_product_name_check check(product_name_snapshot is null or(product_name_snapshot=btrim(product_name_snapshot) and length(product_name_snapshot) between 1 and 200)),
+ constraint crm_order_items_sale_unit_check check(sale_unit_snapshot is null or(sale_unit_snapshot=btrim(sale_unit_snapshot) and length(sale_unit_snapshot) between 1 and 32)),
+ constraint crm_order_items_quantity_check check(quantity is null or quantity>0),
+ constraint crm_order_items_unit_price_check check(unit_price_cents is null or unit_price_cents between 0 and 2147483647),
+ constraint crm_order_items_currency_check check(currency_snapshot is null or currency_snapshot~'^[A-Z]{3}$'),
+ constraint crm_order_items_line_total_check check(line_total_cents is null or(line_total_cents between 0 and 2147483647 and quantity is not null and unit_price_cents is not null and quantity*unit_price_cents=line_total_cents))
+);
+create unique index if not exists crm_order_items_org_id_unique on public.crm_order_items(organization_id,id);
+create index if not exists crm_order_items_org_order_idx on public.crm_order_items(organization_id,order_id);
+create index if not exists crm_order_items_org_product_idx on public.crm_order_items(organization_id,product_id) where product_id is not null;
+do $f02_t02$ begin
+ if not exists(select 1 from pg_constraint where conrelid='public.crm_order_items'::regclass and conname='crm_order_items_org_order_position_key') then
+  alter table public.crm_order_items add constraint crm_order_items_org_order_position_key unique(organization_id,order_id,position) deferrable initially deferred;
+ end if;
+ if not exists(select 1 from pg_constraint where conrelid='public.crm_order_items'::regclass and conname='crm_order_items_order_tenant_fkey') then
+  alter table public.crm_order_items add constraint crm_order_items_order_tenant_fkey foreign key(organization_id,order_id) references public.crm_orders(organization_id,id) on delete cascade;
+ end if;
+ if not exists(select 1 from pg_constraint where conrelid='public.crm_order_items'::regclass and conname='crm_order_items_product_tenant_fkey') then
+  alter table public.crm_order_items add constraint crm_order_items_product_tenant_fkey foreign key(organization_id,product_id) references public.catalog_products(organization_id,id) on delete restrict;
+ end if;
+end $f02_t02$;
+
+create table if not exists public.crm_order_command_receipts (
+ id uuid primary key default gen_random_uuid(), organization_id uuid not null references public.organizations(id) on delete cascade,
+ operation text not null, idempotency_key text not null, request_hash bytea not null,
+ actor_type text not null, actor_id uuid, order_id uuid, response_body jsonb, completed_at timestamptz,
+ created_at timestamptz not null default now(),
+ constraint crm_order_receipts_operation_check check(operation in('create_draft','edit_order','confirm_order','advance_order','cancel_order')),
+ constraint crm_order_receipts_key_check check(idempotency_key=btrim(idempotency_key) and length(idempotency_key) between 1 and 200),
+ constraint crm_order_receipts_hash_check check(octet_length(request_hash)=32),
+ constraint crm_order_receipts_actor_check check(actor_type in('user','ai','automation')),
+ constraint crm_order_receipts_response_check check((response_body is null and completed_at is null) or(jsonb_typeof(response_body)='object' and completed_at is not null))
+);
+create unique index if not exists crm_order_receipts_org_id_unique on public.crm_order_command_receipts(organization_id,id);
+create unique index if not exists crm_order_receipts_idempotency_unique on public.crm_order_command_receipts(organization_id,operation,idempotency_key);
+create index if not exists crm_order_receipts_org_order_idx on public.crm_order_command_receipts(organization_id,order_id) where order_id is not null;
+create index if not exists crm_order_receipts_incomplete_idx on public.crm_order_command_receipts(organization_id,created_at) where completed_at is null;
+do $f02_t02$ begin
+ if not exists(select 1 from pg_constraint where conrelid='public.crm_order_command_receipts'::regclass and conname='crm_order_receipts_order_tenant_fkey') then
+  alter table public.crm_order_command_receipts add constraint crm_order_receipts_order_tenant_fkey foreign key(organization_id,order_id) references public.crm_orders(organization_id,id) on delete restrict;
+ end if;
+end $f02_t02$;
+
+create table if not exists public.crm_order_events (
+ id uuid primary key default gen_random_uuid(), organization_id uuid not null references public.organizations(id) on delete cascade,
+ receipt_id uuid not null, order_id uuid not null, contact_id uuid not null, order_revision integer not null,
+ event_type text not null, changes jsonb not null, actor_type text not null, actor_id uuid,
+ created_at timestamptz not null default now(),
+ constraint crm_order_events_revision_check check(order_revision>=1),
+ constraint crm_order_events_type_check check(event_type in('draft_created','order_edited','order_confirmed','order_advanced','order_cancelled')),
+ constraint crm_order_events_changes_check check(jsonb_typeof(changes)='object'),
+ constraint crm_order_events_actor_check check(actor_type in('user','ai','automation'))
+);
+create unique index if not exists crm_order_events_org_id_unique on public.crm_order_events(organization_id,id);
+create unique index if not exists crm_order_events_receipt_unique on public.crm_order_events(organization_id,receipt_id);
+create unique index if not exists crm_order_events_order_revision_unique on public.crm_order_events(organization_id,order_id,order_revision);
+create index if not exists crm_order_events_org_order_created_idx on public.crm_order_events(organization_id,order_id,created_at);
+create index if not exists crm_order_events_org_contact_created_idx on public.crm_order_events(organization_id,contact_id,created_at,id);
+do $f02_t02$ begin
+ if not exists(select 1 from pg_constraint where conrelid='public.crm_order_events'::regclass and conname='crm_order_events_receipt_tenant_fkey') then
+  alter table public.crm_order_events add constraint crm_order_events_receipt_tenant_fkey foreign key(organization_id,receipt_id) references public.crm_order_command_receipts(organization_id,id) on delete restrict;
+ end if;
+ if not exists(select 1 from pg_constraint where conrelid='public.crm_order_events'::regclass and conname='crm_order_events_order_tenant_fkey') then
+  alter table public.crm_order_events add constraint crm_order_events_order_tenant_fkey foreign key(organization_id,order_id) references public.crm_orders(organization_id,id) on delete restrict;
+ end if;
+ if not exists(select 1 from pg_constraint where conrelid='public.crm_order_events'::regclass and conname='crm_order_events_contact_tenant_fkey') then
+  alter table public.crm_order_events add constraint crm_order_events_contact_tenant_fkey foreign key(organization_id,contact_id) references public.contacts(organization_id,id) on delete restrict;
+ end if;
+end $f02_t02$;
+
+alter table public.crm_orders enable row level security;
+alter table public.crm_order_items enable row level security;
+alter table public.crm_order_command_receipts enable row level security;
+alter table public.crm_order_events enable row level security;
+drop policy if exists crm_orders_select on public.crm_orders;
+create policy crm_orders_select on public.crm_orders for select to authenticated using(organization_id in(select public.fn_user_org_ids()));
+drop policy if exists crm_order_items_select on public.crm_order_items;
+create policy crm_order_items_select on public.crm_order_items for select to authenticated using(organization_id in(select public.fn_user_org_ids()));
+drop policy if exists crm_order_events_select on public.crm_order_events;
+create policy crm_order_events_select on public.crm_order_events for select to authenticated using(organization_id in(select public.fn_user_org_ids()));
+drop trigger if exists trg_crm_orders_updated_at on public.crm_orders;
+create trigger trg_crm_orders_updated_at before update on public.crm_orders for each row execute function public.fn_set_updated_at();
+drop trigger if exists trg_crm_order_items_updated_at on public.crm_order_items;
+create trigger trg_crm_order_items_updated_at before update on public.crm_order_items for each row execute function public.fn_set_updated_at();
+comment on table public.crm_orders is 'Pedidos operacionais do CRM. Distintos de orders, que preserva pedidos externos de e-commerce.';
+comment on column public.crm_orders.delivery_date is 'Data explicitamente informada. NULL é pendência; não implica data de produção.';
+comment on table public.crm_order_items is 'Itens estáveis do pedido; snapshots não são reescritos por mudanças futuras no catálogo.';
+comment on table public.crm_order_command_receipts is 'Recibos privados de idempotência: reservados e concluídos na mesma transação do comando.';
+comment on table public.crm_order_events is 'Journal append-only por recibo e revisão, com instante atribuído pelo banco.';
+comment on column public.crm_order_events.contact_id is 'Contato capturado no evento; não muda se o pedido for depois associado a outro contato.';
+do $f02_t02$ declare v_invalid integer; begin
+ if exists(select 1 from pg_tables where schemaname='public' and tablename in('crm_orders','crm_order_items','crm_order_command_receipts','crm_order_events') and not rowsecurity) then raise exception 'F02-T02 criou tabela sem RLS';end if;
+ if exists(select 1 from pg_policies where schemaname='public' and tablename='crm_order_command_receipts') then raise exception 'recibos de comando devem ter zero policies';end if;
+ select count(*) into v_invalid from pg_constraint where conrelid in('public.crm_orders'::regclass,'public.crm_order_items'::regclass,'public.crm_order_command_receipts'::regclass,'public.crm_order_events'::regclass) and contype='f' and not convalidated;
+ if v_invalid<>0 then raise exception 'F02-T02 deixou % FK(s) sem validação',v_invalid;end if;
+end $f02_t02$;
+notify pgrst,'reload schema';
+revoke all on public.crm_orders,public.crm_order_items,public.crm_order_command_receipts,public.crm_order_events from public,anon,authenticated,service_role;
+grant select on public.crm_orders,public.crm_order_items,public.crm_order_events to authenticated;
+grant all on public.crm_orders,public.crm_order_items,public.crm_order_command_receipts to service_role;
+grant select,insert on public.crm_order_events to service_role;
+
+-- Apêndice 9007 — anonimização transacional dos pedidos operacionais.
+-- F02-T02: a anonimização existente cobre também os pedidos operacionais.
+-- Única exceção à imutabilidade do journal: remover conteúdo pessoal, mantendo
+-- IDs, autoria, revisão, valores comerciais e a existência da operação.
+create or replace function public.fn_crm_orders_redact_contact()
+returns trigger language plpgsql security definer set search_path='' as $f02_redact$
+declare
+  v_orders uuid[];
+  v_order_count integer;
+  v_item_count integer;
+  v_event_count integer;
+  v_receipt_count integer;
+begin
+  -- A origem é a linha de contacts; não há RPC com org/contato fornecidos pelo cliente.
+  new.company_id := null;
+  new.recurring := false;
+  select coalesce(array_agg(id),array[]::uuid[]) into v_orders
+    from public.crm_orders where organization_id=new.organization_id and contact_id=new.id;
+
+  update public.crm_orders set company_id=null,company_name_snapshot=null,channel=null
+    where organization_id=new.organization_id and id=any(v_orders)
+      and (company_id is not null or company_name_snapshot is not null or channel is not null);
+  get diagnostics v_order_count=row_count;
+  update public.crm_order_items set requested_text='[conteúdo anonimizado]',product_name_snapshot=null
+    where organization_id=new.organization_id and order_id=any(v_orders)
+      and (requested_text<>'[conteúdo anonimizado]' or product_name_snapshot is not null);
+  get diagnostics v_item_count=row_count;
+
+  -- Troca de contato pode deixar snapshots históricos associados a outro evento.
+  update public.crm_order_events set changes='{"redacted":true}'::jsonb
+    where organization_id=new.organization_id
+      and (contact_id=new.id or order_id=any(v_orders)
+        or changes#>>'{before,contact_id}'=new.id::text
+        or changes#>>'{after,contact_id}'=new.id::text)
+      and changes<>'{"redacted":true}'::jsonb;
+  get diagnostics v_event_count=row_count;
+  update public.crm_order_command_receipts set response_body='{"redacted":true}'::jsonb
+    where organization_id=new.organization_id and completed_at is not null
+      and (order_id=any(v_orders) or response_body->>'contact_id'=new.id::text)
+      and response_body<>'{"redacted":true}'::jsonb;
+  get diagnostics v_receipt_count=row_count;
+
+  if v_order_count+v_item_count+v_event_count+v_receipt_count>0 then
+    insert into public.api_audit_log
+      (organization_id,actor_user_id,action,resource_type,resource_id,metadata,bypassed_rls)
+    values(new.organization_id,auth.uid(),'crm_order.redacted','contacts',new.id,
+      jsonb_build_object('orders',v_order_count,'items',v_item_count,
+        'events',v_event_count,'receipts',v_receipt_count),true);
+  end if;
+  return new;
+end
+$f02_redact$;
+
+alter function public.fn_crm_orders_redact_contact() owner to postgres;
+revoke all on function public.fn_crm_orders_redact_contact() from public,anon,authenticated,service_role;
+drop trigger if exists trg_crm_orders_redact_contact on public.contacts;
+-- BEFORE permite limpar os campos novos do próprio contato sem UPDATE recursivo.
+-- True→true também limpa resíduos; o mutex legado roda antes deste trigger.
+create trigger trg_crm_orders_redact_contact before update of is_anonymized on public.contacts
+  for each row when(new.is_anonymized is true)
+  execute function public.fn_crm_orders_redact_contact();
+comment on function public.fn_crm_orders_redact_contact() is
+  'Trigger privado de anonimização dos pedidos operacionais, na transação de contacts. Não é RPC.';
+
+-- Apêndice 9009 — saneamento prévio das tarefas legadas (F02-T03).
+-- Par idempotente da migration 20260909191659_9009. Este é o bloco canônico
+-- que saneia os dados, cria e valida a FK composta reconhecida pela 9008.
+create or replace function public.fn_crm_tasks_guard_anonymized_contact()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  v_is_anonymized boolean;
+begin
+  if new.contact_id is null then
+    return new;
+  end if;
+
+  select c.is_anonymized
+    into v_is_anonymized
+    from public.contacts c
+   where c.organization_id = new.organization_id
+     and c.id = new.contact_id
+   for share;
+
+  if found and v_is_anonymized then
+    new.title := 'Tarefa anonimizada';
+    new.description := null;
+  end if;
+
+  return new;
+end;
+$function$;
+
+alter function public.fn_crm_tasks_guard_anonymized_contact() owner to postgres;
+revoke all on function public.fn_crm_tasks_guard_anonymized_contact()
+  from public, anon, authenticated, service_role;
+
+create or replace trigger trg_crm_tasks_guard_anonymized_contact
+before insert or update of organization_id, contact_id, title, description
+on public.crm_tasks
+for each row
+execute function public.fn_crm_tasks_guard_anonymized_contact();
+
+do $migration$
+declare
+  v_cross_scanned integer;
+  v_cross_repaired integer;
+  v_anonymized_scanned integer;
+  v_anonymized_repaired integer;
+begin
+  lock table public.crm_tasks in share row exclusive mode;
+
+  select count(*)::integer
+    into v_cross_scanned
+    from public.crm_tasks t
+    join public.contacts c on c.id = t.contact_id
+   where c.organization_id <> t.organization_id;
+
+  with repaired as (
+    update public.crm_tasks t
+       set contact_id = null,
+           title = case
+             when c.is_anonymized then 'Tarefa anonimizada'
+             else t.title
+           end,
+           description = case
+             when c.is_anonymized then null
+             else t.description
+           end
+      from public.contacts c
+     where c.id = t.contact_id
+       and c.organization_id <> t.organization_id
+    returning t.id, t.organization_id, c.id as previous_contact_id,
+      c.is_anonymized
+  ), audited as (
+    insert into public.api_audit_log
+      (organization_id, action, resource_type, resource_id, bypassed_rls, metadata)
+    select organization_id,
+           'crm_task.updated',
+           'crm_tasks',
+           id,
+           true,
+           jsonb_build_object(
+             'reason', 'cross_tenant_legacy_contact',
+             'fields_changed', case
+               when is_anonymized then
+                 jsonb_build_array('contact_id', 'title', 'description')
+               else jsonb_build_array('contact_id')
+             end,
+             'previous_contact_id', previous_contact_id
+           )
+      from repaired
+    returning 1
+  )
+  select count(*)::integer into v_cross_repaired from audited;
+
+  if not exists (
+    select 1
+      from pg_constraint
+     where conrelid = 'public.crm_tasks'::regclass
+       and conname = 'crm_tasks_contact_tenant_fkey'
+  ) then
+    execute $ddl$
+      alter table public.crm_tasks
+        add constraint crm_tasks_contact_tenant_fkey
+        foreign key (organization_id, contact_id)
+        references public.contacts (organization_id, id)
+        on delete set null (contact_id)
+    $ddl$;
+  elsif exists (
+    select 1
+      from pg_constraint
+     where conrelid = 'public.crm_tasks'::regclass
+       and conname = 'crm_tasks_contact_tenant_fkey'
+       and not convalidated
+  ) then
+    execute 'alter table public.crm_tasks validate constraint crm_tasks_contact_tenant_fkey';
+  end if;
+
+  select count(*)::integer
+    into v_anonymized_scanned
+    from public.crm_tasks t
+    join public.contacts c
+      on c.organization_id = t.organization_id
+     and c.id = t.contact_id
+   where c.is_anonymized
+     and (t.title <> 'Tarefa anonimizada' or t.description is not null);
+
+  with redacted as (
+    update public.crm_tasks t
+       set title = 'Tarefa anonimizada',
+           description = null
+      from public.contacts c
+     where c.organization_id = t.organization_id
+       and c.id = t.contact_id
+       and c.is_anonymized
+       and (t.title <> 'Tarefa anonimizada' or t.description is not null)
+    returning t.id, t.organization_id
+  ), audited as (
+    insert into public.api_audit_log
+      (organization_id, action, resource_type, resource_id, bypassed_rls, metadata)
+    select organization_id,
+           'crm_task.updated',
+           'crm_tasks',
+           id,
+           true,
+           jsonb_build_object(
+             'reason', 'anonymized_contact_late_write',
+             'fields_changed', jsonb_build_array('title', 'description')
+           )
+      from redacted
+    returning 1
+  )
+  select count(*)::integer into v_anonymized_repaired from audited;
+
+  raise notice
+    'crm_tasks legacy safety: cross_scanned=%, cross_repaired=%, anonymized_scanned=%, anonymized_repaired=%',
+    v_cross_scanned,
+    v_cross_repaired,
+    v_anonymized_scanned,
+    v_anonymized_repaired;
+end;
+$migration$;
+
+comment on function public.fn_crm_tasks_guard_anonymized_contact() is
+  'Trigger privado: serializa a tarefa com o contato e impede texto livre ligado a contato anonimizado.';
+
+notify pgrst, 'reload schema';
+
+-- Trigger function privada: não existe chamador direto, inclusive service role.
+revoke all on function public.fn_crm_tasks_guard_anonymized_contact()
+  from public, anon, authenticated, service_role;
+
+-- Apêndice 9008 — notas humanas e tarefas vinculadas a pedidos (F02-T03).
+-- Par idempotente da migration 20260909191700_9008.
+-- F02-T03 — notas humanas e tarefas vinculadas a pedidos.
+-- Notas humanas append-only e tarefas vinculadas a pedidos com journal atômico.
+
+do $migration$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.crm_orders'::regclass
+      and conname = 'crm_orders_org_id_contact_key'
+  ) then
+    alter table public.crm_orders
+      add constraint crm_orders_org_id_contact_key
+      unique (organization_id, id, contact_id);
+  end if;
+end
+$migration$;
+
+alter table public.crm_tasks add column if not exists order_id uuid;
+alter table public.crm_tasks add column if not exists revision integer not null default 1;
+do $migration$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.crm_tasks'::regclass
+      and conname = 'crm_tasks_revision_positive'
+  ) then
+    alter table public.crm_tasks add constraint crm_tasks_revision_positive
+      check (revision >= 1);
+  end if;
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.crm_tasks'::regclass
+      and conname = 'crm_tasks_linked_shape'
+  ) then
+    alter table public.crm_tasks add constraint crm_tasks_linked_shape check (
+      order_id is null or (contact_id is not null and lead_id is null)
+    );
+  end if;
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.crm_tasks'::regclass
+      and conname = 'crm_tasks_org_id_order_contact_key'
+  ) then
+    alter table public.crm_tasks add constraint crm_tasks_org_id_order_contact_key
+      unique (organization_id, id, order_id, contact_id);
+  end if;
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.crm_tasks'::regclass
+      and conname = 'crm_tasks_order_contact_tenant_fkey'
+  ) then
+    alter table public.crm_tasks add constraint crm_tasks_order_contact_tenant_fkey
+      foreign key (organization_id, order_id, contact_id)
+      references public.crm_orders (organization_id, id, contact_id)
+      on delete no action deferrable initially deferred;
+  end if;
+end
+$migration$;
+
+-- A FK composta do contato é criada e validada no bloco canônico 9009 acima,
+-- depois do saneamento legado. A migration 9008 conserva sua guarda histórica
+-- porque já foi aplicada e é imutável; o baseline não a reconstrói novamente.
+
+create index if not exists crm_tasks_org_order_idx
+  on public.crm_tasks (organization_id, order_id, created_at desc, id)
+  where order_id is not null;
+
+-- A policy permissiva crm_tasks_write continua servindo tarefas legadas. Estas
+-- três cercas tornam qualquer linha vinculada read-only para JWT authenticated.
+drop policy if exists crm_tasks_linked_insert_guard on public.crm_tasks;
+create policy crm_tasks_linked_insert_guard on public.crm_tasks
+  as restrictive for insert to authenticated
+  with check (order_id is null);
+drop policy if exists crm_tasks_linked_update_guard on public.crm_tasks;
+create policy crm_tasks_linked_update_guard on public.crm_tasks
+  as restrictive for update to authenticated
+  using (order_id is null) with check (order_id is null);
+drop policy if exists crm_tasks_linked_delete_guard on public.crm_tasks;
+create policy crm_tasks_linked_delete_guard on public.crm_tasks
+  as restrictive for delete to authenticated
+  using (order_id is null);
+
+-- A 0210 nasceu depois da varredura geral de suporte; fecha também esse acesso
+-- direto para as tarefas legadas, sem mudar a permissão normal de agent+.
+drop policy if exists crm_tasks_support_insert on public.crm_tasks;
+create policy crm_tasks_support_insert on public.crm_tasks
+  as restrictive for insert to authenticated
+  with check (public.fn_support_write_allowed(organization_id));
+drop policy if exists crm_tasks_support_update on public.crm_tasks;
+create policy crm_tasks_support_update on public.crm_tasks
+  as restrictive for update to authenticated
+  using (public.fn_support_write_allowed(organization_id))
+  with check (public.fn_support_write_allowed(organization_id));
+drop policy if exists crm_tasks_support_delete on public.crm_tasks;
+create policy crm_tasks_support_delete on public.crm_tasks
+  as restrictive for delete to authenticated
+  using (public.fn_support_write_allowed(organization_id));
+
+create table if not exists public.crm_task_command_receipts (
+  id uuid primary key,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  command_type text not null check (
+    command_type in ('create_linked_task', 'edit_linked_task', 'set_linked_task_status')
+  ),
+  request_hash bytea not null check (octet_length(request_hash) = 32),
+  actor_type text not null check (actor_type in ('user', 'ai', 'automation')),
+  actor_id uuid,
+  result_task_id uuid not null,
+  result_task_revision integer not null check (result_task_revision >= 1),
+  result_status text not null check (
+    result_status in ('pending', 'in_progress', 'done', 'cancelled')
+  ),
+  created_at timestamptz not null default now(),
+  constraint crm_task_command_receipts_org_id_key unique (organization_id, id),
+  constraint crm_task_command_receipts_result_key unique (
+    organization_id, id, result_task_id, result_task_revision, result_status
+  )
+);
+
+alter table public.crm_task_command_receipts enable row level security;
+revoke all on public.crm_task_command_receipts from public, anon, authenticated, service_role;
+grant select, insert on public.crm_task_command_receipts to service_role;
+-- Zero policies: hash e metadados de idempotência nunca entram em SELECT de domínio.
+
+create table if not exists public.crm_task_events (
+  -- Mesmo UUID do receipt: relação 1:1 e um único fato por comando concluído.
+  id uuid primary key,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  task_id uuid not null,
+  order_id uuid not null,
+  contact_id uuid not null,
+  task_revision integer not null check (task_revision >= 1),
+  event_type text not null check (event_type in ('created', 'edited', 'status_changed')),
+  from_status text check (
+    from_status is null or from_status in ('pending', 'in_progress', 'done', 'cancelled')
+  ),
+  to_status text not null check (
+    to_status in ('pending', 'in_progress', 'done', 'cancelled')
+  ),
+  actor_type text not null check (actor_type in ('user', 'ai', 'automation')),
+  actor_id uuid,
+  created_at timestamptz not null default now(),
+  constraint crm_task_events_created_shape check (
+    (event_type = 'created' and from_status is null)
+    or (
+      event_type = 'edited'
+      and from_status is not null
+      and from_status = to_status
+    )
+    or (
+      event_type = 'status_changed'
+      and from_status is not null
+      and from_status <> to_status
+    )
+  ),
+  constraint crm_task_events_org_task_revision_key
+    unique (organization_id, task_id, task_revision),
+  constraint crm_task_events_receipt_fkey
+    foreign key (organization_id, id, task_id, task_revision, to_status)
+    references public.crm_task_command_receipts (
+      organization_id, id, result_task_id, result_task_revision, result_status
+    )
+    on delete restrict,
+  constraint crm_task_events_task_order_contact_fkey
+    foreign key (organization_id, task_id, order_id, contact_id)
+    references public.crm_tasks (organization_id, id, order_id, contact_id)
+    on delete restrict
+);
+
+create index if not exists crm_task_events_order_time_idx
+  on public.crm_task_events (organization_id, order_id, created_at desc, id);
+create index if not exists crm_task_events_contact_time_idx
+  on public.crm_task_events (organization_id, contact_id, created_at desc, id);
+
+alter table public.crm_task_events enable row level security;
+drop policy if exists crm_task_events_select on public.crm_task_events;
+create policy crm_task_events_select on public.crm_task_events
+  for select to authenticated using (
+    organization_id in (select public.fn_user_org_ids())
+  );
+revoke all on public.crm_task_events from public, anon, authenticated, service_role;
+grant select on public.crm_task_events to authenticated;
+grant select, insert on public.crm_task_events to service_role;
+
+create table if not exists public.crm_notes (
+  -- ID obrigatório e fornecido pelo cliente: chave natural de idempotência.
+  id uuid primary key,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  contact_id uuid not null,
+  order_id uuid,
+  body text not null check (length(btrim(body)) between 1 and 4096),
+  actor_user_id uuid not null,
+  created_at timestamptz not null default now(),
+  redacted_at timestamptz,
+  constraint crm_notes_contact_tenant_fkey
+    foreign key (organization_id, contact_id)
+    references public.contacts (organization_id, id) on delete restrict,
+  constraint crm_notes_order_contact_tenant_fkey
+    foreign key (organization_id, order_id, contact_id)
+    references public.crm_orders (organization_id, id, contact_id) on delete restrict
+);
+
+create index if not exists crm_notes_contact_time_idx
+  on public.crm_notes (organization_id, contact_id, created_at desc, id);
+create index if not exists crm_notes_order_time_idx
+  on public.crm_notes (organization_id, order_id, created_at desc, id)
+  where order_id is not null;
+
+alter table public.crm_notes enable row level security;
+drop policy if exists crm_notes_select on public.crm_notes;
+create policy crm_notes_select on public.crm_notes
+  for select to authenticated using (
+    organization_id in (select public.fn_user_org_ids())
+  );
+revoke all on public.crm_notes from public, anon, authenticated, service_role;
+grant select on public.crm_notes to authenticated;
+grant select, insert on public.crm_notes to service_role;
+
+create or replace function public.fn_crm_notes_redact_contact()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.crm_notes
+     set body = '[Nota anonimizada]',
+         redacted_at = coalesce(redacted_at, pg_catalog.now())
+   where organization_id = new.organization_id
+     and contact_id = new.id
+     and (redacted_at is null or body is distinct from '[Nota anonimizada]');
+  return new;
+end;
+$$;
+alter function public.fn_crm_notes_redact_contact() owner to postgres;
+revoke execute on function public.fn_crm_notes_redact_contact()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists trg_crm_notes_redact_contact on public.contacts;
+create trigger trg_crm_notes_redact_contact
+after update of is_anonymized on public.contacts
+for each row
+when (new.is_anonymized is true)
+execute function public.fn_crm_notes_redact_contact();
+
+-- Apêndice 9010 — perfil comercial e arquivo privado de aliases.
+-- Par idempotente da migration 20260909214233_9010.
+-- F02-T08: perfil comercial canônico. Timestamp gerado pelo Supabase CLI.
+-- Mantém aliases antigos como histórico privado quando o admin salva a fonte
+-- canônica correspondente. Não faz backfill nem escolhe valor por timestamp.
+
+create schema if not exists private;
+
+create table if not exists private.tenant_setting_alias_archive (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  alias_key text not null,
+  value jsonb not null,
+  schema_version integer not null,
+  source text not null,
+  legacy_updated_by uuid,
+  legacy_updated_at timestamptz not null,
+  destination text not null,
+  resolved_by uuid not null,
+  resolved_at timestamptz not null default now(),
+  constraint tenant_setting_alias_archive_source
+    check (source in ('seed','tenant_admin','template')),
+  constraint tenant_setting_alias_archive_pair check (
+    (alias_key='business.timezone' and destination='organizations.timezone') or
+    (alias_key='branding.name' and destination='organizations.settings.branding.app_name') or
+    (alias_key='branding.primary_color' and destination='organizations.settings.branding.accent_hex') or
+    (alias_key='branding.logo_url' and destination='organizations.settings.branding.logo_path')
+  )
+);
+
+alter table private.tenant_setting_alias_archive owner to postgres;
+alter table private.tenant_setting_alias_archive enable row level security;
+
+create index if not exists tenant_setting_alias_archive_latest_idx
+  on private.tenant_setting_alias_archive
+  (organization_id,alias_key,resolved_at desc,id desc);
+
+revoke all on table private.tenant_setting_alias_archive
+  from public,anon,authenticated,service_role;
+
+create or replace function private.fn_archive_tenant_setting_alias(
+  p_org uuid,
+  p_actor uuid,
+  p_alias text,
+  p_destination text
+) returns boolean
+language plpgsql
+volatile
+security definer
+set search_path=''
+as $f$
+declare
+  v_row public.tenant_settings%rowtype;
+begin
+  if p_org is null or p_actor is null then
+    raise exception 'commercial_alias_argument_null' using errcode='22023';
+  end if;
+  if not (
+    (p_alias='business.timezone' and p_destination='organizations.timezone') or
+    (p_alias='branding.name' and p_destination='organizations.settings.branding.app_name') or
+    (p_alias='branding.primary_color' and p_destination='organizations.settings.branding.accent_hex') or
+    (p_alias='branding.logo_url' and p_destination='organizations.settings.branding.logo_path')
+  ) then
+    raise exception 'commercial_alias_pair_invalid' using errcode='22023';
+  end if;
+
+  select * into v_row
+    from public.tenant_settings
+   where organization_id=p_org and key=p_alias
+   for update;
+  if not found then return false; end if;
+
+  insert into private.tenant_setting_alias_archive
+    (organization_id,alias_key,value,schema_version,source,legacy_updated_by,
+     legacy_updated_at,destination,resolved_by)
+  values
+    (v_row.organization_id,v_row.key,v_row.value,v_row.schema_version,v_row.source,
+     v_row.updated_by,v_row.updated_at,p_destination,p_actor);
+
+  delete from public.tenant_settings
+   where organization_id=p_org and key=p_alias;
+  return true;
+end
+$f$;
+
+alter function private.fn_archive_tenant_setting_alias(uuid,uuid,text,text) owner to postgres;
+revoke all on function private.fn_archive_tenant_setting_alias(uuid,uuid,text,text)
+  from public,anon,authenticated,service_role;
+
+-- Leitor service-only sem `value`: o DTO conhece que houve resolução, mas não
+-- recebe conteúdo legado (em especial branding.logo_url).
+create or replace function public.fn_commercial_alias_resolutions(p_org uuid)
+returns table(
+  alias_key text,
+  source text,
+  legacy_updated_at timestamptz,
+  destination text,
+  resolved_at timestamptz
+)
+language sql
+stable
+security definer
+set search_path=''
+as $f$
+  select distinct on (h.alias_key)
+         h.alias_key,h.source,h.legacy_updated_at,h.destination,h.resolved_at
+    from private.tenant_setting_alias_archive h
+   where h.organization_id=p_org
+     and public.current_organization_id()=p_org
+   order by h.alias_key,h.resolved_at desc,h.id desc
+$f$;
+
+alter function public.fn_commercial_alias_resolutions(uuid) owner to postgres;
+revoke all on function public.fn_commercial_alias_resolutions(uuid)
+  from public,anon,authenticated,service_role;
+grant execute on function public.fn_commercial_alias_resolutions(uuid) to service_role;
+
+-- Forward-fix da função de logo aplicada: mesmo comportamento, com arquivo do
+-- alias somente após o UPDATE canônico ter casado uma organização.
+create or replace function public.fn_definir_logo_da_organizacao(
+  p_org uuid,
+  p_actor uuid,
+  p_path text
+) returns integer
+language plpgsql
+volatile
+security definer
+set search_path='public','pg_temp'
+as $f$
+declare
+  v_linhas integer;
+  v_path text;
+begin
+  if p_org is null or p_actor is null then
+    raise exception 'logo_da_organizacao_argumento_nulo' using errcode='22023';
+  end if;
+  v_path:=nullif(btrim(coalesce(p_path,'')),'');
+  if v_path is not null
+     and v_path !~ ('^'||p_org::text||'/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|jpg)$')
+  then
+    raise exception 'logo_da_organizacao_caminho_fora_do_escopo' using errcode='22023';
+  end if;
+  if not exists(
+       select 1 from public.user_organizations uo
+        where uo.user_id=p_actor and uo.organization_id=p_org and uo.role='admin'
+          and uo.revoked_at is null)
+     and not exists(
+       select 1 from public.platform_admins pa
+        where pa.user_id=p_actor and pa.revoked_at is null)
+  then
+    raise exception 'logo_da_organizacao_sem_permissao' using errcode='42501';
+  end if;
+
+  update public.organizations o
+     set settings=case when v_path is null then
+       jsonb_set(coalesce(o.settings,'{}'::jsonb),'{branding}',
+         coalesce(o.settings->'branding','{}'::jsonb)-'logo_path',true)
+     else
+       jsonb_set(coalesce(o.settings,'{}'::jsonb),'{branding}',
+         coalesce(o.settings->'branding','{}'::jsonb)||jsonb_build_object('logo_path',v_path),true)
+     end
+   where o.id=p_org;
+  get diagnostics v_linhas=row_count;
+  if v_linhas=1 then
+    perform private.fn_archive_tenant_setting_alias(
+      p_org,p_actor,'branding.logo_url','organizations.settings.branding.logo_path');
+  end if;
+  return v_linhas;
+end
+$f$;
+
+-- Forward-fix da função de nome/cor aplicada. Logo canônico continua preservado.
+create or replace function public.fn_definir_marca_da_organizacao(
+  p_org uuid,
+  p_actor uuid,
+  p_marca jsonb
+) returns integer
+language plpgsql
+volatile
+security definer
+set search_path='public','pg_temp'
+as $f$
+declare
+  v_linhas integer;
+  v_hex text;
+  v_limpar boolean;
+begin
+  if p_org is null or p_actor is null then
+    raise exception 'marca_da_organizacao_argumento_nulo' using errcode='22023';
+  end if;
+  v_limpar:=p_marca is null or jsonb_typeof(p_marca)='null';
+  if not v_limpar and jsonb_typeof(p_marca)<>'object' then
+    raise exception 'marca_da_organizacao_forma_invalida: %',jsonb_typeof(p_marca)
+      using errcode='22023';
+  end if;
+  v_hex:=nullif(p_marca->>'accent_hex','');
+  if v_hex is not null and v_hex !~ '^#[0-9a-f]{6}$' then
+    raise exception 'marca_da_organizacao_accent_hex_invalido' using errcode='22023';
+  end if;
+  if not exists(
+       select 1 from public.user_organizations uo
+        where uo.user_id=p_actor and uo.organization_id=p_org and uo.role='admin'
+          and uo.revoked_at is null)
+     and not exists(
+       select 1 from public.platform_admins pa
+        where pa.user_id=p_actor and pa.revoked_at is null)
+  then
+    raise exception 'marca_da_organizacao_sem_permissao' using errcode='42501';
+  end if;
+
+  update public.organizations o
+     set settings=case
+       when v_limpar and coalesce(o.settings#>>'{branding,logo_path}','')=''
+         then coalesce(o.settings,'{}'::jsonb)-'branding'
+       when v_limpar then jsonb_set(coalesce(o.settings,'{}'::jsonb),'{branding}',
+         jsonb_build_object('logo_path',o.settings#>'{branding,logo_path}'),true)
+       else jsonb_set(coalesce(o.settings,'{}'::jsonb),'{branding}',
+         p_marca||jsonb_strip_nulls(jsonb_build_object(
+           'logo_path',o.settings#>'{branding,logo_path}')),true)
+       end
+   where o.id=p_org;
+  get diagnostics v_linhas=row_count;
+  if v_linhas=1 then
+    perform private.fn_archive_tenant_setting_alias(
+      p_org,p_actor,'branding.name','organizations.settings.branding.app_name');
+    perform private.fn_archive_tenant_setting_alias(
+      p_org,p_actor,'branding.primary_color','organizations.settings.branding.accent_hex');
+  end if;
+  return v_linhas;
+end
+$f$;
+
+-- Substitui o update REST + read/merge/write de settings da action de
+-- organização. A action mantém o mesmo formulário e gate admin; esta RPC torna
+-- timezone + arquivo do alias um único commit e faz merge só da chave que esse
+-- writer possui em organizations.settings.
+create or replace function public.fn_update_organization_profile(
+  p_org uuid,
+  p_actor uuid,
+  p_profile jsonb
+) returns integer
+language plpgsql
+volatile
+security definer
+set search_path='public','pg_temp'
+as $f$
+declare
+  v_linhas integer;
+begin
+  if p_org is null or p_actor is null or p_profile is null
+     or jsonb_typeof(p_profile)<>'object' then
+    raise exception 'organization_profile_invalid' using errcode='22023';
+  end if;
+  if not p_profile ?& array[
+    'display_name','legal_name','cnpj','timezone','locale','currency',
+    'media_retention_days','dpo_email','privacy_policy_url','lost_reasons_extra'
+  ] or exists(
+    select 1 from jsonb_object_keys(p_profile) k
+     where k<>all(array[
+       'display_name','legal_name','cnpj','timezone','locale','currency',
+       'media_retention_days','dpo_email','privacy_policy_url','lost_reasons_extra'
+     ]))
+  then
+    raise exception 'organization_profile_shape_invalid' using errcode='22023';
+  end if;
+
+  -- O lock torna a checagem de estado e a escrita uma decisão do mesmo
+  -- snapshot; suspensão concorrente não pode confirmar entre gate e UPDATE.
+  perform 1 from public.organizations o
+   where o.id=p_org and o.status='active'
+   for update;
+  if not found then
+    raise exception 'organization_profile_unavailable' using errcode='42501';
+  end if;
+  if length(btrim(p_profile->>'display_name')) not between 1 and 120
+     or length(btrim(p_profile->>'legal_name')) not between 1 and 200
+     or length(p_profile->>'timezone') not between 1 and 64
+     or not exists(select 1 from pg_catalog.pg_timezone_names
+                    where name=p_profile->>'timezone')
+     or p_profile->>'locale' not in ('pt-BR','es')
+     or p_profile->>'currency' not in ('BRL','MXN','USD')
+     or (p_profile->>'media_retention_days')::integer not between 30 and 3650
+     or length(coalesce(p_profile->>'cnpj',''))>20
+     or length(coalesce(p_profile->>'dpo_email',''))>200
+     or length(coalesce(p_profile->>'privacy_policy_url',''))>2048
+     or jsonb_typeof(p_profile->'lost_reasons_extra')<>'array'
+     or jsonb_array_length(p_profile->'lost_reasons_extra')>50
+     or exists(
+       select 1 from jsonb_array_elements(p_profile->'lost_reasons_extra') item
+        where jsonb_typeof(item)<>'string'
+           or length(btrim(item#>>'{}')) not between 1 and 80)
+  then
+    raise exception 'organization_profile_value_invalid' using errcode='22023';
+  end if;
+  if not exists(
+       select 1 from public.user_organizations uo
+        where uo.user_id=p_actor and uo.organization_id=p_org and uo.role='admin'
+          and uo.accepted_at is not null and uo.revoked_at is null)
+     and not exists(
+       select 1 from public.platform_admins pa
+        where pa.user_id=p_actor and pa.revoked_at is null)
+  then
+    raise exception 'organization_profile_forbidden' using errcode='42501';
+  end if;
+
+  update public.organizations o set
+    display_name=btrim(p_profile->>'display_name'),
+    legal_name=btrim(p_profile->>'legal_name'),
+    cnpj=nullif(p_profile->>'cnpj',''),
+    timezone=p_profile->>'timezone',
+    locale=p_profile->>'locale',
+    currency=p_profile->>'currency',
+    media_retention_days=(p_profile->>'media_retention_days')::integer,
+    dpo_email=nullif(p_profile->>'dpo_email',''),
+    privacy_policy_url=nullif(p_profile->>'privacy_policy_url',''),
+    settings=jsonb_set(coalesce(o.settings,'{}'::jsonb),'{lost_reasons_extra}',
+                       p_profile->'lost_reasons_extra',true)
+  where o.id=p_org;
+  get diagnostics v_linhas=row_count;
+  if v_linhas=1 then
+    perform private.fn_archive_tenant_setting_alias(
+      p_org,p_actor,'business.timezone','organizations.timezone');
+  end if;
+  return v_linhas;
+end
+$f$;
+
+comment on function public.fn_definir_logo_da_organizacao(uuid,uuid,text) is
+  'Grava logo_path canônico e arquiva branding.logo_url na mesma transação quando a organização existe.';
+comment on function public.fn_definir_marca_da_organizacao(uuid,uuid,jsonb) is
+  'Grava nome/cor canônicos preservando logo_path e arquiva os aliases correspondentes na mesma transação.';
+comment on function public.fn_update_organization_profile(uuid,uuid,jsonb) is
+  'Atualiza o perfil canônico da organização e arquiva business.timezone na mesma transação.';
+
+revoke execute on function public.fn_definir_logo_da_organizacao(uuid,uuid,text)
+  from public,anon,authenticated,service_role;
+grant execute on function public.fn_definir_logo_da_organizacao(uuid,uuid,text) to service_role;
+revoke execute on function public.fn_definir_marca_da_organizacao(uuid,uuid,jsonb)
+  from public,anon,authenticated,service_role;
+grant execute on function public.fn_definir_marca_da_organizacao(uuid,uuid,jsonb) to service_role;
+revoke execute on function public.fn_update_organization_profile(uuid,uuid,jsonb)
+  from public,anon,authenticated,service_role;
+grant execute on function public.fn_update_organization_profile(uuid,uuid,jsonb) to service_role;
+
+notify pgrst,'reload schema';
+
+-- Apêndice 9011 — catálogo: separar autorização de escrita do plano SELECT.
+-- Par idempotente da migration 20260909214308_9011.
+-- F02-T06: leitura de catálogo sem reavaliar o papel de escrita por produto.
+-- SELECT já cobre toda leitura permitida pelo antigo FOR ALL. Separar comandos
+-- evita recalcular o papel de escrita para cada produto durante lista/count.
+-- Helpers que dependem de organization_id continuam correlacionados à linha.
+drop policy if exists catalog_products_write on public.catalog_products;
+
+drop policy if exists catalog_products_select on public.catalog_products;
+create policy catalog_products_select on public.catalog_products
+  for select using (
+    (organization_id in (select public.fn_user_org_ids()))
+    or (select public.fn_is_platform_admin())
+  );
+
+drop policy if exists catalog_products_insert on public.catalog_products;
+create policy catalog_products_insert on public.catalog_products
+  for insert with check (
+    (select public.fn_is_platform_admin())
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'manager'))
+  );
+
+drop policy if exists catalog_products_update on public.catalog_products;
+create policy catalog_products_update on public.catalog_products
+  for update using (
+    (select public.fn_is_platform_admin())
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'manager'))
+  ) with check (
+    (select public.fn_is_platform_admin())
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'manager'))
+  );
+
+drop policy if exists catalog_products_delete on public.catalog_products;
+create policy catalog_products_delete on public.catalog_products
+  for delete using (
+    (select public.fn_is_platform_admin())
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'manager'))
+  );
+
+-- Mantém os grants existentes e não altera as três policies restritivas
+-- support_write_*. Nenhuma função, papel ou privilégio novo é criado.
+revoke all on public.catalog_products from anon;
+grant select, insert, update, delete on public.catalog_products to authenticated;
+grant all on public.catalog_products to service_role;
+
+--
+-- F02-T12 / 9012 — conferência genérica por revisão (ADR-014).
+-- F02-T12 — conferência genérica por item e revisão comercial.
+-- Timestamp criado pelo Supabase CLI; arquivo aplicado é imutável.
+
+create table if not exists public.crm_order_check_command_receipts (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  operation text not null default 'record_check',
+  idempotency_key uuid not null,
+  request_hash bytea not null,
+  actor_user_id uuid not null,
+  order_id uuid,
+  response_body jsonb,
+  completed_at timestamptz,
+  created_at timestamptz not null default now(),
+  constraint crm_order_check_receipts_operation_check
+    check (operation='record_check'),
+  constraint crm_order_check_receipts_hash_check
+    check (octet_length(request_hash)=32),
+  constraint crm_order_check_receipts_response_check check (
+    (response_body is null and completed_at is null)
+    or (
+      jsonb_typeof(response_body)='object'
+      and completed_at is not null
+      and order_id is not null
+    )
+  )
+);
+
+create unique index if not exists crm_order_check_receipts_org_id_unique
+  on public.crm_order_check_command_receipts(organization_id,id);
+create unique index if not exists crm_order_check_receipts_idempotency_unique
+  on public.crm_order_check_command_receipts(organization_id,operation,idempotency_key);
+create index if not exists crm_order_check_receipts_order_idx
+  on public.crm_order_check_command_receipts(organization_id,order_id)
+  where order_id is not null;
+
+do $f02_t12$
+begin
+  if not exists(select 1 from pg_constraint
+    where conrelid='public.crm_order_check_command_receipts'::regclass
+      and conname='crm_order_check_receipts_order_tenant_fkey') then
+    alter table public.crm_order_check_command_receipts
+      add constraint crm_order_check_receipts_order_tenant_fkey
+      foreign key(organization_id,order_id)
+      references public.crm_orders(organization_id,id) on delete restrict;
+  end if;
+end
+$f02_t12$;
+
+create table if not exists public.crm_order_check_events (
+  id uuid primary key default gen_random_uuid(),
+  event_sequence bigint generated always as identity,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  receipt_id uuid not null,
+  order_id uuid not null,
+  order_revision integer not null,
+  event_no integer not null,
+  item_id uuid not null,
+  ordered_quantity_snapshot numeric(12,3),
+  checked_quantity numeric(12,3) not null,
+  sale_unit_snapshot text,
+  check_state text not null,
+  actor_user_id uuid not null,
+  created_at timestamptz not null default now(),
+  constraint crm_order_check_events_revision_check check(order_revision>=1),
+  constraint crm_order_check_events_no_check check(event_no>=1),
+  constraint crm_order_check_events_unit_check check(
+    sale_unit_snapshot is null or (
+      sale_unit_snapshot=btrim(sale_unit_snapshot)
+      and length(sale_unit_snapshot) between 1 and 32
+    )
+  ),
+  constraint crm_order_check_events_state_check check(
+    check_state in('pending','partial','checked')
+  ),
+  constraint crm_order_check_events_quantities_check check(
+    (
+      ordered_quantity_snapshot is null
+      and checked_quantity=0
+      and check_state='pending'
+    ) or (
+      ordered_quantity_snapshot is not null
+      and ordered_quantity_snapshot>0
+      and checked_quantity between 0 and ordered_quantity_snapshot
+      and (checked_quantity=0 or sale_unit_snapshot is not null)
+      and (
+        (checked_quantity=0 and check_state='pending')
+        or (checked_quantity>0 and checked_quantity<ordered_quantity_snapshot
+            and check_state='partial')
+        or (checked_quantity=ordered_quantity_snapshot and check_state='checked')
+      )
+    )
+  )
+);
+
+create unique index if not exists crm_order_check_events_sequence_unique
+  on public.crm_order_check_events(event_sequence);
+create unique index if not exists crm_order_check_events_org_id_unique
+  on public.crm_order_check_events(organization_id,id);
+create unique index if not exists crm_order_check_events_receipt_unique
+  on public.crm_order_check_events(organization_id,receipt_id);
+create unique index if not exists crm_order_check_events_order_no_unique
+  on public.crm_order_check_events(organization_id,order_id,order_revision,event_no);
+create index if not exists crm_order_check_events_order_sequence_idx
+  on public.crm_order_check_events(organization_id,order_id,event_sequence desc);
+create index if not exists crm_order_check_events_current_item_idx
+  on public.crm_order_check_events(
+    organization_id,order_id,order_revision,item_id,event_sequence desc
+  );
+
+do $f02_t12$
+begin
+  if not exists(select 1 from pg_constraint
+    where conrelid='public.crm_order_check_events'::regclass
+      and conname='crm_order_check_events_receipt_tenant_fkey') then
+    alter table public.crm_order_check_events
+      add constraint crm_order_check_events_receipt_tenant_fkey
+      foreign key(organization_id,receipt_id)
+      references public.crm_order_check_command_receipts(organization_id,id)
+      on delete restrict;
+  end if;
+  if not exists(select 1 from pg_constraint
+    where conrelid='public.crm_order_check_events'::regclass
+      and conname='crm_order_check_events_order_tenant_fkey') then
+    alter table public.crm_order_check_events
+      add constraint crm_order_check_events_order_tenant_fkey
+      foreign key(organization_id,order_id)
+      references public.crm_orders(organization_id,id) on delete restrict;
+  end if;
+end
+$f02_t12$;
+
+alter table public.crm_order_check_command_receipts enable row level security;
+alter table public.crm_order_check_events enable row level security;
+
+drop policy if exists crm_order_check_events_select on public.crm_order_check_events;
+create policy crm_order_check_events_select
+  on public.crm_order_check_events for select to authenticated
+  using(organization_id in(select public.fn_user_org_ids()));
+
+-- Uma única consulta fornece estado atual e página histórica do mesmo snapshot.
+create or replace function public.fn_crm_order_checks(
+  p_org uuid,
+  p_order uuid,
+  p_limit integer default 50,
+  p_before_sequence text default null
+) returns jsonb
+language plpgsql
+stable
+security invoker
+set search_path=''
+as $f02_t12$
+declare
+  v_result jsonb;
+  v_before_sequence bigint;
+begin
+  if p_org is null or p_order is null or p_limit not between 1 and 100
+     or (p_before_sequence is not null and p_before_sequence!~'^[1-9][0-9]*$') then
+    raise exception 'crm_order_checks_invalid_arguments' using errcode='22023';
+  end if;
+  if p_before_sequence is not null then
+    begin
+      v_before_sequence:=p_before_sequence::bigint;
+    exception when numeric_value_out_of_range then
+      raise exception 'crm_order_checks_invalid_arguments' using errcode='22023';
+    end;
+  end if;
+
+  with raw_history as (
+    select e.* from public.crm_order_check_events e
+     where e.organization_id=p_org and e.order_id=p_order
+       and (v_before_sequence is null or e.event_sequence<v_before_sequence)
+     order by e.event_sequence desc
+     limit p_limit+1
+  ), page_history as (
+    select * from raw_history order by event_sequence desc limit p_limit
+  )
+  select jsonb_build_object(
+    'order_id',o.id,
+    'order_revision',o.revision,
+    'items',coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'item_id',i.id,
+        'ordered_quantity',i.quantity::text,
+        'checked_quantity',coalesce(last_event.checked_quantity::text,'0.000'),
+        'sale_unit',i.sale_unit_snapshot,
+        'state',coalesce(last_event.check_state,'pending'),
+        'event_id',last_event.id,
+        'event_sequence',last_event.event_sequence::text,
+        'checked_by_user_id',last_event.actor_user_id,
+        'checked_at',last_event.created_at
+      ) order by i.position,i.id)
+      from public.crm_order_items i
+      left join lateral(
+        select e.id,e.event_sequence,e.checked_quantity,e.check_state,
+               e.actor_user_id,e.created_at
+          from public.crm_order_check_events e
+         where e.organization_id=i.organization_id and e.order_id=i.order_id
+           and e.order_revision=o.revision and e.item_id=i.id
+         order by e.event_sequence desc limit 1
+      ) last_event on true
+      where i.organization_id=o.organization_id and i.order_id=o.id
+    ),'[]'::jsonb),
+    'history',coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'event_id',h.id,
+        'event_sequence',h.event_sequence::text,
+        'order_id',h.order_id,
+        'order_revision',h.order_revision,
+        'item_id',h.item_id,
+        'ordered_quantity',h.ordered_quantity_snapshot::text,
+        'checked_quantity',h.checked_quantity::text,
+        'sale_unit',h.sale_unit_snapshot,
+        'state',h.check_state,
+        'checked_by_user_id',h.actor_user_id,
+        'checked_at',h.created_at
+      ) order by h.event_sequence desc) from page_history h
+    ),'[]'::jsonb),
+    'next_before_sequence',case
+      when (select count(*) from raw_history)>p_limit
+      then (select min(event_sequence)::text from page_history)
+      else null end
+  ) into v_result
+  from public.crm_orders o
+  where o.organization_id=p_org and o.id=p_order;
+
+  return v_result;
+end
+$f02_t12$;
+
+comment on table public.crm_order_check_command_receipts is
+  'Recibos privados de idempotência da conferência; hash e replay sem grants de cliente.';
+comment on table public.crm_order_check_events is
+  'Journal append-only de quantidades conferidas por item e revisão; sem descrição ou PII textual.';
+comment on column public.crm_order_check_events.item_id is
+  'Snapshot da identidade do item no momento do evento, sem FK: edição posterior pode remover o item.';
+comment on function public.fn_crm_order_checks(uuid,uuid,integer,text) is
+  'Leitura security-invoker de estado atual e histórico paginado; RLS das tabelas decide o tenant.';
+
+do $f02_t12$
+declare v_invalid integer;
+begin
+  if exists(select 1 from pg_tables where schemaname='public'
+    and tablename in('crm_order_check_command_receipts','crm_order_check_events')
+    and not rowsecurity) then
+    raise exception 'F02-T12 criou tabela sem RLS';
+  end if;
+  if exists(select 1 from pg_policies where schemaname='public'
+    and tablename='crm_order_check_command_receipts') then
+    raise exception 'recibos de conferência devem ter zero policies';
+  end if;
+  select count(*) into v_invalid from pg_constraint
+   where conrelid in(
+     'public.crm_order_check_command_receipts'::regclass,
+     'public.crm_order_check_events'::regclass
+   ) and contype='f' and not convalidated;
+  if v_invalid<>0 then
+    raise exception 'F02-T12 deixou % FK(s) sem validação',v_invalid;
+  end if;
+end
+$f02_t12$;
+
+alter function public.fn_crm_order_checks(uuid,uuid,integer,text) owner to postgres;
+revoke all on function public.fn_crm_order_checks(uuid,uuid,integer,text)
+  from public,anon,authenticated,service_role;
+grant execute on function public.fn_crm_order_checks(uuid,uuid,integer,text)
+  to authenticated,service_role;
+
+revoke all on public.crm_order_check_command_receipts,public.crm_order_check_events
+  from public,anon,authenticated,service_role;
+grant select on public.crm_order_check_events to authenticated;
+grant select,insert,update on public.crm_order_check_command_receipts to service_role;
+grant select,insert on public.crm_order_check_events to service_role;
+revoke all on sequence public.crm_order_check_events_event_sequence_seq
+  from public,anon,authenticated,service_role;
+grant usage on sequence public.crm_order_check_events_event_sequence_seq to service_role;
+
+notify pgrst,'reload schema';
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ ESTE BLOCO É, DE PROPÓSITO, O ÚLTIMO DO ARQUIVO. Apêndice novo entra ANTES

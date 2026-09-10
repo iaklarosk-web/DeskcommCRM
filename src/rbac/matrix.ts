@@ -29,6 +29,8 @@ export type Permissao =
   | "users.manage"
   | "products.manage"
   | "knowledge.manage"
+  | "orders.write"
+  | "orders.confirm"
   | "tenants.create"
   | "platform.counters.read";
 
@@ -43,6 +45,8 @@ export const MATRIZ: Record<Permissao, Record<PapelD15, boolean>> = {
   "users.manage": { platform_admin: false, tenant_admin: true, attendant: false },
   "products.manage": { platform_admin: false, tenant_admin: true, attendant: false },
   "knowledge.manage": { platform_admin: false, tenant_admin: true, attendant: false },
+  "orders.write": { platform_admin: false, tenant_admin: true, attendant: true },
+  "orders.confirm": { platform_admin: false, tenant_admin: true, attendant: true },
   "tenants.create": { platform_admin: true, tenant_admin: false, attendant: false },
   "platform.counters.read": { platform_admin: true, tenant_admin: false, attendant: false },
 };

@@ -101,6 +101,15 @@ beforeAll(() => {
       v_stage uuid;
       v_agent uuid;
       v_version uuid;
+      v_company uuid;
+      v_product uuid;
+      v_order uuid;
+      v_receipt uuid;
+      v_check_receipt uuid;
+      v_check_item uuid;
+      v_order_revision integer;
+      v_linked_task uuid;
+      v_task_receipt uuid;
       v_boundary jsonb;
     begin
       foreach v_org in array array['${ORG_A}'::uuid, '${ORG_B}'::uuid] loop
@@ -235,12 +244,140 @@ beforeAll(() => {
             values (v_org, 'RLS-' || v_org::text, 'Produto de invariante', 100);
         end if;
 
+        if not exists (select 1 from public.crm_companies where organization_id = v_org) then
+          insert into public.crm_companies (organization_id, legal_name)
+            values (v_org, 'Empresa de invariante ' || v_org::text);
+        end if;
+
+        select id into v_company from public.crm_companies
+          where organization_id = v_org limit 1;
+        select id into v_product from public.catalog_products
+          where organization_id = v_org limit 1;
+
+        -- F02-T02: pedido, item e journal são tabelas de domínio legíveis por
+        -- membro. O recibo que ancora a idempotência é privado e tem prova
+        -- dedicada em f02-t02-order-schema.test.ts.
+        select id into v_order from public.crm_orders
+          where organization_id = v_org limit 1;
+        if v_order is null then
+          insert into public.crm_orders
+            (organization_id, contact_id, company_id, company_name_snapshot,
+             source, status, created_by_actor_type)
+            values (v_org, v_contact, v_company, 'Empresa no momento do pedido',
+                    'ui', 'draft', 'user')
+            returning id into v_order;
+        end if;
+        if not exists (select 1 from public.crm_order_items where organization_id = v_org) then
+          insert into public.crm_order_items
+            (organization_id, order_id, position, requested_text, product_id,
+             product_name_snapshot, sale_unit_snapshot, quantity,
+             unit_price_cents, currency_snapshot, line_total_cents)
+            values (v_org, v_order, 1, 'Item sintético do invariante', v_product,
+                    'Produto no momento do pedido', 'un', 1.000,
+                    100, 'BRL', 100);
+        end if;
+        select id into v_receipt from public.crm_order_command_receipts
+          where organization_id = v_org and order_id = v_order limit 1;
+        if v_receipt is null then
+          insert into public.crm_order_command_receipts
+            (organization_id, operation, idempotency_key, request_hash,
+             actor_type, order_id, response_body, completed_at)
+            values (v_org, 'create_draft', 'rls-invariant-' || v_org::text,
+                    decode(repeat('00', 32), 'hex'), 'user', v_order,
+                    '{}'::jsonb, now())
+            returning id into v_receipt;
+        end if;
+        if not exists (select 1 from public.crm_order_events where organization_id = v_org) then
+          insert into public.crm_order_events
+            (organization_id, receipt_id, order_id, contact_id, order_revision,
+             event_type, changes, actor_type)
+            values (v_org, v_receipt, v_order, v_contact, 1,
+                    'draft_created', '{}'::jsonb, 'user');
+        end if;
+
+        -- F02-T12: evento de conferência legível e recibo privado.
+        if not exists(select 1 from public.crm_order_check_events where organization_id=v_org) then
+          select id into v_check_item from public.crm_order_items
+            where organization_id=v_org and order_id=v_order order by position,id limit 1;
+          if v_check_item is null then
+            insert into public.crm_order_items
+              (organization_id,order_id,position,requested_text,product_id,
+               product_name_snapshot,sale_unit_snapshot,quantity,unit_price_cents,
+               currency_snapshot,line_total_cents)
+            values(v_org,v_order,1,'Item sintético de conferência',v_product,
+                   'Produto sintético de conferência','un',1.000,100,'BRL',100)
+            returning id into v_check_item;
+          end if;
+          select revision into v_order_revision from public.crm_orders
+            where organization_id=v_org and id=v_order;
+          insert into public.crm_order_check_command_receipts
+            (organization_id,operation,idempotency_key,request_hash,actor_user_id,order_id,
+             response_body,completed_at)
+          values(v_org,'record_check',gen_random_uuid(),decode(repeat('12',32),'hex'),
+            case when v_org='${ORG_A}'::uuid then '${USER_A}'::uuid else '${USER_B}'::uuid end,
+            v_order,'{}'::jsonb,now()) returning id into v_check_receipt;
+          insert into public.crm_order_check_events
+            (organization_id,receipt_id,order_id,order_revision,event_no,item_id,
+             ordered_quantity_snapshot,checked_quantity,sale_unit_snapshot,check_state,actor_user_id)
+          select v_org,v_check_receipt,v_order,v_order_revision,1,v_check_item,
+                 i.quantity,
+                 case when i.quantity is null or i.sale_unit_snapshot is null then 0 else i.quantity end,
+                 i.sale_unit_snapshot,
+                 case when i.quantity is null or i.sale_unit_snapshot is null then 'pending' else 'checked' end,
+                 case when v_org='${ORG_A}'::uuid then '${USER_A}'::uuid else '${USER_B}'::uuid end
+            from public.crm_order_items i where i.organization_id=v_org and i.id=v_check_item;
+        end if;
+
+        -- F02-T03: journal de tarefa e nota são domínio legível pelo membro.
+        -- O receipt de comando permanece privado e tem prova própria dedicada.
+        select id into v_linked_task from public.crm_tasks
+          where organization_id = v_org and order_id = v_order limit 1;
+        if v_linked_task is null then
+          insert into public.crm_tasks
+            (organization_id,title,contact_id,order_id,created_by,revision)
+          values (
+            v_org,'RLS invariant linked task',v_contact,v_order,
+            case when v_org='${ORG_A}'::uuid then '${USER_A}'::uuid else '${USER_B}'::uuid end,1
+          ) returning id into v_linked_task;
+        end if;
+        select id into v_task_receipt from public.crm_task_command_receipts
+          where organization_id = v_org and result_task_id = v_linked_task limit 1;
+        if v_task_receipt is null then
+          v_task_receipt := gen_random_uuid();
+          insert into public.crm_task_command_receipts
+            (id,organization_id,command_type,request_hash,actor_type,actor_id,
+             result_task_id,result_task_revision,result_status)
+          values (
+            v_task_receipt,v_org,'create_linked_task',decode(repeat('03',32),'hex'),'user',
+            case when v_org='${ORG_A}'::uuid then '${USER_A}'::uuid else '${USER_B}'::uuid end,
+            v_linked_task,1,'pending'
+          );
+          insert into public.crm_task_events
+            (id,organization_id,task_id,order_id,contact_id,task_revision,event_type,
+             from_status,to_status,actor_type,actor_id)
+          values (
+            v_task_receipt,v_org,v_linked_task,v_order,v_contact,1,'created',null,'pending','user',
+            case when v_org='${ORG_A}'::uuid then '${USER_A}'::uuid else '${USER_B}'::uuid end
+          );
+        end if;
+        if not exists (select 1 from public.crm_notes where organization_id = v_org) then
+          insert into public.crm_notes
+            (id,organization_id,contact_id,order_id,body,actor_user_id)
+          values (
+            gen_random_uuid(),v_org,v_contact,v_order,'RLS invariant note',
+            case when v_org='${ORG_A}'::uuid then '${USER_A}'::uuid else '${USER_B}'::uuid end
+          );
+        end if;
+
         -- crm_tasks (migration 0210): o que o time combinou fazer, com prazo.
         -- Entra COM o vínculo de lead porque a tarefa presa a um negócio é o
         -- caso que cruza duas tabelas tenant-aware — se a policy vazasse, o
         -- vizinho leria o combinado E o ponteiro para o funil dele.
         -- (sem crase nesta prosa: o bloco inteiro é um template literal de JS.)
-        if not exists (select 1 from public.crm_tasks where organization_id = v_org) then
+        if not exists (
+          select 1 from public.crm_tasks
+            where organization_id = v_org and order_id is null
+        ) then
           insert into public.crm_tasks (organization_id, title, lead_id)
             values (v_org, 'RLS invariant task',
                     (select id from public.crm_leads where organization_id = v_org limit 1));
@@ -300,6 +437,18 @@ export const TABLES = [
   // exige `manager` — esse segundo eixo é medido em
   // `tests/invariants/catalogo-so-gestor-muda-preco.test.ts`, não aqui.
   "catalog_products",
+  // F02-T01 — empresa cliente, separada de organizations (o tenant).
+  "crm_companies",
+  // F02-T02 — domínio operacional somente leitura para membros. O recibo de
+  // comando fica fora desta lista porque authenticated não possui SELECT.
+  "crm_orders",
+  "crm_order_items",
+  "crm_order_events",
+  // F02-T12 — journal de conferência; receipt privado fica em PROVA_PROPRIA.
+  "crm_order_check_events",
+  // F02-T03 — domínios de leitura do membro. Receipt privado fica em PROVA_PROPRIA.
+  "crm_task_events",
+  "crm_notes",
   // migration 0210 — as tarefas do CRM. A leitura é org-scoped sem gate de papel
   // (o `viewer` precisa ver o que o time combinou); a ESCRITA exige `agent`, e
   // esse segundo eixo NÃO é medido aqui — o usuário semeado é `agent`, então o
@@ -347,18 +496,28 @@ describe("RLS tenant isolation (fn_user_org_ids pattern)", () => {
   }
 
   it("ai_reply_drafts: org B lê sua sugestão e não lê a de A (direção inversa)", () => {
-    expect(countAs(USER_B,
-      `select count(*) from public.ai_reply_drafts where organization_id = '${ORG_B}';`,
-    )).toBeGreaterThanOrEqual(1);
-    expect(countAs(USER_B,
-      `select count(*) from public.ai_reply_drafts where organization_id = '${ORG_A}';`,
-    )).toBe(0);
+    expect(
+      countAs(
+        USER_B,
+        `select count(*) from public.ai_reply_drafts where organization_id = '${ORG_B}';`,
+      ),
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      countAs(
+        USER_B,
+        `select count(*) from public.ai_reply_drafts where organization_id = '${ORG_A}';`,
+      ),
+    ).toBe(0);
   });
 
   it("ai_reply_drafts: os dois tenants têm linhas antes de testar as cercas", () => {
-    expect(Number(sql(
-      `select count(distinct organization_id) from public.ai_reply_drafts where organization_id in ('${ORG_A}','${ORG_B}');`,
-    ))).toBe(2);
+    expect(
+      Number(
+        sql(
+          `select count(distinct organization_id) from public.ai_reply_drafts where organization_id in ('${ORG_A}','${ORG_B}');`,
+        ),
+      ),
+    ).toBe(2);
   });
 
   it("superuser sees both orgs (seed sanity: cross-tenant rows really exist)", () => {

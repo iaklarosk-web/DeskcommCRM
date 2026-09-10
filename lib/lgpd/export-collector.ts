@@ -9,6 +9,21 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/logger";
 import type { Json } from "@/lib/database.types";
+import {
+  collectOperationalOrderExport,
+  type OperationalOrderCheckRow,
+  type OperationalOrderEventRow,
+  type OperationalOrderRow,
+  type OperationalOrderSavedSnapshot,
+} from "@/src/crm/orders/export";
+import {
+  collectCrmWorkExport,
+  type CrmNoteExportRow,
+  type LinkedTaskEventExportRow,
+  type LinkedTaskExportRow,
+} from "@/src/crm/work/export";
+import type { TenantCtx } from "@/src/tenant-context";
+import type { ServicePool } from "@/src/tenant-context/db";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -219,6 +234,18 @@ export interface ExportPayload {
   messages_recent: MessageRow[];
   leads: LeadRow[];
   orders: OrderRow[];
+  /** Sempre preenchido pelo coletor real; opcional só preserva fixtures anteriores. */
+  operational_orders?: OperationalOrderRow[];
+  operational_order_events?: OperationalOrderEventRow[];
+  operational_order_saved_snapshots?: OperationalOrderSavedSnapshot[];
+  /** Journal quantitativo sem texto, chave ou hash privado de idempotência. */
+  operational_order_checks?: OperationalOrderCheckRow[];
+  /** Notas humanas sobre o titular; fatal se a coleta transacional falhar. */
+  crm_notes?: CrmNoteExportRow[];
+  /** Tarefas de pedido; tarefas legadas permanecem no campo `tasks`. */
+  linked_tasks?: LinkedTaskExportRow[];
+  /** Journal sem texto livre: vínculos, estados, revisão, ator e horário. */
+  linked_task_events?: LinkedTaskEventExportRow[];
   activities: ActivityRow[];
   appointments: AppointmentRow[];
   tasks: TaskRow[];
@@ -247,6 +274,7 @@ interface CollectArgs {
   requestId: string;
   contactId: string | null;
   externalCustomerId: string | null;
+  tenantCtx?: TenantCtx;
 }
 
 const RECENT_MESSAGES_LIMIT = 100;
@@ -290,7 +318,10 @@ async function lerControlador(
   };
 }
 
-export async function collectExportData(args: CollectArgs): Promise<ExportPayload> {
+export async function collectExportData(
+  args: CollectArgs,
+  dependencies: { pool?: ServicePool } = {},
+): Promise<ExportPayload> {
   const admin = createAdminClient();
   const { organizationId, requestId, externalCustomerId } = args;
   // ANTES do primeiro `return`: o caminho "nenhum dado localizado" também gera
@@ -511,6 +542,24 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
   }
 
   // Activities — direct contact_id on crm_lead_activities.
+  // Operational orders are independent from legacy ecommerce `orders`. Failure is fatal:
+  // a successful export missing this block would falsely claim completeness.
+  const operational = contactId
+    ? await collectOperationalOrderExport(
+        args.tenantCtx ?? { organization_id: organizationId, source: "job" },
+        contactId,
+        dependencies,
+      )
+    : { orders: [], events: [], saved_snapshots: [], checks: [] };
+  // Uma única fotografia para notas, tarefas vinculadas e seu journal. A falha
+  // é fatal: sucesso sem estes blocos declararia falsamente um export completo.
+  const crmWork = contactId
+    ? await collectCrmWorkExport(
+        args.tenantCtx ?? { organization_id: organizationId, source: "job" },
+        contactId,
+        dependencies,
+      )
+    : { notes: [], linked_tasks: [], task_events: [] };
   let activities: ActivityRow[] = [];
   if (contactId) {
     const { data, error } = await admin
@@ -559,7 +608,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     }
   }
 
-  // Tarefas — contact_id direto em crm_tasks (migration 0210).
+  // Tarefas legadas — as vinculadas a pedido saem no snapshot crmWork acima.
   //
   // O texto que a equipe escreveu sobre o titular ("ligar para Fulano confirmar
   // o orçamento") é dado dele. Se a anonimização o apaga — e ela apaga —, o
@@ -571,6 +620,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
       .select("id, title, description, due_date, status, priority")
       .eq("organization_id", organizationId)
       .eq("contact_id", contactId)
+      .is("order_id", null)
       .order("due_date", { ascending: false })
       .limit(500);
     if (error) {
@@ -749,6 +799,13 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     messages_recent,
     leads,
     orders,
+    operational_orders: operational.orders,
+    operational_order_events: operational.events,
+    operational_order_saved_snapshots: operational.saved_snapshots,
+    operational_order_checks: operational.checks,
+    crm_notes: crmWork.notes,
+    linked_tasks: crmWork.linked_tasks,
+    linked_task_events: crmWork.task_events,
     activities,
     appointments,
     tasks,
@@ -780,6 +837,13 @@ function emptyPayload(
     messages_recent: [],
     leads: [],
     orders: [],
+    operational_orders: [],
+    operational_order_events: [],
+    operational_order_saved_snapshots: [],
+    operational_order_checks: [],
+    crm_notes: [],
+    linked_tasks: [],
+    linked_task_events: [],
     activities: [],
     appointments: [],
     tasks: [],
