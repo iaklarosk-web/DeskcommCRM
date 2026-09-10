@@ -1,5 +1,47 @@
 # deskcomm-audit — Auditoria F00 do DeskcommCRM
 
+## Checkpoint F02 em construção — d44e3d34d55512b2287209f7802810ee26843f73
+
+Este checkpoint tem precedência sobre descrições históricas do estado atual.
+As medições F00/F01 preservadas abaixo continuam atribuídas a seus commits.
+D47 determina pausa após F02; D48 retira dados Deka dos gates de engenharia.
+[ADR-014](../decisions/ADR-014-F02-configuravel-e-pausas.md) e [desenho F02](../design/F02-pedidos-do-dia.md) registram o contrato genérico.
+
+| Superfície | Fonte no checkpoint | Implementação |
+|---|---|---|
+| Cliente e pedidos da ficha | `components/crm/ContactOrders.tsx:23` | Leitura paginada, vazio/erro e acesso ao pedido do contato. |
+| Empresas | `app/api/v1/companies/route.ts:49` | CRUD sob organização ativa; vínculo de empresa e snapshot do pedido. |
+| Catálogo | `lib/catalogo/listar.ts:33` | Busca literal e paginação; leitura e escrita têm policies por operação (9011). |
+| Pedidos/itens | `src/crm/orders/service.ts:115` | Comandos transacionais com identidade, revisão, snapshots, histórico e idempotência. |
+| Notas | `components/crm/CrmNotes.tsx:28` | Notas humanas vinculadas ao titular/pedido, sem lead fictício. |
+| Tarefas | `components/crm/LinkedOrderTasks.tsx:40` | Tarefas e histórico vinculados ao pedido. |
+| Configuração comercial | `src/tenant-config/commercial-service.ts:357` | Identidade/timezone/moeda canônicos em organizations; seis campos comerciais em tenant_settings; aliases antigos arquivados privadamente. |
+| Relatório diário | `src/crm/orders/daily.ts:345` | Data e critério explícitos; identidade canônica da empresa, consulta completa, grupos e centavos/milésimos exatos. |
+| Conferência | `src/crm/orders/checks-service.ts:119` | Quantidade conferida por item/revisão, separada da venda; recibos privados e histórico imutável. |
+| Seeds fictícios | `scripts/f02-fixture-writer.ts:185` | Opt-in em sandbox com marcador do banco; gravação idempotente. |
+| Exportação de pedidos | `src/crm/orders/export.ts:124` | Escopo pelo titular e organização; inclui journal de conferência sem recibos/chaves/hashes. |
+
+Branding permanece em `organizations.settings.branding`; o arquivo legado é a
+tabela privada `private.tenant_setting_alias_archive`, criada na 9010, com RLS,
+zero policies e nenhum grant direto a anon/authenticated/service_role. A fachada
+`src/tenant-config/settings.ts` lê os aliases da origem canônica e recusa escrita
+nesses aliases. Não é uma migração geral dos seis escritores de branding para
+`setSetting`; a descrição histórica que propunha isso não reflete a implementação.
+
+O journal de conferência da 9012 tem `USING (organization_id in (select
+public.fn_user_org_ids()))`; as leituras HTTP/RPC especificam também organização.
+O recibo privado mantém RLS, zero policies e nenhum grant de cliente. As provas
+medem tabelas existentes e o catálogo de policies; números F00 não são contagens
+atuais. O baseline preserva a varredura final de anon e migrações aplicadas são
+imutáveis. Nenhum dado `orders` externo foi apagado ou reinterpretado.
+
+[Evidência T04–T08](evidence/construction-f02-t04-t08-20260909.txt) registra provas
+parciais e tentativas. T10–T12 possuem provas focais locais; o gate T13, o navegador
+final e o aceite da fase ainda estão em andamento. Implementação não equivale
+a validação do operador Deka, serviços reais ou produção. Todas as fixtures são
+fictícias, com WhatsApp/IA mock e sem envio externo.
+
+
 Saída da F00 (DIRETRIZ §6). Tudo abaixo cita `arquivo:linha @ c85f7d7`. O que não foi verificado está na seção 8.
 
 ## 0. Identificação

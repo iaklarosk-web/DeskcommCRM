@@ -57,7 +57,7 @@ expansão comercial; F03 e fases posteriores não começam por esta autorizaçã
 
 ## Commit
 
-Pendente de promoção. Nenhum hash futuro é presumido.
+Implementação: `d44e3d34d55512b2287209f7802810ee26843f73`. O gate integral continua em andamento; esse commit não declara a fase pronta.
 
 ## Implementação do gate T13
 

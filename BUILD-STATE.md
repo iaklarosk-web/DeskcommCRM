@@ -1,11 +1,11 @@
 ---
-updated_at: 2026-09-09T20:58:20Z
-head_commit: e14c72c57b1183012492ebd5a2e258f425c960ba   # código T03 validado localmente; F02 permanece em andamento
+updated_at: 2026-09-10T00:26:00Z
+head_commit: d44e3d34d55512b2287209f7802810ee26843f73   # checkpoint de código T04–T12; gate integral em andamento
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
-plan_version: "2.2 (2026-09-09); D38–D46; ADR-006…013"
+plan_version: "2.3 (2026-09-09); D38–D48; ADR-006…014"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
 current_phase: F02
-next_task: F02-T04
+next_task: F02-T13
 status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
@@ -37,6 +37,33 @@ verify_summary_last: |
 ---
 
 # BUILD-STATE
+
+## Estado vigente — continuação e recuperação de 09/09/2026
+
+D47 exige pausa ao concluir F02, com evidências e consumo; F03 só começa após
+nova mensagem do proprietário. D48 determina que a Deka informará seus dados
+ao receber acesso: nenhuma pendência da entrevista bloqueia a engenharia genérica.
+Estas decisões substituem as dependências antigas de dados Deka descritas abaixo.
+
+T04–T08 estão integradas localmente, com [evidência parcial](docs/migration/evidence/construction-f02-t04-t08-20260909.txt).
+T10/T11 têm consulta/tela/impressão integradas; unit focal 17/17, integração diária
+3/3, mutantes de truncamento de backend e UI 1/1 cada. T12 recebeu core, migration
+9012 e tipos gerados; unit21/21, integração12/12, banco120/120 e export3/3
+mais coletor6/6 passaram. O gate integral T13 segue em andamento: a tentativa
+f02-final-04 já aprovou tipos/lint/build/shell, com build444s.
+Nenhuma dessas contagens declara F02 pronta. O resumo F01 abaixo é histórico.
+
+A VPS foi reiniciada manualmente pelo painel em 09/09, por volta de 19:50 de
+Brasília. Git, migrations aplicadas e dados do sandbox foram preservados; o
+conteúdo temporário de /tmp foi perdido. [Recuperação](docs/migration/evidence/construction-f02-recovery-20260909.txt).
+Preparação dos subagentes passou a diretórios persistentes, e verificações
+pesadas são executadas em série. A causa do travamento original não foi estabelecida.
+
+A CI do checkpoint publicado 5f879175 concluiu com sucesso (run 34408643274),
+após corrigir as três falhas do checkpoint T03 anterior. A continuação T04–T12
+precisa de nova validação; esse resultado não se transfere ao código não publicado.
+
+## Checkpoints anteriores (estado histórico)
 
 Plano vigente: [DIRETRIZ v2.2](docs/DIRETRIZ.md), decisões D45–D46 e [ADR-011](docs/decisions/ADR-011-construcao-por-fases-e-consumo.md). **A construção por fases está autorizada e F02 está em andamento** na branch `codex/f02-crm-pedidos`. Cadastros/API/UI e saneamento das três dívidas estão implementados com provas focais. Pedidos operacionais já têm domínio, migrations, comandos transacionais, API, telas e histórico. As jornadas de cadastros e pedidos passaram no navegador. Tipos, lint e build passaram; as dez falhas da regressão global passaram nas rechecagens focais. Os checkpoints T01/T02 e T03 estão registrados, com revisão independente e provas locais. F02 e as partes ainda incompletas de T04–T06 não recebem `done` por esse checkpoint.
 
@@ -78,7 +105,7 @@ A [ADR-006](docs/decisions/ADR-006-integracao-v1.17.0.md) fixa a release `db58c3
 
 A prova reproduzível de atualização a partir do baseline F01 está em [scripts/verify/upgrade-f01-v117/README.md](scripts/verify/upgrade-f01-v117/README.md), com [evidência observada](docs/migration/evidence/upgrade-f01-v117.txt). Ela cobre o banco descartável e não substitui a bateria completa nem demonstra serviços reais.
 
-## Fases (D07; plano v2.2)
+## Fases (D07; plano v2.3)
 
 `done` em F00/F01 registra o fechamento histórico de 07/09/2026. A revalidação da combinação com v1.17.0 está separada acima. F08–F17 têm objetivos e critérios em DIRETRIZ §7.9; suas tasks serão decompostas antes da execução.
 
@@ -86,13 +113,13 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 |---|---|---|
 | F00 | Auditoria, verificador, ADR-001…003 e baseline N0 | done(verify=2026-09-07 2a23537e) |
 | F01 | TenantContext, TenantConfiguration, Entitlement mínimo, seeds deka/demo2 e criação de tenant | done(verify=2026-09-07 6f7c56fc) — histórico; revalidação v1.17.0 com dívida em 08/09/2026 |
-| F02 | CRM mínimo e pedidos do dia: clientes/empresas, catálogo, pedidos/itens, histórico, tarefas/notas, lista por produto/entrega, impressão e conferência | in_progress — checkpoints T01–T03; T04–T08 em construção; lista/impressão/conferência e gate final pendentes |
+| F02 | CRM mínimo e pedidos do dia: clientes/empresas, catálogo, pedidos/itens, histórico, tarefas/notas, lista por produto/entrega, impressão e conferência | in_progress — T01–T03 publicados; T04–T12 integrados localmente, provas finais/T09/T13 em andamento; pausa ao concluir F02 |
 | F03 | WhatsApp de entrada/saída via WAHA, adaptação do ChannelAdapter, Inbox e ciclo das conversas | pending |
 | F04 | Adaptar o motor de IA/RAG, Action Policy e nove ferramentas ao contrato CRM-OS | pending |
 | F05 | Adaptar handoff e notificações; criar regra de lembrete PJ sobre infraestrutura existente | pending |
 | F06 | Deploy de staging, mocks, segurança/observabilidade e smoke | pending |
 | F07 | Validação técnica do piloto, replicabilidade deka/demo2 e abertura de BLOCKER-PROD | pending |
-| F08 | Serviços reais e produção inicial: WAHA/IA, e-mail, domínio, orçamento, backup/retorno e dados autorizados | pending |
+| F08 | Serviços reais e produção inicial: WAHA/IA, e-mail, domínio, orçamento, backup/retorno e onboarding configurável | pending |
 | F09 | Piloto Deka acompanhado, com baseline/metas, pedidos, separação, tempo e qualidade/custo da IA medidos | pending |
 | F10 | Segunda empresa real operando por configuração, com preço aceito; gate da expansão comercial | pending |
 | F11 | Administração da plataforma, empresas/equipes, suporte limitado e auditado, cadastro e entrada guiada | pending — ativação paga depende da F12 |
@@ -103,7 +130,7 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 | F16 | Marca do SaaS e presets configuráveis; profundidade de templates, white-label e domínios por cliente a definir | pending |
 | F17 | Operação, capacidade/recuperação, suporte, atualização, regressão e aceite comercial pelo proprietário | pending |
 
-Dependência principal: F00/F01 → F02 → F03 → F04 → F05 → F06 → F07 → F08 → F09 → F10. F11/F12 fecham juntas o onboarding pago; F13–F16 podem avançar em paralelo com contratos definidos. F17 reúne a jornada comercial e os critérios de operação. Nenhuma fase futura recebe `done` por existir código equivalente no upstream.
+Dependência técnica: F00/F01 → F02 → F03 → F04 → F05 → F06 → F07. F11/F12 fecham juntas o onboarding pago; F13–F16 avançam com contratos definidos. F08 depende das entradas/autorização para serviços reais. D48 permite concluir a construção F11–F17 antes das evidências reais F09/F10; piloto e validação de mercado permanecem marcos separados, sem bloquear o software. F17 reúne a jornada comercial e os critérios de operação. Nenhuma fase futura recebe `done` por existir código equivalente no upstream.
 
 ## Módulos — orientação vigente e estado da integração
 
@@ -160,8 +187,8 @@ Tipos: `credential_real`, `commercial`, `cost`, `production`, `real_message`, `r
 
 | Id | Tema | Situação vigente | Necessário antes de |
 |---|---|---|---|
-| P-F02-01 | Data que organiza pedidos do dia | O proprietário pediu mantê-la conscientemente pendente até confirmar com a Deka. Não assumir criação, produção ou entrega como regra aprovada | F02 dependente do recorte operacional |
-| P-F02-02…P-F02-08 | Unidades/embalagens, preço PJ, confirmação, corte/janelas, exceções, impressão, áudio e metas | Perguntas e cenários no desenho F02; não inventar conversões, preços, prazo ou liberação parcial | Tasks dependentes F02–F05 |
+| P-F02-01 | Data que organiza pedidos do dia | Pendente de configuração pela Deka após receber acesso. D48: a consulta exige critério explícito, sem assumir uma regra comercial | Uso operacional pela Deka; não bloqueia a construção |
+| P-F02-02…P-F02-08 | Unidades/embalagens, preço PJ, confirmação, corte/janelas, exceções, impressão, áudio e metas | Perguntas e cenários no desenho F02; configuração futura sem inventar conversões, preços, prazo ou liberação parcial | Operação dependente da configuração e avaliação real do piloto; não bloqueia a engenharia genérica |
 | D03 | Hosting/staging | Docker Compose nesta VPS é referência; Supabase local/self-hosted foi escolha de desenvolvimento. Capacidade e opção comercial precisam de decisão | F06/F08 |
 | Orçamento | Custos mensais e contratação | [Orçamento proposto](docs/product/ORCAMENTO-PROPOSTO.md) aberto para revisão: até R$300/mês adicionais no piloto, condicionado à capacidade da VPS e à ausência de nova assinatura de banco; R$600–1.200/mês na preparação comercial. Nenhum valor aprovado ou gasto autorizado | Contratação e serviços reais |
 | Prazo | Início e datas | Desejo de começar o quanto antes; nenhuma data calendário, duração de fase ou prazo final foi fixado | Compromissos de entrega |
