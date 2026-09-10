@@ -1,32 +1,41 @@
 # F02/T04 — matriz auditável das APIs do CRM
 
-Base lida: checkpoint T03 `ef4e32ecf75cebe891e8013da049a2488dcaae84`, somado ao patch T04 mantido neste diretório. Este mapa é inventário e régua; ele não declara a T04 concluída.
+Base implementada e executada: `5f3df2cf064e9c441d228ce3a956201e5403d692`.
+O recorte E2E do `verify05` aprovou `13/13`; o gate integral terminou NOT READY
+com `mutants_killed=23/27`, pelas falhas dos mecanismos 01/02/03/26. Este mapa registra a prova observada sem declarar F02 concluída.
 
 ## Denominadores
 
-O inventário lê 18 módulos de rota e 29 operações HTTP reais, listadas em `operations.txt`:
+O inventário final lê 21 módulos de rota e 34 operações HTTP reais, listadas em
+`f02-t04-api-operations.txt:1-34` @ `5f3df2cf`:
 
-- 14 leituras e 15 escritas;
+- 17 leituras e 17 escritas;
 - 5 identidades relevantes por operação: `viewer`, `agent`, `manager`, `support_readonly` e sessão ausente;
-- `role_cells = 29 × 5 = 145`;
-- duas posições do mesmo membro A/B: A ativa e B ativa;
-- `active_org_cells = 29 × 2 = 58`;
+- `role_cells = 34 × 5 = 170`, como inventário/composição de guardas e papéis;
+- as 170 células **não** representam 170 requisições HTTP executadas;
+- o recorte HTTP histórico usa duas posições do mesmo membro, A ativa e B ativa,
+  sobre as 29 operações originais: `active_org_cells = 29 × 2 = 58/58`;
 - 9 tabelas de domínio F02 exercitadas pelo isolamento RLS geral: `contacts`, `crm_companies`, `catalog_products`, `crm_orders`, `crm_order_items`, `crm_order_events`, `crm_notes`, `crm_tasks`, `crm_task_events`. Os receipts privados têm provas próprias e não entram como entidade HTTP.
 
 Expectativa de papel por classe:
 
-| classe                         | operações | células |                                          permitidas |                                              negadas |
-| ------------------------------ | --------: | ------: | --------------------------------------------------: | ---------------------------------------------------: |
-| leitura `viewer+`              |        14 |      70 | 56 (`viewer`, `agent`, `manager`, suporte readonly) |                                      14 (sem sessão) |
-| escrita `agent+`               |        12 |      60 |                             24 (`agent`, `manager`) |          36 (`viewer`, suporte readonly, sem sessão) |
-| escrita de catálogo `manager+` |         3 |      15 |                                       3 (`manager`) | 12 (`viewer`, `agent`, suporte readonly, sem sessão) |
-| **total**                      |    **29** | **145** |                                              **83** |                                               **62** |
+| classe                                    | operações | células |                                          permitidas |                                              negadas |
+| ----------------------------------------- | --------: | ------: | --------------------------------------------------: | ---------------------------------------------------: |
+| leitura `viewer+`                         |        17 |      85 | 68 (`viewer`, `agent`, `manager`, suporte readonly) |                                      17 (sem sessão) |
+| escrita `agent+`                          |        13 |      65 |                             26 (`agent`, `manager`) |          39 (`viewer`, suporte readonly, sem sessão) |
+| escrita de catálogo/configuração `manager+` |       4 |      20 |                                       4 (`manager`) | 16 (`viewer`, `agent`, suporte readonly, sem sessão) |
+| **total de composição**                   |    **34** | **170** |                                              **98** |                                               **72** |
 
-A coluna “prova” distingue camadas: `G` guard de rota, `A` comportamento HTTP, `S` serviço transacional, `R` RLS/constraints, `E` navegador real, `T` prova preparada fora da árvore. Uma prova de uma camada não é contada como se cobrisse outra.
+A coluna “prova” distingue camadas: `G` guard de rota, `A` comportamento HTTP,
+`S` serviço transacional, `R` RLS/constraints, `E` navegador real e `T` teste de
+organização ativa promovido e depois executado. Uma prova de uma camada não é
+contada como se cobrisse outra. A última coluna preserva as lacunas registradas
+no checkpoint inicial; elas são históricas e não substituem o estado final
+observado após a tabela.
 
 ## Matriz entidade × operação
 
-| ID  | entidade / operação              | papel mínimo | escopo ativo na borda                                          | prova existente                                                                                                                                                                                                 | lacuna material                                                                       |
+| ID  | entidade / operação              | papel mínimo | escopo ativo na borda                                          | prova existente                                                                                                                                                                                                 | lacuna no checkpoint inicial (histórica)                                               |
 | --- | -------------------------------- | ------------ | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | C01 | `GET /contacts`                  | viewer       | `resolveActiveOrg` → handler                                   | E: `f02-crm-orders.spec.ts:92-99`, A(handler): `contatos-lista-ordenacao.test.ts`                                                                                                                               | falta 401 direto da rota; não usa `requireRole`                                       |
 | C02 | `POST /contacts`                 | agent        | `authz.org.orgId`                                              | E: `f02-crm-cadastros.spec.ts:130-139`; T: `f02-api-active-org.spec.ts`; R: `f02-t01-crm-schema.test.ts:176-276`                                                                                                | executar a prova A/B preparada; suporte readonly continua na matriz de papel          |
@@ -58,69 +67,87 @@ A coluna “prova” distingue camadas: `G` guard de rota, `A` comportamento HTT
 | L03 | `PATCH /tasks/[id]`              | agent        | org/id; linked 409; contato pré-validado                       | A: `tarefas-rota-nao-tem-porta-dos-fundos.test.ts:346-541`; E: legado A `f02-crm-work.spec.ts:391-402`; T: próprio/foreign A/B em `f02-api-active-org.spec.ts`                                                  | executar A/B preparado; suporte readonly continua na matriz de papel                  |
 | L04 | `DELETE /tasks/[id]`             | agent        | org/id; linked 409                                             | A: `tarefas-rota-nao-tem-porta-dos-fundos.test.ts:346-551`; E: legado A `f02-crm-work.spec.ts:403-412`; T: próprio/foreign A/B em `f02-api-active-org.spec.ts`                                                  | executar A/B preparado; suporte readonly continua na matriz de papel                  |
 
-## Cobertura por camada
+## Ampliação integrada de T08/T10/T12
 
-### Guard de sessão e papel
+As cinco operações acrescentadas ao inventário original estão implementadas no
+mesmo commit da prova final:
 
-- `rotas-api-tem-gate-de-papel.test.ts:147-180` garante que rota nova não nasce sem gate; C06/C07 já foram removidas da dívida datada após receberem gate.
-- `f02-api-session-composition.test.ts` preparado chama o ramo real `loadAuthUser() === null` de `requireRole`, exige 401 `unauthenticated`, conecta 27 handlers ao gate com o mínimo literal esperado e chama C01/C03 reais com `getUser() = null`. Resultado focal observado fora da árvore: `session_absent=29/29` por composição.
-- `rbac-matrix.test.ts` mede todas as permissões D15 × três papéis e o papel nulo. Isso prova o núcleo `orders.write`, `tasks.create`, `notes.create`; não prova que cada rota chamou o gate certo.
-- O mesmo teste focal exerce a tabela real de rank `viewer/agent/manager` contra os três mínimos usados. Junto do scanner método→mínimo, isso dá proveniência às 87 células de papel tenant sem repetir 87 mocks de handler.
-- `f02-api-support-readonly-scanner.test.ts` preparado conecta `requireSupportWrite()` a `15/15` escritas e reprova `15/15` fontes mutadas em memória com a chamada removida. `suporte-guardas.test.ts` continua sendo a prova comportamental do 403 readonly.
-- `f02-support-readonly-api.spec.ts` abre e encerra uma sessão real de suporte readonly, sem membership no tenant observado e sem depender de Realtime/WAHA. Ela lê cadastros, catálogo, pedidos e trabalho (`4/4` grupos), recusa uma escrita válida em cada grupo (`4/4`) e compara estado, recibo e auditoria antes/depois.
+| ID  | operação                                | papel mínimo | prova observada |
+| --- | --------------------------------------- | ------------ | --------------- |
+| S01 | `GET /settings/commercial`              | viewer       | configuração A/B no navegador |
+| S02 | `PATCH /settings/commercial`            | manager      | persistência A/B e recusa do viewer |
+| D01 | `GET /crm-orders/daily`                 | viewer       | daily A/B com recorte, fuso, 501 itens e PDF completo |
+| K01 | `GET /crm-orders/[id]/checks`           | viewer       | leitura própria/cross-tenant e histórico A/B |
+| K02 | `POST /crm-orders/[id]/checks`          | agent        | pendente/parcial/completa, replay, revisão vencida e viewer 403 |
 
-### API e organização ativa
+Essas cinco operações completam `34/34` no inventário e na composição. Elas não
+são somadas ao denominador HTTP histórico de `58/58`, pois foram exercitadas por
+casos integrados com recorte diferente.
 
-- Prova executada simétrica A ativa/B ativa existe para 13/29 operações: C01, C06–C07, P01, O01–O04, N01–N02 e T01–T03. Isso corresponde a `26/58 active_org_cells`.
-- C06/C07 passaram nas quatro células do navegador final01: leitura própria 200 e contato estrangeiro 404 nos dois sentidos. Seus nove testes unitários permanecem como cobertura focal separada.
-- As 16 operações C02–C05, E01–E05, P02–P04 e L01–L04 passaram nas `32/58` células reais de `f02-api-active-org.spec.ts`. Com as 26 anteriores, o recorte histórico fecha `58/58` células executadas.
-- As recusas de PATCH/DELETE por ID da outra organização comparam estado e auditoria antes/depois. P04 e C05 agora têm prova HTTP simétrica, além das provas transacionais dos serviços de pedidos e trabalho.
+## Cobertura final observada por camada
 
-### Serviço
+### Sessão, papel e suporte
 
-- Pedido: `crm-orders.test.ts`, 20/20, cobre autorização transacional, papel, org suspensa/revogada, IDs cruzados, replay, revisão, rollback e LGPD.
-- Notas/tarefas vinculadas: `crm-work.test.ts`, 15/15, cobre autorização, IDs cruzados, concorrência, journal/audit atômicos e LGPD.
-- Empresas, catálogo, contatos e tarefas legadas escrevem via cliente de sessão/handlers; sua autoridade final é guard + RLS, sem um serviço transacional F02 equivalente.
+- `tests/unit/f02-api-session-composition.test.ts:299-381` @ `5f3df2cf`
+  chama a recusa 401 real, conecta `32/34` operações a `requireRole` com o mínimo
+  esperado e chama os dois leitores manuais C01/C03. O resultado é composição,
+  não 170 chamadas HTTP.
+- `tests/unit/f02-api-support-readonly-scanner.test.ts:92-110` @ `5f3df2cf`
+  conecta as `17/17` escritas a `requireSupportWrite` e detecta `17/17` remoções
+  em memória. Isso prova a cerca em cada handler; o caso HTTP usa quatro escritas
+  representativas.
+- `tests/e2e/f02-support-readonly-api.spec.ts:217-380` @ `5f3df2cf` abriu suporte
+  sem membership no tenant observado, leu `4/4` grupos, recusou `4/4` escritas e
+  preservou contato, catálogo, pedidos, notas e recibo. Pedidos/notas produziram
+  exatamente `2` registros `authz.denied`, correlacionados ao header
+  `x-request-id`, ator, organização, recurso e sessão de suporte (`:325-355`).
+- O proxy gera ou ecoa UUID canônico e o encaminha à rota conforme
+  `tests/unit/request-id-correlation.test.ts:10-65` @ `5f3df2cf`. O navegador
+  comprovou um ID gerado e outro fornecido pelo cliente na correlação real acima.
 
-### RLS e constraints
+### Organização ativa e navegador
 
-- `rls-isolation.test.ts:379-458` inclui as 9 tabelas F02 listadas no denominador e mede leitura própria + recusa A→B; os testes F02 específicos completam direção B, ACL e papel conforme a tabela.
-- Empresas/contatos: `f02-t01-crm-schema.test.ts:176-335` prova viewer read-only, agent próprio/cross e suporte readonly.
-- Catálogo: `catalogo-so-gestor-muda-preco.test.ts:101-215` prova agent lê mas não escreve, manager A/B escreve só o próprio e anon sem grant.
-- Pedidos: `f02-t02-order-schema.test.ts:123-297` prova domínio read-only, receipts privados, leitura A/B e journal append-only.
-- Trabalho: `f02-t03-work-schema.test.ts:105-296` prova notas/eventos append-only, receipts privados, A/B, linked task sem DML direto e legado gravável.
-- O catálogo reconciliado de 146 testes de schema/RLS/LGPD é evidência de camada banco. Ele não aumenta o numerador das 58 células de organização ativa da API.
+- O recorte HTTP original permanece `58/58`: `26/58` células vieram das jornadas
+  existentes das operações C01, C06–C07, P01, O01–O04, N01–N02 e T01–T03;
+  `32/58` vieram das 16 operações simétricas em
+  `tests/e2e/f02-api-active-org.spec.ts:372-416` @ `5f3df2cf`.
+- C06/C07 devolveram 200 para o contato próprio e 404 para o estrangeiro nos dois
+  sentidos (`f02-api-active-org.spec.ts:387-416`). PATCH/DELETE estrangeiros
+  conservaram o estado comercial e emitiram somente a auditoria de recusa esperada
+  (`f02-api-active-org.spec.ts:278-349`).
+- Navegação A/B passou em `tests/e2e/f02-crm-navigation.spec.ts:65-334` e segue
+  cobrindo catálogo completo, ficha e início do pedido. Daily/checks A/B passou em
+  `tests/e2e/f02-daily-checks.spec.ts:168-385`: 501 itens, PDF com os 501 índices
+  duas vezes, impressão sem escrita, conferência, replay, revisão vencida,
+  isolamento e viewer 403 (`:180-250`, `:252-380`).
 
-## Estado auditável do checkpoint em construção
+### Banco e limites da contagem
 
-- Inventário: `route_modules=18/18`, `http_operations=29/29`.
-- Papéis: `role_cells=145/145` catalogadas; a composição liga a tabela real de permissões aos handlers. Não são 145 chamadas HTTP independentes.
-- Os dois scanners e leitores focais foram promovidos. Composição de sessão ausente: `29/29`; cercas de escrita readonly: `15/15`, com `15/15` remoções detectadas em memória.
-- Organização ativa: `58/58` células de navegador executadas; os dois testes active-org, incluindo C06/C07, passaram no relatório final01.
-- Suporte readonly real: o caso do navegador final01 foi executado e falhou; leitura `4/4` e recusa `4/4` não são declaradas aprovadas.
-- Banco F02: `schema_rls_lgpd=146/146` reconciliados; `rls_domain_tables=9/9` mapeadas. Recibos privados têm provas próprias.
-- O catálogo falhou na navegação com 509 produtos por timeout da RLS legada de escrita. A migration 9011 separa comandos; a medição REST autenticada posterior retornou total509/50linhas em99ms e total509/500linhas em74ms. A navegação ainda precisa ser repetida após essa correção.
+- `tests/integration/rls-isolation.test.ts:379-458` cobre as 9 tabelas F02 do
+  denominador; as provas específicas permanecem referenciadas na matriz.
+- O verify05 aprovou `unit=8380/8380`, `integration=72/72` e `db=1585/1585`,
+  registrados respectivamente em
+  `.verify-logs/f02-final-05/run.w9FWFLk8/{unit,integration,db}.json:1`.
+  Essas contagens globais não aumentam os denominadores HTTP `58/58` nem as
+  quatro escritas representativas do caso de suporte.
 
-A tabela acima preserva os links de preparação por operação; este estado prevalece sobre seus rótulos históricos “preparado”. F02 e sua jornada completa continuam em andamento.
+## Execução verify05 e histórico das tentativas
 
+O relatório `.verify-logs/f02-final-05/run.w9FWFLk8/e2e.json:101-190,599-752`
+registra `13/13` casos esperados, `skipped=0`, `unexpected=0`, `flaky=0` e
+`duration=999983.488ms`. Nele passaram a matriz de organização ativa, C06/C07,
+configuração comercial, navegação A/B, pedidos A/B, trabalho A/B, daily/checks
+A/B e suporte readonly.
 
-## Ampliação T08/T10/T12 (09/09/2026)
+As tentativas anteriores continuam como histórico: `final01` fechou `9/13` e
+expôs falhas de espera na navegação, extração do PDF e captura da resposta de
+suporte; `repairs03` comprovou daily/checks e isolou a captura de saída; `repairs04`
+revelou que o proxy respondia com ID diferente da auditoria. A ADR-015 levou ao
+encaminhamento canônico comprovado no `final05`; nenhum desses resultados parciais
+é reclassificado retroativamente como aprovação integral.
 
-O inventário atual soma 34 operações em 21 módulos (17 leituras/17 escritas).
-A composição de sessão cobre 32 handlers com requireRole e os dois leitores
-legados com autenticação explícita; suporte readonly tem 17/17 escritores
-conectados à guarda e 17 mutações de conexão detectadas. Esses números são
-composição de testes e não representam 34 ou 170 requisições HTTP realizadas.
-O inventário nominal está em f02-t04-api-operations.txt.
-
-| ID | Operação nova | Autorização | Prova preparada/observada |
-|---|---|---|---|
-| S01 | GET settings/commercial | viewer+, suporte ativo; plataforma direta recusada no serviço | Unit/integração comercial e jornada API comercial A/B |
-| S02 | PATCH settings/commercial | manager/admin; readonly negado; full support revalidado | Unit/integração comercial, auditoria/aliases e jornada API |
-| D01 | GET crm-orders/daily | viewer+, suporte ativo; plataforma direta recusada | Unit e integração diária A/B, 501 itens/fuso; navegador final01 A/B executado sem aprovação |
-| K01 | GET crm-orders/:id/checks | viewer+, invoker/RLS, plataforma direta recusada | Unit/API e DB; navegador final01 A/B executado sem aprovação |
-| K02 | POST crm-orders/:id/checks | agente humano+; suporte negado; ator/organização revalidados | Unit/API e integração transacional; navegador final01 A/B executado sem aprovação |
-
-As `58/58` células HTTP anteriores incluem a promoção de C06/C07 no final01.
-As novas provas não são somadas a elas como se tivessem o mesmo recorte. O
-relatório final01 fechou `9/13`; daily/checks e suporte seguem sem aprovação.
+Tipos, lint, build, shell, unit, integração, banco e os 13 E2E já passaram no
+verify05 sobre `5f3df2cf`. O gate executou 27 scripts mutantes e aprovou 23/27; os mecanismos
+01/02/03/26 exigiram reparo. O número 30 identifica o mutante de encaminhamento de request ID e não
+é denominador. Portanto esta matriz não declara aprovação do gate, F02 pronta,
+validação visual, operação Deka, serviço real ou produção.

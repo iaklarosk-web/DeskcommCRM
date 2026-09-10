@@ -47,4 +47,4 @@ D47/D48 continuam vigentes: concluir F02 e pausar antes da próxima fase.
 
 ## Commit
 
-Decisão registrada antes da implementação; código e evidência final pendentes.
+Implementação: `5f3df2cf064e9c441d228ce3a956201e5403d692`. Decisão registrada antes da implementação; validação final e gate integral pendentes.

@@ -1,8 +1,8 @@
 ---
-updated_at: 2026-09-10T00:52:44Z
-head_commit: aa831343a0d91e2ec130b12bd52c2146dca9cc77   # reparos da regressão T13; navegador e novo gate pendentes
+updated_at: 2026-09-10T03:30:03Z
+head_commit: 4ec7bb5677674d92f5b8ea484d81efe279460182   # mecanismos de prova corrigidos; gate integral06 em execução
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
-plan_version: "2.3 (2026-09-09); D38–D48; ADR-006…014"
+plan_version: "2.3 (2026-09-09); D38–D48; ADR-006…015"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
 current_phase: F02
 next_task: F02-T13
@@ -11,34 +11,49 @@ baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
 hosting_confirmed: no          # confirmar D03 antes da F06; orçamento proposto não aprova contratação
 build_env: "Codex na VPS, worktree DeskcommCRM-v1.17.0; validação em serviços/bancos descartáveis; WHATSAPP_MODE=mock AI_PROVIDER=mock"
-verify_summary_last_context: "HISTÓRICO de 08/09/2026, anterior à construção F02. Provas focais atuais abaixo; nenhum novo gate completo publicado."
+verify_summary_last_context: "Gate F02 de 10/09/2026, fonte5f3df2cf: funcionais aprovados, 23/27 scripts mutantes; NOT READY. Reparo4ec7bb56 em nova validação integral06."
 verify_summary_last: |
   VERIFY SUMMARY
-  scope=revalidation phase=F01 current_phase=F02
+  scope=phase phase=F02 current_phase=F02
   build=ok lint=ok typecheck=ok shell=ok
-  unit=7965/7966 integration=6/6 db=1499/1501 e2e=pending baseline_n0=8997
-  baseline_comparable: scope=unit+db passed=9464 required=8738 full_n0=pending
-  isolation: tables=117 ops=4 dirs=2 leaks=0 (material_cross_org=90/117)
-  rls-coverage: tables_with_org_id=117 policies_found=109 missing=0 service_only_with_grant=0
-  rbac: roles=3 denied_expected=17 denied_actual=17
+  unit=8380/8380 integration=72/72 db=1585/1585 e2e=13/13 baseline_n0=8997
+  baseline_comparable: scope=unit+db passed=9965 required=8738 full_n0=pending
+  e2e_scope: F02-required passed=13/13 specs=7/7
+  isolation: tables=127 ops=4 dirs=2 leaks=0 (material_cross_org=91/127)
+  rls-coverage: tables_with_org_id=127 policies_found=116 missing=0 service_only_with_grant=0
+  rbac: roles=3 denied_expected=19 denied_actual=19
   entitlement: usage_events_written=2
   ai_eval: cases=pending pass=pending unknown=pending injection=pending cross_tenant=pending provider_calls_at_zero_balance=pending
   handoff: ai_msgs_after_handoff=pending summary=pending assignee=pending notify=pending
   reminder: runs=pending sent=pending duplicates=pending
   webhook: replay=pending stored=pending tables_checked=pending
-  replicability: e2e[deka]=pending e2e[demo2]=pending src_diff_lines=pending grep_deka_in_src=0
-  secrets: files_scanned=361 findings=0
-  tests_deleted=0 tests_skipped=1 expected_failures=2 tests_failed=0 tests_pending=0 mutants_killed=2/2
-  debt_known=3 skip_only_occurrences=16 violations=0
-  debt: unit expected_failure tests/unit/agenda-separar-historico.test.tsx :: o compromisso EM ANDAMENTO ainda é Próximos — começou, mas não terminou
-  debt: db expected_failure tests/invariants/followup-reactivity.test.ts :: STOP alcança também o enrollment PAUSADO MANUALMENTE — opt-out não abre exceção de estado
-  debt: db skipped tests/invariants/webhooks-inbound.test.ts :: rate limit 429 após estourar a janela — coberto por unit test do fallback in-memory
-  STATUS: REVALIDATED WITH DEBT (F01)
+  replicability: e2e[fictitious_A_B]=13/13 specs=7/7 grep_deka_in_src=0
+  secrets: files_scanned=396 findings=0
+  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=23/27
+  debt_known=0 skip_only_occurrences=15 violations=1
+  violation: Mutante ausente ou vivo
+  STATUS: NOT READY
 ---
 
 # BUILD-STATE
 
-## Estado vigente — continuação e recuperação de 09/09/2026
+## Estado vigente — validação final em 10/09/2026
+
+F02 continua em andamento. O gate05 sobre `5f3df2cf` aprovou tipos, lint, build,
+shell, unit8380/8380, integração72/72, banco1585/1585 e navegador13/13, mas saiu1
+com23/27 scripts mutantes. Os mecanismos01/02/03/26 foram corrigidos no
+checkpoint `4ec7bb56`, com provas focais aprovadas. O gate integral06 está em
+execução; somente sua conclusão pode fechar a fase. [Evidência T13](docs/migration/evidence/construction-f02-t13-20260909.txt).
+
+D47: concluir F02, entregar evidências/limites/consumo e pausar. F03 não foi
+iniciada e depende de nova mensagem do proprietário. D48: a Deka preencherá
+seus dados após acesso; a engenharia é validada com empresas fictícias.
+
+A VPS foi reiniciada manualmente pelo painel; o trabalho Git e as migrations
+foram preservados. A causa original não foi estabelecida. Os testes pesados
+rodam em série, com a reserva de swap existente reativada. A [recuperação](docs/migration/evidence/construction-f02-recovery-20260909.txt) registra os limites da checagem.
+
+## Histórico da recuperação e dos checkpoints parciais de 09/09/2026
 
 D47 exige pausa ao concluir F02, com evidências e consumo; F03 só começa após
 nova mensagem do proprietário. D48 determina que a Deka informará seus dados
@@ -267,3 +282,32 @@ STATUS: READY (F01)
 ## Regra de atualização
 
 Migrations distinguem `escrita`, `aplicada` e `verificada` (G-24), sempre indicando o ambiente: uma aplicação descartável não significa aplicação em banco de cliente. Ao fechar task/fase ou revalidação, registrar commit, comandos, contagens/denominadores, limites e evidência observada; o fechamento atual seguirá ADR-007. Alterar `verify_summary_last` somente com resultado real, preservando o histórico anterior separadamente. Registros humanos continuam exclusivos do proprietário. Esta revisão atualiza planejamento e estado documental, sem concluir fase, aprovar custo ou produzir validação real.
+
+
+## Resumo preservado da revalidação de 08/09/2026
+
+Histórico anterior à F02, preservado do cabeçalho.
+
+```text
+VERIFY SUMMARY
+scope=revalidation phase=F01 current_phase=F02
+build=ok lint=ok typecheck=ok shell=ok
+unit=7965/7966 integration=6/6 db=1499/1501 e2e=pending baseline_n0=8997
+baseline_comparable: scope=unit+db passed=9464 required=8738 full_n0=pending
+isolation: tables=117 ops=4 dirs=2 leaks=0 (material_cross_org=90/117)
+rls-coverage: tables_with_org_id=117 policies_found=109 missing=0 service_only_with_grant=0
+rbac: roles=3 denied_expected=17 denied_actual=17
+entitlement: usage_events_written=2
+ai_eval: cases=pending pass=pending unknown=pending injection=pending cross_tenant=pending provider_calls_at_zero_balance=pending
+handoff: ai_msgs_after_handoff=pending summary=pending assignee=pending notify=pending
+reminder: runs=pending sent=pending duplicates=pending
+webhook: replay=pending stored=pending tables_checked=pending
+replicability: e2e[deka]=pending e2e[demo2]=pending src_diff_lines=pending grep_deka_in_src=0
+secrets: files_scanned=361 findings=0
+tests_deleted=0 tests_skipped=1 expected_failures=2 tests_failed=0 tests_pending=0 mutants_killed=2/2
+debt_known=3 skip_only_occurrences=16 violations=0
+debt: unit expected_failure tests/unit/agenda-separar-historico.test.tsx :: o compromisso EM ANDAMENTO ainda é Próximos — começou, mas não terminou
+debt: db expected_failure tests/invariants/followup-reactivity.test.ts :: STOP alcança também o enrollment PAUSADO MANUALMENTE — opt-out não abre exceção de estado
+debt: db skipped tests/invariants/webhooks-inbound.test.ts :: rate limit 429 após estourar a janela — coberto por unit test do fallback in-memory
+STATUS: REVALIDATED WITH DEBT (F01)
+```

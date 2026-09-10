@@ -123,3 +123,54 @@ um UUID válido fornecido pelo cliente, ambos correlacionados no banco.
 Typecheck focal inicial com heap1536MB falhou por limite do V8 (exit134,75,48s),
 não por erro TypeScript ou reinício da VPS; a repetição usa3072MB, já previsto
 para tipos/build no verificador. Testes unitários mantêm1536MB/um worker.
+
+Checkpoint5f3df2cf064e9c441d228ce3a956201e5403d692 publicado em PRdraft2.
+Focal request-id final: unit34/34 em5arquivos,19,89s; mutante30 killed1/1,
+5,83s. Rechecagem05 request-id: build278,92s exit0; suporte1/1,43,15s de
+Playwright,0skips/retries/flaky. Entrada/saída pela UI, leituras, recusas403,
+ID gerado e UUID enviado pelo cliente,2authz.denied correlacionados e nenhum
+efeito comercial indevido passaram. Snapshot de inputs antes/depois igual.
+O typecheck com3072MB havia encontrado duas nulabilidades apenas nos testes
+PDF/support; foram corrigidas no checkpoint. Gate05 já revalidou tipos,exit0,
+19s. Gate integral atual:.verify-logs/f02-final-05/run.w9FWFLk8, em andamento.
+CI34427290205 em andamento; Docker34427290227success, sem publicação/deploy.
+
+CI34427290205 @5f3df2cf: success. Unit8380/8380 em788arquivos (504,60s)
+e DB1585/1585 em194arquivos (412,38s). Docker34427290227success. Log privado
+completo em .verify-logs/ci-34427290205-success.log; IDs/contagens confirmados.
+Gate05 local: tipos19s/lint135s/build126s/shell64s, todos exit0; suíte unitária
+integral em execução. A CI verde não é apresentada como saída0 do verificador.
+
+
+GATE INTEGRAL 05 — 10/09/2026 03:20:59 UTC, NOT READY
+Fonte congelada: 5f3df2cf064e9c441d228ce3a956201e5403d692. Exit1, 4910.03s.
+Artefatos: .verify-logs/f02-final-05/run.w9FWFLk8; JSONs integrais e PDFs A/B preservados.
+Inputs: 3336/3336 arquivos, SHA256 antes/depois 21cd14d853669355b7a13d0769889ab24e47b18085f47ea1507a195834af9681.
+VERIFY SUMMARY
+scope=phase phase=F02 current_phase=F02
+build=ok lint=ok typecheck=ok shell=ok
+unit=8380/8380 integration=72/72 db=1585/1585 e2e=13/13 baseline_n0=8997
+baseline_comparable: scope=unit+db passed=9965 required=8738 full_n0=pending
+e2e_scope: F02-required passed=13/13 specs=7/7
+isolation: tables=127 ops=4 dirs=2 leaks=0 (material_cross_org=91/127)
+rls-coverage: tables_with_org_id=127 policies_found=116 missing=0 service_only_with_grant=0
+rbac: roles=3 denied_expected=19 denied_actual=19
+entitlement: usage_events_written=2
+ai_eval: cases=pending pass=pending unknown=pending injection=pending cross_tenant=pending provider_calls_at_zero_balance=pending
+handoff: ai_msgs_after_handoff=pending summary=pending assignee=pending notify=pending
+reminder: runs=pending sent=pending duplicates=pending
+webhook: replay=pending stored=pending tables_checked=pending
+replicability: e2e[fictitious_A_B]=13/13 specs=7/7 grep_deka_in_src=0
+secrets: files_scanned=396 findings=0
+tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=23/27
+debt_known=0 skip_only_occurrences=15 violations=1
+violation: Mutante ausente ou vivo
+STATUS: NOT READY
+
+As quatro falhas são dos scripts01,02,03,26; a última numeração30 não é denominador: existem27 scripts.
+01: terminal repetia nomes; agora contatos mantêm guardas comerciais apesar de RLS aberta, invalidando a premissa antiga de8 falhas só nessa tabela. Reparo preserva8 direções/operações com tabela-prova descartável controlada por RLS e relatórioJSON, sem remover guardas de contatos.
+02/03: pacote temporário do report.mjs não incluía f02-e2e.mjs; importar módulo ausente corretamente não foi aceito como mutante morto. Dependência copiada; rechecagem02=1/1,03=5/5,gate.cases43/43.
+26: escapesANSI impediam reconhecimento da asserção jest-dom; título do caso plataforma estava obsoleto. Normalização e título real preservam falha nominal única; rechecagem5/5.
+Correções restritas aos mecanismos de teste; nova execução integral permanece necessária. F02 ainda não concluída; F03 não iniciada.
+
+Rechecagem01 concluída: exit0; controle9/9; oito asserções distintas de vazamento8/8; script1/1. .verify-logs/f02-mutant-repair-01/{run.log,result.exit}. Nenhuma expectativa funcional enfraquecida nem teste pulado; a contagem abandona duplicação textual de títulos.
