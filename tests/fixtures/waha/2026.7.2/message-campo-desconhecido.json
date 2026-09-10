@@ -1,0 +1,24 @@
+{
+  "event": "message.any",
+  "session": "f03-sessao-ficticia",
+  "payload": {
+    "id": "false_5511900000004@c.us_3EB0F03UNK001",
+    "from": "5511900000004@c.us",
+    "to": "5511900000099@c.us",
+    "fromMe": false,
+    "body": "traz campo que o parser nao cataloga",
+    "type": "chat",
+    "hasMedia": false,
+    "timestamp": 1789000420,
+    "campoQueNinguemCatalogou": { "versao": 9, "origem": "waha-futuro" },
+    "_data": {
+      "pushName": "Cliente Ficticio Quatro",
+      "key": {
+        "remoteJid": "5511900000004@s.whatsapp.net",
+        "fromMe": false,
+        "id": "3EB0F03UNK001"
+      },
+      "message": { "conversation": "traz campo que o parser nao cataloga" }
+    }
+  }
+}

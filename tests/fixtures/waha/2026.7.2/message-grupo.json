@@ -1,0 +1,23 @@
+{
+  "event": "message.any",
+  "session": "f03-sessao-ficticia",
+  "payload": {
+    "id": "false_120363000000000001@g.us_3EB0F03GRP001",
+    "from": "120363000000000001@g.us",
+    "to": "5511900000099@c.us",
+    "fromMe": false,
+    "body": "mensagem de grupo, descarte esperado",
+    "type": "chat",
+    "hasMedia": false,
+    "timestamp": 1789000360,
+    "_data": {
+      "key": {
+        "remoteJid": "120363000000000001@g.us",
+        "participant": "5511900000003@s.whatsapp.net",
+        "fromMe": false,
+        "id": "3EB0F03GRP001"
+      },
+      "message": { "conversation": "mensagem de grupo, descarte esperado" }
+    }
+  }
+}
