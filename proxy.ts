@@ -2,6 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookieSecure } from "@/lib/supabase/cookie-secure";
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
+import { getRequestId } from "@/lib/api/request-id";
 import { isPublicPath } from "@/lib/auth/public-paths";
 import {
   verifyImpersonateCookieEdge,
@@ -11,16 +12,19 @@ import {
 const COOKIE_NAME = "sb-deskcomm-auth";
 
 export async function proxy(request: NextRequest) {
-  const response = NextResponse.next({ request: { headers: request.headers } });
-
-  // Inject X-Request-Id for downstream correlation (audit log, error wrappers).
-  const requestId = request.headers.get("x-request-id") ?? crypto.randomUUID();
-  response.headers.set("x-request-id", requestId);
-
   const { pathname, search } = request.nextUrl;
+  const requestId = getRequestId(request);
+  const requestHeaders = new Headers(request.headers);
+
+  // A rota, o wrapper e a auditoria recebem o mesmo ID que volta ao cliente.
+  requestHeaders.set("x-request-id", requestId);
   // Expose pathname to Server Components via header (used by onboarding layout).
+  requestHeaders.set("x-pathname", pathname);
+
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  // Mantém o fallback herdado para handlers que ainda não usam wrappers.
+  response.headers.set("x-request-id", requestId);
   response.headers.set("x-pathname", pathname);
-  request.headers.set("x-pathname", pathname);
 
   // EPIC-11: in dev we route by path (`/admin/*`); in prod the
   // `admin.deskcomm.com` sub-domain is mapped via Vercel rewrites to the same

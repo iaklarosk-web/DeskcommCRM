@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { getRequestId } from "@/lib/api/request-id";
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
@@ -15,7 +15,7 @@ const querySchema = workListSchema.extend({
 });
 
 export async function GET(req: Request): Promise<Response> {
-  const requestId = randomUUID();
+  const requestId = getRequestId(req);
   const parsed = querySchema.safeParse(Object.fromEntries(new URL(req.url).searchParams));
   if (!parsed.success)
     return fail("validation_failed", "Parâmetros inválidos.", 422, {

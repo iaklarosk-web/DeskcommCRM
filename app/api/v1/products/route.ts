@@ -1,4 +1,5 @@
 import { requireSupportWrite } from "@/lib/impersonate/support";
+import { getRequestId } from "@/lib/api/request-id";
 /**
  * GET  /api/v1/products — o catálogo da organização ativa.
  * POST /api/v1/products — cadastra um produto.
@@ -7,7 +8,6 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * é o motivo de este catálogo não morar na tabela da Nuvemshop, cuja policy é
  * org-flat sem checagem de papel.
  */
-import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 
 import { audit } from "@/lib/audit";
@@ -15,17 +15,14 @@ import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { catalogQuerySchema, listCatalogPage } from "@/lib/catalogo/listar";
 import { moedaDaOrganizacao } from "@/lib/catalogo/moeda-da-org";
-import {
-  COLUNAS_DO_PRODUTO,
-  produtoCreateSchema,
-} from "@/lib/schemas/produtos";
+import { COLUNAS_DO_PRODUTO, produtoCreateSchema } from "@/lib/schemas/produtos";
 import { createClient } from "@/lib/supabase/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest): Promise<Response> {
-  const requestId = randomUUID();
+  const requestId = getRequestId(req);
   const authz = await requireRole("viewer", {
     requestId,
     resource: "catalog_products",
@@ -45,11 +42,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       requestId,
     });
   const supabase = await createClient();
-  const { data, error, count } = await listCatalogPage(
-    supabase,
-    authz.org.orgId,
-    parsed.data,
-  );
+  const { data, error, count } = await listCatalogPage(supabase, authz.org.orgId, parsed.data);
   if (error || count === null)
     return fail("internal_error", t("Erro ao listar os produtos."), 500, {
       requestId,
@@ -65,7 +58,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
-  const requestId = randomUUID();
+  const requestId = getRequestId(req);
   const authz = await requireRole("manager", {
     requestId,
     resource: "catalog_products",
@@ -73,9 +66,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 
-  const parsed = produtoCreateSchema.safeParse(
-    await req.json().catch(() => null),
-  );
+  const parsed = produtoCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return fail("validation_failed", t("Dados inválidos."), 422, {
       requestId,

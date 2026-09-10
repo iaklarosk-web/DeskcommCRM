@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { getRequestId } from "@/lib/api/request-id";
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
@@ -13,7 +13,7 @@ const querySchema = z.strictObject({
 
 /** Journal autorizado do pedido, paginado sem copiar eventos de outro domínio. */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const requestId = randomUUID();
+  const requestId = getRequestId(req);
   const id = z.uuid().safeParse((await params).id);
   const query = querySchema.safeParse(Object.fromEntries(new URL(req.url).searchParams));
   if (!id.success || !query.success)

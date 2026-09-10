@@ -41,6 +41,11 @@ final e o aceite da fase ainda estão em andamento. Implementação não equival
 a validação do operador Deka, serviços reais ou produção. Todas as fixtures são
 fictícias, com WhatsApp/IA mock e sem envio externo.
 
+Conforme a [ADR-015](../decisions/ADR-015-request-id-canonico-F02.md), o inventário
+F02 de 21 módulos e 34 operações passou a usar o identificador canônico da
+requisição nos envelopes e auditorias. Implementação em validação; checkpoint final
+pendente.
+
 
 Saída da F00 (DIRETRIZ §6). Tudo abaixo cita `arquivo:linha @ c85f7d7`. O que não foi verificado está na seção 8.
 

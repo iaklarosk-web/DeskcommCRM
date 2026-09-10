@@ -1,10 +1,10 @@
 import { z } from "zod";
+import { getRequestId } from "@/lib/api/request-id";
 
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { logger } from "@/lib/logger";
-import { randomId } from "@/lib/random-id";
 import { createClient } from "@/lib/supabase/server";
 import { OrderAuthorizationError } from "@/src/crm/orders/authorization";
 import {
@@ -12,10 +12,7 @@ import {
   orderCheckListQuerySchema,
   orderChecksViewSchema,
 } from "@/src/crm/orders/checks-contracts";
-import {
-  OrderCheckServiceError,
-  recordOrderCheck,
-} from "@/src/crm/orders/checks-service";
+import { OrderCheckServiceError, recordOrderCheck } from "@/src/crm/orders/checks-service";
 
 export const dynamic = "force-dynamic";
 const orderIdSchema = z.uuid().transform((id) => id.toLowerCase());
@@ -24,25 +21,19 @@ const messages: Record<string, string> = {
   order_not_found: "Pedido não encontrado.",
   item_not_found: "Item não encontrado nesta revisão do pedido.",
   revision_conflict: "O pedido mudou. Recarregue antes de conferir.",
-  idempotency_conflict:
-    "Esta solicitação já foi usada com outros dados. Recarregue o pedido.",
+  idempotency_conflict: "Esta solicitação já foi usada com outros dados. Recarregue o pedido.",
   ordered_quantity_unavailable:
     "Informe a quantidade pedida antes de registrar uma quantidade conferida.",
-  checked_quantity_exceeds_ordered:
-    "A quantidade conferida não pode exceder a quantidade pedida.",
-  sale_unit_unavailable:
-    "Informe a unidade de venda antes de registrar uma quantidade conferida.",
+  checked_quantity_exceeds_ordered: "A quantidade conferida não pode exceder a quantidade pedida.",
+  sale_unit_unavailable: "Informe a unidade de venda antes de registrar uma quantidade conferida.",
   contact_unavailable: "O cliente deste pedido não está disponível.",
 };
 
 function commandFailure(error: unknown, requestId: string): Response {
   if (error instanceof OrderAuthorizationError)
-    return fail(
-      "forbidden",
-      "Você não tem permissão para conferir este pedido.",
-      403,
-      { requestId },
-    );
+    return fail("forbidden", "Você não tem permissão para conferir este pedido.", 403, {
+      requestId,
+    });
   if (error instanceof OrderCheckServiceError)
     return fail(
       error.code,
@@ -50,10 +41,7 @@ function commandFailure(error: unknown, requestId: string): Response {
       error.status,
       { requestId },
     );
-  const code =
-    error && typeof error === "object" && "code" in error
-      ? String(error.code)
-      : "";
+  const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
   if (["23503", "23505", "23514", "40001", "40P01"].includes(code))
     return fail(
       "concurrent_operation",
@@ -62,19 +50,14 @@ function commandFailure(error: unknown, requestId: string): Response {
       { requestId },
     );
   logger.error("crm_order_check_failed", { requestId });
-  return fail(
-    "internal_error",
-    "Não foi possível registrar a conferência.",
-    500,
-    { requestId },
-  );
+  return fail("internal_error", "Não foi possível registrar a conferência.", 500, { requestId });
 }
 
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const requestId = randomId();
+  const requestId = getRequestId(req);
   const orderId = orderIdSchema.safeParse((await params).id);
   const query = orderCheckListQuerySchema.safeParse(
     Object.fromEntries(new URL(req.url).searchParams),
@@ -90,12 +73,7 @@ export async function GET(
   });
   if (!authz.ok) return authz.response;
   if (authz.user.is_platform_admin && !authz.user.support)
-    return fail(
-      "forbidden",
-      "A conferência exige vínculo com a organização.",
-      403,
-      { requestId },
-    );
+    return fail("forbidden", "A conferência exige vínculo com a organização.", 403, { requestId });
   const db = await createClient();
   const result = await db.rpc("fn_crm_order_checks", {
     p_org: authz.org.orgId,
@@ -105,24 +83,13 @@ export async function GET(
   });
   if (result.error) {
     logger.error("crm_order_checks_read_failed", { requestId });
-    return fail(
-      "internal_error",
-      "Não foi possível carregar a conferência.",
-      500,
-      { requestId },
-    );
+    return fail("internal_error", "Não foi possível carregar a conferência.", 500, { requestId });
   }
-  if (result.data === null)
-    return fail("not_found", "Pedido não encontrado.", 404, { requestId });
+  if (result.data === null) return fail("not_found", "Pedido não encontrado.", 404, { requestId });
   const presented = orderChecksViewSchema.safeParse(result.data);
   if (!presented.success) {
     logger.error("crm_order_checks_shape_invalid", { requestId });
-    return fail(
-      "internal_error",
-      "Não foi possível apresentar a conferência.",
-      500,
-      { requestId },
-    );
+    return fail("internal_error", "Não foi possível apresentar a conferência.", 500, { requestId });
   }
   return ok(presented.data, { requestId });
 }
@@ -131,11 +98,9 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const requestId = randomId();
+  const requestId = getRequestId(req);
   const orderId = orderIdSchema.safeParse((await params).id);
-  const command = orderCheckCommandSchema.safeParse(
-    await req.json().catch(() => null),
-  );
+  const command = orderCheckCommandSchema.safeParse(await req.json().catch(() => null));
   if (!orderId.success || !command.success)
     return fail("validation_failed", "Revise os dados da conferência.", 422, {
       requestId,

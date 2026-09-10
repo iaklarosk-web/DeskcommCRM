@@ -164,7 +164,7 @@ for (const side of ["A", "B"] as const) {
       });
       await page.goto(`/app/orders/${draft.id}`);
       const detail = page.getByTestId("pedido-detalhe");
-      await expect(detail).toBeVisible();
+      await expect(detail).toBeVisible({ timeout: HTTP_TIMEOUT });
       await expect(detail.locator("header p")).toHaveText(`${snapshotName} · Rascunho`);
       await expect(detail.getByRole("link", { name: customer.name, exact: true })).toBeVisible();
       await expect(

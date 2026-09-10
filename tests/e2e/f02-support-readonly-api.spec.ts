@@ -122,23 +122,48 @@ async function startReadonly(page: Page, fixture: SupportFixture) {
   await page.goto(`/admin/tenants/${fixture.orgB}`, { timeout: HTTP_TIMEOUT });
   await page.getByRole("button", { name: /Acompanhar/ }).click();
   await page.getByLabel("Somente leitura", { exact: true }).check();
+  // O app navega assim que recebe a resposta. Capture o corpo real antes de
+  // entregá-lo ao navegador, que pode descartá-lo durante essa navegação.
+  const endpoint = `/api/v1/admin/tenants/${fixture.orgB}/impersonate`;
+  let sessionId: string | undefined;
+  await page.route(
+    `**${endpoint}`,
+    async (route) => {
+      const response = await route.fetch();
+      if (response.status() === 200) {
+        sessionId = (await response.json()).data.support_session_id;
+      }
+      await route.fulfill({ response });
+    },
+    { times: 1 },
+  );
   const pending = page.waitForResponse(
     (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname === `/api/v1/admin/tenants/${fixture.orgB}/impersonate`,
+      response.request().method() === "POST" && new URL(response.url()).pathname === endpoint,
     { timeout: HTTP_TIMEOUT },
   );
   await page.getByRole("button", { name: "Confirmar e entrar" }).click();
   const response = await pending;
   expect(response.status()).toBe(200);
-  const sessionId = (await response.json()).data.support_session_id as string;
+  expect(sessionId).toEqual(expect.any(String));
   await page.waitForURL("**/app/inbox", { timeout: HTTP_TIMEOUT });
   await expect(page.getByRole("button", { name: "Sair do acompanhamento" })).toBeVisible();
   expect(await activeOrg(page)).toBe(fixture.orgB);
-  return sessionId;
+  return sessionId!;
 }
 
 async function endSupport(page: Page, fixture: SupportFixture, sessionId: string) {
+  // A saída também navega imediatamente; conserve a resposta real antes disso.
+  let body: unknown;
+  await page.route(
+    "**/api/v1/admin/impersonate/end",
+    async (route) => {
+      const response = await route.fetch();
+      body = await response.json();
+      await route.fulfill({ response });
+    },
+    { times: 1 },
+  );
   const pending = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
@@ -148,7 +173,7 @@ async function endSupport(page: Page, fixture: SupportFixture, sessionId: string
   await page.getByRole("button", { name: "Sair do acompanhamento" }).click();
   const response = await pending;
   expect(response.status()).toBe(200);
-  expect(await response.json()).toMatchObject({ data: { ended: true } });
+  expect(body).toMatchObject({ data: { ended: true } });
   await page.waitForURL("**/app/inbox", { timeout: HTTP_TIMEOUT });
   await expect(page.getByRole("button", { name: "Sair do acompanhamento" })).toHaveCount(0);
   expect(await activeOrg(page)).toBe(fixture.orgA);
@@ -167,9 +192,16 @@ async function endSupport(page: Page, fixture: SupportFixture, sessionId: string
   expect(ended.data.ended_at).toBeTruthy();
 }
 
-async function expectForbidden(response: APIResponse) {
+async function expectForbidden(
+  response: APIResponse,
+  code: "forbidden" | "forbidden_role",
+): Promise<string> {
   expect(response.status(), response.url()).toBe(403);
-  expect(await response.json()).toMatchObject({ error: { code: "forbidden" } });
+  expect(await response.json()).toMatchObject({ error: { code } });
+  const requestId = response.headers()["x-request-id"];
+  expect(requestId).toEqual(expect.any(String));
+  expect(requestId).not.toBe("");
+  return requestId!;
 }
 
 async function count(table: string, organizationId: string) {
@@ -182,7 +214,7 @@ async function count(table: string, organizationId: string) {
   return result.count;
 }
 
-test("suporte readonly lê os quatro grupos F02 e nenhuma escrita produz efeito", async ({
+test("suporte readonly lê quatro grupos F02, recusa escritas comerciais e audita recusas", async ({
   page,
   fixture,
 }) => {
@@ -231,6 +263,7 @@ test("suporte readonly lê os quatro grupos F02 e nenhuma escrita produz efeito"
 
   const deniedNoteId = randomUUID();
   const deniedCommandId = randomUUID();
+  const suppliedRequestId = randomUUID();
   const before = {
     audits: await count("api_audit_log", fixture.orgB),
     products: await count("catalog_products", fixture.orgB),
@@ -275,6 +308,7 @@ test("suporte readonly lê os quatro grupos F02 e nenhuma escrita produz efeito"
       timeout: HTTP_TIMEOUT,
     }),
     page.request.post("/api/v1/crm-notes", {
+      headers: { "x-request-id": suppliedRequestId },
       data: {
         id: deniedNoteId,
         contact_id: own.contactId,
@@ -284,11 +318,41 @@ test("suporte readonly lê os quatro grupos F02 e nenhuma escrita produz efeito"
       timeout: HTTP_TIMEOUT,
     }),
   ]);
-  for (const response of [contactWrite, productWrite, orderWrite, noteWrite]) {
-    await expectForbidden(response);
-  }
+  await expectForbidden(contactWrite, "forbidden");
+  await expectForbidden(productWrite, "forbidden");
+  // Pedidos e notas consultam requireRole antes da guarda de efeito. Suporte
+  // readonly tem papel efetivo viewer e recebe a recusa canônica desse guard.
+  const orderDeniedRequestId = await expectForbidden(orderWrite, "forbidden_role");
+  const noteDeniedRequestId = await expectForbidden(noteWrite, "forbidden_role");
+  expect(noteDeniedRequestId).toBe(suppliedRequestId);
 
-  expect(await count("api_audit_log", fixture.orgB)).toBe(before.audits);
+  await expect
+    .poll(
+      async () => {
+        const denied = await db
+          .from("api_audit_log")
+          .select("request_id,resource_type")
+          .eq("organization_id", fixture.orgB)
+          .eq("action", "authz.denied")
+          .eq("actor_user_id", fixture.manager.id)
+          .contains("metadata", {
+            required_role: "agent",
+            effective_role: "viewer",
+            support_session_id: supportSessionId,
+            support_access_mode: "support_readonly",
+          })
+          .in("request_id", [orderDeniedRequestId, noteDeniedRequestId])
+          .order("resource_type");
+        if (denied.error) throw denied.error;
+        return denied.data;
+      },
+      { timeout: HTTP_TIMEOUT },
+    )
+    .toEqual([
+      { request_id: noteDeniedRequestId, resource_type: "crm_notes" },
+      { request_id: orderDeniedRequestId, resource_type: "crm_orders" },
+    ]);
+  expect(await count("api_audit_log", fixture.orgB)).toBe(before.audits + 2);
   expect(await count("catalog_products", fixture.orgB)).toBe(before.products);
   expect(await count("crm_orders", fixture.orgB)).toBe(before.orders);
   expect(await count("crm_notes", fixture.orgB)).toBe(before.notes);

@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
 import { fail, ok } from "@/lib/api/wrappers";
+import { getRequestId } from "@/lib/api/request-id";
 import { requireRole } from "@/lib/auth/require-role";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { logger } from "@/lib/logger";
@@ -28,7 +28,7 @@ const messages: Record<string, string> = {
 };
 
 export async function POST(req: Request): Promise<Response> {
-  const requestId = randomUUID();
+  const requestId = getRequestId(req);
   const parsed = orderCommandSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success)
     return fail("validation_failed", "Dados do pedido inválidos.", 422, {

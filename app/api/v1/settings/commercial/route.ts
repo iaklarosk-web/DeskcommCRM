@@ -1,9 +1,9 @@
 import { ZodError } from "zod";
+import { getRequestId } from "@/lib/api/request-id";
 
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { requireSupportWrite } from "@/lib/impersonate/support";
-import { randomId } from "@/lib/random-id";
 import {
   CommercialSettingsError,
   getCommercialProfile,
@@ -33,12 +33,9 @@ function failure(error: unknown, requestId: string): Response {
     });
   }
   if (error instanceof CommercialSettingsError) {
-    return fail(
-      error.code,
-      "Esta configuração não pôde ser processada.",
-      error.status,
-      { requestId },
-    );
+    return fail(error.code, "Esta configuração não pôde ser processada.", error.status, {
+      requestId,
+    });
   }
   const code = (error as { code?: string } | null)?.code;
   if (code === "40001" || code === "40P01") {
@@ -51,18 +48,13 @@ function failure(error: unknown, requestId: string): Response {
       },
     );
   }
-  return fail(
-    "internal_error",
-    "Não foi possível carregar as configurações comerciais.",
-    500,
-    {
-      requestId,
-    },
-  );
+  return fail("internal_error", "Não foi possível carregar as configurações comerciais.", 500, {
+    requestId,
+  });
 }
 
-export async function GET(): Promise<Response> {
-  const requestId = randomId();
+export async function GET(req?: Request): Promise<Response> {
+  const requestId = getRequestId(req);
   const authz = await requireRole("viewer", {
     requestId,
     resource: "commercial_settings",
@@ -78,7 +70,7 @@ export async function GET(): Promise<Response> {
 }
 
 export async function PATCH(req: Request): Promise<Response> {
-  const requestId = randomId();
+  const requestId = getRequestId(req);
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
   const authz = await requireRole("manager", {
@@ -90,10 +82,7 @@ export async function PATCH(req: Request): Promise<Response> {
   const { tenant, access } = context(authz);
   try {
     const body = await req.json().catch(() => null);
-    return ok(
-      await patchCommercialProfile(tenant, access, body, { requestId }),
-      { requestId },
-    );
+    return ok(await patchCommercialProfile(tenant, access, body, { requestId }), { requestId });
   } catch (error) {
     return failure(error, requestId);
   }

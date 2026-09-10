@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
+import { getRequestId } from "@/lib/api/request-id";
 import { z } from "zod";
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
@@ -17,7 +17,7 @@ const querySchema = z.strictObject({
 });
 
 export async function GET(req: NextRequest): Promise<Response> {
-  const requestId = randomUUID();
+  const requestId = getRequestId(req);
   const parsed = querySchema.safeParse(Object.fromEntries(req.nextUrl.searchParams));
   if (!parsed.success) return fail("validation_failed", "Filtros inválidos.", 422, { requestId });
   const authz = await requireRole("viewer", { requestId, resource: "crm_orders" });

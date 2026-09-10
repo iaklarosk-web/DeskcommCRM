@@ -123,6 +123,25 @@ function localDate(iso: string, zone: string) {
     day: "2-digit",
   }).format(new Date(iso));
 }
+function textFromPdfItems(items: unknown[]) {
+  return items
+    .map((item) =>
+      typeof item === "object" && item !== null && "str" in item && typeof item.str === "string"
+        ? `${item.str}${"hasEOL" in item && item.hasEOL ? "\n" : ""}`
+        : "",
+    )
+    .join("");
+}
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function dailyMarkers(text: string, suffix: string) {
+  const pattern = new RegExp(
+    `${escapeRegExp(`Linha diária ${suffix} `)}(\\d(?:\\s*\\d)*)(?=\\s*·)`,
+    "g",
+  );
+  return [...text.matchAll(pattern)].map((match) => Number(match[1]!.replace(/\s/g, "")));
+}
 async function pdfText(bytes: Buffer) {
   const fonts =
     join(
@@ -137,7 +156,7 @@ async function pdfText(bytes: Buffer) {
     const pages = await Promise.all(
       Array.from({ length: document.numPages }, async (_, index) => {
         const content = await (await document.getPage(index + 1)).getTextContent();
-        return content.items.map((item) => ("str" in item ? item.str : "")).join(" ");
+        return textFromPdfItems(content.items);
       }),
     );
     return { pages: document.numPages, text: pages.join("\n") };
@@ -213,13 +232,16 @@ for (const side of ["A", "B"] as const)
       pdf: (options: { printBackground: boolean }) => Promise<Buffer>;
     };
     const pdf = await chromium.pdf({ printBackground: true });
+    await info.attach(`daily-${side}.pdf`, { body: pdf, contentType: "application/pdf" });
     const parsed = await pdfText(pdf);
     expect(parsed.pages).toBeGreaterThan(1);
     expect(report.criteria.organization.id).toBe(customer.orgId);
     expect(parsed.text).toContain(report.criteria.organization.name);
-    for (let index = 0; index < 501; index++)
-      expect(parsed.text).toContain(`Linha diária ${fixture.suffix} ${index}`);
-    await info.attach(`daily-${side}.pdf`, { body: pdf, contentType: "application/pdf" });
+    const markers = dailyMarkers(parsed.text, fixture.suffix);
+    expect(markers).toHaveLength(1002);
+    expect(markers.sort((a, b) => a - b)).toEqual(
+      Array.from({ length: 501 }, (_, index) => [index, index]).flat(),
+    );
     await page.evaluate(() => {
       window.print = () => document.documentElement.setAttribute("data-print-called", "true");
     });

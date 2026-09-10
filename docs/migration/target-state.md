@@ -41,6 +41,11 @@ final e o aceite da fase ainda estão em andamento. Implementação não equival
 a validação do operador Deka, serviços reais ou produção. Todas as fixtures são
 fictícias, com WhatsApp/IA mock e sem envio externo.
 
+Conforme a [ADR-015](../decisions/ADR-015-request-id-canonico-F02.md), o inventário
+F02 de 21 módulos e 34 operações passou a usar o identificador canônico da
+requisição nos envelopes e auditorias. Implementação em validação; checkpoint final
+pendente.
+
 
 Saída original da F00-T07 em `c85f7d72eebe33649812fe5cae174b7dd80e0e9f`, revista em 08/09/2026 por autorização do proprietário para atualizar o desenho, sem construir a F02. Referência desta revisão: release v1.17.0, `db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d`; o código da integração com nossa F01 está registrado em `a86ca7c4234722d8422e833dbefcaf986fad1797`. O [BUILD-STATE](../../BUILD-STATE.md) registra a revalidação concluída com três dívidas herdadas, sem substituir o histórico da F00/F01 por uma declaração de prontidão da combinação.
 

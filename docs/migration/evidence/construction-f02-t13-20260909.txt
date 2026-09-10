@@ -1,0 +1,125 @@
+F02 T13 — EM ANDAMENTO, 09/09/2026 BRT
+
+Código T04–T12: d44e3d34d55512b2287209f7802810ee26843f73.
+Evidências parciais:282c22814ca242112fada1dc9efb4530266f0bdf.
+Reparos de regressão:aa831343a0d91e2ec130b12bd52c2146dca9cc77.
+
+Tentativas do gate preservadas em .verify-logs:
+01:f02-final/run.foHuJ07J — interrompida antes do build para recusar '&' no
+   parser do ambiente; caso vermelho observado, verificador43/43 após correção.
+02:f02-final-recheck/run.zybJ2HLI — tipos/lint0; interrompida durante build para
+   completar identidade canônica da empresa no relatório impresso.
+03:f02-final-03/run.0SjrqOJl — tipos173s/lint139s,exit0; build interrompido por
+   pressão de memória, sem swap ativo. Somente processos próprios terminados.
+04:f02-final-04/run.9uefzdQ1 — após reativar /swapfile existente de2GB:
+   tipos23s/lint118s/build444s/shell61s,exit0. Interrompida intencionalmente
+   após CI completar o inventário de falhas do mesmo código;355 arquivos
+   unitários aprovados no log parcial, sem relatório unitário completo local.
+   Saída143 observada da sessão; nenhum gate acima é declarado aprovado.
+
+CI34421338576 @282c2281:
+- Unit8366/8376,6/787arquivos falhos,10casos falhos e4erros derivados do painel.
+- Banco1584/1585,1/194arquivos falho.
+- Docker34421338581:success; build de PR sem publicação/promover stable.
+Logs completos preservados em .verify-logs/ci-34421338576-{failed,clean}.log.
+
+Diagnóstico/reparos:
+- O marcador comentado da varredura anon estava antes9012; o DO efetivo já
+  estava depois. Moveu-se somente comentário, sem alterar SQL executável.
+- OrderChecks fazia GET próprio; os testes legados de composição entregavam
+  OrderView também a essa rota e consumiam as filas do pedido. Filho isolado
+  nos dois testes; todas as expectativas comerciais/histórico preservadas.
+- Moeda agora usa fn_update_organization_profile. Dublê passou a observar
+  perfil.currency=MXN,org da sessão,ator autenticado e uma gravação; não há
+  retorno genérico de sucesso escondendo uma gravação ausente.
+- Aliases antigos de configuração são somente leitura: fixture de defaults
+  representa organização canônica existente, e N/N exige erro de alias+destino
+  ou validação de valor conforme contrato; zero consultas na recusa preservado.
+- Diária ganhou destino no catálogo/hub CRM,sem sidebar,visível viewer e
+  recusado ao contexto direto de plataforma. A página já tinha link na lista.
+- Fixture de upgrade T02 remove dependências T12 explicitamente dentro da
+  transação que reconstrói o estado anterior à9006; rollback restaura o domínio.
+  Não se usa DROP CASCADE nem se toca banco em uso.
+
+Rechecagens em .verify-logs/f02-ci-repairs:
+- unit.json:75/77 em8arquivos,17,93s. Dois casos de navegação ainda modelavam
+  contexto de plataforma como se fosse tenant. Reparo manteve a recusa direta
+  da plataforma e a presença no hub do administrador/viewer da empresa.
+- navigation-recheck.json:27/27 em2arquivos,4,16s. Cobertura focal reconciliada
+  dos77casos; não se apresenta como uma única execução77/77.
+- db.json:8/8,3,74sdeVitest; instalação/reaplicação do baseline e cleanup do
+  container deskcomm-test-db-389070 passaram. Sem migration aplicada alterada.
+- SHA2569012:a4fa1a2bf1d5aadc23f2139e597808bebabb39c7e90e6d74f5c96caaece90eb6.
+
+CI34422892675 @aa831343: success, unit8376/8376 em787arquivos e
+DB1585/1585 em194arquivos. Docker34422892627:success, sem publicação/deploy.
+
+Browser .verify-logs/f02-browser-final-01: build172,74s exit0; relatório
+completo de13casos:9aprovados/4falhos,0skips/0retries/0flaky,799,93s.
+- NavegaçãoB: timeout5s esperando pedido; o GET terminou404 apenas após
+  limpeza apagar a fixture. Reparo: usar HTTP_TIMEOUT30s já existente.
+- DailyA/B: texto extraído do PDF dividiu dígitos do marcador77; diagnóstico
+  e correção do extrator pendentes, sem declarar impressão aprovada.
+- Suporte: resposta real POST200 foi descartada pelo navegador após navegar,
+  antes de response.json no teste. Reparo captura corpo real antes de fulfill;
+  nenhuma resposta de negócio inventada e expectativas readonly preservadas.
+O wrapper sofreu término143 após emitir o relatório e antes de gravar os
+resultados/compare; não se conhece o emissor do sinal. Não é saída normal do
+Playwright. Artefatos copiados antes da próxima execução. O compare posterior
+já viu reparos fora do período da execução e foi recusado corretamente; não
+se declara snapshot comparado nesse run. Wrappers privados passam a registrar
+sinais e finalizar apenas o grupo próprio de processos.
+
+Navegador/PDF final e novo gate integral ainda pendentes. Aceite humano,
+operação Deka, provedores reais e produção permanecem não validados. Pausa
+obrigatória após fechar F02; F03 não iniciada.
+
+Rechecagem02 (.verify-logs/f02-browser-repairs-02): cinco casos selecionados,
+2/5 aprovados em259,71s; navegaçãoA/B passou. Captura da entrada do suporte
+passou, mas a expectativa genérica de forbidden não representava a guarda
+requireRole anterior em pedidos/notas (forbidden_role canônico). O PDF foi
+anexado antes de assert; 55páginas, e o próprio TextItem de pdfjs contém espaço
+entre alguns dígitos. A reconstrução geométrica não resolve espaços já dentro
+um TextItem. Matcher passou a compactar somente o índice após o rótulo exato,
+com delimitador '·'; exige cada índice0..500 exatamente duas vezes.
+
+Rechecagem03 (.verify-logs/f02-browser-repairs-03): daily/checksA/B2/2 passaram
+integralmente, incluindo PDF completo, reimpressão sem escrita, conferência
+humana, replay, revisão antiga409/histórico e viewer403. O suporte passou
+leituras/recusas/estado comercial, mas falhou na captura JSON ao sair por
+nova navegação. O reparo conserva a resposta real antes de entregá-la à tela,
+como já feito na entrada. Resultado agregado03=2/3, não aprovação integral.
+Entradas de código foram comparadas antes/depois das rechecagens02/03,exit0;
+ambas usaram buildaa831343 porque somente testes/docs foram alterados.
+Inspeção pelo agente das páginas1/55 do PDF02: cabeçalho legível e último item
+501 presente, sem corte no fim; isto não preenche aceite visual do proprietário.
+
+Revisão adicional do suporte: requireRole registra authz.denied de modo
+assíncrono em api_audit_log. Contagem imediata igual ao baseline não prova
+imutabilidade comercial e pode anteceder esses registros legítimos. O teste
+passa a aguardar duas recusas correlacionadas por request_id/recurso/ator/org,
+role viewer e sessão support_readonly; exige delta total+2 e preserva todos
+os checks de domínio/recibos sem escrita. Rechecagem04 somente suporte iniciada;
+se a auditoria não persistir, o teste falha explicitamente.
+
+Rechecagem04 (.verify-logs/f02-browser-repairs-04): suporte0/1,63,78s. O novo
+poll revelou defeito real de correlação: POSTs de01:30:43UTC retornam headers
+7216baa8.../7eb5f060..., e os dois registros authz.denied de01:30:45UTC da mesma
+sessão guardam0d25ed3c.../18b215db.... Os metadados de papel/suporte estão corretos.
+O proxy gerava ID próprio na resposta sem encaminhá-lo às rotas. Não se trata
+somente de esperar a auditoria; os IDs nunca coincidem. ADR-015 registrada antes
+da implementação: encaminhar UUID canônico no proxy e adotá-lo nos handlersF02,
+preservando fallback de resposta legado. Reparo, teste de encaminhamento,
+mutante30 e nova prova de navegador pendentes. Nenhuma aprovação integral
+é inferida das etapas que precederam essas falhas.
+
+ADR015 implementada localmente: proxy encaminha UUID antes de NextResponse.next;
+helper compartilhado adotado nas34operações de21módulos. IDs de entidade e de
+idempotência intactos. A prova unitária verifica encaminhamento real do
+NextResponse e preservação dos cookies; a auditoria é verificada no navegador,
+sem alias de variável apresentado como prova de persistência. Mutante30 remove
+o encaminhamento apenas em memória. Suporte passa a exercitar um ID gerado e
+um UUID válido fornecido pelo cliente, ambos correlacionados no banco.
+Typecheck focal inicial com heap1536MB falhou por limite do V8 (exit134,75,48s),
+não por erro TypeScript ou reinício da VPS; a repetição usa3072MB, já previsto
+para tipos/build no verificador. Testes unitários mantêm1536MB/um worker.

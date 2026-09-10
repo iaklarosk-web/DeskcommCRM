@@ -1,6 +1,5 @@
-import { randomUUID } from "node:crypto";
-
 import { ZodError } from "zod";
+import { getRequestId } from "@/lib/api/request-id";
 
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
@@ -14,7 +13,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request): Promise<Response> {
-  const requestId = randomUUID();
+  const requestId = getRequestId(req);
   const parsed = dailyOrderQuerySchema.safeParse(Object.fromEntries(new URL(req.url).searchParams));
   if (!parsed.success)
     return fail("validation_failed", "Informe a data e o critério do relatório.", 422, {

@@ -17,8 +17,8 @@
  * as duas dividem as peças de `lib/leads/timeline-query.ts` e divergem só na
  * cláusula, que é justamente onde a diferença mora.
  */
-import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
+import { getRequestId } from "@/lib/api/request-id";
 import { z } from "zod";
 
 import { ok, fail } from "@/lib/api/wrappers";
@@ -40,7 +40,7 @@ export async function GET(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const requestId = randomUUID();
+  const requestId = getRequestId(req);
   const authz = await requireRole("viewer", {
     requestId,
     resource: "crm_lead_activities",
@@ -60,10 +60,7 @@ export async function GET(
   const types = url.searchParams.getAll("type").filter(Boolean);
   const cursorRaw = url.searchParams.get("cursor");
   const limitRaw = url.searchParams.get("limit");
-  const limit = Math.min(
-    Math.max(parseInt(limitRaw ?? "50", 10) || 50, 1),
-    100,
-  );
+  const limit = Math.min(Math.max(parseInt(limitRaw ?? "50", 10) || 50, 1), 100);
 
   let cursor: Cursor | null = null;
   if (cursorRaw) {
@@ -81,8 +78,7 @@ export async function GET(
     .eq("id", contactId.data)
     .maybeSingle();
   if (cErr) return fail("internal_error", cErr.message, 500, { requestId });
-  if (!contactRow)
-    return fail("not_found", t("Contato não encontrado."), 404, { requestId });
+  if (!contactRow) return fail("not_found", t("Contato não encontrado."), 404, { requestId });
 
   // Resolve owned lead ids first.
   const { data: leadRows, error: lErr } = await supabase
@@ -98,10 +94,7 @@ export async function GET(
   // We over-fetch slightly to keep merge correct.
   const FETCH = limit + 1;
 
-  const buildQuery = (
-    column: "contact_id" | "lead_id",
-    values: string | string[],
-  ) => {
+  const buildQuery = (column: "contact_id" | "lead_id", values: string | string[]) => {
     let q = supabase
       .from("crm_lead_activities")
       .select(TIMELINE_COLS)
@@ -142,10 +135,8 @@ export async function GET(
   // real (campo do tipo fora do SELECT compilava verde) e ganha-se o portão de
   // exaustividade acima, que protege.
   const merged = new Map<string, TimelineItem>();
-  for (const row of (directRes.data ?? []) as unknown as TimelineItem[])
-    merged.set(row.id, row);
-  for (const row of (leadRes.data ?? []) as unknown as TimelineItem[])
-    merged.set(row.id, row);
+  for (const row of (directRes.data ?? []) as unknown as TimelineItem[]) merged.set(row.id, row);
+  for (const row of (leadRes.data ?? []) as unknown as TimelineItem[]) merged.set(row.id, row);
 
   const sorted = Array.from(merged.values()).sort((a, b) => {
     if (a.performed_at !== b.performed_at) {
@@ -165,9 +156,7 @@ export async function GET(
   const page = await comNomeDoAtor(supabase, pageRows);
   const last = page[page.length - 1];
   const nextCursor =
-    hasMore && last
-      ? encodeCursor({ performed_at: last.performed_at, id: last.id })
-      : null;
+    hasMore && last ? encodeCursor({ performed_at: last.performed_at, id: last.id }) : null;
 
   return ok(page, {
     requestId,

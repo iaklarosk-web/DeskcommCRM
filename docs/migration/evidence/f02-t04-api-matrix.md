@@ -33,8 +33,8 @@ A coluna “prova” distingue camadas: `G` guard de rota, `A` comportamento HTT
 | C03 | `GET /contacts/[id]`             | viewer       | `resolveActiveOrg` → handler                                   | E: positivo/foreign `f02-crm-cadastros.spec.ts:140-144,248-249`; T: `f02-api-active-org.spec.ts`                                                                                                                | executar A/B preparado; falta 401 direto, pois não usa `requireRole`                  |
 | C04 | `PATCH /contacts/[id]`           | agent        | `authz.org.orgId`                                              | E: positivo + viewer 403 `f02-crm-cadastros.spec.ts:163-172,274-278`; T: `f02-api-active-org.spec.ts`; R: `f02-t01-crm-schema.test.ts:176-276`                                                                  | executar A/B preparado; suporte readonly continua na matriz de papel                  |
 | C05 | `DELETE /contacts/[id]`          | agent        | `authz.org.orgId` no handler                                   | T: próprio/foreign A/B em `f02-api-active-org.spec.ts`; A(handler): `contato-delete.test.ts:59-84`; R: `f02-t01-crm-schema.test.ts:176-276`                                                                     | executar A/B preparado; viewer, suporte e sessão ausente continuam na matriz de papel |
-| C06 | `GET /contacts/[id]/timeline`    | viewer       | **patch T04:** `requireRole` + org em contato/leads/atividades | T: `contact-readers-active-org.test.ts`                                                                                                                                                                         | promover patch; remover rota da dívida do scanner                                     |
-| C07 | `GET /contacts/[id]/crm-summary` | viewer       | **patch T04:** `requireRole` + org nas 6 leituras              | T: `contact-readers-active-org.test.ts`                                                                                                                                                                         | promover patch; remover rota da dívida do scanner                                     |
+| C06 | `GET /contacts/[id]/timeline`    | viewer       | `requireRole` + org em contato/leads/atividades                | A: `contact-readers-active-org.test.ts`; E: próprio/foreign A/B `f02-api-active-org.spec.ts:387-416`                                                                                                             | suporte readonly positivo não isolado                                                 |
+| C07 | `GET /contacts/[id]/crm-summary` | viewer       | `requireRole` + org nas 6 leituras                             | A: `contact-readers-active-org.test.ts`; E: próprio/foreign A/B `f02-api-active-org.spec.ts:387-416`                                                                                                             | suporte readonly positivo não isolado                                                 |
 | E01 | `GET /companies`                 | viewer       | `authz.org.orgId`                                              | A: `crm-empresas-api.test.ts:70-88`; E: `f02-crm-cadastros.spec.ts:104-128,241-247`; T: `f02-api-active-org.spec.ts`                                                                                            | executar o positivo/lista isolada A/B preparado                                       |
 | E02 | `POST /companies`                | agent        | org/ator só da sessão                                          | A: `crm-empresas-api.test.ts:90-113,139-164`; E: `f02-crm-cadastros.spec.ts:100-128,264-268`; T: manager A/B em `f02-api-active-org.spec.ts`                                                                    | executar A/B preparado; agent positivo distinto continua na matriz de papel           |
 | E03 | `GET /companies/[id]`            | viewer       | org + id                                                       | A: `crm-empresas-api.test.ts:124-137,150-164`; E: `f02-crm-cadastros.spec.ts:174-185`; T: próprio/foreign A/B em `f02-api-active-org.spec.ts`                                                                   | executar A/B preparado                                                                |
@@ -71,9 +71,9 @@ A coluna “prova” distingue camadas: `G` guard de rota, `A` comportamento HTT
 
 ### API e organização ativa
 
-- Prova executada simétrica A ativa/B ativa existe para 11/29 operações: C01, P01, O01–O04, N01–N02 e T01–T03. Isso corresponde a `22/58 active_org_cells`.
-- C06/C07 foram corrigidas e promovidas; as quatro células do navegador aguardam execução. Seus nove testes unitários passaram na árvore atual.
-- As 16 operações C02–C05, E01–E05, P02–P04 e L01–L04 passaram nas `32/58` células reais de `f02-api-active-org.spec.ts`. Com as 22 anteriores, são `54/58` células executadas; as quatro preparadas de C06/C07 não entram nesse numerador.
+- Prova executada simétrica A ativa/B ativa existe para 13/29 operações: C01, C06–C07, P01, O01–O04, N01–N02 e T01–T03. Isso corresponde a `26/58 active_org_cells`.
+- C06/C07 passaram nas quatro células do navegador final01: leitura própria 200 e contato estrangeiro 404 nos dois sentidos. Seus nove testes unitários permanecem como cobertura focal separada.
+- As 16 operações C02–C05, E01–E05, P02–P04 e L01–L04 passaram nas `32/58` células reais de `f02-api-active-org.spec.ts`. Com as 26 anteriores, o recorte histórico fecha `58/58` células executadas.
 - As recusas de PATCH/DELETE por ID da outra organização comparam estado e auditoria antes/depois. P04 e C05 agora têm prova HTTP simétrica, além das provas transacionais dos serviços de pedidos e trabalho.
 
 ### Serviço
@@ -96,8 +96,8 @@ A coluna “prova” distingue camadas: `G` guard de rota, `A` comportamento HTT
 - Inventário: `route_modules=18/18`, `http_operations=29/29`.
 - Papéis: `role_cells=145/145` catalogadas; a composição liga a tabela real de permissões aos handlers. Não são 145 chamadas HTTP independentes.
 - Os dois scanners e leitores focais foram promovidos. Composição de sessão ausente: `29/29`; cercas de escrita readonly: `15/15`, com `15/15` remoções detectadas em memória.
-- Organização ativa: `54/58` células de navegador executadas, quatro C06/C07 preparadas e pendentes. A primeira jornada API passou em 223,766 s no sandbox local.
-- Suporte readonly real: jornada compacta preparada para leitura de quatro grupos e recusa de quatro escritas; navegador pendente.
+- Organização ativa: `58/58` células de navegador executadas; os dois testes active-org, incluindo C06/C07, passaram no relatório final01.
+- Suporte readonly real: o caso do navegador final01 foi executado e falhou; leitura `4/4` e recusa `4/4` não são declaradas aprovadas.
 - Banco F02: `schema_rls_lgpd=146/146` reconciliados; `rls_domain_tables=9/9` mapeadas. Recibos privados têm provas próprias.
 - O catálogo falhou na navegação com 509 produtos por timeout da RLS legada de escrita. A migration 9011 separa comandos; a medição REST autenticada posterior retornou total509/50linhas em99ms e total509/500linhas em74ms. A navegação ainda precisa ser repetida após essa correção.
 
@@ -117,10 +117,10 @@ O inventário nominal está em f02-t04-api-operations.txt.
 |---|---|---|---|
 | S01 | GET settings/commercial | viewer+, suporte ativo; plataforma direta recusada no serviço | Unit/integração comercial e jornada API comercial A/B |
 | S02 | PATCH settings/commercial | manager/admin; readonly negado; full support revalidado | Unit/integração comercial, auditoria/aliases e jornada API |
-| D01 | GET crm-orders/daily | viewer+, suporte ativo; plataforma direta recusada | Unit e integração diária A/B, 501 itens/fuso; navegador final pendente |
-| K01 | GET crm-orders/:id/checks | viewer+, invoker/RLS, plataforma direta recusada | Unit/API e DB; navegador final pendente |
-| K02 | POST crm-orders/:id/checks | agente humano+; suporte negado; ator/organização revalidados | Unit/API e integração transacional; navegador final pendente |
+| D01 | GET crm-orders/daily | viewer+, suporte ativo; plataforma direta recusada | Unit e integração diária A/B, 501 itens/fuso; navegador final01 A/B executado sem aprovação |
+| K01 | GET crm-orders/:id/checks | viewer+, invoker/RLS, plataforma direta recusada | Unit/API e DB; navegador final01 A/B executado sem aprovação |
+| K02 | POST crm-orders/:id/checks | agente humano+; suporte negado; ator/organização revalidados | Unit/API e integração transacional; navegador final01 A/B executado sem aprovação |
 
-As 54/58 células HTTP anteriores continuam históricas até a execução integral
-final. As novas provas não são somadas a elas como se todas tivessem o mesmo
-recorte ou tivessem sido executadas sobre o mesmo commit.
+As `58/58` células HTTP anteriores incluem a promoção de C06/C07 no final01.
+As novas provas não são somadas a elas como se tivessem o mesmo recorte. O
+relatório final01 fechou `9/13`; daily/checks e suporte seguem sem aprovação.

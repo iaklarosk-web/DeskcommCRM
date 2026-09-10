@@ -1,6 +1,6 @@
 ---
-updated_at: 2026-09-10T00:26:00Z
-head_commit: d44e3d34d55512b2287209f7802810ee26843f73   # checkpoint de código T04–T12; gate integral em andamento
+updated_at: 2026-09-10T00:52:44Z
+head_commit: aa831343a0d91e2ec130b12bd52c2146dca9cc77   # reparos da regressão T13; navegador e novo gate pendentes
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
 plan_version: "2.3 (2026-09-09); D38–D48; ADR-006…014"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
@@ -62,6 +62,17 @@ pesadas são executadas em série. A causa do travamento original não foi estab
 A CI do checkpoint publicado 5f879175 concluiu com sucesso (run 34408643274),
 após corrigir as três falhas do checkpoint T03 anterior. A continuação T04–T12
 precisa de nova validação; esse resultado não se transfere ao código não publicado.
+
+O checkpoint T13 `aa831343` corrige os testes legados do novo painel/contrato
+canônico, registra a diária no hub CRM e ajusta a fixture de upgrade para T12.
+A CI anterior `34421338576` mediu unit8366/8376 e DB1584/1585; esses resultados
+não eram verdes. Os 77 casos focais foram reconciliados (75/77 inicial +27/27
+na rechecagem de navegação) e DB8/8 passou, incluindo o upgrade duplo.
+A tentativa local04 foi encerrada após obter esse inventário completo da CI;
+sua suíte unitária parcial não é contada como aprovação integral. A CI nova `34422892675` passou: unit8376/8376 e DB1585/1585; Docker34422892627 também passou. O navegador final01 mediu9/13: navegaçãoB, extração do PDF A/B e captura da resposta de suporte falharam e estão em reparo. Navegador/PDF A/B e novo gate completo seguem pendentes.
+[Evidência T13](docs/migration/evidence/construction-f02-t13-20260909.txt).
+
+As rechecagens aprovaram navegaçãoA/B e daily/checksA/B com PDF completo. O suporte revelou diferença entre o identificador do header e o registrado em auditoria; a [ADR-015](docs/decisions/ADR-015-request-id-canonico-F02.md) orienta a correção. Novo navegador e gate integral seguem obrigatórios. F03 não iniciada.
 
 ## Checkpoints anteriores (estado histórico)
 

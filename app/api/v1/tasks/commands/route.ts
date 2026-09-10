@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
 import { fail, ok } from "@/lib/api/wrappers";
+import { getRequestId } from "@/lib/api/request-id";
 import { requireRole } from "@/lib/auth/require-role";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { workFailure } from "@/src/crm/work/api";
@@ -8,7 +8,7 @@ import { executeLinkedTaskCommand } from "@/src/crm/work/service";
 
 export const dynamic = "force-dynamic";
 export async function POST(req: Request): Promise<Response> {
-  const requestId = randomUUID();
+  const requestId = getRequestId(req);
   const parsed = linkedTaskCommandSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success)
     return fail("validation_failed", "Revise os dados da tarefa.", 422, {

@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
+import { getRequestId } from "@/lib/api/request-id";
 import { z } from "zod";
 
 import { fail, ok } from "@/lib/api/wrappers";
@@ -22,7 +22,7 @@ const querySchema = z
 const COLUMNS = "id,organization_id,legal_name,trade_name,cnpj,created_at,updated_at";
 
 export async function GET(req: NextRequest): Promise<Response> {
-  const requestId = randomUUID();
+  const requestId = getRequestId(req);
   const parsed = querySchema.safeParse(Object.fromEntries(req.nextUrl.searchParams));
   if (!parsed.success) return fail("validation_failed", "Filtros inválidos.", 422, { requestId });
   const authz = await requireRole("viewer", { requestId, resource: "crm_companies" });
@@ -47,7 +47,7 @@ export async function GET(req: NextRequest): Promise<Response> {
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
-  const requestId = randomUUID();
+  const requestId = getRequestId(req);
   const parsed = companyCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success)
     return fail("validation_failed", "Dados da empresa inválidos.", 422, { requestId });

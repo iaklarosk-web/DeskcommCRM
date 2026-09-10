@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
+import { getRequestId } from "@/lib/api/request-id";
 import { z } from "zod";
 
 import { fail, ok } from "@/lib/api/wrappers";
@@ -15,7 +15,7 @@ const idSchema = z.string().uuid();
 const COLUMNS = "id,organization_id,legal_name,trade_name,cnpj,created_at,updated_at";
 
 export async function GET(_req: NextRequest, context: RouteContext): Promise<Response> {
-  const requestId = randomUUID();
+  const requestId = getRequestId(_req);
   const id = idSchema.safeParse((await context.params).id);
   if (!id.success) return fail("validation_failed", "Identificador inválido.", 422, { requestId });
   const authz = await requireRole("viewer", { requestId, resource: "crm_companies" });
@@ -34,7 +34,7 @@ export async function GET(_req: NextRequest, context: RouteContext): Promise<Res
 }
 
 export async function PATCH(req: NextRequest, context: RouteContext): Promise<Response> {
-  const requestId = randomUUID();
+  const requestId = getRequestId(req);
   const id = idSchema.safeParse((await context.params).id);
   const parsed = companyPatchSchema.safeParse(await req.json().catch(() => null));
   if (!id.success || !parsed.success || Object.keys(parsed.data).length === 0) {
@@ -70,7 +70,7 @@ export async function PATCH(req: NextRequest, context: RouteContext): Promise<Re
 }
 
 export async function DELETE(_req: NextRequest, context: RouteContext): Promise<Response> {
-  const requestId = randomUUID();
+  const requestId = getRequestId(_req);
   const id = idSchema.safeParse((await context.params).id);
   if (!id.success) return fail("validation_failed", "Identificador inválido.", 422, { requestId });
   const authz = await requireRole("agent", { requestId, resource: "crm_companies" });

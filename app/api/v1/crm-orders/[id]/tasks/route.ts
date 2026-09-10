@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { getRequestId } from "@/lib/api/request-id";
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
@@ -10,7 +10,7 @@ export async function GET(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const requestId = randomUUID();
+  const requestId = getRequestId(req);
   const id = z.uuid().safeParse((await ctx.params).id);
   const parsed = workListSchema.safeParse(Object.fromEntries(new URL(req.url).searchParams));
   if (!id.success || !parsed.success)
