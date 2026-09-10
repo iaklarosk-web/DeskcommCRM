@@ -167,6 +167,46 @@ export async function getSetting(
   return valor;
 }
 
+/**
+ * O valor ARMAZENADO da setting, sem aplicar o default do schema — e a
+ * informação que `getSetting` apaga de propósito: se existe linha.
+ *
+ * Existe por causa de uma guarda da F03 (ADR-016): `ai.enabled` tem default
+ * `true` no schema porque isso descreve o mundo da F04, em que existe IA para
+ * habilitar. Na F03 não existe executor de IA, e "ninguém configurou" tem de
+ * significar guarda FALSA, não "ligada por omissão" — sem distinguir presença,
+ * toda conversa cairia em `ai_handling` sem ninguém do outro lado.
+ *
+ * `src/tenant-config` continua sendo o único módulo que lê `tenant_settings`
+ * (invariante 4 da §5.2): quem chama recebe o par, nunca a tabela.
+ */
+export async function getStoredSetting(
+  ctx: TenantCtx,
+  key: string,
+  deps: Deps = {},
+): Promise<{ present: boolean; value: unknown }> {
+  const entrada = exigirEntrada(key);
+  if (entrada.canonical) {
+    // Alias canônico não tem linha em tenant_settings: perguntar por presença
+    // ali seria sempre "não", e a resposta enganaria quem chamou.
+    throw new CanonicalSettingAliasError(key, entrada.canonical.destination);
+  }
+  return withTenant(
+    ctx,
+    async (db) => {
+      const r = await db.query<{ value: unknown }>(
+        `select value from public.tenant_settings
+          where organization_id = $1 and key = $2`,
+        [ctx.organization_id, key],
+      );
+      const linha = r.rows[0];
+      if (linha === undefined) return { present: false, value: undefined };
+      return { present: true, value: linha.value };
+    },
+    deps,
+  );
+}
+
 export async function setSetting(
   ctx: TenantCtx,
   key: string,

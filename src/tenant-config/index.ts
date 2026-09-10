@@ -12,6 +12,7 @@ export {
 export {
   CanonicalSettingAliasError,
   getSetting,
+  getStoredSetting,
   CanonicalSettingUnavailableError,
   InvalidSettingError,
   listSchema,
