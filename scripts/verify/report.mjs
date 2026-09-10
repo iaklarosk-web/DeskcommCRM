@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseF02E2E } from "./f02-e2e.mjs";
 
 // Dívidas de c85f7d72 saneadas: não podem reaparecer nem em revalidação.
 // As identidades e resultados históricos permanecem na evidência de ADR-007.
@@ -69,7 +70,7 @@ export function evaluate(input) {
   const debt = [];
   const suites = {};
   const context = input.context;
-  if (!["F00", "F01"].includes(context.phase)) errors.push(`Fase ${context.phase} ainda sem gate completo; E2E e requisitos posteriores pendentes`);
+  if (!["F00", "F01", "F02"].includes(context.phase)) errors.push(`Fase ${context.phase} ainda sem gate completo; requisitos posteriores pendentes`);
   for (const name of ["typecheck", "lint", "build", "shell", "secrets"]) {
     if (input.exits[name] !== 0) errors.push(`${name}: comando falhou ou não executou`);
   }
@@ -82,6 +83,32 @@ export function evaluate(input) {
       debt.push(...parsed.debt);
     } catch (error) {
       errors.push(error.message);
+    }
+  }
+  if (context.phase === "F02") {
+    for (const name of ["inputs-before", "sandbox", "e2e-plan", "e2e", "inputs"]) {
+      if (input.exits[name] !== 0) errors.push(`${name}: comando falhou ou não executou`);
+    }
+    const inputs = input.inputs;
+    if (!inputs || inputs.ok !== true || inputs.algorithm !== "sha256" ||
+        !integer(inputs.files_before) || inputs.files_before < 1 || inputs.files_after !== inputs.files_before ||
+        typeof inputs.hash_before !== "string" || !/^[a-f0-9]{64}$/.test(inputs.hash_before) ||
+        inputs.hash_after !== inputs.hash_before) {
+      errors.push("inputs: snapshot ausente, inválido ou árvore alterada durante o gate");
+    }
+    const sandbox = input.sandbox;
+    if (!sandbox || sandbox.ok !== true || sandbox.sandbox !== "f02-crm-cadastros-disposable" ||
+        sandbox.api !== "loopback:55421" || sandbox.database !== "loopback:55422/postgres" ||
+        sandbox.app !== "loopback:3102" || sandbox.providers?.whatsapp !== "mock" ||
+        sandbox.providers?.ai !== "mock" || sandbox.credentials?.anon !== "present" ||
+        sandbox.credentials?.service_role !== "present") {
+      errors.push("sandbox: evidência segura ausente ou inválida");
+    }
+    try {
+      const parsed = parseF02E2E(input.reports["e2e-plan"], input.reports.e2e, input.root);
+      suites.e2e = parsed;
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : "e2e: relatório inválido");
     }
   }
   const unknownDebt = debt.filter((entry) => !KNOWN_DEBT.some((known) => Object.keys(known).every((key) => known[key] === entry[key])));
@@ -144,13 +171,20 @@ function git(args, root) { return execFileSync("git", args, { cwd: root, encodin
 
 export function collect(root, directory, context) {
   const reports = {}, exits = {}, metrics = {};
-  for (const name of ["typecheck", "lint", "build", "shell", "unit", "integration", "db", "secrets"]) {
+  for (const name of ["typecheck", "lint", "build", "shell", "unit", "integration", "db", "secrets", "inputs-before", "sandbox", "e2e-plan", "e2e", "inputs"]) {
     const raw = read(path.join(directory, `${name}.exit`));
     exits[name] = raw !== null && /^\d+$/.test(raw) ? Number(raw) : null;
   }
   for (const suite of ["unit", "integration", "db"]) {
     try { reports[suite] = JSON.parse(readFileSync(path.join(directory, `${suite}.json`), "utf8")); } catch { reports[suite] = null; }
   }
+  for (const name of ["e2e-plan", "e2e"]) {
+    try { reports[name] = JSON.parse(readFileSync(path.join(directory, `${name}.json`), "utf8")); } catch { reports[name] = null; }
+  }
+  let sandbox = null;
+  try { sandbox = JSON.parse(readFileSync(path.join(directory, "sandbox.json"), "utf8")); } catch { sandbox = null; }
+  let inputs = null;
+  try { inputs = JSON.parse(readFileSync(path.join(directory, "inputs.json"), "utf8")); } catch { inputs = null; }
   for (const name of ["isolation", "rls-coverage", "rbac", "entitlement"]) metrics[name] = read(path.join(directory, "metrics", `${name}.line`));
   metrics.secrets = read(path.join(directory, "secrets.log"));
   let testsDeleted = null, tenantReferences = null, skipOnlyOccurrences = null;
@@ -169,27 +203,33 @@ export function collect(root, directory, context) {
     testsDeleted = null; tenantReferences = null; skipOnlyOccurrences = null;
   }
   const mutantCounts = (read(path.join(directory, "mutants.count")) ?? "").split("/").map(Number);
-  return { root, context, exits, reports, metrics, testsDeleted, tenantReferences, skipOnlyOccurrences,
+  return { root, context, exits, reports, sandbox, inputs, metrics, testsDeleted, tenantReferences, skipOnlyOccurrences,
     mutants: { killed: mutantCounts[0], total: mutantCounts[1] } };
 }
 
 export function render(input, result) {
   const fraction = (name) => result.suites[name] ? `${result.suites[name].passed}/${result.suites[name].total}` : "pending";
   const ok = (name) => input.exits[name] === 0 ? "ok" : "fail";
-  const count = (key) => Object.keys(result.suites).length === 3
+  const expectedSuiteCount = input.context.phase === "F02" ? 4 : 3;
+  const count = (key) => Object.keys(result.suites).length === expectedSuiteCount
     ? Object.values(result.suites).reduce((sum, suite) => sum + suite[key], 0) : "pending";
+  const e2e = result.suites.e2e;
+  const replicability = input.context.phase === "F02"
+    ? `replicability: e2e[fictitious_A_B]=${fraction("e2e")} specs=${e2e ? `${e2e.specs}/${e2e.requiredSpecs}` : "pending"} grep_deka_in_src=${input.tenantReferences ?? "pending"}`
+    : `replicability: e2e[deka]=pending e2e[demo2]=pending src_diff_lines=pending grep_deka_in_src=${input.tenantReferences ?? "pending"}`;
   return [
     "VERIFY SUMMARY",
     `scope=${input.context.revalidation ? "revalidation" : "phase"} phase=${input.context.phase} current_phase=${input.context.active}`,
     `build=${ok("build")} lint=${ok("lint")} typecheck=${ok("typecheck")} shell=${ok("shell")}`,
-    `unit=${fraction("unit")} integration=${fraction("integration")} db=${fraction("db")} e2e=pending baseline_n0=${input.context.baseline.total}`,
+    `unit=${fraction("unit")} integration=${fraction("integration")} db=${fraction("db")} e2e=${fraction("e2e")} baseline_n0=${input.context.baseline.total}`,
     `baseline_comparable: scope=unit+db passed=${result.corePassed} required=${result.baselineCore} full_n0=pending`,
+    `e2e_scope: F02-required passed=${fraction("e2e")} specs=${e2e ? `${e2e.specs}/${e2e.requiredSpecs}` : "pending"}`,
     ...["isolation", "rls-coverage", "rbac", "entitlement"].map((name) => input.metrics[name] ?? `${name}: pending`),
     "ai_eval: cases=pending pass=pending unknown=pending injection=pending cross_tenant=pending provider_calls_at_zero_balance=pending",
     "handoff: ai_msgs_after_handoff=pending summary=pending assignee=pending notify=pending",
     "reminder: runs=pending sent=pending duplicates=pending",
     "webhook: replay=pending stored=pending tables_checked=pending",
-    `replicability: e2e[deka]=pending e2e[demo2]=pending src_diff_lines=pending grep_deka_in_src=${input.tenantReferences ?? "pending"}`,
+    replicability,
     input.metrics.secrets ?? "secrets: pending",
     `tests_deleted=${input.testsDeleted ?? "pending"} tests_skipped=${count("skipped")} expected_failures=${count("expectedFailures")} tests_failed=${count("failed")} tests_pending=${count("pending")} mutants_killed=${input.mutants.killed ?? "pending"}/${input.mutants.total ?? "pending"}`,
     `debt_known=${result.debt.filter((entry) => KNOWN_DEBT.some((known) => Object.keys(known).every((key) => known[key] === entry[key]))).length} skip_only_occurrences=${input.skipOnlyOccurrences ?? "pending"} violations=${result.errors.length}`,

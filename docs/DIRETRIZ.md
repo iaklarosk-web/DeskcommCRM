@@ -1,6 +1,6 @@
 # DIRETRIZ v2 — CRM SaaS multi-tenant com IA sobre o DeskcommCRM
 
-**Versão 2.2 · construção autorizada em 09/09/2026 · substitui integralmente "Construção CRM" v1 (Guias 00–09).** Este arquivo vive em `docs/DIRETRIZ.md`. O `AGENTS.md` (seção 9) é o que o agente relê a cada tarefa e aponta para cá.
+**Versão 2.3 · construção por fase e configuração pelo cliente em 09/09/2026 · substitui integralmente "Construção CRM" v1 (Guias 00–09).** Este arquivo vive em `docs/DIRETRIZ.md`. O `AGENTS.md` (seção 9) é o que o agente relê a cada tarefa e aponta para cá.
 
 ## 0. Como usar este documento
 
@@ -103,6 +103,8 @@ A tabela abaixo é a seção de maior autoridade deste documento. Cada linha res
 | D44 | [DECIDIDO, 08/09/2026] Atraso de assinatura: avisar e conceder prazo de regularização; depois bloquear novas operações, preservando dados e acesso à cobrança. Dias de carência, notificações e regras de reativação/retencão permanecem para revisão antes da cobrança real. |
 | D45 | [AUTORIZADO, 09/09/2026] Construir por fases conforme a sequência e os aceites vigentes, começando pela F02; amplia o escopo de D42. Planejamento e revisões críticas com modelos mais fortes; execução delimitada com modelos mais econômicos, escolhidos pelo agente com esforço proporcional ao risco. Registrar consumo observado e equivalente de API separadamente da cobrança da assinatura, sem inventar fatura por tarefa. Pedido típico, unidades, preços e entrega continuam pendentes com a Deka; seguir com fixtures e campos configuráveis, sem inferir regra comercial. Detalhes no ADR-011. |
 | D46 | [DECISÃO TÉCNICA, 09/09/2026, ADR-012] Identidade lógica preservada em contacts/catalog_products; empresa-cliente em crm_companies. Pedido operacional em crm_orders/crm_order_items, sem relaxar contratos ou reinterpretar estados de orders externo. Relações novas incluem tenant; unidades legadas ficam não definidas. Escrita operacional atômica por serviço autorizado, revisão e recibo idempotente; evento canônico do pedido integra a ficha com origem visível, preservando a visibilidade das atividades de lead. Implementação e aceite exigem provas próprias. |
+| D47 | [DECIDIDO PELO PROPRIETÁRIO, 09/09/2026] Pausar ao concluir cada fase e entregar estado, evidências e consumo observado. A fase seguinte começa após nova mensagem do proprietário, para administrar o limite semanal da assinatura. Se houver impedimento real, preservar checkpoint sem declarar conclusão. Não foi fixado teto numérico de tokens; equivalente API não é saldo nem fatura da assinatura. |
+| D48 | [DECIDIDO PELO PROPRIETÁRIO, 09/09/2026] A Deka será o primeiro usuário piloto e preencherá seus dados/regras ao receber acesso. Informações comerciais da Deka não são pré-requisito para concluir a construção: implementar funções genéricas configuráveis e validar com empresas/dados fictícios. Configuração necessária é solicitada no produto antes da operação dependente; nunca inferida como fato da Deka. Substitui dependências de construção de entrevistas Deka em F02/F05 e etapas posteriores, preservando validação real de provedores, autorização de produção e resultados do piloto como evidências distintas. ADR-014 detalha o contrato F02. |
 
 ### 2.2 Decisões que só o proprietário toma
 
@@ -713,7 +715,7 @@ Substitui as 163 tasks do backlog original. Ficou só o que cabe nos 5 blocos da
 |---|---|---|---|
 | F01 Fundação multi-tenant | F00 | `phase=F00 status=done`, `baseline_n0=N0`, ADR-001/002/003, `verify.sh` v0 revisado (D25) | TenantContext, TenantConfiguration, seeds, Entitlement stub, RBAC, RLS provada |
 | F02 CRM Core | F01 | `F01=done`, `isolation: leaks=0 tables=K` | 7 entidades D22 com RLS, API, UI |
-| F03 Conversation + Channel Adapter + Inbox | F02 | `F02=done`, `e2e[deka]=ok e2e[demo2]=ok` | Estados D16, WAHA com mock, webhook idempotente, Inbox |
+| F03 Conversation + Channel Adapter + Inbox | F02 | `F02=done`, `e2e[fictitious_A_B]=ok` (ADR-014) | Estados D16, WAHA com mock, webhook idempotente, Inbox |
 | F04 AI Agent + Knowledge/RAG + Action Policy | F03 | `F03=done`, `webhook: stored=1` | Catálogo D17, 9 tools D18, RAG isolado, dataset ai-eval |
 | F05 Handoff + Notificações + Recurring Reminder | F04 | `F04=done`, `ai_eval: pass=M/M` | D19, notificações, lembrete PJ D23, uso de IA visível |
 | F06 Hardening + staging | F05 | `F05=done`, `hosting_confirmed=yes` (D03; sem isso, BLOCKER) | Observabilidade, Segurança/LGPD, backup+restore, Compose, smoke |
@@ -775,7 +777,7 @@ Não entra: estoque, fiscal, cobrança de pedidos, rota de entrega, IA/WhatsApp 
 
 Objetivo: mensagem do WAHA (ou mock) vira cliente, conversa e mensagem no tenant certo, uma vez só; o atendente opera pelo Inbox com estado visível. Adaptar o ciclo existente e preservar `ServiceBoundary`, demanda e revisão; mapear D16 sem criar uma segunda máquina de estados concorrente.
 
-Pré-condição: `F02=done`, `e2e[deka]=ok e2e[demo2]=ok`.
+Pré-condição: `F02=done`, `e2e[fictitious_A_B]=ok` (ADR-014).
 
 | ID | Task | Módulo | Prova |
 |---|---|---|---|
@@ -892,7 +894,7 @@ Estas fases ampliam o destino do produto conforme entrevista de 08/09/2026. São
 
 | Fase | Entrega | Critério de saída |
 |---|---|---|
-| F08 — Serviços reais e produção inicial | WAHA e IA reais, e-mail transacional, domínio, operador, orçamento, backup/retorno e dados Deka autorizados | Jornadas reais conferidas, configuração sem placeholders, aceite de produção e smoke após deploy |
+| F08 — Serviços reais e produção inicial | WAHA e IA reais, e-mail transacional, domínio, operador, orçamento e backup/retorno; dados de cliente entram no onboarding após acesso | Jornadas reais conferidas, configuração sem placeholders, aceite de produção e smoke após deploy |
 | F09 — Piloto Deka | Operação acompanhada: pedidos, separação, tempo, adesão e custo/qualidade da IA | Baseline/metas comparados com números e denominadores; decidir continuar, corrigir/repetir ou encerrar |
 | F10 — Segunda empresa real | Validar outro cliente e preço aceito; segmento ainda não definido | Operação por configuração sem código específico; preço aceito. Abre o gate de expansão; venda assistida pode validar demanda antes do gateway |
 | F11 — Administração e entrada guiada | Painel/login do proprietário, empresas/equipes/suporte, cadastro e wizard WhatsApp/IA; preparar ativação dependente de F12 | Empresa conclui configuração sem editar código/banco; suporte auditado e limitado; nenhum acesso operacional gratuito por falha no fluxo |
@@ -903,7 +905,7 @@ Estas fases ampliam o destino do produto conforme entrevista de 08/09/2026. São
 | F16 — Marca e versatilidade | Marca do SaaS, experiência coerente e presets configuráveis. Definir profundidade de templates, white-label e domínio por cliente antes de construir | Nova empresa configura seu uso sem código; atualização preserva escolhas; identidade visual/domínio corretos para o escopo acordado |
 | F17 — Operação e aceite comercial | Capacidade, recuperação, suporte, atualização, documentação e regressão final | Jornada cadastro → pagamento → acesso → WhatsApp/IA/chat/agenda → operação → cancelamento/recuperação validada; carga/recuperação medidas; nenhum defeito crítico/alto aberto; aceite da versão pelo proprietário |
 
-Dependências: F00/F01 → F02 → F03 → F04 → F05 → F06 → F07 → F08 → F09 → F10. F11/F12 são desenvolvidas em conjunto para fechar o onboarding pago; F13–F16 podem ter trabalho paralelo com seus contratos definidos. F17 reúne os critérios. WhatsApp oficial e novos canais só entram por decisão posterior. Prioridade informada: começar o quanto antes, sem data fixada. Orçamento recomendado, aberto para revisão: até R$300/mês adicionais no piloto se a VPS comportar, e R$600–1.200/mês na preparação comercial; premissas no orçamento proposto. Nenhum valor aprovado nem autorização de gasto.
+Dependências técnicas: F00/F01 → F02 → F03 → F04 → F05 → F06 → F07. F11/F12 são desenvolvidas em conjunto para fechar o onboarding pago; F13–F16 avançam com seus contratos definidos, e F17 reúne os critérios. F08 prepara e valida os serviços reais quando houver credenciais e autorização do proprietário. Por D48, F09/F10 são marcos de acompanhamento e validação de mercado: podem ocorrer após a plataforma estar construída e não bloqueiam a engenharia de F11–F17. Suas evidências reais permanecem pendentes até ocorrerem, e o gate comercial de expansão de D32 não é um pré-requisito para terminar o software. WhatsApp oficial e novos canais só entram por decisão posterior. Prioridade informada: começar o quanto antes, sem data fixada. Orçamento recomendado, aberto para revisão: até R$300/mês adicionais no piloto se a VPS comportar, e R$600–1.200/mês na preparação comercial; premissas no orçamento proposto. Nenhum valor aprovado nem autorização de gasto.
 
 ## 8. Definition of Done, verify.sh e condição de parada
 
@@ -1328,7 +1330,7 @@ Confirmação: cada linha da tabela tem numerador, denominador e meta; nenhuma l
 | 4 Supabase dev | F00 (F00-T04 consulta `pg_policies` e `pg_tables` no banco de dev; sem banco, a sub-matriz de RLS não existe) |
 | 5 OpenAI + modelos | F00 exige ADR-002: sem modelo escolhido por você, o ADR registra a dimensão herdada do schema como decisão provisória e marca `provisório`; F04 real fica `NOT VALIDATED (real)` sem a chave |
 | 6 Número de teste | F03 real fica `NOT VALIDATED (real)`; a fase fecha com mock |
-| 7 Conversa com a Deka | Dados comerciais antes das tasks dependentes F02/F05; placeholders permitem a fundação; piloto real não começa sem D27 |
+| 7 Conversa com a Deka | Dados comerciais preenchidos pela empresa ao receber acesso; não bloqueiam construção F02/F05 (D48). Piloto real mantém metas e evidências próprias |
 | 8 Hosting | F06 (deploy em staging) |
 | 9 Revisão do verify.sh | F01 (o `verify.sh` só vale como prova depois de congelado) |
 | 10 Itens de produção | Promoção para produção |

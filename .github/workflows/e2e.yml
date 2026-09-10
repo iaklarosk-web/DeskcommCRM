@@ -601,6 +601,10 @@ jobs:
         zona-de-perigo-apaga-dados-de-teste.spec.ts
         f02-crm-orders.spec.ts
         f02-crm-work.spec.ts
+        f02-crm-navigation.spec.ts
+        f02-api-active-org.spec.ts
+        f02-support-readonly-api.spec.ts
+        f02-daily-checks.spec.ts
 
       FORA_DO_CI: >-
         vps-fresh-onboarding.spec.ts

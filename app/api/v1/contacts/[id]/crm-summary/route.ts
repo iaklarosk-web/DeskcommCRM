@@ -28,8 +28,10 @@
  */
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
+import { z } from "zod";
 
 import { ok, fail } from "@/lib/api/wrappers";
+import { requireRole } from "@/lib/auth/require-role";
 import { camposDoFunil, settingsDoEmbed } from "@/lib/leads/campos-do-funil";
 import { createClient } from "@/lib/supabase/server";
 import { nomesDosAtendentes } from "@/lib/users/nome-do-atendente";
@@ -70,63 +72,96 @@ export async function GET(
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const requestId = randomUUID();
-  const { id: contactId } = await ctx.params;
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: authErr,
-  } = await supabase.auth.getUser();
-  if (authErr || !user) {
-    return fail("unauthenticated", "Auth required.", 401, { requestId });
+  const authz = await requireRole("viewer", {
+    requestId,
+    resource: "contacts",
+  });
+  if (!authz.ok) return authz.response;
+  const contactId = z.uuid().safeParse((await ctx.params).id);
+  if (!contactId.success) {
+    return fail("validation_failed", "Parâmetros inválidos.", 422, {
+      requestId,
+    });
   }
+  const organizationId = authz.org.orgId;
+  const supabase = await createClient();
 
-  const { data: contactScope, error: scopeError } = await supabase.from("contacts")
-    .select("organization_id").eq("id", contactId).maybeSingle();
-  if (scopeError) return fail("internal_error", scopeError.message, 500, { requestId });
-  if (!contactScope) return fail("not_found", "Contato não encontrado.", 404, { requestId });
-  const [leads, orders, activities, demandas, fatos, historico] = await Promise.all([
-    supabase
-      .from("crm_leads")
-      .select(LEAD_COLS)
-      .eq("contact_id", contactId).eq("organization_id", contactScope.organization_id)
-      .order("updated_at", { ascending: false })
-      .limit(3),
-    supabase
-      .from("orders")
-      .select(ORDER_COLS)
-      .eq("contact_id", contactId).eq("organization_id", contactScope.organization_id)
-      .order("created_at", { ascending: false })
-      .limit(3),
-    // 12 e não 5. A janela de 5 foi dimensionada quando a timeline não recebia
-    // troca de comando: agora um atendimento normal (assumiu → transferiu →
-    // liberou → voltou ao automático) gasta QUATRO linhas sozinho, e com 5 o
-    // painel mostraria só a movimentação de dono, empurrando para fora o que o
-    // negócio fez. 12 cabe sem rolagem própria na coluna de 296px.
-    supabase
-      .from("crm_lead_activities")
-      .select(ACTIVITY_COLS)
-      .eq("contact_id", contactId).eq("organization_id", contactScope.organization_id)
-      .order("performed_at", { ascending: false })
-      .limit(12),
-    // Só as ABERTAS: demanda encerrada é histórico e já vive na timeline. Da
-    // mais antiga para a mais nova — quem espera há mais tempo aparece primeiro,
-    // mesma régua do Radar, para as duas telas não contarem histórias
-    // diferentes sobre o mesmo contato.
-    supabase
-      .from("demandas")
-      .select(DEMANDA_COLS)
-      .eq("contact_id", contactId).eq("organization_id", contactScope.organization_id)
-      .is("fechada_em", null)
-      .order("aberta_em", { ascending: true })
-      .limit(5),
-    supabase.from("lead_notes").select("id, headline, body").eq("contact_id", contactId).eq("organization_id", contactScope.organization_id).order("created_at", { ascending: false }).limit(20),
-    supabase.from("demandas").select("id, desfecho, fechada_em").eq("contact_id", contactId).eq("organization_id", contactScope.organization_id).not("fechada_em", "is", null).order("fechada_em", { ascending: false }).limit(5),
-  ]);
+  const { data: contact, error: contactError } = await supabase
+    .from("contacts")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("id", contactId.data)
+    .maybeSingle();
+  if (contactError)
+    return fail("internal_error", contactError.message, 500, { requestId });
+  if (!contact)
+    return fail("not_found", "Contato não encontrado.", 404, { requestId });
+  const [leads, orders, activities, demandas, fatos, historico] =
+    await Promise.all([
+      supabase
+        .from("crm_leads")
+        .select(LEAD_COLS)
+        .eq("contact_id", contactId.data)
+        .eq("organization_id", organizationId)
+        .order("updated_at", { ascending: false })
+        .limit(3),
+      supabase
+        .from("orders")
+        .select(ORDER_COLS)
+        .eq("contact_id", contactId.data)
+        .eq("organization_id", organizationId)
+        .order("created_at", { ascending: false })
+        .limit(3),
+      // 12 e não 5. A janela de 5 foi dimensionada quando a timeline não recebia
+      // troca de comando: agora um atendimento normal (assumiu → transferiu →
+      // liberou → voltou ao automático) gasta QUATRO linhas sozinho, e com 5 o
+      // painel mostraria só a movimentação de dono, empurrando para fora o que o
+      // negócio fez. 12 cabe sem rolagem própria na coluna de 296px.
+      supabase
+        .from("crm_lead_activities")
+        .select(ACTIVITY_COLS)
+        .eq("contact_id", contactId.data)
+        .eq("organization_id", organizationId)
+        .order("performed_at", { ascending: false })
+        .limit(12),
+      // Só as ABERTAS: demanda encerrada é histórico e já vive na timeline. Da
+      // mais antiga para a mais nova — quem espera há mais tempo aparece primeiro,
+      // mesma régua do Radar, para as duas telas não contarem histórias
+      // diferentes sobre o mesmo contato.
+      supabase
+        .from("demandas")
+        .select(DEMANDA_COLS)
+        .eq("contact_id", contactId.data)
+        .eq("organization_id", organizationId)
+        .is("fechada_em", null)
+        .order("aberta_em", { ascending: true })
+        .limit(5),
+      supabase
+        .from("lead_notes")
+        .select("id, headline, body")
+        .eq("contact_id", contactId.data)
+        .eq("organization_id", organizationId)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabase
+        .from("demandas")
+        .select("id, desfecho, fechada_em")
+        .eq("contact_id", contactId.data)
+        .eq("organization_id", organizationId)
+        .not("fechada_em", "is", null)
+        .order("fechada_em", { ascending: false })
+        .limit(5),
+    ]);
 
   // A falha SOBE. Engolir aqui devolveria lista vazia ao cliente e recriaria,
   // do lado do servidor, exatamente a mentira que esta rota veio desfazer.
-  const falha = leads.error ?? orders.error ?? activities.error ?? demandas.error ?? fatos.error ?? historico.error;
+  const falha =
+    leads.error ??
+    orders.error ??
+    activities.error ??
+    demandas.error ??
+    fatos.error ??
+    historico.error;
   if (falha) {
     return fail("internal_error", falha.message, 500, { requestId });
   }
@@ -138,11 +173,15 @@ export async function GET(
     performed_by_user_id?: string | null;
     [k: string]: unknown;
   }>;
-  const nomes = await nomesDosAtendentes(linhas.map((a) => a.performed_by_user_id ?? null));
+  const nomes = await nomesDosAtendentes(
+    linhas.map((a) => a.performed_by_user_id ?? null),
+  );
 
   return ok(
     {
-      leads: (leads.data ?? []).map((row) => comCamposDoFunil(row as Record<string, unknown>)),
+      leads: (leads.data ?? []).map((row) =>
+        comCamposDoFunil(row as Record<string, unknown>),
+      ),
       orders: orders.data ?? [],
       activities: linhas.map((a) => ({
         ...a,
@@ -151,7 +190,8 @@ export async function GET(
           : null,
       })),
       demandas: demandas.data ?? [],
-      fatos: fatos.data ?? [], historico: historico.data ?? [],
+      fatos: fatos.data ?? [],
+      historico: historico.data ?? [],
     },
     { requestId },
   );

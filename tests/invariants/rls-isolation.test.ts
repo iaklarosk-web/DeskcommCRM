@@ -105,6 +105,9 @@ beforeAll(() => {
       v_product uuid;
       v_order uuid;
       v_receipt uuid;
+      v_check_receipt uuid;
+      v_check_item uuid;
+      v_order_revision integer;
       v_linked_task uuid;
       v_task_receipt uuid;
       v_boundary jsonb;
@@ -292,6 +295,39 @@ beforeAll(() => {
                     'draft_created', '{}'::jsonb, 'user');
         end if;
 
+        -- F02-T12: evento de conferência legível e recibo privado.
+        if not exists(select 1 from public.crm_order_check_events where organization_id=v_org) then
+          select id into v_check_item from public.crm_order_items
+            where organization_id=v_org and order_id=v_order order by position,id limit 1;
+          if v_check_item is null then
+            insert into public.crm_order_items
+              (organization_id,order_id,position,requested_text,product_id,
+               product_name_snapshot,sale_unit_snapshot,quantity,unit_price_cents,
+               currency_snapshot,line_total_cents)
+            values(v_org,v_order,1,'Item sintético de conferência',v_product,
+                   'Produto sintético de conferência','un',1.000,100,'BRL',100)
+            returning id into v_check_item;
+          end if;
+          select revision into v_order_revision from public.crm_orders
+            where organization_id=v_org and id=v_order;
+          insert into public.crm_order_check_command_receipts
+            (organization_id,operation,idempotency_key,request_hash,actor_user_id,order_id,
+             response_body,completed_at)
+          values(v_org,'record_check',gen_random_uuid(),decode(repeat('12',32),'hex'),
+            case when v_org='${ORG_A}'::uuid then '${USER_A}'::uuid else '${USER_B}'::uuid end,
+            v_order,'{}'::jsonb,now()) returning id into v_check_receipt;
+          insert into public.crm_order_check_events
+            (organization_id,receipt_id,order_id,order_revision,event_no,item_id,
+             ordered_quantity_snapshot,checked_quantity,sale_unit_snapshot,check_state,actor_user_id)
+          select v_org,v_check_receipt,v_order,v_order_revision,1,v_check_item,
+                 i.quantity,
+                 case when i.quantity is null or i.sale_unit_snapshot is null then 0 else i.quantity end,
+                 i.sale_unit_snapshot,
+                 case when i.quantity is null or i.sale_unit_snapshot is null then 'pending' else 'checked' end,
+                 case when v_org='${ORG_A}'::uuid then '${USER_A}'::uuid else '${USER_B}'::uuid end
+            from public.crm_order_items i where i.organization_id=v_org and i.id=v_check_item;
+        end if;
+
         -- F02-T03: journal de tarefa e nota são domínio legível pelo membro.
         -- O receipt de comando permanece privado e tem prova própria dedicada.
         select id into v_linked_task from public.crm_tasks
@@ -408,6 +444,8 @@ export const TABLES = [
   "crm_orders",
   "crm_order_items",
   "crm_order_events",
+  // F02-T12 — journal de conferência; receipt privado fica em PROVA_PROPRIA.
+  "crm_order_check_events",
   // F02-T03 — domínios de leitura do membro. Receipt privado fica em PROVA_PROPRIA.
   "crm_task_events",
   "crm_notes",

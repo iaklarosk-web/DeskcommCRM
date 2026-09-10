@@ -4409,6 +4409,133 @@ export type Database = {
           },
         ]
       }
+      crm_order_check_command_receipts: {
+        Row: {
+          actor_user_id: string
+          completed_at: string | null
+          created_at: string
+          id: string
+          idempotency_key: string
+          operation: string
+          order_id: string | null
+          organization_id: string
+          request_hash: string
+          response_body: Json | null
+        }
+        Insert: {
+          actor_user_id: string
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          idempotency_key: string
+          operation?: string
+          order_id?: string | null
+          organization_id: string
+          request_hash: string
+          response_body?: Json | null
+        }
+        Update: {
+          actor_user_id?: string
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          idempotency_key?: string
+          operation?: string
+          order_id?: string | null
+          organization_id?: string
+          request_hash?: string
+          response_body?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_order_check_command_receipts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_order_check_receipts_order_tenant_fkey"
+            columns: ["organization_id", "order_id"]
+            isOneToOne: false
+            referencedRelation: "crm_orders"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
+      crm_order_check_events: {
+        Row: {
+          actor_user_id: string
+          check_state: string
+          checked_quantity: number
+          created_at: string
+          event_no: number
+          event_sequence: number
+          id: string
+          item_id: string
+          order_id: string
+          order_revision: number
+          ordered_quantity_snapshot: number | null
+          organization_id: string
+          receipt_id: string
+          sale_unit_snapshot: string | null
+        }
+        Insert: {
+          actor_user_id: string
+          check_state: string
+          checked_quantity: number
+          created_at?: string
+          event_no: number
+          event_sequence?: never
+          id?: string
+          item_id: string
+          order_id: string
+          order_revision: number
+          ordered_quantity_snapshot?: number | null
+          organization_id: string
+          receipt_id: string
+          sale_unit_snapshot?: string | null
+        }
+        Update: {
+          actor_user_id?: string
+          check_state?: string
+          checked_quantity?: number
+          created_at?: string
+          event_no?: number
+          event_sequence?: never
+          id?: string
+          item_id?: string
+          order_id?: string
+          order_revision?: number
+          ordered_quantity_snapshot?: number | null
+          organization_id?: string
+          receipt_id?: string
+          sale_unit_snapshot?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_order_check_events_order_tenant_fkey"
+            columns: ["organization_id", "order_id"]
+            isOneToOne: false
+            referencedRelation: "crm_orders"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "crm_order_check_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_order_check_events_receipt_tenant_fkey"
+            columns: ["organization_id", "receipt_id"]
+            isOneToOne: false
+            referencedRelation: "crm_order_check_command_receipts"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
       crm_order_command_receipts: {
         Row: {
           actor_id: string | null
@@ -9187,6 +9314,16 @@ export type Database = {
         }
         Returns: string
       }
+      fn_commercial_alias_resolutions: {
+        Args: { p_org: string }
+        Returns: {
+          alias_key: string
+          destination: string
+          legacy_updated_at: string
+          resolved_at: string
+          source: string
+        }[]
+      }
       fn_configurar_pre_go_live_canal: {
         Args: {
           p_canal: string
@@ -9261,6 +9398,15 @@ export type Database = {
           p_hash: string
           p_key: string
           p_request: Json
+        }
+        Returns: Json
+      }
+      fn_crm_order_checks: {
+        Args: {
+          p_before_sequence?: string
+          p_limit?: number
+          p_order: string
+          p_org: string
         }
         Returns: Json
       }
@@ -9850,6 +9996,10 @@ export type Database = {
         Returns: boolean
       }
       fn_support_write_allowed: { Args: { p_org: string }; Returns: boolean }
+      fn_update_organization_profile: {
+        Args: { p_actor: string; p_org: string; p_profile: Json }
+        Returns: number
+      }
       fn_upsert_wa_contact: {
         Args: {
           p_chat_id: string

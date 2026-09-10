@@ -13,6 +13,9 @@
  * Seed nunca sobrescreve nada existente (on conflict do nothing) — quem muda
  * configuração viva é o tenant_admin pela tela (setSetting), não uma re-rodada
  * de seed.
+ *
+ * F02-T07 acrescenta fixtures fictícias somente por opt-in duplo. O documento
+ * inteiro é validado antes do pool e o writer roda no mesmo BEGIN/COMMIT.
  */
 import * as fs from "node:fs";
 
@@ -21,6 +24,11 @@ import { parse as parseYaml } from "yaml";
 
 import { entradaDoSchema, SCHEMA_VERSION } from "@/src/tenant-config/schema";
 import { validateSeed } from "@/src/tenant-config/validate-seed";
+import { LEGACY_SETTING_KEYS, prepareCanonicalSeed } from "@/src/tenant-config/canonical-seed";
+
+import { parseF02Fixtures } from "../src/tenant-config/f02-fixtures";
+import { parseF02FixtureArgs } from "./f02-fixture-args";
+import { writeF02Fixtures } from "./f02-fixture-writer";
 
 interface SeedUser {
   email: string;
@@ -77,9 +85,12 @@ function temTodoPendente(v: unknown): boolean {
 async function main(): Promise<void> {
   const arquivo = process.argv[2];
   if (!arquivo) {
-    console.error("uso: scripts/create-tenant.sh <seed.yaml>");
+    console.error(
+      "uso: scripts/create-tenant.sh <seed.yaml> [--fictional-fixtures <arquivo> --sandbox-marker <marcador>]",
+    );
     process.exit(2);
   }
+  const fixtureOptions = parseF02FixtureArgs(process.argv.slice(3));
   const dbUrl = process.env["SUPABASE_DB_URL"];
   if (!dbUrl) {
     console.error("SUPABASE_DB_URL ausente no ambiente (direnv /srv/secrets/crm-saas.env)");
@@ -94,6 +105,18 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   console.log(`validateSeed: 0 erros, seed_todos=${resultado.seed_todos}`);
+  // Limites técnicos e aliases são resolvidos antes do pool. TODO continua
+  // pendência e uma URL legada de logo nunca provoca acesso remoto.
+  const canonicalSeed = prepareCanonicalSeed(seed.settings);
+
+  // O documento opcional também é validado antes de abrir o pool. Assim erro
+  // de fixture produz zero escrita, inclusive da organização-base.
+  const f02Fixtures = fixtureOptions
+    ? parseF02Fixtures(parseYaml(fs.readFileSync(fixtureOptions.fixturePath, "utf8")), {
+        tenantSlug: seed.tenant.slug,
+        seedUserEmails: (seed.users ?? []).map((user) => user.email),
+      })
+    : undefined;
 
   const pool = new pg.Pool({ connectionString: dbUrl, max: 2 });
   const client = await pool.connect();
@@ -106,18 +129,34 @@ async function main(): Promise<void> {
   try {
     await client.query("begin");
 
-    // 1. Organização (slug é o unique herdado).
-    await conta(
-      `insert into public.organizations (slug, display_name, legal_name)
-       values ($1, $2, $2) on conflict (slug) do nothing`,
-      [seed.tenant.slug, seed.tenant.name],
+    // 1. Organização (slug é o unique herdado). Aliases canônicos só entram no
+    // INSERT: reencontrar slug nunca edita timezone/marca de tenant vivo.
+    const columns = ["slug", "display_name", "legal_name"];
+    const values = ["$1", "$2", "$2"];
+    const params: unknown[] = [seed.tenant.slug, seed.tenant.name];
+    if (canonicalSeed.organization.timezone) {
+      columns.push("timezone");
+      params.push(canonicalSeed.organization.timezone);
+      values.push(`$${params.length}`);
+    }
+    if (canonicalSeed.organization.branding) {
+      columns.push("settings");
+      params.push(JSON.stringify({ branding: canonicalSeed.organization.branding }));
+      values.push(`$${params.length}::jsonb`);
+    }
+    const inserted = await client.query<{ id: string }>(
+      `insert into public.organizations (${columns.join(",")})
+       values (${values.join(",")}) on conflict (slug) do nothing returning id`,
+      params,
     );
-    const org = (
-      await client.query<{ id: string }>(
-        `select id from public.organizations where slug = $1`,
-        [seed.tenant.slug],
-      )
-    ).rows[0]?.id;
+    criadas += inserted.rowCount ?? 0;
+    const org =
+      inserted.rows[0]?.id ??
+      (
+        await client.query<{ id: string }>(`select id from public.organizations where slug = $1`, [
+          seed.tenant.slug,
+        ])
+      ).rows[0]?.id;
     if (!org) throw new Error(`organização ${seed.tenant.slug} não encontrada após insert`);
 
     // 2. Usuários + membership (ADR-003).
@@ -137,7 +176,9 @@ async function main(): Promise<void> {
           [u.email, u.name ?? u.email],
         );
         userId = (
-          await client.query<{ id: string }>(`select id from auth.users where email = $1`, [u.email])
+          await client.query<{ id: string }>(`select id from auth.users where email = $1`, [
+            u.email,
+          ])
         ).rows[0]?.id;
       }
       if (!userId) throw new Error(`usuário ${u.email} não encontrado após insert`);
@@ -146,6 +187,14 @@ async function main(): Promise<void> {
          values ($1, $2, $3, now()) on conflict do nothing`,
         [userId, org, papel],
       );
+    }
+
+    if (f02Fixtures && fixtureOptions) {
+      const written = await writeF02Fixtures(client, org, f02Fixtures, {
+        sandboxMarker: fixtureOptions.sandboxMarker,
+      });
+      criadas += written.rowsCreated;
+      console.info(`fixtures_f02=${written.rowsCreated} shape=fictitious-v1`);
     }
 
     // 3. Canais mock (channel_accounts, §5.1).
@@ -159,24 +208,31 @@ async function main(): Promise<void> {
 
     // 4. Settings (§5.2) — pendência TODO-DEKA não vira linha.
     const pares: Array<{ key: string; value: unknown }> = [];
-    achatarSettings("", seed.settings ?? {}, pares);
+    achatarSettings("", canonicalSeed.settings, pares);
     let pulados = 0;
     for (const { key, value } of pares) {
       if (temTodoPendente(value)) {
         pulados += 1;
         continue;
       }
+      // Fonte canônica já foi gravada no INSERT da organização nova. Em rerun
+      // de slug existente, não ressuscitar aliases nem tocar a fonte viva.
+      if (LEGACY_SETTING_KEYS.has(key)) continue;
       await conta(
         `insert into public.tenant_settings (organization_id, key, value, schema_version, source)
          values ($1, $2, $3, $4, 'seed') on conflict (organization_id, key) do nothing`,
         [org, key, JSON.stringify(value), SCHEMA_VERSION],
       );
     }
-    if (pulados > 0) console.log(`settings com sentinela TODO- puladas (pendência não é valor): ${pulados}`);
+    if (pulados > 0)
+      console.log(`settings com sentinela TODO- puladas (pendência não é valor): ${pulados}`);
 
     for (const bloco of ["products", "customers", "faq"] as const) {
       const n = (seed[bloco] ?? []).length;
-      if (n > 0) console.log(`bloco ${bloco} (${n} itens) PULADO: entra na fase que adapta a tabela (F02/F04)`);
+      if (n > 0)
+        console.log(
+          `bloco ${bloco} (${n} itens) PULADO: entra na fase que adapta a tabela (F02/F04)`,
+        );
     }
 
     await client.query("commit");

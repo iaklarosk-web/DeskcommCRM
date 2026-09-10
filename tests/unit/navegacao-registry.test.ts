@@ -65,8 +65,20 @@ describe("canSee", () => {
     expect(canSee(dest("/app/inbox"), VIEWER.platform, VIEWER.role)).toBe(true);
   });
 
-  it("platform admin vê tudo, inclusive sem org ativa", () => {
-    for (const d of NAV_DESTINATIONS) expect(canSee(d, true, null)).toBe(true);
+  it("platform admin mantém todos os destinos herdados; Dados comerciais exige escopo tenant", () => {
+    for (const d of NAV_DESTINATIONS) {
+      if (d.href === "/app/settings/commercial") {
+        expect(canSee(d, true, null)).toBe(false);
+        expect(canSee(d, true, "admin")).toBe(false);
+      } else {
+        expect(canSee(d, true, null)).toBe(true);
+      }
+    }
+    const commercial = dest("/app/settings/commercial");
+    expect(canSee(commercial, false, "manager")).toBe(true);
+    expect(canSee(commercial, false, "admin")).toBe(true);
+    expect(canSee(commercial, false, "agent")).toBe(true);
+    expect(canSee(commercial, false, "viewer")).toBe(true);
   });
 
   it("sem papel e sem ser platform admin não vê nada", () => {

@@ -31,8 +31,6 @@ const DIVIDA_CONHECIDA = new Set([
   "app/api/v1/channels/partner/templates/media/route.ts",
   "app/api/v1/channels/partner/templates/route.ts",
   "app/api/v1/contacts/[id]/avatar/route.ts",
-  "app/api/v1/contacts/[id]/crm-summary/route.ts",
-  "app/api/v1/contacts/[id]/timeline/route.ts",
   "app/api/v1/contacts/duplicates/route.ts",
   "app/api/v1/conversations/[id]/messages/route.ts",
   "app/api/v1/conversations/[id]/retention/route.ts",

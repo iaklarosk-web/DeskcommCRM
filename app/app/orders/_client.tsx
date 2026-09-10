@@ -1,6 +1,12 @@
 "use client";
 
 import { randomId } from "@/lib/random-id";
+import { useContact } from "@/hooks/contacts/useContact";
+import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
+import {
+  OrderCommercialFields,
+  type OrderCompanySnapshot,
+} from "@/components/crm/OrderCommercialFields";
 
 import * as React from "react";
 import Link from "next/link";
@@ -25,7 +31,15 @@ function commandItems(items: DraftItem[]) {
   return items.map(({ quantity_input: _quantityInput, ...item }) => item);
 }
 
-export function OrdersClient({ podeEditar }: { podeEditar: boolean }) {
+export function OrdersClient({
+  podeEditar,
+  initialContactId = "",
+  startCreating = false,
+}: {
+  podeEditar: boolean;
+  initialContactId?: string;
+  startCreating?: boolean;
+}) {
   const t = useT();
   const locale = useTagDeIdioma();
   const [status, setStatus] = React.useState("");
@@ -34,8 +48,21 @@ export function OrdersClient({ podeEditar }: { podeEditar: boolean }) {
   const [error, setError] = React.useState(false);
   const [page, setPage] = React.useState(1);
   const [more, setMore] = React.useState(false);
-  const [createOpen, setCreateOpen] = React.useState(false);
-  const [contactId, setContactId] = React.useState("");
+  const [createOpen, setCreateOpen] = React.useState(
+    startCreating && podeEditar,
+  );
+  const [contactId, setContactId] = React.useState(initialContactId);
+  const contactQuery = useContact(contactId);
+  const contact = contactQuery.data?.data;
+  const validContact =
+    !contactQuery.isError &&
+    contact?.id === contactId &&
+    !contact.is_anonymized &&
+    !contact.is_merged_into;
+  const [company, setCompany] = React.useState<OrderCompanySnapshot | null>(
+    null,
+  );
+  const [channel, setChannel] = React.useState("");
   const [items, setItems] = React.useState<DraftItem[]>([newItem()]);
   const [currency, setCurrency] = React.useState("");
   const [draftDeliveryDate, setDraftDeliveryDate] = React.useState("");
@@ -57,9 +84,12 @@ export function OrdersClient({ podeEditar }: { podeEditar: boolean }) {
       });
       if (status) query.set("status", status);
       if (deliveryDate) query.set("delivery_date", deliveryDate);
-      const response = await apiClient.get<ApiList<OrderSummary>>(`/api/v1/crm-orders?${query}`, {
-        signal: controller.signal,
-      });
+      const response = await apiClient.get<ApiList<OrderSummary>>(
+        `/api/v1/crm-orders?${query}`,
+        {
+          signal: controller.signal,
+        },
+      );
       if (controller.signal.aborted) return;
       setData(response.data);
       setMore(response.meta.has_more);
@@ -76,21 +106,39 @@ export function OrdersClient({ podeEditar }: { podeEditar: boolean }) {
   }, [load]);
   React.useEffect(() => () => loadController.current?.abort(), []);
 
+  function selectContact(nextId: string) {
+    if (nextId !== contactId) setCompany(null);
+    setContactId(nextId);
+  }
+
   async function createDraft() {
+    if (!podeEditar || saving) return;
     if (!contactId) {
       setSaveMessage(t("Escolha um contato antes de salvar o pedido."));
       return;
     }
+    if (!validContact) {
+      setSaveMessage(t("Carregue um contato ativo antes de salvar o pedido."));
+      return;
+    }
+    if (company && !company.name.trim()) {
+      setSaveMessage(
+        t("Informe o nome da empresa no pedido ou remova a empresa."),
+      );
+      return;
+    }
     if (items.some((item) => !item.requested_text.trim())) {
-      setSaveMessage(t("Descreva os itens ou remova as linhas vazias antes de salvar."));
+      setSaveMessage(
+        t("Descreva os itens ou remova as linhas vazias antes de salvar."),
+      );
       return;
     }
     const draft: Omit<CreateDraftCommand, "idempotency_key"> = {
       command: "create_draft",
       contact_id: contactId,
-      company_id: null,
-      company_name: null,
-      channel: null,
+      company_id: company?.id ?? null,
+      company_name: company?.name.trim() ?? null,
+      channel: channel.trim() || null,
       delivery_date: draftDeliveryDate || null,
       currency: currency || null,
       items: commandItems(items),
@@ -110,20 +158,30 @@ export function OrdersClient({ podeEditar }: { podeEditar: boolean }) {
         { idempotencyKey: idempotency_key },
       );
       idempotencyKeys.current.delete(key);
-      setSaveMessage(response.meta.replayed ? t("Pedido já salvo.") : t("Pedido salvo."));
+      setSaveMessage(
+        response.meta.replayed ? t("Pedido já salvo.") : t("Pedido salvo."),
+      );
       setCreateOpen(false);
       setContactId("");
+      setCompany(null);
+      setChannel("");
       setItems([newItem()]);
       setDraftDeliveryDate("");
       setCurrency("");
       await load();
     } catch (cause: unknown) {
       const statusCode =
-        typeof cause === "object" && cause !== null && "status" in cause ? cause.status : null;
+        typeof cause === "object" && cause !== null && "status" in cause
+          ? cause.status
+          : null;
       setSaveMessage(
         statusCode === 409
-          ? t("O pedido mudou em outra tela. Recarregue antes de tentar novamente.")
-          : t("Não foi possível salvar. Seus dados continuam no formulário para tentar novamente."),
+          ? t(
+              "O pedido mudou em outra tela. Recarregue antes de tentar novamente.",
+            )
+          : t(
+              "Não foi possível salvar. Seus dados continuam no formulário para tentar novamente.",
+            ),
       );
     } finally {
       setSaving(false);
@@ -131,7 +189,10 @@ export function OrdersClient({ podeEditar }: { podeEditar: boolean }) {
   }
 
   return (
-    <main className="mx-auto max-w-5xl space-y-4 p-6" data-testid="tela-pedidos">
+    <main
+      className="mx-auto max-w-5xl space-y-4 p-6"
+      data-testid="tela-pedidos"
+    >
       <header className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">{t("Pedidos")}</h1>
@@ -139,6 +200,9 @@ export function OrdersClient({ podeEditar }: { podeEditar: boolean }) {
             {t("Acompanhe o que foi combinado e a entrega.")}
           </p>
         </div>
+        <Button asChild variant="outline">
+          <Link href="/app/orders/daily">{t("Pedidos do dia")}</Link>
+        </Button>
         {podeEditar && (
           <Button onClick={() => setCreateOpen((open) => !open)}>
             {createOpen ? t("Fechar formulário") : t("Novo pedido")}
@@ -146,14 +210,61 @@ export function OrdersClient({ podeEditar }: { podeEditar: boolean }) {
         )}
       </header>
       {podeEditar && createOpen && (
-        <section className="space-y-3 rounded-md border p-4" aria-label={t("Novo pedido")}>
+        <section
+          className="space-y-3 rounded-md border p-4"
+          aria-label={t("Novo pedido")}
+        >
           <h2 className="font-medium">{t("Novo pedido")}</h2>
           <OrderForm
             contactId={contactId}
-            onContactChange={setContactId}
+            onContactChange={selectContact}
             items={items}
             onItemsChange={setItems}
             disabled={saving}
+          />
+          {contactId &&
+            (contactQuery.isLoading ? (
+              <p role="status">{t("Carregando contato…")}</p>
+            ) : contactQuery.isError || !contact ? (
+              <div>
+                <p role="alert">{t("Erro ao carregar contato.")}</p>
+                <Button
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => void contactQuery.refetch()}
+                >
+                  {t("Recarregar contato")}
+                </Button>
+              </div>
+            ) : (
+              <p>
+                {t("Contato")}:{" "}
+                <Link
+                  className="underline"
+                  href={`/app/contacts/${contact.id}`}
+                >
+                  {contact.is_anonymized
+                    ? t("Contato anonimizado")
+                    : rotuloDoContato(contact, t)}
+                </Link>
+                {!validContact && (
+                  <span role="alert">
+                    {" "}
+                    · {t("Este contato não pode receber novos pedidos.")}
+                  </span>
+                )}
+              </p>
+            ))}
+          <OrderCommercialFields
+            key={contactId}
+            suggestedCompanyId={
+              validContact ? (contact?.company_id ?? null) : null
+            }
+            company={company}
+            onCompanyChange={setCompany}
+            channel={channel}
+            onChannelChange={setChannel}
+            disabled={saving || !validContact}
           />
           <label className="grid gap-1 text-sm">
             {t("Entrega em")}
@@ -171,10 +282,15 @@ export function OrdersClient({ podeEditar }: { podeEditar: boolean }) {
               maxLength={3}
               placeholder={t("Ex.: BRL")}
               disabled={saving}
-              onChange={(event) => setCurrency(event.target.value.toUpperCase())}
+              onChange={(event) =>
+                setCurrency(event.target.value.toUpperCase())
+              }
             />
           </label>
-          <Button disabled={saving} onClick={() => void createDraft()}>
+          <Button
+            disabled={saving || Boolean(contactId && !validContact)}
+            onClick={() => void createDraft()}
+          >
             {saving ? t("Salvando…") : t("Salvar rascunho")}
           </Button>
           {saveMessage && <p role="status">{saveMessage}</p>}
@@ -224,9 +340,11 @@ export function OrdersClient({ podeEditar }: { podeEditar: boolean }) {
           {data.map((order) => (
             <li key={order.id} className="rounded-md border p-3">
               <Link href={`/app/orders/${order.id}`}>
-                {order.contact_name ?? t("Contato sem nome")} · {statusLabel(order.status, t)} ·{" "}
-                {displayDateOnly(order.delivery_date, locale) ?? t("Entrega não definida")} ·{" "}
-                {displayMoney(order.total_cents, order.currency, t)}
+                {order.contact_name ?? t("Contato sem nome")} ·{" "}
+                {statusLabel(order.status, t)} ·{" "}
+                {displayDateOnly(order.delivery_date, locale) ??
+                  t("Entrega não definida")}{" "}
+                · {displayMoney(order.total_cents, order.currency, t)}
               </Link>
             </li>
           ))}
@@ -234,9 +352,14 @@ export function OrdersClient({ podeEditar }: { podeEditar: boolean }) {
       )}
       <nav className="flex gap-2" aria-label={t("Paginação de pedidos")}>
         {page > 1 && (
-          <Button onClick={() => setPage((current) => current - 1)}>{t("Anterior")}</Button>
+          <Button onClick={() => setPage((current) => current - 1)}>
+            {t("Anterior")}
+          </Button>
         )}
-        <Button disabled={!more} onClick={() => setPage((current) => current + 1)}>
+        <Button
+          disabled={!more}
+          onClick={() => setPage((current) => current + 1)}
+        >
           {t("Próxima")}
         </Button>
       </nav>

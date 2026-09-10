@@ -42,10 +42,24 @@ export interface OperationalOrderSavedSnapshot {
   saved_at: string;
   order: Record<string, unknown>;
 }
+export interface OperationalOrderCheckRow {
+  event_id: string;
+  event_sequence: string;
+  order_id: string;
+  order_revision: number;
+  item_id: string;
+  ordered_quantity: string | null;
+  checked_quantity: string;
+  sale_unit: string | null;
+  state: string;
+  checked_by_user_id: string;
+  checked_at: string;
+}
 export interface OperationalOrderExport {
   orders: OperationalOrderRow[];
   events: OperationalOrderEventRow[];
   saved_snapshots: OperationalOrderSavedSnapshot[];
+  checks: OperationalOrderCheckRow[];
 }
 
 type Deps = { pool?: ServicePool };
@@ -89,10 +103,21 @@ async function readSnapshot(
         join public.crm_orders saved_order on saved_order.organization_id=r.organization_id and saved_order.id=r.order_id
         where r.organization_id=$1 and saved_order.contact_id=$2
           and r.completed_at is not null and r.response_body->>'contact_id'=$2::text
-          and r.response_body->>'id'=r.order_id::text),'[]'::jsonb) as saved_snapshots`,
+          and r.response_body->>'id'=r.order_id::text),'[]'::jsonb) as saved_snapshots,
+      coalesce((select jsonb_agg(jsonb_build_object(
+        'event_id',c.id,'event_sequence',c.event_sequence::text,'order_id',c.order_id,
+        'order_revision',c.order_revision,'item_id',c.item_id,
+        'ordered_quantity',c.ordered_quantity_snapshot::text,
+        'checked_quantity',c.checked_quantity::text,'sale_unit',c.sale_unit_snapshot,
+        'state',c.check_state,'checked_by_user_id',c.actor_user_id,'checked_at',c.created_at
+      ) order by c.event_sequence)
+        from public.crm_order_check_events c
+        join public.crm_orders checked_order
+          on checked_order.organization_id=c.organization_id and checked_order.id=c.order_id
+       where c.organization_id=$1 and checked_order.contact_id=$2),'[]'::jsonb) as checks`,
     [organizationId, contactId],
   );
-  return result.rows[0] ?? { orders: [], events: [], saved_snapshots: [] };
+  return result.rows[0] ?? { orders: [], events: [], saved_snapshots: [], checks: [] };
 }
 
 /** Job context is trusted by the LGPD worker; tenant scope still travels through withTenant. */

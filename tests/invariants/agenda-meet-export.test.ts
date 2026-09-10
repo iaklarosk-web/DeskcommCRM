@@ -130,6 +130,14 @@ const appointment = randomUUID(),
   otherAppointment = randomUUID();
 const job = randomUUID(),
   notice = randomUUID();
+const checkedOrder = randomUUID(),
+  checkedItem = randomUUID(),
+  checkedReceipt = randomUUID(),
+  checkedEvent = randomUUID(),
+  otherCheckedOrder = randomUUID(),
+  otherCheckedItem = randomUUID(),
+  otherCheckedReceipt = randomUUID(),
+  otherCheckedEvent = randomUUID();
 const secret = "PRIVATE-AUTHORIZATION-MATERIAL";
 const request = {
   organizationId: org,
@@ -165,6 +173,36 @@ beforeAll(async () => {
       "insert into calendar_appointments(id,organization_id,contact_id,title,starts_at,ends_at,status) values($1,$2,$3,'Consulta',now(),now()+interval '1 hour','completed')",
       [id, tenant, contact],
     );
+  for (const [tenant, contact, order, item, receipt, event] of [
+    [org, target, checkedOrder, checkedItem, checkedReceipt, checkedEvent],
+    [otherOrg, outsider, otherCheckedOrder, otherCheckedItem, otherCheckedReceipt, otherCheckedEvent],
+  ]) {
+    await pool.query(
+      `insert into crm_orders
+        (id,organization_id,contact_id,source,status,created_by_actor_type,created_by_actor_id)
+       values($1,$2,$3,'ui','draft','user',$3)`,
+      [order, tenant, contact],
+    );
+    await pool.query(
+      `insert into crm_order_items
+        (id,organization_id,order_id,position,requested_text,quantity,sale_unit_snapshot)
+       values($1,$2,$3,1,'Item fictício',2.000,'kg')`,
+      [item, tenant, order],
+    );
+    await pool.query(
+      `insert into crm_order_check_command_receipts
+        (id,organization_id,idempotency_key,request_hash,actor_user_id,order_id,response_body,completed_at)
+       values($1,$2,gen_random_uuid(),decode(repeat('42',32),'hex'),$3,$4,'{}',now())`,
+      [receipt, tenant, contact, order],
+    );
+    await pool.query(
+      `insert into crm_order_check_events
+        (id,organization_id,receipt_id,order_id,order_revision,event_no,item_id,
+         ordered_quantity_snapshot,checked_quantity,sale_unit_snapshot,check_state,actor_user_id)
+       values($1,$2,$3,$4,1,1,$5,2.000,1.000,'kg','partial',$6)`,
+      [event, tenant, receipt, order, item, contact],
+    );
+  }
   for (const [id, tenant, contact, ref] of [
     [job, org, target, appointment],
     [randomUUID(), org, neighbor, neighborAppointment],
@@ -216,6 +254,15 @@ it("exporta entrega/aviso do titular, exclui outro contato/tenant e material pri
       body: "Link aguardando liberação.",
     }),
   ]);
+  expect(data.operational_order_checks).toEqual([
+    expect.objectContaining({
+      event_id: checkedEvent,
+      order_id: checkedOrder,
+      item_id: checkedItem,
+      checked_quantity: "1.000",
+      state: "partial",
+    }),
+  ]);
   const serialized = JSON.stringify(data);
   for (const excluded of [
     neighborAppointment,
@@ -226,6 +273,8 @@ it("exporta entrega/aviso do titular, exclui outro contato/tenant e material pri
     "meeting_request_id",
     "delivery_generation",
     "locked_by",
+    otherCheckedEvent,
+    checkedReceipt,
   ])
     expect(serialized).not.toContain(excluded);
   expect(

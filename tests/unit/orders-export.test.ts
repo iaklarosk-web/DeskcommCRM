@@ -89,6 +89,12 @@ describe("export operacional de pedidos", () => {
     expect(sql).toContain("r.organization_id=$1 and saved_order.contact_id=$2");
     expect(sql).toContain("r.response_body->>'contact_id'=$2::text");
     expect(sql).toContain("r.response_body->>'id'=r.order_id::text");
+    expect(sql).toContain("from public.crm_order_check_events c");
+    expect(sql).toContain(
+      "checked_order.organization_id=c.organization_id and checked_order.id=c.order_id",
+    );
+    expect(sql).toContain("c.organization_id=$1 and checked_order.contact_id=$2");
+    expect(sql).toContain("'checked_quantity',c.checked_quantity::text");
     expect(sql).not.toContain("request_hash");
     expect(sql).not.toContain("idempotency_key");
     expect(sql).not.toContain("actor_id");

@@ -11,6 +11,7 @@ import { logger } from "@/lib/logger";
 import type { Json } from "@/lib/database.types";
 import {
   collectOperationalOrderExport,
+  type OperationalOrderCheckRow,
   type OperationalOrderEventRow,
   type OperationalOrderRow,
   type OperationalOrderSavedSnapshot,
@@ -237,6 +238,8 @@ export interface ExportPayload {
   operational_orders?: OperationalOrderRow[];
   operational_order_events?: OperationalOrderEventRow[];
   operational_order_saved_snapshots?: OperationalOrderSavedSnapshot[];
+  /** Journal quantitativo sem texto, chave ou hash privado de idempotência. */
+  operational_order_checks?: OperationalOrderCheckRow[];
   /** Notas humanas sobre o titular; fatal se a coleta transacional falhar. */
   crm_notes?: CrmNoteExportRow[];
   /** Tarefas de pedido; tarefas legadas permanecem no campo `tasks`. */
@@ -547,7 +550,7 @@ export async function collectExportData(
         contactId,
         dependencies,
       )
-    : { orders: [], events: [], saved_snapshots: [] };
+    : { orders: [], events: [], saved_snapshots: [], checks: [] };
   // Uma única fotografia para notas, tarefas vinculadas e seu journal. A falha
   // é fatal: sucesso sem estes blocos declararia falsamente um export completo.
   const crmWork = contactId
@@ -799,6 +802,7 @@ export async function collectExportData(
     operational_orders: operational.orders,
     operational_order_events: operational.events,
     operational_order_saved_snapshots: operational.saved_snapshots,
+    operational_order_checks: operational.checks,
     crm_notes: crmWork.notes,
     linked_tasks: crmWork.linked_tasks,
     linked_task_events: crmWork.task_events,
@@ -836,6 +840,7 @@ function emptyPayload(
     operational_orders: [],
     operational_order_events: [],
     operational_order_saved_snapshots: [],
+    operational_order_checks: [],
     crm_notes: [],
     linked_tasks: [],
     linked_task_events: [],

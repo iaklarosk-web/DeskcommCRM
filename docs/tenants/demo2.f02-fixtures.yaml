@@ -1,0 +1,111 @@
+fictional_only: true
+schema_version: 1
+tenant_slug: demo2
+actor_email: admin@demo2.test
+
+companies:
+  - ref: empresa-alfa
+    fictional: true
+    legal_name: "Empresa Fictícia Alfa Ltda."
+    trade_name: "Fictícia Alfa"
+  - ref: empresa-beta
+    fictional: true
+    legal_name: "Mercado Fictício Beta Ltda."
+    trade_name: "Fictício Beta"
+
+contacts:
+  - ref: contato-alfa
+    fictional: true
+    display_name: "Contato Fictício Alfa"
+    company_ref: empresa-alfa
+    recurring: false
+  - ref: contato-beta
+    fictional: true
+    display_name: "Contato Fictício Beta"
+    company_ref: empresa-beta
+    recurring: true
+
+products:
+  - ref: kit-un
+    fictional: true
+    codigo: FICT-UN-01
+    nome: "Kit unitário fictício"
+    sale_unit: un
+    price_cents: 1500
+    currency: BRL
+    active: true
+  - ref: caixa-cx
+    fictional: true
+    codigo: FICT-CX-01
+    nome: "Caixa fictícia"
+    sale_unit: cx
+    price_cents: 2500
+    currency: BRL
+    active: true
+  - ref: material-kg
+    fictional: true
+    codigo: FICT-KG-01
+    nome: "Material fictício por peso"
+    sale_unit: kg
+    price_cents: 1200
+    currency: BRL
+    active: true
+
+orders:
+  - ref: confirmado-alfa
+    fictional: true
+    contact_ref: contato-alfa
+    company_ref: empresa-alfa
+    status: confirmed
+    cancellation_reason: null
+    delivery_date: "2040-06-15"
+    channel: null
+    currency: BRL
+    created_at: "2040-06-01T12:00:00.000Z"
+    items:
+      - ref: mil-caixas
+        fictional: true
+        position: 1
+        requested_text: "Mil caixas fictícias"
+        product_ref: caixa-cx
+        quantity_input: "1.000 cx"
+      - ref: meio-quilo
+        fictional: true
+        position: 2
+        requested_text: "Meio quilo fictício"
+        product_ref: material-kg
+        quantity_input: "0,5 kg"
+  - ref: rascunho-beta-pendente
+    fictional: true
+    contact_ref: contato-beta
+    company_ref: empresa-beta
+    status: draft
+    cancellation_reason: null
+    delivery_date: null
+    channel: null
+    currency: null
+    created_at: "2040-06-01T12:10:00.000Z"
+    items:
+      - ref: item-pendente
+        fictional: true
+        position: 1
+        requested_text: "Item fictício aguardando quantidade e preço"
+        product_ref: null
+        quantity_input: null
+  - ref: cancelado-beta
+    fictional: true
+    contact_ref: contato-beta
+    company_ref: empresa-beta
+    status: cancelled
+    cancellation_reason: "Cenário fictício de cancelamento"
+    delivery_date: "2040-06-16"
+    channel: null
+    currency: BRL
+    created_at: "2040-06-01T12:20:00.000Z"
+    items:
+      - ref: um-kit
+        fictional: true
+        position: 1
+        requested_text: "Um kit fictício"
+        product_ref: kit-un
+        quantity_input: "1 un"

@@ -12,6 +12,40 @@
 @source "../lib";
 @source "../hooks";
 
+@media print {
+  html:has(.daily-print-root),
+  body:has(.daily-print-root),
+  body:has(.daily-print-root) main,
+  body:has(.daily-print-root) div:has(.daily-print-root) {
+    display: block !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  body:has(.daily-print-root) header,
+  body:has(.daily-print-root) nav,
+  body:has(.daily-print-root) aside,
+  .daily-print-chrome {
+    display: none !important;
+  }
+
+  .daily-print-root,
+  .daily-print-content {
+    display: block !important;
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  .daily-print-root .break-inside-avoid {
+    break-inside: avoid;
+  }
+}
+
 /* Escuro por atributo, não por classe. Equivale ao `darkMode: ["class",
    "[data-theme='dark']"]` do v3: a forma de duas casas do v3 NÃO acumula com
    `.dark` — ela SUBSTITUI o seletor padrão, e o produto inteiro liga o tema

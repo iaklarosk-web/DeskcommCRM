@@ -65,6 +65,7 @@ export const AUDIT_ACTIONS = [
   "crm_order.order_advanced",
   "crm_order.order_cancelled",
   "crm_order.redacted",
+  "crm_order.check_recorded",
   "contacts.imported",
   "contact.anonymized",
   "contact.merge_pending",

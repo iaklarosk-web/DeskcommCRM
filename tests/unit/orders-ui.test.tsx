@@ -9,13 +9,41 @@ vi.mock("@/lib/api/client", () => ({ apiClient: { get, post } }));
 vi.mock("@/app/app/orders/_history", () => ({ OrderHistory: () => null }));
 // Notas e tarefas têm sua própria suíte; aqui a fila de GET mede o pedido.
 vi.mock("@/components/crm/CrmNotes", () => ({ CrmNotes: () => null }));
-vi.mock("@/components/crm/LinkedOrderTasks", () => ({ LinkedOrderTasks: () => null }));
+vi.mock("@/components/crm/LinkedOrderTasks", () => ({
+  LinkedOrderTasks: () => null,
+}));
 vi.mock("@/components/crm/TaskHistory", () => ({ TaskHistory: () => null }));
-vi.mock("@/hooks/crm/useCrmAuthorNames", () => ({ useCrmAuthorNames: () => ({}) }));
+vi.mock("@/hooks/crm/useCrmAuthorNames", () => ({
+  useCrmAuthorNames: () => ({}),
+}));
+
+// Identidade comercial tem suíte própria; aqui a fila de GET mede somente o comando.
+vi.mock("@/components/crm/OrderContactIdentity", () => ({
+  OrderContactIdentity: () => null,
+}));
+vi.mock("@/components/crm/OrderCommercialFields", () => ({
+  OrderCommercialFields: () => null,
+}));
+vi.mock("@/hooks/contacts/useContact", () => ({
+  useContact: (id: string) => ({
+    data: {
+      data: {
+        id,
+        is_anonymized: false,
+        is_merged_into: null,
+        company_id: null,
+      },
+    },
+  }),
+}));
 
 import { OrderDetailClient } from "@/app/app/orders/[id]/_client";
 import { OrdersClient } from "@/app/app/orders/_client";
-import { matchedQuantity, parseMoneyInput, quantityInput } from "@/app/app/orders/_presentation";
+import {
+  matchedQuantity,
+  parseMoneyInput,
+  quantityInput,
+} from "@/app/app/orders/_presentation";
 import { newItem, OrderForm } from "@/app/app/orders/_form";
 
 const order = {
@@ -81,9 +109,13 @@ describe("pedidos UI", () => {
     const change = vi.fn();
     render(<OrderFormHarness onItemsChange={change} />);
 
-    fireEvent.change(screen.getByLabelText("Buscar produto"), { target: { value: "ca" } });
+    fireEvent.change(screen.getByLabelText("Buscar produto"), {
+      target: { value: "ca" },
+    });
     fireEvent.click(await screen.findByRole("button", { name: "Caixa (CX)" }));
-    fireEvent.change(screen.getByLabelText("Quantidade"), { target: { value: "1,5 cx" } });
+    fireEvent.change(screen.getByLabelText("Quantidade"), {
+      target: { value: "1,5 cx" },
+    });
 
     await waitFor(() =>
       expect(change).toHaveBeenLastCalledWith(
@@ -111,7 +143,9 @@ describe("pedidos UI", () => {
       />,
     );
     expect(screen.getByLabelText("Buscar contato")).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Adicionar item" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Adicionar item" }),
+    ).toBeDisabled();
   });
 
   it("não confirma pedido com pendência humana", async () => {
@@ -128,8 +162,12 @@ describe("pedidos UI", () => {
     render(<OrderDetailClient orderId={order.id} podeEditar={false} />);
 
     await screen.findByText("Pedido");
-    expect(screen.queryByRole("button", { name: "Editar pedido" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Confirmar" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Editar pedido" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Confirmar" }),
+    ).not.toBeInTheDocument();
   });
 
   it("preserva decimal PT-BR, preço em centavos e recusa sufixo de unidade divergente", () => {
@@ -141,18 +179,27 @@ describe("pedidos UI", () => {
   });
 
   it("pedido terminal não oferece novas mutações", async () => {
-    get.mockResolvedValue({ data: { ...order, status: "delivered", pending: [] } });
+    get.mockResolvedValue({
+      data: { ...order, status: "delivered", pending: [] },
+    });
     render(<OrderDetailClient orderId={order.id} podeEditar />);
     await screen.findByTestId("pedido-detalhe");
-    expect(screen.queryByRole("button", { name: "Editar pedido" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Cancelar pedido" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Editar pedido" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Cancelar pedido" }),
+    ).not.toBeInTheDocument();
   });
 
   it("replay recebe leitura autoritativa antes de liberar o próximo comando", async () => {
     get
       .mockResolvedValueOnce({ data: { ...order, pending: [] } })
       .mockResolvedValueOnce({ data: { ...order, revision: 2, pending: [] } });
-    post.mockResolvedValueOnce({ data: { ...order, pending: [] }, meta: { replayed: true } });
+    post.mockResolvedValueOnce({
+      data: { ...order, pending: [] },
+      meta: { replayed: true },
+    });
     render(<OrderDetailClient orderId={order.id} podeEditar />);
     fireEvent.click(await screen.findByRole("button", { name: "Confirmar" }));
     await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
@@ -161,17 +208,24 @@ describe("pedidos UI", () => {
 
   it("cria rascunho com moeda BRL explícita", async () => {
     get.mockImplementation(async (path: string) => {
-      if (path.startsWith("/api/v1/crm-orders")) return { data: [], meta: { has_more: false } };
+      if (path.startsWith("/api/v1/crm-orders"))
+        return { data: [], meta: { has_more: false } };
       if (path.startsWith("/api/v1/contacts"))
-        return { data: [{ id: order.contact_id, display_name: "Ana", name: null }] };
+        return {
+          data: [{ id: order.contact_id, display_name: "Ana", name: null }],
+        };
       return { data: [] };
     });
     post.mockResolvedValue({ data: order, meta: { replayed: false } });
     render(<OrdersClient podeEditar />);
     fireEvent.click(await screen.findByRole("button", { name: "Novo pedido" }));
-    fireEvent.change(screen.getByLabelText("Buscar contato"), { target: { value: "An" } });
+    fireEvent.change(screen.getByLabelText("Buscar contato"), {
+      target: { value: "An" },
+    });
     fireEvent.click(await screen.findByRole("button", { name: "Ana" }));
-    fireEvent.change(screen.getByLabelText("Moeda do pedido"), { target: { value: "brl" } });
+    fireEvent.change(screen.getByLabelText("Moeda do pedido"), {
+      target: { value: "brl" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Remover item" }));
     fireEvent.click(screen.getByRole("button", { name: "Salvar rascunho" }));
     await waitFor(() =>
@@ -185,19 +239,28 @@ describe("pedidos UI", () => {
 
   it("não descarta um item preenchido cuja descrição está vazia", async () => {
     get.mockImplementation(async (path: string) => {
-      if (path.startsWith("/api/v1/crm-orders")) return { data: [], meta: { has_more: false } };
+      if (path.startsWith("/api/v1/crm-orders"))
+        return { data: [], meta: { has_more: false } };
       if (path.startsWith("/api/v1/contacts"))
-        return { data: [{ id: order.contact_id, display_name: "Ana", name: null }] };
+        return {
+          data: [{ id: order.contact_id, display_name: "Ana", name: null }],
+        };
       return { data: [] };
     });
     render(<OrdersClient podeEditar />);
     fireEvent.click(await screen.findByRole("button", { name: "Novo pedido" }));
-    fireEvent.change(screen.getByLabelText("Buscar contato"), { target: { value: "An" } });
+    fireEvent.change(screen.getByLabelText("Buscar contato"), {
+      target: { value: "An" },
+    });
     fireEvent.click(await screen.findByRole("button", { name: "Ana" }));
-    fireEvent.change(screen.getByLabelText("Quantidade"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Quantidade"), {
+      target: { value: "2" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Salvar rascunho" }));
     expect(
-      await screen.findByText("Descreva os itens ou remova as linhas vazias antes de salvar."),
+      await screen.findByText(
+        "Descreva os itens ou remova as linhas vazias antes de salvar.",
+      ),
     ).toBeInTheDocument();
     expect(post).not.toHaveBeenCalled();
     expect(screen.getByLabelText("Quantidade")).toHaveValue("2");
@@ -208,15 +271,22 @@ describe("pedidos UI", () => {
       .mockResolvedValueOnce({ data: { ...order, pending: [] } })
       .mockRejectedValueOnce(new Error("fresh failed"))
       .mockResolvedValueOnce({ data: { ...order, pending: [] } });
-    post.mockResolvedValueOnce({ data: { ...order, pending: [] }, meta: { replayed: true } });
+    post.mockResolvedValueOnce({
+      data: { ...order, pending: [] },
+      meta: { replayed: true },
+    });
     render(<OrderDetailClient orderId={order.id} podeEditar />);
     fireEvent.click(await screen.findByRole("button", { name: "Confirmar" }));
     await screen.findByRole("button", { name: "Recarregar pedido" });
-    expect(screen.getByRole("button", { name: "Editar pedido" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Editar pedido" }),
+    ).toBeDisabled();
     expect(screen.getByRole("button", { name: "Confirmar" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Recarregar pedido" }));
     await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "Recarregar pedido" })).toBeNull(),
+      expect(
+        screen.queryByRole("button", { name: "Recarregar pedido" }),
+      ).toBeNull(),
     );
     expect(post).toHaveBeenCalledTimes(1);
   });

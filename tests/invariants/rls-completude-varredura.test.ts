@@ -76,6 +76,13 @@ interface Excecao {
  */
 const PROVA_PROPRIA: readonly Excecao[] = [
   {
+    tabela: "crm_order_check_command_receipts",
+    razao:
+      "tests/invariants/f02-t12-order-checks-schema.test.ts prova zero policies, " +
+      "nenhum privilégio anon/authenticated, quatro operações negadas em dois " +
+      "tenants e somente SELECT+INSERT+UPDATE para service_role.",
+  },
+  {
     tabela: "crm_task_command_receipts",
     razao:
       "tests/invariants/f02-t03-work-schema.test.ts prova zero policies, " +

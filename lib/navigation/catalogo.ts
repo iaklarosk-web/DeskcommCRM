@@ -40,6 +40,8 @@ export interface NavMetadata {
   section?: string;
   /** Ausente = viewer. Ver a regra de escolha abaixo. */
   minRole?: Role;
+  /** Ausente mantém o acesso de plataforma herdado; false exige escopo tenant. */
+  allowPlatform?: boolean;
   /** Ausente = só no hub. `true` = uso diário, sobe para o sidebar. */
   sidebar?: boolean;
   healthDot?: boolean;
@@ -602,6 +604,16 @@ export const NAV_CATALOG = [
     group: "organizacao",
     section: "Sua empresa",
     minRole: "manager",
+  },
+  {
+    href: "/app/settings/commercial",
+    label: "Dados comerciais",
+    description: "Contato, atendimento, entrega e política comercial da empresa.",
+    icon: "Buildings",
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "viewer",
+    allowPlatform: false,
   },
   {
     href: "/app/settings/tenant",

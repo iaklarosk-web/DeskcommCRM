@@ -1,6 +1,8 @@
 "use client";
 
 import { randomId } from "@/lib/random-id";
+import { OrderContactIdentity } from "@/components/crm/OrderContactIdentity";
+import { OrderChecks } from "@/components/crm/OrderChecks";
 
 import * as React from "react";
 
@@ -43,7 +45,9 @@ function commandItems(items: DraftItem[]) {
 }
 
 function statusCode(cause: unknown) {
-  return typeof cause === "object" && cause !== null && "status" in cause ? cause.status : null;
+  return typeof cause === "object" && cause !== null && "status" in cause
+    ? cause.status
+    : null;
 }
 
 export function OrderDetailClient({
@@ -76,9 +80,12 @@ export function OrderDetailClient({
     loadController.current = controller;
     setError(false);
     try {
-      const response = await apiClient.get<{ data: OrderView }>(`/api/v1/crm-orders/${orderId}`, {
-        signal: controller.signal,
-      });
+      const response = await apiClient.get<{ data: OrderView }>(
+        `/api/v1/crm-orders/${orderId}`,
+        {
+          signal: controller.signal,
+        },
+      );
       if (controller.signal.aborted) return;
       setOrder(response.data);
       setContactId(response.data.contact_id);
@@ -120,11 +127,17 @@ export function OrderDetailClient({
       setContactId(response.data.contact_id);
       setItems(asDraftItems(response.data));
       setEditing(false);
-      setMessage(response.meta.replayed ? t("Comando já aplicado.") : t("Pedido atualizado."));
+      setMessage(
+        response.meta.replayed
+          ? t("Comando já aplicado.")
+          : t("Pedido atualizado."),
+      );
       try {
         // A resposta de replay é um recibo, não necessariamente a visão mais nova.
         // Releia antes de permitir outra edição com `expected_revision`.
-        const fresh = await apiClient.get<{ data: OrderView }>(`/api/v1/crm-orders/${orderId}`);
+        const fresh = await apiClient.get<{ data: OrderView }>(
+          `/api/v1/crm-orders/${orderId}`,
+        );
         setOrder(fresh.data);
         setContactId(fresh.data.contact_id);
         setItems(asDraftItems(fresh.data));
@@ -135,16 +148,24 @@ export function OrderDetailClient({
         setNeedsReload(true);
         setMessage(
           response.meta.replayed
-            ? t("Comando já aplicado. Recarregue para obter a revisão atual antes de editar.")
-            : t("Pedido atualizado. Recarregue para obter a revisão atual antes de editar."),
+            ? t(
+                "Comando já aplicado. Recarregue para obter a revisão atual antes de editar.",
+              )
+            : t(
+                "Pedido atualizado. Recarregue para obter a revisão atual antes de editar.",
+              ),
         );
       }
     } catch (cause: unknown) {
       if (statusCode(cause) === 409) setNeedsReload(true);
       setMessage(
         statusCode(cause) === 409
-          ? t("O pedido mudou em outra tela. Recarregue antes de tentar novamente.")
-          : t("Não foi possível salvar. Seus dados continuam no formulário para tentar novamente."),
+          ? t(
+              "O pedido mudou em outra tela. Recarregue antes de tentar novamente.",
+            )
+          : t(
+              "Não foi possível salvar. Seus dados continuam no formulário para tentar novamente.",
+            ),
       );
     } finally {
       setSaving(false);
@@ -168,7 +189,9 @@ export function OrderDetailClient({
     await send(payload);
   }
 
-  async function transition(next: "confirm_order" | "advance_order" | "cancel_order") {
+  async function transition(
+    next: "confirm_order" | "advance_order" | "cancel_order",
+  ) {
     if (!order) return;
     const payload: Record<string, unknown> =
       next === "advance_order"
@@ -176,7 +199,8 @@ export function OrderDetailClient({
             command: next,
             order_id: order.id,
             expected_revision: order.revision,
-            next_status: order.status === "confirmed" ? "in_production" : "delivered",
+            next_status:
+              order.status === "confirmed" ? "in_production" : "delivered",
           }
         : {
             command: next,
@@ -196,22 +220,34 @@ export function OrderDetailClient({
   }
   if (!order) return <main className="p-6">{t("Carregando pedido…")}</main>;
 
-  const canOperate = podeEditar && order.status !== "delivered" && order.status !== "cancelled";
+  const canOperate =
+    podeEditar && order.status !== "delivered" && order.status !== "cancelled";
   return (
-    <main className="mx-auto max-w-4xl space-y-4 p-6" data-testid="pedido-detalhe">
+    <main
+      className="mx-auto max-w-4xl space-y-4 p-6"
+      data-testid="pedido-detalhe"
+    >
       <header className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">{t("Pedido")}</h1>
           <p>
-            {order.company_name ?? t("Sem empresa")} · {statusLabel(order.status, t)}
+            {order.company_name ?? t("Sem empresa")} ·{" "}
+            {statusLabel(order.status, t)}
           </p>
         </div>
         {canOperate && !editing && (
-          <Button disabled={saving || needsReload} onClick={() => setEditing(true)}>
+          <Button
+            disabled={saving || needsReload}
+            onClick={() => setEditing(true)}
+          >
             {t("Editar pedido")}
           </Button>
         )}
       </header>
+      <OrderContactIdentity contactId={order.contact_id} />
+      <p className="text-sm">
+        {t("Canal declarado")}: {order.channel ?? t("Não informado")}
+      </p>
       {order.pending.length > 0 && (
         <section className="rounded-md border p-3">
           <h2 className="font-medium">{t("Revisão humana necessária")}</h2>
@@ -228,7 +264,10 @@ export function OrderDetailClient({
         </section>
       )}
       {editing ? (
-        <section className="space-y-3 rounded-md border p-4" aria-label={t("Editar pedido")}>
+        <section
+          className="space-y-3 rounded-md border p-4"
+          aria-label={t("Editar pedido")}
+        >
           <OrderForm
             contactId={contactId}
             onContactChange={setContactId}
@@ -253,11 +292,16 @@ export function OrderDetailClient({
               maxLength={3}
               placeholder={t("Ex.: BRL")}
               disabled={saving || needsReload}
-              onChange={(event) => setCurrency(event.target.value.toUpperCase())}
+              onChange={(event) =>
+                setCurrency(event.target.value.toUpperCase())
+              }
             />
           </label>
           <div className="flex gap-2">
-            <Button disabled={saving || needsReload} onClick={() => void edit()}>
+            <Button
+              disabled={saving || needsReload}
+              onClick={() => void edit()}
+            >
               {saving ? t("Salvando…") : t("Salvar alterações")}
             </Button>
             <Button
@@ -280,8 +324,8 @@ export function OrderDetailClient({
           {order.items.map((item) => (
             <li key={item.id}>
               {item.product_name ?? item.requested_text} ·{" "}
-              {item.quantity ?? t("quantidade pendente")} {item.sale_unit ?? ""} ·{" "}
-              {displayMoney(item.line_total_cents, item.currency, t)}
+              {item.quantity ?? t("quantidade pendente")} {item.sale_unit ?? ""}{" "}
+              · {displayMoney(item.line_total_cents, item.currency, t)}
             </li>
           ))}
         </ul>
@@ -322,9 +366,11 @@ export function OrderDetailClient({
         </div>
       )}
       <p>
-        {t("Entrega em")}: {displayDateOnly(order.delivery_date, locale) ?? t("A definir")} ·{" "}
+        {t("Entrega em")}:{" "}
+        {displayDateOnly(order.delivery_date, locale) ?? t("A definir")} ·{" "}
         {t("Total")}: {displayMoney(order.total_cents, order.currency, t)}
       </p>
+      <OrderChecks orderId={order.id} revision={order.revision} canEdit={podeEditar} items={order.items} />
       <OrderHistory orderId={order.id} revision={order.revision} />
       <CrmNotes
         contactId={order.contact_id}
@@ -332,7 +378,11 @@ export function OrderDetailClient({
         canEdit={podeEditar}
         authorNames={authorNames}
       />
-      <section id="tarefas" className="scroll-mt-6" aria-label={t("Tarefas do pedido")}>
+      <section
+        id="tarefas"
+        className="scroll-mt-6"
+        aria-label={t("Tarefas do pedido")}
+      >
         <LinkedOrderTasks
           orderId={order.id}
           canEdit={podeEditar}

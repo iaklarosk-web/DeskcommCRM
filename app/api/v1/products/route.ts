@@ -13,8 +13,12 @@ import { type NextRequest } from "next/server";
 import { audit } from "@/lib/audit";
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
+import { catalogQuerySchema, listCatalogPage } from "@/lib/catalogo/listar";
 import { moedaDaOrganizacao } from "@/lib/catalogo/moeda-da-org";
-import { COLUNAS_DO_PRODUTO, produtoCreateSchema } from "@/lib/schemas/produtos";
+import {
+  COLUNAS_DO_PRODUTO,
+  produtoCreateSchema,
+} from "@/lib/schemas/produtos";
 import { createClient } from "@/lib/supabase/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 
@@ -22,29 +26,39 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("viewer", { requestId, resource: "catalog_products" });
+  const authz = await requireRole("viewer", {
+    requestId,
+    resource: "catalog_products",
+  });
   if (!authz.ok) return authz.response;
 
-  const busca = req.nextUrl.searchParams.get("busca")?.trim() ?? "";
+  const t = (texto: string) => traduzir(texto, authz.user.idioma);
+  const params = req.nextUrl.searchParams;
+  if ([...params.keys()].some((key) => params.getAll(key).length !== 1)) {
+    return fail("validation_failed", t("Filtros inválidos."), 422, {
+      requestId,
+    });
+  }
+  const parsed = catalogQuerySchema.safeParse(Object.fromEntries(params));
+  if (!parsed.success)
+    return fail("validation_failed", t("Filtros inválidos."), 422, {
+      requestId,
+    });
   const supabase = await createClient();
-
-  let q = supabase
-    .from("catalog_products")
-    .select(COLUNAS_DO_PRODUTO)
-    .eq("organization_id", authz.org.orgId);
-
-  // A busca da TELA é substring simples, de propósito: quem opera a loja digita
-  // o nome como cadastrou. A busca por token (que tolera "ifone") é a do
-  // AGENTE, em `lib/catalogo/busca.ts`, e ela responde a outra pergunta.
-  if (busca !== "") q = q.or(`nome.ilike.%${busca}%,codigo.ilike.%${busca}%,marca.ilike.%${busca}%`);
-
-  const { data, error } = await q
-    .order("ativo", { ascending: false })
-    .order("nome")
-    .limit(500);
-
-  if (error) return fail("internal_error", "Erro ao listar os produtos.", 500, { requestId });
-  return ok(data ?? [], { requestId });
+  const { data, error, count } = await listCatalogPage(
+    supabase,
+    authz.org.orgId,
+    parsed.data,
+  );
+  if (error || count === null)
+    return fail("internal_error", t("Erro ao listar os produtos."), 500, {
+      requestId,
+    });
+  const { page, limit } = parsed.data;
+  return ok(data ?? [], {
+    requestId,
+    meta: { page, limit, total: count, has_more: page * limit < count },
+  });
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
@@ -52,11 +66,16 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "catalog_products" });
+  const authz = await requireRole("manager", {
+    requestId,
+    resource: "catalog_products",
+  });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 
-  const parsed = produtoCreateSchema.safeParse(await req.json().catch(() => null));
+  const parsed = produtoCreateSchema.safeParse(
+    await req.json().catch(() => null),
+  );
   if (!parsed.success) {
     return fail("validation_failed", t("Dados inválidos."), 422, {
       requestId,
@@ -69,7 +88,12 @@ export async function POST(req: NextRequest): Promise<Response> {
   const moeda = await moedaDaOrganizacao(supabase, authz.org.orgId);
   const { data, error } = await supabase
     .from("catalog_products")
-    .insert({ ...parsed.data, moeda, organization_id: authz.org.orgId, origem: "manual" })
+    .insert({
+      ...parsed.data,
+      moeda,
+      organization_id: authz.org.orgId,
+      origem: "manual",
+    })
     .select(COLUNAS_DO_PRODUTO)
     .single();
 
@@ -77,9 +101,13 @@ export async function POST(req: NextRequest): Promise<Response> {
     // 23505 = já existe produto com este código nesta organização. A recusa
     // nomeia o campo porque quem lê é quem digitou.
     if (error.code === "23505") {
-      return fail("conflict", t("Já existe um produto com esse código."), 409, { requestId });
+      return fail("conflict", t("Já existe um produto com esse código."), 409, {
+        requestId,
+      });
     }
-    return fail("internal_error", "Erro ao salvar o produto.", 500, { requestId });
+    return fail("internal_error", "Erro ao salvar o produto.", 500, {
+      requestId,
+    });
   }
 
   await audit({

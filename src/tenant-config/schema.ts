@@ -33,6 +33,18 @@ export interface SettingEntry {
   /** Só para tipo = int: faixa inclusiva. */
   min?: number;
   max?: number;
+  /**
+   * A chave pública antiga não possui mais linha escritora em tenant_settings.
+   * `diagnostic_only` evita fingir que um caminho de Storage é uma URL.
+   */
+  canonical?: {
+    destination:
+      | "organizations.timezone"
+      | "organizations.settings.branding.app_name"
+      | "organizations.settings.branding.accent_hex"
+      | "organizations.settings.branding.logo_path";
+    read: "canonical_value" | "diagnostic_only";
+  };
 }
 
 /** O objeto de orders.recurring_reminder (D23) — campos e faixas em validators.ts. */
@@ -48,11 +60,40 @@ export const REMINDER_DEFAULT = {
 
 export const SETTINGS_SCHEMA: readonly SettingEntry[] = [
   // branding (D28)
-  { key: "branding.name", tipo: "string_nullable", default: null },
-  { key: "branding.logo_url", tipo: "string_nullable", default: null },
-  { key: "branding.primary_color", tipo: "string_nullable", default: null },
+  {
+    key: "branding.name",
+    tipo: "string_nullable",
+    default: null,
+    canonical: {
+      destination: "organizations.settings.branding.app_name",
+      read: "canonical_value",
+    },
+  },
+  {
+    key: "branding.logo_url",
+    tipo: "string_nullable",
+    default: null,
+    canonical: {
+      destination: "organizations.settings.branding.logo_path",
+      read: "diagnostic_only",
+    },
+  },
+  {
+    key: "branding.primary_color",
+    tipo: "string_nullable",
+    default: null,
+    canonical: {
+      destination: "organizations.settings.branding.accent_hex",
+      read: "canonical_value",
+    },
+  },
   // business
-  { key: "business.timezone", tipo: "string", default: "America/Sao_Paulo" },
+  {
+    key: "business.timezone",
+    tipo: "string",
+    default: "America/Sao_Paulo",
+    canonical: { destination: "organizations.timezone", read: "canonical_value" },
+  },
   { key: "business.phone", tipo: "string_nullable", default: null },
   { key: "business.address", tipo: "string_nullable", default: null },
   { key: "business.hours", tipo: "string_nullable", default: null },

@@ -45,6 +45,7 @@ aplica.
 
 | Version | Name | Description |
 |---|---|---|
+| `20260909232854` | `9012_crm_order_checks` | F02: conferência por item/revisão, histórico paginado invoker, recibos privados e auditoria transacional; timestamp CLI, validação somente em sandbox. |
 | `20260428195354` | `0001_platform_base` | organizations, user_organizations, platform_admins, api_tokens, api_audit_log, user_recovery_codes, idempotency_keys + RLS helpers (fn_user_org_ids, fn_is_platform_admin, fn_user_role_in_org, fn_role_at_least) |
 | `20260428195513` | `0002_event_log_and_compat` | event_log + emit_event/fn_log_event helpers + compat aliases (fn_set_updated_at, fn_user_role_in returning int) |
 | `20260428195708` | `0003_customer_360` | contacts (CPF encrypted), crm_pipelines, crm_stages, crm_leads, crm_lead_activities, crm_lead_links, merge_queue + 5 domain triggers |
@@ -271,6 +272,9 @@ aplica.
 | `20260909191659` | `9009_crm_tarefas_legado_seguro` | **Pré-requisito da 9008 para upgrades com dados legados.** A 0210 aceitava `contact_id` global e podia conter tarefa de uma organização apontando para contato de outra. Sob lock de escrita, preserva a tarefa, redige antes de desvincular se o contato antigo já estava anonimizado, audita somente IDs/motivo/campos e instala a FK composta validada que a 9008 reconhece. Um trigger privado serializa escrita de tarefa com o contato e impede que POST/PATCH tardio recoloque título ou descrição após anonimização. O rótulo 9009 identifica o forward-fix; o timestamp deliberadamente anterior expressa sua dependência da 9008 ainda não aplicada em upgrades limpos. No baseline idempotente, este é o único bloco que reconstrói e valida `crm_tasks_contact_tenant_fkey`; o bloco 9008 apenas consome essa pós-condição. |
 | `20260909191700` | `9008_crm_notas_e_tarefas_vinculadas` | **F02-T03 aditiva.** Liga tarefas ao pedido por FK composta de empresa/pedido/contato, mantém tarefas sem pedido no fluxo legado e cerca escrita JWT de tarefas vinculadas com policies restritivas. Cria notas humanas append-only, eventos de tarefa e recibos privados; comandos humanos autorizados fazem escrita e auditoria na mesma transação. Anonimização de notas usa trigger privado. Grants explícitos preservam somente leitura de domínio para membros e nenhuma leitura cliente dos recibos. A migration aplicada permanece imutável com sua guarda histórica; no baseline, a FK de contato não é redeclarada depois do bloco canônico 9009. |
 
+| `20260909214233` | `9010_perfil_comercial_canonico` | **F02-T08 centraliza as fontes comerciais sem backfill automático.** Identidade/fuso continuam em organizations; nome/cor/logo permanecem na marca canônica. O salvamento correspondente arquiva o alias antigo na mesma transação em tabela private com RLS, zero policies e ACL fechada inclusive a service_role; o diagnóstico expõe apenas metadados sob escopo de tenant. A RPC nova do perfil revalida org ativa/admin aceito. RPCs legadas de marca/logo preservam seu contrato. Seis campos comerciais seguem em tenant_settings com validação estrita e versão compartilhada. Baseline idempotente antes de 9011 e da varredura anon. |
+| `20260909214308` | `9011_catalogo_policies_por_operacao` | **F02-T06 corrige timeout da listagem paginada.** Divide a policy permissiva FOR ALL em INSERT/UPDATE/DELETE, preservando seus predicados e as três restritivas de suporte. SELECT já cobre a mesma leitura; o helper de plataforma independente da linha passa por subconsulta escalar. Com 509 produtos, REST autenticado mantém contagem e limite completos. Nenhum índice, papel, tabela ou privilégio novo; baseline idempotente antes da varredura final. |
+
 ## Reproducibility
 
 Migrations were applied directly via the Supabase MCP `apply_migration` tool during the autonomous bootstrap session. The SQL of each migration is also embedded in the corresponding spec under `docs/specs/0X-spec-*.md` and the database keeps them in `supabase_migrations.schema_migrations`.
@@ -313,7 +317,12 @@ O mapa resolve referências históricas e comentários SQL que ainda usam os ró
 | `ai_usage_events` | `20260907210000_9004` | livro-razão de uso de IA; deny-all por grant, leitura só server-side |
 | `crm_order_command_receipts` | `20260909160605_9006` | recibo privado de idempotência dos comandos de pedido; zero policies e nenhum privilégio para anon/authenticated |
 | `crm_task_command_receipts` | `20260909191700_9008` | recibo privado dos comandos de tarefa vinculada; zero policies, nenhum privilégio para anon/authenticated e somente SELECT/INSERT para service_role |
+| `crm_order_check_command_receipts` | `20260909232854_9012` | recibo privado de conferência; RLS ligada, zero policies/grants de cliente; service_role SELECT/INSERT/UPDATE para concluir replay atômico |
 | `platform_support_sessions` | `20260905210000_0220` | sessão de suporte privada; leitura/escrita de cliente negadas, consulta pela RPC cercada à sessão Auth; prova em `tests/invariants/suporte-temporario.test.ts` |
 | `event_service_origins` | `20260906030000_0223` | recibo privado de procedência; acesso direto negado também a service_role, RPC valida evento e organização; prova em `tests/invariants/service-event-origin.test.ts` |
 | `appointment_recovery_receipts` | `20260906120000_0224` | recibo de recuperação da agenda; acesso direto negado também a service_role, RPC valida org/evento; prova em `tests/invariants/agenda-presenca-acl.test.ts` |
 | `channel_connection_requests` | `20260907040000_0228` | reserva privada de canal com lease e procedência; acesso direto negado também a service_role, RPC exige autoridade e tenant; prova em `tests/invariants/channel-routing.test.ts` |
+
+### Arquivo privado F02-T08
+
+`private.tenant_setting_alias_archive` é service_only por isolamento: RLS ativa, zero policies e nenhuma permissão direta a PUBLIC, anon, authenticated ou service_role. Somente o helper privado chamado pelos três escritores canônicos grava; o leitor público service-only retorna diagnóstico sem conteúdo antigo. A FK de organization_id remove o arquivo ao remover a organização. Provas em `f02-t08-commercial-schema.test.ts` e `commercial-settings.test.ts`.
