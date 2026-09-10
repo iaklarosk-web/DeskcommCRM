@@ -313,9 +313,28 @@ for (const side of ["A", "B"] as const) {
           }),
         ).toHaveCount(0);
         await expect(viewer.getByRole("button", { name: "Editar", exact: true })).toHaveCount(0);
-        await viewer.goto("/app/contacts");
+        const [contactsResponse] = await Promise.all([
+          viewer.waitForResponse(
+            (response) =>
+              response.request().method() === "GET" &&
+              new URL(response.url()).pathname === "/api/v1/contacts",
+            { timeout: HTTP_TIMEOUT },
+          ),
+          viewer.goto("/app/contacts", { timeout: HTTP_TIMEOUT }),
+        ]);
+        expect(contactsResponse.status()).toBe(200);
+        const contactsBody = (await contactsResponse.json()) as {
+          data: Array<{ id: string; display_name: string | null }>;
+        };
+        expect(contactsBody.data).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ id: customer.contactId, display_name: customer.name }),
+          ]),
+        );
         await expect(viewer.getByRole("heading", { name: "Contatos", exact: true })).toBeVisible();
-        await expect(viewer.getByText(customer.name, { exact: true })).toBeVisible();
+        await expect(viewer.getByText(customer.name, { exact: true })).toBeVisible({
+          timeout: HTTP_TIMEOUT,
+        });
         await expect(viewer.getByRole("button", { name: "Novo contato", exact: true })).toHaveCount(
           0,
         );
