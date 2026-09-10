@@ -10,6 +10,8 @@
  * ainda (`waiting_confirmation` só ganha executor na F04/F05), e o defeito
  * apareceria como conversa parada em produção, não como vermelho aqui.
  */
+import { entitlement } from "@/src/entitlement/entitlement";
+import type { Capability, EntitlementResposta } from "@/src/entitlement/capability";
 import { getSetting, getStoredSetting } from "@/src/tenant-config/settings";
 import type { ServicePool } from "@/src/tenant-context/db";
 import type { TenantCtx } from "@/src/tenant-context";
@@ -53,6 +55,12 @@ export interface GuardDeps {
   pool?: ServicePool;
   /** Relógio injetável: guarda de tempo comparada com hora fixa em teste. */
   agora?: () => Date;
+  /**
+   * Dublê de Entitlement. Existe para que o teste prove a metade de
+   * `ai_available` que a Fase 1 não consegue observar: com `allowed=false` a
+   * guarda tem de ser falsa mesmo com `ai.enabled` gravado como `true`.
+   */
+  entitlementResolver?: (ctx: TenantCtx, capability: Capability) => EntitlementResposta;
 }
 
 function comoDate(valor: Date | string | null): Date | null {
@@ -72,7 +80,22 @@ export function resolverDeGuardasF03(deps: GuardDeps = {}): GuardResolver {
       // src/tenant-config/schema.ts) descreve aquele mundo; neste, ausência de
       // linha é "IA não configurada" e a guarda é falsa — por isso a leitura é
       // por presença e não por default.
-      case "ai_available":
+      //
+      // As duas guardas NÃO são sinônimas: §5.6 escreve a de `inbound.message`
+      // como "`ai.enabled` e `entitlement(ai.reply).allowed`", e a de
+      // `human.return_to_ai` (D34, ação `resume_ai`) como só `ai.enabled`. Na
+      // Fase 1 o entitlement responde sim para tudo (D14), então hoje as duas
+      // coincidem em VALOR — mas a pergunta certa já é feita, e no dia em que um
+      // plano negar `ai.reply` a conversa vai para `waiting_human` sem ninguém
+      // precisar lembrar disto.
+      case "ai_available": {
+        const { present, value } = await getStoredSetting(ctx, "ai.enabled", {
+          pool: deps.pool,
+        });
+        if (!present || value !== true) return false;
+        return (deps.entitlementResolver ?? entitlement)(ctx, "ai.reply").allowed;
+      }
+
       case "ai_enabled": {
         const { present, value } = await getStoredSetting(ctx, "ai.enabled", {
           pool: deps.pool,
