@@ -12,6 +12,7 @@ const original = 'errors.push(`Métrica obrigatória ausente: ${name}`); // MUTA
 if (!source.includes(original)) throw new Error('Mutant target missing');
 writeFileSync(process.argv[2], source.replace(original, '// MUTANT: missing metric is accepted'));
 JS
+cp scripts/verify/f02-e2e.mjs "$scratch/f02-e2e.mjs"
 if VERIFY_GATE_MODULE="$scratch/report.mjs" node --test --test-name-pattern='missing mandatory metric' tests/verify/gate.cases.mjs >"$scratch/result.log" 2>&1; then
   echo 'MUTANTE VIVO: métrica ausente deixou o gate verde' >&2
   exit 1

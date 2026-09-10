@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
@@ -45,6 +45,7 @@ export default { ...base, plugins: [...(base.plugins ?? []), {
   assert.equal(gate.split(target).length, 2);
   const copy = path.join(scratch, "report.mjs");
   writeFileSync(copy, gate.replace(target, "const unknownDebt = []; // MUTANT: aceita dívida aposentada"));
+  copyFileSync(path.join(root, "scripts/verify/f02-e2e.mjs"), path.join(scratch, "f02-e2e.mjs"));
   const run = spawnSync(process.execPath, ["--test", "--test-name-pattern=retired debt cannot return", "tests/verify/gate.cases.mjs"],
     { cwd: root, encoding: "utf8", timeout: 15000, env: { ...process.env, VERIFY_GATE_MODULE: copy } });
   assert.equal(run.status, 1);

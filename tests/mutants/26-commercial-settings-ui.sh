@@ -17,7 +17,7 @@ const cases = [
   ["ignora-retorno", "app/app/settings/commercial/_client.tsx", "setDraft(valuesOf(response.data));", "setDraft(draft);", "commercial-settings-ui.test.tsx", "envia só seis campos alterados"],
   ["viewer-escreve", "app/app/settings/commercial/_client.tsx", "profile.capabilities.can_write_commercial && !blocked", "!blocked", "commercial-settings-ui.test.tsx", "viewer ou suporte readonly"],
   ["pagina-plataforma", "app/app/settings/commercial/page.tsx", "(user.is_platform_admin && !user.support)", "false", "commercial-settings-page.test.tsx", "nega plataforma direta"],
-  ["cartao-plataforma", "lib/navigation/interface.ts", "if (platform && d.allowPlatform === false) return false;", "if (false) return false;", "navegacao-registry.test.ts", "platform admin mantém todos"],
+  ["cartao-plataforma", "lib/navigation/interface.ts", "if (platform && d.allowPlatform === false) return false;", "if (false) return false;", "navegacao-registry.test.ts", "platform admin mantém os destinos herdados; dados comerciais e relatório diário exigem tenant"],
 ];
 let killed = 0;
 try {
@@ -42,11 +42,14 @@ export default { ...base, plugins: [...(base.plugins ?? []), {
     assert.equal(failed.length, 1, `${name}: esperava uma asserção nominal reprovada`);
     assert.match(failed[0].title, new RegExp(titlePattern), `${name}: falha em outro caso`);
     const message = failed[0].failureMessages.join("\n");
+    // Vitest colore a mensagem de jest-dom antes de `expect(`. Normaliza só os
+    // escapes ANSI para reconhecer o matcher, sem aceitar erro arbitrário.
+    const normalizedMessage = message.replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, "");
     // Vitest e jest-dom usam três formatos observados. Import/configuração não
-    // conta: exige AssertionError ou o frame do matcher de expect/rejects.
+    // conta: exige AssertionError ou um matcher nominal de expect/rejects.
     const assertionFailure = /AssertionError/.test(message)
-      || (/^Error: expect\(/.test(message) && message.includes("__VITEST_EXTEND_ASSERTION__"))
-      || (/^Error: promise resolved .* instead of rejecting/.test(message) && message.includes("__VITEST_REJECTS__"));
+      || (/^Error: expect\(/.test(normalizedMessage) && normalizedMessage.includes("__VITEST_EXTEND_ASSERTION__"))
+      || (/^Error: promise resolved .* instead of rejecting/.test(normalizedMessage) && normalizedMessage.includes("__VITEST_REJECTS__"));
     assert.ok(assertionFailure, `${name}: erro de infraestrutura não mata mutante\n${message}`);
     killed++;
   }
