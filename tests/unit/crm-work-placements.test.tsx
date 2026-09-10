@@ -40,6 +40,7 @@ vi.mock("@/components/crm/TaskHistory", () => ({
     return <div data-testid="task-history-placement" />;
   },
 }));
+vi.mock("@/components/crm/OrderChecks", () => ({ OrderChecks: () => null }));
 vi.mock("@/components/contacts/TimelineView", () => ({
   TimelineView: ({ contactId }: { contactId: string }) => (
     <div data-testid="legacy-timeline">{contactId}</div>

@@ -65,20 +65,22 @@ describe("canSee", () => {
     expect(canSee(dest("/app/inbox"), VIEWER.platform, VIEWER.role)).toBe(true);
   });
 
-  it("platform admin mantém todos os destinos herdados; Dados comerciais exige escopo tenant", () => {
+  it("platform admin mantém os destinos herdados; dados comerciais e relatório diário exigem tenant", () => {
     for (const d of NAV_DESTINATIONS) {
-      if (d.href === "/app/settings/commercial") {
+      if (["/app/settings/commercial", "/app/orders/daily"].includes(d.href)) {
         expect(canSee(d, true, null)).toBe(false);
         expect(canSee(d, true, "admin")).toBe(false);
       } else {
         expect(canSee(d, true, null)).toBe(true);
       }
     }
-    const commercial = dest("/app/settings/commercial");
-    expect(canSee(commercial, false, "manager")).toBe(true);
-    expect(canSee(commercial, false, "admin")).toBe(true);
-    expect(canSee(commercial, false, "agent")).toBe(true);
-    expect(canSee(commercial, false, "viewer")).toBe(true);
+    for (const href of ["/app/settings/commercial", "/app/orders/daily"]) {
+      const tenantDestination = dest(href);
+      expect(canSee(tenantDestination, false, "manager")).toBe(true);
+      expect(canSee(tenantDestination, false, "admin")).toBe(true);
+      expect(canSee(tenantDestination, false, "agent")).toBe(true);
+      expect(canSee(tenantDestination, false, "viewer")).toBe(true);
+    }
   });
 
   it("sem papel e sem ser platform admin não vê nada", () => {
@@ -154,17 +156,22 @@ describe("hubSections", () => {
     // As seções são a régua do sidebar escrita por extenso — o que se abre todo
     // dia contra o que se define uma vez. Lista EXATA: `toContain` deixaria uma
     // tela nova entrar sem que ninguém decidisse de que lado dela ela cai.
-    const secoes = hubSections("crm", true, null);
+    const secoes = hubSections("crm", ADMIN.platform, ADMIN.role);
     expect(secoes.map((s) => s.section)).toEqual(["O dia a dia da venda", "Preparar a venda"]);
     expect(secoes.flatMap((s) => s.items.map((i) => i.href))).toEqual([
       "/app/kanban",
       "/app/contacts",
       "/app/companies",
       "/app/orders",
+      "/app/orders/daily",
       "/app/tasks",
       "/app/products",
       "/app/settings/tenant/pipelines",
     ]);
+    const viewerRoutes = hubSections("crm", VIEWER.platform, VIEWER.role).flatMap((section) =>
+      section.items.map((item) => item.href),
+    );
+    expect(viewerRoutes).toContain("/app/orders/daily");
   });
 
   it("agrupa a IA nas três etapas da jornada, na ordem", () => {

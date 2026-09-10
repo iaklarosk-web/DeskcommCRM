@@ -203,6 +203,16 @@ export const NAV_CATALOG = [
     // Sem sidebar: a lista fica no inventário CRM junto dos outros cadastros comerciais.
   },
   {
+    href: "/app/orders/daily",
+    label: "Pedidos do dia",
+    description: "Relatório diário",
+    icon: "Receipt",
+    group: "crm",
+    section: "O dia a dia da venda",
+    allowPlatform: false,
+    // Sem sidebar: o relatório fica no inventário CRM, acessível também pela lista de pedidos.
+  },
+  {
     // Extraída do PR #418 (@clinicacentrodosorrisosc-code). Fica no CRM e no
     // sidebar porque é tela de USO DIÁRIO — quem atende abre para ver o que
     // vence hoje, do mesmo jeito que abre o Inbox. Sem `minRole`: `viewer` VÊ

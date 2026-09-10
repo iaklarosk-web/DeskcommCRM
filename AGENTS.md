@@ -11,7 +11,7 @@ CRM SaaS multi-tenant sobre DeskcommCRM. Piloto Deka: WhatsApp/Inbox, IA/conheci
 
 ## 2. Leia nesta ordem
 1. `AGENTS.md` (este arquivo: como você trabalha).
-2. `docs/DIRETRIZ.md` (o que construir). Dentro dele, a seção "Decisões fechadas" (D01..D46) vence qualquer outro trecho; D38–D44 e ADR-009 registram a entrega comercial confirmada; D45/D46 e ADR-011/012 autorizam a construção e os contratos operacionais.
+2. `docs/DIRETRIZ.md` (o que construir). Dentro dele, a seção "Decisões fechadas" (D01..D48) vence qualquer outro trecho; D38–D44 e ADR-009 registram a entrega comercial confirmada; D45/D46 e ADR-011/012 autorizam a construção e os contratos operacionais; D47/D48 e ADR-014 determinam pausa por fase e configuração do piloto após acesso.
 3. Código do Deskcomm: fonte de verdade sobre o ESTADO ATUAL, nunca sobre requisitos.
 4. `BUILD-STATE.md`: estado da construção.
 
@@ -22,6 +22,7 @@ Início: `git fetch`, `git rev-parse HEAD`, ler BUILD-STATE e comparar `head_com
 Se `status: BLOCKED` e o BLOCKER continua aberto, não avance: encerre a run sem diff.
 Remeça afirmações antigas (G-23); novas citam `arquivo:linha @ commit`.
 BUILD-STATE: atualizar ao fechar task (`next_task`), fase (bloco + VERIFY SUMMARY) ou abrir BLOCKER.
+D47: ao concluir uma fase, entregar resultados, limites e consumo observado e aguardar nova mensagem do proprietário antes da próxima. `next_task` não autoriza atravessar essa pausa. D48: dados/regras da Deka serão configurados após seu acesso; usar funções genéricas e fixtures fictícias, sem bloquear a engenharia pela entrevista do piloto.
 
 ## 4. Comandos
 Comandos reais: `package.json` e `docs/migration/deskcomm-audit.md`. Referência: `pnpm typecheck`, `pnpm lint`, `pnpm test:unit`, `pnpm test:integration`, `pnpm test:db`, `pnpm test:e2e`, `pnpm ai:eval`, `pnpm build`, `./scripts/verify.sh`. Não inventar script ausente: registrar na auditoria. Criar scripts quando explicitamente previstos nas tasks da DIRETRIZ §7.

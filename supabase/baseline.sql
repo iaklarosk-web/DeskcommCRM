@@ -24612,7 +24612,6 @@ revoke all on public.catalog_products from anon;
 grant select, insert, update, delete on public.catalog_products to authenticated;
 grant all on public.catalog_products to service_role;
 
--- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- F02-T12 / 9012 — conferência genérica por revisão (ADR-014).
 -- F02-T12 — conferência genérica por item e revisão comercial.
@@ -24894,6 +24893,8 @@ grant usage on sequence public.crm_order_check_events_event_sequence_seq to serv
 
 notify pgrst,'reload schema';
 
+-- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
+--
 -- ⚠️ ESTE BLOCO É, DE PROPÓSITO, O ÚLTIMO DO ARQUIVO. Apêndice novo entra ANTES
 
 -- dele — quem o empurrar para o meio desarma a cura para tudo que vier depois.

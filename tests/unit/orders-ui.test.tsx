@@ -13,6 +13,7 @@ vi.mock("@/components/crm/LinkedOrderTasks", () => ({
   LinkedOrderTasks: () => null,
 }));
 vi.mock("@/components/crm/TaskHistory", () => ({ TaskHistory: () => null }));
+vi.mock("@/components/crm/OrderChecks", () => ({ OrderChecks: () => null }));
 vi.mock("@/hooks/crm/useCrmAuthorNames", () => ({
   useCrmAuthorNames: () => ({}),
 }));
