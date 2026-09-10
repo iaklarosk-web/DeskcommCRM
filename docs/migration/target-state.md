@@ -1,6 +1,6 @@
 # target-state — revisão para Deskcomm v1.17.0 e pedidos do dia
 
-## Checkpoint F02 em construção — d44e3d34d55512b2287209f7802810ee26843f73
+## Checkpoint F02 concluído tecnicamente — 03ec6a3b56826ab882782efb1dd5185f47e52a8c
 
 Este checkpoint tem precedência sobre descrições históricas do estado atual.
 As medições F00/F01 preservadas abaixo continuam atribuídas a seus commits.
@@ -35,16 +35,36 @@ medem tabelas existentes e o catálogo de policies; números F00 não são conta
 atuais. O baseline preserva a varredura final de anon e migrações aplicadas são
 imutáveis. Nenhum dado `orders` externo foi apagado ou reinterpretado.
 
-[Evidência T04–T08](evidence/construction-f02-t04-t08-20260909.txt) registra provas
-parciais e tentativas. T10–T12 possuem provas focais locais; o gate T13, o navegador
-final e o aceite da fase ainda estão em andamento. Implementação não equivale
-a validação do operador Deka, serviços reais ou produção. Todas as fixtures são
-fictícias, com WhatsApp/IA mock e sem envio externo.
+[Evidência T04–T08](evidence/construction-f02-t04-t08-20260909.txt) preserva provas
+focais e tentativas. O gate05 sobre o código funcional `5f3df2cf` aprovou
+unit8380/8380, integração72/72, banco1585/1585 e E2E13/13, mas reprovou quatro
+mecanismos de teste (23/27 scripts mutantes). O checkpoint `4ec7bb56` corrigiu
+esses mecanismos, com controle RLS9/9, vazamentos8/8 e rechecagens02=1/1,03=5/5,26=5/5.
+O gate06 aprovou 27/27 scripts, mas encerrou NOT READY com E2E12/13 por uma espera
+insuficiente na lista do viewer. O checkpoint `03ec6a3b` sincroniza a resposta
+GET HTTP200, a fixture exata e sua exibição na UI
+(`tests/e2e/f02-crm-navigation.spec.ts:316-337`); a rechecagem A/B passou2/2.
+A CI34439000032 e o Docker34439000033 desse checkpoint passaram. O gate07 terminou
+com exit 0 em `4617.77s`, concluído às `2026-09-10T06:11:30Z`:
+unit8380/8380, integração72/72, DB1585/1585, E2E13/13 em sete specs,
+mutantes27/27, `tests_pending=0`, `debt_known=0` e zero violações. Os indicadores
+das fases futuras continuam `pending` e não entram no fechamento de F02.
+O verificador registrou `STATUS: READY (F02)` em
+`.verify-logs/f02-final-07/orchestration.log:15-33`; o término está em
+`.verify-logs/f02-final-07/result.json:1-4`. [Evidência T13](evidence/construction-f02-t13-20260909.txt)
+e [matriz das APIs](evidence/f02-t04-api-matrix.md). F02 conclui seu escopo técnico
+e a construção pausa antes de F03, conforme D47.
 
-Conforme a [ADR-015](../decisions/ADR-015-request-id-canonico-F02.md), o inventário
-F02 de 21 módulos e 34 operações passou a usar o identificador canônico da
-requisição nos envelopes e auditorias. Implementação em validação; checkpoint final
-pendente.
+Conforme a [ADR-015](../decisions/ADR-015-request-id-canonico-F02.md), 21 módulos e
+34 operações F02 usam o identificador canônico nos envelopes e auditorias.
+O E2E comprovou suporte somente leitura, quatro grupos de leitura/quatro recusas,
+duas auditorias correlacionadas e IDs gerado/ecoado. As 11 referências da tabela
+foram revalidadas contra o checkpoint acima; arquivos de aplicação não mudaram
+no reparo dos mecanismos de teste. Toda a execução usa fixtures fictícias e
+WhatsApp/IA mock. Aceite visual do proprietário, operação Deka, provedores
+reais, produção e E2E integral do upstream não foram validados. Esses limites
+permanecem explícitos, mas dados e operação Deka não bloqueiam a engenharia
+genérica concluída em F02, conforme D48.
 
 
 Saída original da F00-T07 em `c85f7d72eebe33649812fe5cae174b7dd80e0e9f`, revista em 08/09/2026 por autorização do proprietário para atualizar o desenho, sem construir a F02. Referência desta revisão: release v1.17.0, `db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d`; o código da integração com nossa F01 está registrado em `a86ca7c4234722d8422e833dbefcaf986fad1797`. O [BUILD-STATE](../../BUILD-STATE.md) registra a revalidação concluída com três dívidas herdadas, sem substituir o histórico da F00/F01 por uma declaração de prontidão da combinação.

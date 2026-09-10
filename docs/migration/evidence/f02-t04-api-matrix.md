@@ -1,8 +1,10 @@
 # F02/T04 — matriz auditável das APIs do CRM
 
-Base implementada e executada: `5f3df2cf064e9c441d228ce3a956201e5403d692`.
-O recorte E2E do `verify05` aprovou `13/13`; o gate integral terminou NOT READY
-com `mutants_killed=23/27`, pelas falhas dos mecanismos 01/02/03/26. Este mapa registra a prova observada sem declarar F02 concluída.
+Base funcional: `5f3df2cf064e9c441d228ce3a956201e5403d692`. Checkpoint
+integral verificado: `03ec6a3b56826ab882782efb1dd5185f47e52a8c`.
+O gate07 aprovou o recorte E2E `13/13`, os mutantes `27/27` e registrou
+`STATUS: READY (F02)`. Este mapa declara a conclusão técnica da fase dentro dos
+limites de sandbox e mocks descritos abaixo.
 
 ## Denominadores
 
@@ -115,7 +117,9 @@ casos integrados com recorte diferente.
   sentidos (`f02-api-active-org.spec.ts:387-416`). PATCH/DELETE estrangeiros
   conservaram o estado comercial e emitiram somente a auditoria de recusa esperada
   (`f02-api-active-org.spec.ts:278-349`).
-- Navegação A/B passou em `tests/e2e/f02-crm-navigation.spec.ts:65-334` e segue
+- Navegação A/B passou em `tests/e2e/f02-crm-navigation.spec.ts:65-353` @
+  `03ec6a3b`; a leitura do viewer espera o GET, exige HTTP200, confere a fixture
+  exata na resposta e depois sua exibição na UI (`:316-337`). A jornada segue
   cobrindo catálogo completo, ficha e início do pedido. Daily/checks A/B passou em
   `tests/e2e/f02-daily-checks.spec.ts:168-385`: 501 itens, PDF com os 501 índices
   duas vezes, impressão sem escrita, conferência, replay, revisão vencida,
@@ -125,13 +129,13 @@ casos integrados com recorte diferente.
 
 - `tests/integration/rls-isolation.test.ts:379-458` cobre as 9 tabelas F02 do
   denominador; as provas específicas permanecem referenciadas na matriz.
-- O verify05 aprovou `unit=8380/8380`, `integration=72/72` e `db=1585/1585`,
+- O verify07 aprovou `unit=8380/8380`, `integration=72/72` e `db=1585/1585`,
   registrados respectivamente em
-  `.verify-logs/f02-final-05/run.w9FWFLk8/{unit,integration,db}.json:1`.
+  `.verify-logs/f02-final-07/run.Zmng5CLM/{unit,integration,db}.json:1`.
   Essas contagens globais não aumentam os denominadores HTTP `58/58` nem as
   quatro escritas representativas do caso de suporte.
 
-## Execução verify05 e histórico das tentativas
+## Execuções integrais e fechamento
 
 O relatório `.verify-logs/f02-final-05/run.w9FWFLk8/e2e.json:101-190,599-752`
 registra `13/13` casos esperados, `skipped=0`, `unexpected=0`, `flaky=0` e
@@ -146,8 +150,23 @@ revelou que o proxy respondia com ID diferente da auditoria. A ADR-015 levou ao
 encaminhamento canônico comprovado no `final05`; nenhum desses resultados parciais
 é reclassificado retroativamente como aprovação integral.
 
-Tipos, lint, build, shell, unit, integração, banco e os 13 E2E já passaram no
-verify05 sobre `5f3df2cf`. O gate executou 27 scripts mutantes e aprovou 23/27; os mecanismos
-01/02/03/26 exigiram reparo. O número 30 identifica o mutante de encaminhamento de request ID e não
-é denominador. Portanto esta matriz não declara aprovação do gate, F02 pronta,
-validação visual, operação Deka, serviço real ou produção.
+O gate05 executou 27 scripts mutantes e aprovou 23/27; os mecanismos 01/02/03/26
+exigiram reparo. O gate06 aprovou 27/27, mas terminou NOT READY com E2E12/13; a
+correção de espera em `03ec6a3b` passou A/B2/2. Esses resultados permanecem como
+histórico e não são reclassificados.
+
+O gate07 sobre `03ec6a3b` terminou em 10/09/2026 com exit 0 após `4617.77s`, às
+`2026-09-10T06:11:30Z`. Tipos,
+lint, build, shell, secrets e igualdade dos inputs passaram; unit8380/8380,
+integração72/72, DB1585/1585 e E2E13/13 em sete specs passaram sem skip, falha,
+ou flaky; mutantes27/27, `tests_pending=0`, `debt_known=0` e violações0. Os
+indicadores das fases futuras continuam `pending` e não entram no fechamento de
+F02. O resumo literal está em
+`.verify-logs/f02-final-07/orchestration.log:1-33` e o término em
+`.verify-logs/f02-final-07/result.json:1-4`. O número 30 identifica o mutante de
+encaminhamento de request ID e não é denominador.
+
+F02 está tecnicamente concluída no escopo de empresas fictícias, sandbox local e
+WhatsApp/IA mock. Conforme D47, a construção pausa antes de F03. Aceite visual do
+proprietário, operação Deka, provedores reais, E2E integral do upstream e produção
+não foram validados; por D48, dados e operação Deka não bloqueiam este fechamento.

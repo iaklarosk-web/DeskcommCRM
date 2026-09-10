@@ -57,7 +57,18 @@ expansão comercial; F03 e fases posteriores não começam por esta autorizaçã
 
 ## Commit
 
-Implementação: `d44e3d34d55512b2287209f7802810ee26843f73`. O gate integral continua em andamento; esse commit não declara a fase pronta.
+Implementação inicial: `d44e3d34d55512b2287209f7802810ee26843f73`.
+Checkpoint integral verificado: `03ec6a3b56826ab882782efb1dd5185f47e52a8c`.
+O gate07 terminou em 10/09/2026 com exit 0 e `STATUS: READY (F02)`:
+unit8380/8380, integração72/72, DB1585/1585, E2E13/13 em sete specs,
+mutantes27/27 e zero violações. A prova está em
+`.verify-logs/f02-final-07/orchestration.log:1-33` e
+`.verify-logs/f02-final-07/result.json:1-4`, com síntese na
+[evidência versionada T13](../migration/evidence/construction-f02-t13-20260909.txt).
+Isso conclui F02 no escopo técnico
+genérico, com sandbox, empresas fictícias e provedores mock. Conforme D47, a
+construção pausa aqui e F03 depende de nova mensagem do proprietário; os dados
+da Deka não bloquearam este fechamento, conforme D48.
 
 ## Implementação do gate T13
 

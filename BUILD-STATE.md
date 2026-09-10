@@ -1,17 +1,17 @@
 ---
-updated_at: 2026-09-10T03:30:03Z
-head_commit: 4ec7bb5677674d92f5b8ea484d81efe279460182   # mecanismos de prova corrigidos; gate integral06 em execução
+updated_at: 2026-09-10T06:14:51Z
+head_commit: 03ec6a3b56826ab882782efb1dd5185f47e52a8c   # código validado pelo gate integral07; commits posteriores somente documentais
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
 plan_version: "2.3 (2026-09-09); D38–D48; ADR-006…015"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
 current_phase: F02
-next_task: F02-T13
+next_task: F03-T01             # fila futura; aguardar nova mensagem do proprietário (D47)
 status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
 hosting_confirmed: no          # confirmar D03 antes da F06; orçamento proposto não aprova contratação
 build_env: "Codex na VPS, worktree DeskcommCRM-v1.17.0; validação em serviços/bancos descartáveis; WHATSAPP_MODE=mock AI_PROVIDER=mock"
-verify_summary_last_context: "Gate F02 de 10/09/2026, fonte5f3df2cf: funcionais aprovados, 23/27 scripts mutantes; NOT READY. Reparo4ec7bb56 em nova validação integral06."
+verify_summary_last_context: "Gate07 aprovado em 10/09/2026 sobre 03ec6a3b; F02 concluída tecnicamente e pausada antes de F03. Não é READY_STAGING nem aceite comercial."
 verify_summary_last: |
   VERIFY SUMMARY
   scope=phase phase=F02 current_phase=F02
@@ -29,29 +29,54 @@ verify_summary_last: |
   webhook: replay=pending stored=pending tables_checked=pending
   replicability: e2e[fictitious_A_B]=13/13 specs=7/7 grep_deka_in_src=0
   secrets: files_scanned=396 findings=0
-  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=23/27
-  debt_known=0 skip_only_occurrences=15 violations=1
-  violation: Mutante ausente ou vivo
-  STATUS: NOT READY
+  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=27/27
+  debt_known=0 skip_only_occurrences=15 violations=0
+  STATUS: READY (F02)
+
 ---
 
 # BUILD-STATE
 
-## Estado vigente — validação final em 10/09/2026
+## Estado vigente — F02 concluída e construção pausada em 10/09/2026
 
-F02 continua em andamento. O gate05 sobre `5f3df2cf` aprovou tipos, lint, build,
-shell, unit8380/8380, integração72/72, banco1585/1585 e navegador13/13, mas saiu1
-com23/27 scripts mutantes. Os mecanismos01/02/03/26 foram corrigidos no
-checkpoint `4ec7bb56`, com provas focais aprovadas. O gate integral06 está em
-execução; somente sua conclusão pode fechar a fase. [Evidência T13](docs/migration/evidence/construction-f02-t13-20260909.txt).
+O gate integral07 sobre `03ec6a3b56826ab882782efb1dd5185f47e52a8c` encerrou
+com exit0 e `STATUS: READY (F02)` em 10/09/2026 às 06:11:30 UTC (03:11:30 de
+Brasília). Tipos, lint, build e shell passaram; unit8380/8380, integração72/72,
+banco1585/1585, navegador13/13 em sete specs e mutantes27/27, sem falhas,
+skips ou violações. Os 3.336 arquivos de entrada conservaram o mesmo SHA-256
+antes/depois da execução. A CI34439000032 e o Docker34439000033 passaram.
+[Evidência T13](docs/migration/evidence/construction-f02-t13-20260909.txt).
 
-D47: concluir F02, entregar evidências/limites/consumo e pausar. F03 não foi
-iniciada e depende de nova mensagem do proprietário. D48: a Deka preencherá
-seus dados após acesso; a engenharia é validada com empresas fictícias.
+T01–T13 estão concluídas: contatos/empresas/catálogo, pedidos e itens, notas e
+tarefas, configuração comercial, auditoria/API, relatório diário, impressão e
+conferência por revisão. A consulta exige data e critério explícitos; as regras
+comerciais da Deka serão configuradas após seu acesso (D48).
 
-A VPS foi reiniciada manualmente pelo painel; o trabalho Git e as migrations
-foram preservados. A causa original não foi estabelecida. Os testes pesados
-rodam em série, com a reserva de swap existente reativada. A [recuperação](docs/migration/evidence/construction-f02-recovery-20260909.txt) registra os limites da checagem.
+D47: a construção está pausada antes da F03. `next_task` registra a próxima tarefa,
+mas sua execução exige nova mensagem do proprietário. O status geral permanece
+`IN_PROGRESS`: F07 é o marco de staging e F17 reúne o aceite comercial do SaaS.
+Consumo observado e equivalência de API constam no [relatório de construção](https://github.com/iaklarosk-web/CRM-OS/blob/codex/plano-saas-v1.17.0/docs/custos/construcao-uso.md);
+Snapshot de 10/09/2026 às 06:18:16 UTC (03:18:16 de Brasília): 529,767,815 tokens
+observados desde 09/09 às 15:07:45 UTC, incluindo 514,087,424 tokens de entrada em
+cache; equivalência de API Standard US$509.445639. Modelos/esforços observados:
+Astra ultra, Sol high e Terra medium, em 11 rollouts pertencentes à construção.
+O snapshot não inclui mensagens posteriores ao corte e não representa cobrança
+da assinatura, custo interno do provedor nem saldo semanal.
+
+Limites: fixtures fictícias em duas empresas, WhatsApp/IA mock e sandbox local.
+Aceite visual/humano, operação Deka, provedores reais, produção e E2E integral do
+upstream não foram validados. Os campos de aceite humano permanecem em branco.
+Os indicadores de IA/handoff/lembrete/webhook pendentes pertencem a fases futuras.
+
+A VPS foi reiniciada manualmente pelo painel; Git e migrations foram preservados,
+sem indício identificado de corrupção. A causa original não foi estabelecida.
+Os testes pesados rodaram em série, com a reserva de swap existente reativada;
+a reserva não tem ativação persistente configurada para o próximo reboot.
+Os seis containers, dois volumes e a rede descartáveis da F02 foram removidos
+após arquivar as evidências. Arquivos privados de ambiente e metadados foram
+preservados. `tos-postgres-dev` e `run-u1201.service`, externos a esta tarefa,
+continuavam parados/com falha na checagem final e não foram alterados.
+[Recuperação](docs/migration/evidence/construction-f02-recovery-20260909.txt).
 
 ## Histórico da recuperação e dos checkpoints parciais de 09/09/2026
 
@@ -139,7 +164,7 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 |---|---|---|
 | F00 | Auditoria, verificador, ADR-001…003 e baseline N0 | done(verify=2026-09-07 2a23537e) |
 | F01 | TenantContext, TenantConfiguration, Entitlement mínimo, seeds deka/demo2 e criação de tenant | done(verify=2026-09-07 6f7c56fc) — histórico; revalidação v1.17.0 com dívida em 08/09/2026 |
-| F02 | CRM mínimo e pedidos do dia: clientes/empresas, catálogo, pedidos/itens, histórico, tarefas/notas, lista por produto/entrega, impressão e conferência | in_progress — T01–T03 publicados; T04–T12 integrados localmente, provas finais/T09/T13 em andamento; pausa ao concluir F02 |
+| F02 | CRM mínimo e pedidos do dia: clientes/empresas, catálogo, pedidos/itens, histórico, tarefas/notas, lista por produto/entrega, impressão e conferência | done(verify=2026-09-10 03ec6a3b) — T01–T13 concluídas; construção pausada antes de F03 |
 | F03 | WhatsApp de entrada/saída via WAHA, adaptação do ChannelAdapter, Inbox e ciclo das conversas | pending |
 | F04 | Adaptar o motor de IA/RAG, Action Policy e nove ferramentas ao contrato CRM-OS | pending |
 | F05 | Adaptar handoff e notificações; criar regra de lembrete PJ sobre infraestrutura existente | pending |
@@ -164,19 +189,19 @@ As classes abaixo expressam o destino aprovado, não uma nova medição de pront
 
 | Módulo | Classe vigente | Referência/decisão | Estado e trabalho restante |
 |---|---|---|---|
-| Auth, papéis e isolamento | ADAPTAR | `lib/auth/`, `src/rbac/`, `src/tenant-context/`; ADR-003/006 | Preservar autorização e escopo; contexto de suporte temporário é recusado pelo TenantCtx F01 até adaptação explícita. Revalidado com dívida herdada; escopo e contagens acima |
-| TenantContext, TenantConfiguration e Entitlement mínimo | ADAPTAR | `src/tenant-context/`, `src/tenant-config/`, `src/entitlement/`; fundação F01 | Construídos no histórico F01; integração revalidada com dívida herdada. F03/F04 ligam canais, agentes e uso; F11/F12 ampliam suporte e capacidades comerciais |
+| Auth, papéis e isolamento | ADAPTAR | `lib/auth/`, `src/rbac/`, `src/tenant-context/`; ADR-003/006 | Gate F02 aprovado: isolamento/RLS/RBAC, suporte somente leitura e identificação correlacionada de requisições F02. Ampliação comercial de suporte continua na F11/F12 |
+| TenantContext, TenantConfiguration e Entitlement mínimo | ADAPTAR | `src/tenant-context/`, `src/tenant-config/`, `src/entitlement/`; fundação F01 | Fundação integrada e gate F02 aprovado, sem dívida nominal restante no gate. Configuração comercial canônica concluída; F03/F04 ligam canais, agentes e uso; F11/F12 ampliam capacidades comerciais |
 | WhatsApp/ChannelAdapter | ADAPTAR | `lib/channels/`, `lib/waha/`; target-state §5.7 | Deka usará WAHA agora. Adaptar entrada/saída, resolução de tenant, mocks e fixtures na F03; API oficial não é requisito desta etapa |
 | Inbox/conversas | ADAPTAR | `lib/inbox/comando-da-conversa.ts`, `lib/atendimento/fronteira.ts`; ADR-006/008 | Preservar conversas, demandas, revisões, ServiceBoundary e silêncio. Conciliar transições sem segunda máquina concorrente na F03 |
 | Motor de IA e RAG | ADAPTAR | `lib/agent-engine/`, `lib/ai/embeddings/`; ADR-002/006/008 | Reutilizar motor único e proveniência; completar contexto/ferramentas de pedido, provedor/mock, conhecimento e contabilização de uso na F04 |
-| CRM existente | ADAPTAR | `contacts`, `catalog_products`, `crm_tasks` e contrato herdado de `orders`; ADR-008/desenho F02 | Preservar IDs, dados, leitores e vínculos. Nomes lógicos não obrigam rename físico; estratégia de pedidos depende de inventário F02-T01/T02 |
-| Lista do dia, impressão e conferência | CRIAR | [Desenho F02](docs/design/F02-pedidos-do-dia.md), DIRETRIZ §7.3 | F02-T10…T13 acrescentadas ao plano; T01…T09 preservadas. Uma fonte para lista/totais/impressão, revisão de pedido e conferência rastreável; regras Deka pendentes |
+| CRM existente | ADAPTAR | `contacts`, `catalog_products`, `crm_tasks` e contrato herdado de `orders`; ADR-008/desenho F02 | F02 concluída: IDs e contrato externo preservados; empresas, catálogo, pedidos/itens, notas/tarefas e histórico integrados e validados. Inventário e provas em T04/T09/T13 |
+| Lista do dia, impressão e conferência | CRIAR | [Desenho F02](docs/design/F02-pedidos-do-dia.md), DIRETRIZ §7.3 | F02-T10…T13 concluídas: uma fonte para lista/totais/impressão completa, revisão e conferência rastreável. Data/critério explícitos; regras Deka são configuração futura, sem bloquear engenharia |
 | Action Policy | ADAPTAR | Política/preview e executores do motor; target-state §5.8 | Completar catálogo, aprovação e auditoria no mesmo caminho de execução. Aprovação de texto não confirma pedido |
 | Handoff | ADAPTAR | `lib/agent-engine/agent/human-handoff.ts`; ADR-006/008 | Completar resumo, motivos, claim e provas D19 preservando guardas, silêncio e episódio existentes; F05 |
-| Lembrete PJ | CRIAR | target-state §5.12; desenho F02 | Regra específica sobre filas/envio existentes; timeout sem resposta é distinto do corte de produção. Datas/janelas/exceções ainda dependem da Deka; F05 |
+| Lembrete PJ | CRIAR | target-state §5.12; desenho F02 | Regra específica sobre filas/envio existentes; timeout sem resposta é distinto do corte de produção. Construção genérica na F05; datas/janelas/exceções da Deka serão configuradas após acesso (D48) |
 | Workers/filas e observabilidade | ADAPTAR | `event_log`, `job_queue`, `workers/`, `lib/audit/`; target-state §5.13/5.17 | Preservar infraestrutura e provar tenant, repetição segura, trabalhos antigos e rastreabilidade nas F03–F06 |
 | Notificações do contrato CRM-OS | CRIAR | target-state §5.16; canais/avisos herdados reaproveitáveis | Completar avisos por usuário e e-mail transacional com mocks na F05; entregas reais continuam pendentes |
-| Banco/RLS/migrations | ADAPTAR | `supabase/baseline.sql`, [MANIFEST](supabase/migrations/MANIFEST.md), ADR-010 | 217 arquivos SQL, incluindo bootstrap; instalação pelo baseline. Aplicação da combinação provada em banco descartável; bateria da fundação concluída com dívida herdada; serviços reais pendentes |
+| Banco/RLS/migrations | ADAPTAR | `supabase/baseline.sql`, [MANIFEST](supabase/migrations/MANIFEST.md), ADR-010 | 225 arquivos SQL em migrations no checkpoint 03ec6a3b; instalação/upgrade pelo baseline e reaplicação provados em banco descartável. Gate F02: banco1585/1585, RLS127 tabelas, nenhuma dívida nominal; serviços reais pendentes |
 | Administração, onboarding e cobrança comerciais | ADAPTAR | D38/D39/D44; ADR-009; DIRETRIZ §7.9 | Reaproveitar módulos herdados e completar F11/F12; presença de telas não comprova jornada self-service paga |
 | Canais comerciais, agenda, automação e marca | ADAPTAR | D40/D41; ADR-009; DIRETRIZ §7.9 | Recorte confirmado para F14–F16; regras de sincronização, limites e profundidade de white-label ainda serão definidos |
 
@@ -193,7 +218,7 @@ A [ADR-010](docs/decisions/ADR-010-rotulos-das-migrations-F01.md) resolve as col
 
 | Id | Tipo (D11) | O que precisa | Desde | Branch |
 |---|---|---|---|---|
-| (nenhum registrado nesta revisão documental) | | Revalidação encerrada com dívida herdada; pendências abaixo continuam vinculadas às etapas dependentes | | |
+| (nenhum bloqueio de engenharia ativo) | | F02 concluída e pausada por D47; pendências abaixo continuam vinculadas às etapas dependentes, sem bloqueio pelos dados Deka (D48) | | |
 
 Tipos: `credential_real`, `commercial`, `cost`, `production`, `real_message`, `restore_prod`, `real_data`, `contradiction_b`, `awaiting_owner`. `BLOCKER-PROD` será aberto na F07 e não muda `status` para BLOCKED; produção continua sem autorização nesta revisão.
 

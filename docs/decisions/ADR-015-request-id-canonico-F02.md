@@ -47,4 +47,4 @@ D47/D48 continuam vigentes: concluir F02 e pausar antes da próxima fase.
 
 ## Commit
 
-Implementação: `5f3df2cf064e9c441d228ce3a956201e5403d692`. Decisão registrada antes da implementação; validação final e gate integral pendentes.
+Implementação: `5f3df2cf064e9c441d228ce3a956201e5403d692`. Decisão registrada antes da implementação. Unit focal34/34 e E2E integrado13/13 comprovaram a correlação; mutante30 (identificador, não denominador) foi detectado. O gate06 aprovou27/27 scripts mutantes, mas encerrou NOT READY com E2E12/13; o checkpoint `03ec6a3b56826ab882782efb1dd5185f47e52a8c` sincronizou a lista do viewer e passou A/B2/2. O gate integral07 desse checkpoint terminou com exit 0, E2E13/13, mutantes27/27, zero violações e `STATUS: READY (F02)`, conforme `.verify-logs/f02-final-07/orchestration.log:1-33` e a [evidência versionada T13](../migration/evidence/construction-f02-t13-20260909.txt). F02 está concluída no escopo técnico e pausa por D47; F03 não foi iniciada. Os limites de ambiente real descritos acima permanecem e não bloqueiam este fechamento por D48.

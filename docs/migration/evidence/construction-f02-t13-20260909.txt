@@ -174,3 +174,97 @@ As quatro falhas são dos scripts01,02,03,26; a última numeração30 não é de
 Correções restritas aos mecanismos de teste; nova execução integral permanece necessária. F02 ainda não concluída; F03 não iniciada.
 
 Rechecagem01 concluída: exit0; controle9/9; oito asserções distintas de vazamento8/8; script1/1. .verify-logs/f02-mutant-repair-01/{run.log,result.exit}. Nenhuma expectativa funcional enfraquecida nem teste pulado; a contagem abandona duplicação textual de títulos.
+
+CI DO REPARO4ec7bb56 — 10/09/2026
+CI34433509561 success: unit8380/8380 em788/788 arquivos; DB1585/1585 em194/194 arquivos. Docker34433509545 success. Log privado .verify-logs/ci-34433509561-success.log. O commit documental f613bb27 preserva os mesmos inputs de código/testes. Gate06 em .verify-logs/f02-final-06/run.5zdgAiVH, supervisor1130947, segue em execução.
+
+GATE06 — RESULTADOS FUNCIONAIS PARCIAIS, 10/09/2026
+Fonte4ec7bb56; documentaçãof613bb27 não altera inputs protegidos. Typecheck17s,lint115s,build103s,shell62s: exit0. Unit8380/8380 em1738s, integração72/72 em44s, DB1585/1585 em896s.
+E2E:12/13, zero skips/flaky; processoexit1 em1146s; JSONduration1144850.515ms. Falha única: f02-crm-navigation.spec.ts:318, caso B, viewer aguardando texto do cliente na lista de contatos com timeout padrão5000ms. As demais12 jornadas passaram. O trace está em análise; não se presume que aumentar espera resolva sem verificar a resposta real.
+Mutantes ainda em execução. Fonte continua congelada; F02 não concluída.
+
+GATE06 ENCERRADO — 10/09/2026 04:47:13 UTC
+Exit1,4686.24s; resultadoNOT READY; todas27 provas de regressão passaram. Fonte4ec7bb56 permaneceu inalterada durante a execução.
+VERIFY SUMMARY
+scope=phase phase=F02 current_phase=F02
+build=ok lint=ok typecheck=ok shell=ok
+unit=8380/8380 integration=72/72 db=1585/1585 e2e=pending baseline_n0=8997
+baseline_comparable: scope=unit+db passed=9965 required=8738 full_n0=pending
+e2e_scope: F02-required passed=pending specs=pending
+isolation: tables=127 ops=4 dirs=2 leaks=0 (material_cross_org=91/127)
+rls-coverage: tables_with_org_id=127 policies_found=116 missing=0 service_only_with_grant=0
+rbac: roles=3 denied_expected=19 denied_actual=19
+entitlement: usage_events_written=2
+ai_eval: cases=pending pass=pending unknown=pending injection=pending cross_tenant=pending provider_calls_at_zero_balance=pending
+handoff: ai_msgs_after_handoff=pending summary=pending assignee=pending notify=pending
+reminder: runs=pending sent=pending duplicates=pending
+webhook: replay=pending stored=pending tables_checked=pending
+replicability: e2e[fictitious_A_B]=pending specs=pending grep_deka_in_src=0
+secrets: files_scanned=396 findings=0
+tests_deleted=0 tests_skipped=pending expected_failures=pending tests_failed=pending tests_pending=pending mutants_killed=27/27
+debt_known=0 skip_only_occurrences=15 violations=2
+violation: e2e: comando falhou ou não executou
+violation: F02 E2E: tests/e2e/f02-crm-navigation.spec.ts: spec falhou
+STATUS: NOT READY
+
+Reparo da navegação: 03ec6a3b56826ab882782efb1dd5185f47e52a8c. A requisição da lista não aparecia antes do timeout5s; cleanup começou apenas apósfalha. O teste agora registra a esperaHTTP antes do goto, exige200 e contatoexato no corpo e depois presença naUI.
+Focal .verify-logs/f02-browser-navigation-07:2/2, zero skipped/unexpected/flaky,185652.625ms; processoexit0 em189.61s; inputs iguais. Build de aplicação reutilizado do gate06, pois somente a spec mudou. Não substitui gateintegral.
+Gate07 iniciado após o reparo, com nova execução de todas as etapas; F03 não iniciada.
+
+Recovery follow-up, 2026-09-10T05:14Z: boot_id=37ac4497-0792-44d2-9a9d-7c3e9adf773d unchanged; own six f02-crm-cadastros containers active (five reported healthy; rest has no health status). Other-project tos-postgres-dev remains exited255/restart=no; run-u1201.service remains failed/exit-code. Neither was changed. Gate07 continues on frozen03ec; types/lint/build/shell exit0, unit pending.
+
+CI checkpoint 03ec6a3b56826ab882782efb1dd5185f47e52a8c, observed 2026-09-10T05:22Z:
+https://github.com/iaklarosk-web/DeskcommCRM/actions/runs/34439000032 — success; jobs verify and invariants success.
+Unit tests: 788/788 files, 8380/8380 tests. DB invariants: 194/194 files, 1585/1585 tests.
+Raw CI log preserved at .verify-logs/ci-34439000032-success.log.
+https://github.com/iaklarosk-web/DeskcommCRM/actions/runs/34439000033 — Docker success; PR build/test, no stable publication or deployment.
+Local gate07 remains pending; CI success does not replace the mandatory local F02 E2E/mutant gate.
+
+FINAL GATE07 — F02 APPROVED
+Code: 03ec6a3b56826ab882782efb1dd5185f47e52a8c
+Command: bash scripts/verify.sh, supervised by .verify-logs/run-f02-gate.py f02-final-07
+Sandbox: fictitious companies, WHATSAPP_MODE=mock AI_PROVIDER=mock; one worker, no Playwright retries.
+{"exit": 0, "seconds": 4617.77, "finished_utc": "2026-09-10T06:11:30Z"}
+{"ok": true, "algorithm": "sha256", "files_before": 3336, "files_after": 3336, "hash_before": "f471f348c35c5796a8b2cbbc78136ffb6e19c4a611e322947e83557679bfa637", "hash_after": "f471f348c35c5796a8b2cbbc78136ffb6e19c4a611e322947e83557679bfa637"}
+[verify] evidence=/home/klarosk/projetos/DeskcommCRM-v1.17.0/.verify-logs/f02-final-07/run.Zmng5CLM
+[verify] inputs-before: exit=0 0s
+[verify] sandbox: exit=0 0s
+[verify] typecheck: exit=0 23s
+[verify] lint: exit=0 139s
+[verify] build: exit=0 84s
+[verify] shell: exit=0 65s
+[verify] unit: exit=0 1999s
+[verify] integration: exit=0 28s
+[verify] db: exit=0 848s
+[verify] secrets: exit=0 0s
+[verify] e2e-plan: exit=0 2s
+[verify] e2e: exit=0 880s
+[verify] inputs: exit=0 0s
+VERIFY SUMMARY
+scope=phase phase=F02 current_phase=F02
+build=ok lint=ok typecheck=ok shell=ok
+unit=8380/8380 integration=72/72 db=1585/1585 e2e=13/13 baseline_n0=8997
+baseline_comparable: scope=unit+db passed=9965 required=8738 full_n0=pending
+e2e_scope: F02-required passed=13/13 specs=7/7
+isolation: tables=127 ops=4 dirs=2 leaks=0 (material_cross_org=91/127)
+rls-coverage: tables_with_org_id=127 policies_found=116 missing=0 service_only_with_grant=0
+rbac: roles=3 denied_expected=19 denied_actual=19
+entitlement: usage_events_written=2
+ai_eval: cases=pending pass=pending unknown=pending injection=pending cross_tenant=pending provider_calls_at_zero_balance=pending
+handoff: ai_msgs_after_handoff=pending summary=pending assignee=pending notify=pending
+reminder: runs=pending sent=pending duplicates=pending
+webhook: replay=pending stored=pending tables_checked=pending
+replicability: e2e[fictitious_A_B]=13/13 specs=7/7 grep_deka_in_src=0
+secrets: files_scanned=396 findings=0
+tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=27/27
+debt_known=0 skip_only_occurrences=15 violations=0
+STATUS: READY (F02)
+
+E2E runner: expected=13 skipped=0 unexpected=0 flaky=0 errors=0 duration=878806.146ms. Archived at .verify-logs/f02-final-07/test-results. PDFs: final-pdf-1.pdf (313523 bytes, sha256 cd940d5e8627983d785e16c564488b0a6d11366eb464f4ef58271640f9370c61); final-pdf-2.pdf (312978 bytes, sha256 0b036f13c2c35405194134f01726053f4b9628e2f70ed46320cc1bb16a7f7cb1). Exact full item indexes verified by browser tests; no owner visual acceptance inferred.
+Cleanup: supabase stop --project-id f02-crm-cadastros --no-backup --yes exited0; own six containers/two disposable volumes removed. Exact labeled empty network f02-crm-cadastros-loopback removed separately. Evidence, sandbox metadata and private .env.e2e preserved; no env contents logged. No other project services changed.
+Final health check: original boot_id unchanged; tos-postgres-dev remains exited255/restart=no; run-u1201.service remains failed/exit-code. Existing 2GB swap remains active, no persistence entry added. Cause of original freeze remains unknown.
+D47: F02 technically complete; pause before F03, await new owner message. D48: Deka data/configuration does not block engineering. NOT VALIDATED: owner visual acceptance, real pilot/provider/production, full upstream E2E.
+
+Observed construction usage at phase close: {"snapshot_utc": "2026-09-10T06:18:16.008103+00:00", "started_at": "2026-09-09T15:07:45.023Z", "owned_rollouts": 11, "total_tokens": 529767815, "cached_input_tokens_subset": 514087424, "usd_api_standard_equivalent": 509.4456388, "models_efforts": [["gpt-5.6-sol", "high"], ["gpt-5.6-terra", "medium"], ["gpt-6-astra", "ultra"]], "coverage": {"token_events_after_cutoff": 4516, "deduplicated_cumulative": 278, "resets": 4, "last_usage_fallbacks": 0, "fallback_ambiguities": 0, "unknown_model_events": 0, "invalid_usage_events": 0, "first_cumulative_gaps": 0}}
+Not subscription billing/internal provider cost/weekly quota. Events after snapshot cutoff are not included. Canonical measured report: CRM-OS/docs/custos/construcao-uso.json and .md.
+Cleanup verification: containers=0 volumes=0 networks=0 for own labels; listening test ports3102/55421/55422/55424=0. Private env and sandbox metadata preserved. Structured evidence: .verify-logs/f02-final-07/cleanup.json.
