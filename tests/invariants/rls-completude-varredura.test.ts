@@ -262,8 +262,10 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "tests/invariants/uso-de-ia-e-server-side.test.ts — privilégio NENHUM " +
       "para anon e authenticated, `permission denied` medido sob `set role`, " +
       "RLS ligada, zero policies. É o livro-razão de custo de IA de todos os " +
-      "tenants; só `recordUsage` (service role, via withTenant) escreve, e a " +
-      "leitura do tenant chega por agregação server-side na Fase 2.",
+      "tenants; escrevem só `recordUsage` (service role, via withTenant) e — " +
+      "desde a F04-T08 — `runModelCall`, no MESMO statement do `llm_calls` que " +
+      "originou o uso (`llm_call_id`, único parcial). A leitura do tenant chega " +
+      "por agregação server-side na Fase 2.",
   },
   // ─── migrations 9014 e 9016 (F03) — mesma postura deny-all (D35) ───
   //

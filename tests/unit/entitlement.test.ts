@@ -75,7 +75,14 @@ describe("entitlement", () => {
     gravarLinhaDoVerify("entitlement", linha);
     // custo calculado LOCALMENTE (pricing.ts), na posição do estimated_cost_cents
     expect(fake.inserts[0]?.values?.[6]).toBe(estimatedCostCents("gpt-4o-mini", 100_000, 10_000));
-    expect(fake.inserts[0]?.values?.[6]).toBe(2); // 100k×0.015 + 10k×0.06 por 1k = 1.5 + 0.6 → 2
+    // 100k×0,015 + 10k×0,06 por 1k = 1,5 + 0,6 = 2,1 cents. A expectativa era
+    // `2` porque `estimatedCostCents` arredondava — o próprio comentário de
+    // antes registrava a conta certa e o valor errado ("1.5 + 0.6 → 2"). Desde
+    // a F04-T08 o preço vem da tabela única do motor, a coluna é `numeric`
+    // (migration 9018) e a projeção guarda o MESMO número de
+    // `llm_calls.cost_cents`: 0,1 cent por chamada deixou de ser descartado.
+    // Expectativa mais ESTREITA que a anterior, não mais frouxa.
+    expect(fake.inserts[0]?.values?.[6]).toBeCloseTo(2.1, 9);
     expect(fake.inserts[1]?.values?.[3]).toBe("embedding");
   });
 
