@@ -7742,7 +7742,11 @@ alter table job_queue add constraint job_queue_kind_check
   -- comenta que o valor mora neste bloco. Ele NÃO entra em
   -- job_queue_turn_needs_contact logo abaixo: job de saída tem contact_id NULO
   -- e endereça conversa e mensagem pelo payload.
-  check (kind in ('inbound_turn','followup_turn','watchdog','flywheel','case_reply_turn','operator_turn','transactional_delivery','approved_reply','outbound_message'));
+  -- 'recurring_reminder' e 'recurring_reminder_cutoff' (9022/F05-T06/T08,
+  -- §5.12/§5.13, ADR-026) entram AQUI pelo mesmo motivo: o apêndice 9022, no
+  -- fim do arquivo, NÃO recria esta constraint. Os dois endereçam o TENANT
+  -- (contact_id NULO) e ficam fora de job_queue_turn_needs_contact.
+  check (kind in ('inbound_turn','followup_turn','watchdog','flywheel','case_reply_turn','operator_turn','transactional_delivery','approved_reply','outbound_message','recurring_reminder','recurring_reminder_cutoff'));
 alter table job_queue drop constraint if exists job_queue_turn_needs_contact;
 do $$
 declare c text;
@@ -26927,45 +26931,19 @@ comment on column public.conversations.saas_tags is
 -- ---------------------------------------------------------------------------
 -- 3 · job_queue.kind aceita os dois kinds do lembrete (sem perder os herdados)
 -- ---------------------------------------------------------------------------
-
-do $f05_t06_kind$
-declare
-  v_nome text;
-  v_perdidos text;
-begin
-  select conname into v_nome
-    from pg_constraint
-   where conrelid = 'public.job_queue'::regclass and contype = 'c'
-     and pg_get_constraintdef(oid) ilike '%watchdog%'
-     and pg_get_constraintdef(oid) not ilike '%contact_id%';
-
-  if v_nome is not null then
-    select string_agg(distinct k, ', ') into v_perdidos
-      from (
-        select unnest(regexp_matches(
-                 pg_get_constraintdef(oid), '''([a-z_]+)''', 'g')) as k
-          from pg_constraint
-         where conrelid = 'public.job_queue'::regclass and conname = v_nome
-      ) atual
-     where k not in ('inbound_turn','followup_turn','watchdog','flywheel',
-                     'case_reply_turn','operator_turn','transactional_delivery',
-                     'approved_reply','outbound_message',
-                     'recurring_reminder','recurring_reminder_cutoff');
-    if v_perdidos is not null then
-      raise exception
-        'F05-T06 ia ESTREITAR job_queue.kind: valor(es) herdado(s) fora da lista nova: %',
-        v_perdidos;
-    end if;
-    execute format('alter table public.job_queue drop constraint %I', v_nome);
-  end if;
-end
-$f05_t06_kind$;
-
-alter table public.job_queue add constraint job_queue_kind_check
-  check (kind in ('inbound_turn','followup_turn','watchdog','flywheel',
-                  'case_reply_turn','operator_turn','transactional_delivery',
-                  'approved_reply','outbound_message',
-                  'recurring_reminder','recurring_reminder_cutoff'));
+--
+-- ⚠️ UMA DIVERGÊNCIA DELIBERADA em relação ao arquivo aplicado, e ela é regra
+-- da casa, não descuido (a mesma do apêndice 9016): a dança de drop + recriação
+-- de `job_queue_kind_check` da seção 3 da migration NÃO é copiada para cá. Os
+-- valores `recurring_reminder` e `recurring_reminder_cutoff` entram no bloco
+-- ÚNICO daquela constraint, lá em cima (o da migration 0066), porque
+-- reconstruir a mesma constraint em N blocos do baseline quebra o `update.sh`
+-- de todo clone que já tenha uma linha de vocabulário posterior — os blocos
+-- antigos rodam antes e falham em cadeia, e entre o `drop` e o `add` que
+-- funciona a tabela fica SEM constraint. Vigiado por
+-- `tests/unit/baseline-constraint-reconstruida.test.ts` (que foi quem pegou a
+-- primeira versão deste apêndice, no gate f05-gate-02). O `comment on
+-- constraint` abaixo e o bloco final, que relê os kinds, são byte-fiéis.
 
 comment on constraint job_queue_kind_check on public.job_queue is
   'Vocabulário de kind. recurring_reminder / recurring_reminder_cutoff (F05-T06/T08) são o disparo por tenant do lembrete PJ (§5.12) e o seu corte — uma linha por tenant por disparo, com a tentativa em job_runs (§5.13). contact_id NULO nos dois: endereçam o TENANT, não uma pessoa.';

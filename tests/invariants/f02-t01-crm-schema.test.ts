@@ -89,6 +89,11 @@ describe("F02-T01 — empresas e campos comerciais", () => {
         drop constraint crm_orders_contact_tenant_fkey;
       alter table public.crm_order_items
         drop constraint crm_order_items_product_tenant_fkey;
+      -- F05-T06 (9022): o lembrete recorrente também aponta o cliente pela FK
+      -- composta sobre contacts_org_id_unique — mais uma posterior a soltar. O
+      -- gate f05-gate-02 pegou o índice preso a ela; o ROLLBACK a restaura.
+      alter table public.reminder_runs
+        drop constraint reminder_runs_customer_tenant_fkey;
       drop index public.contacts_org_id_unique;
       drop index public.catalog_products_org_id_unique;
       ${seed}
