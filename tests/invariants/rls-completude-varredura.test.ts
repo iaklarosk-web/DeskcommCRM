@@ -288,6 +288,42 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "— RLS ligada, zero policies, relacl sem anon/authenticated/PUBLIC — é " +
       "conferido à parte no mesmo arquivo.",
   },
+  // ─── migration 9017 (F04) — mesma postura deny-all (D35) ───
+  //
+  // A pendência e a auditoria nasceram `service_only`: RLS ligada, ZERO
+  // policies, `revoke all` de public/anon/authenticated e `grant all` só para
+  // service_role. O Inbox do atendente as lê pelo SERVIDOR, via `withTenant` —
+  // nunca pelo PostgREST. Como nas entradas acima, a prova NÃO conta linha
+  // cross-org (não há regra de tenant para acertar quando não há privilégio
+  // nenhum): ela mede a RECUSA, sob `set local role` + JWT, nas quatro
+  // operações, nos dois tenants. Por isso também não podem entrar em `TABLES`:
+  // lá o `countAs` receberia `permission denied` onde espera `0`, e a "correção"
+  // natural seria criar policy — isto é, passar a SERVIR pelo PostgREST a
+  // auditoria que existe justamente para ninguém escrever de fora.
+  {
+    tabela: "pending_actions",
+    razao:
+      "tests/invariants/f04-t02-confirmacao-schema.test.ts — duas organizações e " +
+      "dois usuários reais em auth.users/user_organizations; `permission denied` " +
+      "medido sob `set local role authenticated` + JWT nas quatro operações " +
+      "(select/insert/update/delete) para os DOIS usuários, as mesmas quatro " +
+      "negadas para `anon`, e controle positivo de `service_role` que escreve e " +
+      "lê a linha de volta (guarda de vacuidade). O catálogo — RLS ligada, zero " +
+      "policies, relacl sem anon/authenticated/PUBLIC — é conferido à parte no " +
+      "caso `pending_actions e audit_events são service_only (D35)`, junto com a " +
+      "unicidade por conversa e a coerência status ⇔ resolved_at.",
+  },
+  {
+    tabela: "audit_events",
+    razao:
+      "tests/invariants/f04-t02-confirmacao-schema.test.ts — a mesma prova da " +
+      "linha acima sobre o registro único de §5.17: dois tenants e dois usuários " +
+      "reais, `permission denied` sob `set local role authenticated` + JWT nas " +
+      "quatro operações, `anon` negado nas quatro e `service_role` inserindo e " +
+      "lendo de volta. Os vocabulários de `actor_type`, `result` e `risk` têm " +
+      "caso próprio, com valor inventado recusado; `api_audit_log` continua de " +
+      "pé ao lado, como §5.17 manda.",
+  },
   {
     tabela: "job_runs",
     razao:

@@ -367,11 +367,23 @@ describe("F03-T06 — a guarda recusa o que não pode sair", () => {
       { conversation_id: conversaDe(cenario.org, 2), body: "texto que não deve sair" },
       { pool, adapters: { mock: adapterMock }, modo: "mock" },
     );
+    // A ação mudou em F04-T01, e a mudança é do CATÁLOGO, não deste teste.
+    //
+    // Na F03 `send_message` nascia com `executors: ["human"]` — a IA ainda não
+    // tinha `execute()`, e o comentário de `catalog.ts` dizia isso com todas as
+    // letras. F04-T01 completou o catálogo com a tabela de §5.8/D18, onde
+    // `send_message` é `human, ai, automation`: a IA passar por aquele subset
+    // deixou de ser defeito e virou o desenho.
+    //
+    // O que este caso mede — "executor fora do subset é negado, sem escrita e
+    // sem fila" — continua inteiro, e continua sendo medido com a MESMA força:
+    // `resume_ai` (D34) é `executors: ["human"]`, e a IA pedindo para devolver a
+    // conversa a si mesma é exatamente a tentativa que a política tem de negar.
     const porIa = await execute(
       ctx,
       { kind: "ai" },
-      "send_message",
-      { conversation_id: conversaDe(cenario.org, 3), body: "texto que não deve sair" },
+      "resume_ai",
+      { conversation_id: conversaDe(cenario.org, 3) },
       { pool, adapters: { mock: adapterMock }, modo: "mock" },
     );
     const nomeInventado = await execute(
@@ -389,7 +401,7 @@ describe("F03-T06 — a guarda recusa o que não pode sair", () => {
     expect(emArquivada.reason, "conversa archived não foi recusada pela guarda").toBe(
       "conversation_closed",
     );
-    expect(porIa.reason, "a IA passou pelo subset de executores de send_message").toBe(
+    expect(porIa.reason, "a IA passou pelo subset de executores de resume_ai").toBe(
       "executor_not_allowed",
     );
     expect(nomeInventado.reason, "nome fora do catálogo não foi negado (§5.8, inv. 4)").toBe(

@@ -1,197 +1,238 @@
 /**
- * Action Policy — `execute()` mínimo e a entrega da fila (§5.8, F03-T06).
+ * Action Policy — `execute()` (§5.8, D17/D33). A ÚNICA porta de efeito de IA,
+ * automação ou humano.
  *
- * ⚠️ ESTE É O ÚNICO ARQUIVO DO PRODUTO QUE CHAMA `adapter.send`. O invariante 3
- * de §5.7 (`grep -rn "\.send(" src/ | grep -v src/actions/`) é medido em
- * `tests/integration/f03-saida.test.ts`. Quem precisar enviar chama `execute()`
- * ou `entregarSaida()`; nunca `getSaasAdapter(...).send` direto.
+ * Ordem deliberada, e cada passo é uma pergunta que só este arquivo responde:
  *
- * ─── Por que `execute()` NÃO envia ─────────────────────────────────────────
- *
- * `execute()` valida, guarda o estado, grava a mensagem em `queued` e ENFILEIRA.
- * O envio é do worker (`src/jobs/outbound-worker.ts`), que chama
- * `entregarSaida()` — aqui mesmo. Enviar dentro do `execute()` reproduziria o
- * envio síncrono herdado (`app/api/v1/messages/_handler.ts:577-821`): sem lugar
- * para registrar tentativa, sem backoff e sem `blocked`, que é o que F03-T07/T08
- * existem para dar.
+ *   1. o nome está no catálogo?             → `unknown_action`
+ *   2. o executor está no subset?           → `executor_not_allowed`
+ *   3. o risco é `blocked`?                 → `risk_blocked` (nega para TODOS)
+ *   4. a entrada casa com o `input_schema`? → `invalid_input`
+ *   5. precisa de confirmação humana?       → PENDÊNCIA (D33), não efeito
+ *   6. senão, a função de domínio executa.
  *
  * ─── Negado é RESULTADO, não exceção ───────────────────────────────────────
  *
  * §5.8, invariante 4: "nome fora do catálogo = denied, nunca exceção". Vale
- * para toda recusa de política (executor fora do subset, conversa encerrada,
- * input inválido): sobe como `{status:"denied", reason}` contável e AUDITADO.
- * Exceção fica para o que é defeito — banco fora do ar, invariante violado.
+ * para toda recusa de política: sobe como `{status:"denied", reason}` contável
+ * e AUDITADO. Exceção fica para o que é defeito — banco fora do ar, invariante
+ * violado.
+ *
+ * ─── `audit: always` ───────────────────────────────────────────────────────
+ *
+ * TODA saída daqui — executada, pendente ou negada — deixa uma linha em
+ * `audit_events` e outra em `api_audit_log` (§5.17; `src/actions/audit.ts`
+ * explica por que as duas). O id da primeira volta em `audit_id`.
+ *
+ * O efeito de canal mora em `outbound.ts`; o mapeamento tool → domínio, em
+ * `tools/`. Aqui só a política.
  */
 import { randomUUID } from "node:crypto";
 
-import { getSaasAdapter } from "@/src/channels";
-import type { SaasChannelAdapter, SaasChannelProvider } from "@/src/channels/contract";
-import { isConversationState, type ConversationState } from "@/src/conversation";
-import { enqueue } from "@/src/jobs/enqueue";
+import { IllegalTransition, transition } from "@/src/conversation";
 import { incrementCounter } from "@/src/obs/counters";
-import type { ServicePool } from "@/src/tenant-context/db";
-import { withTenant, type TenantCtx, type TenantDb } from "@/src/tenant-context";
+import { getSetting } from "@/src/tenant-config/settings";
+import { withTenant, type TenantCtx } from "@/src/tenant-context";
 
+import { recordIn, type AuditActorType, type AuditResult } from "./audit";
 import {
-  conversaAceitaEnvio,
+  ACTION_RISKS,
   findAction,
-  sendMessageInputSchema,
-  type ActionExecutor,
+  nivelDeRisco,
+  type ActionCatalogEntry,
+  type ActionRisk,
 } from "./catalog";
+import { criarPendencia, resolverPendencia } from "./pending-store";
+import { findHandler } from "./tools";
+import type {
+  ActionActor,
+  ActionDenyReason,
+  ExecuteDeps,
+  ToolOutcome,
+} from "./tools/contrato";
+
+export type { ActionActor, ActionDenyReason, ExecuteDeps } from "./tools/contrato";
+export { entregarSaida, MensagemDeSaidaAusente, type EntregaDeSaida } from "./outbound";
 
 export type ActionStatus = "executed" | "pending" | "denied";
-
-/**
- * Motivo da recusa — etiqueta de contador e coluna de auditoria, nunca frase
- * livre (D19/G-78). Texto novo a cada caminho transformaria a métrica em prosa.
- */
-export type ActionDenyReason =
-  | "unknown_action"
-  | "invalid_input"
-  | "executor_not_allowed"
-  | "conversation_not_found"
-  | "conversation_closed"
-  | "contact_without_phone"
-  | "channel_account_missing";
-
-export interface ActionActor {
-  readonly kind: ActionExecutor;
-  /** Atendente que executa; obrigatório para o executor `human` auditar quem. */
-  readonly user_id?: string;
-}
 
 export interface ActionResult {
   readonly status: ActionStatus;
   readonly output: Record<string, unknown> | null;
   readonly audit_id: string;
   readonly reason?: ActionDenyReason;
+  /** Preenchido só quando `status = "pending"` — é o id que `confirm()` recebe. */
+  readonly pending_action_id?: string;
 }
 
-export interface ExecuteDeps {
-  pool?: ServicePool;
-  /** Correlaciona a auditoria com a request (ADR-015). */
-  requestId?: string;
-  /** Seams de `getSaasAdapter` — a prova injeta o adapter em vez do ambiente. */
-  adapters?: Partial<Record<SaasChannelProvider, SaasChannelAdapter>>;
-  modo?: string;
-}
-
-/** A mensagem já gravada que o worker tem de pôr no fio. */
-export interface EntregaDeSaida {
-  readonly conversation_id: string;
-  readonly message_id: string;
-  readonly to_e164: string;
-  readonly provider: SaasChannelProvider;
-  readonly account_key: string | null;
-  readonly idempotency_key: string;
-}
-
-/** A linha de saída sumiu ou está num estado que não comporta envio. */
-export class MensagemDeSaidaAusente extends Error {
-  constructor(public readonly messageId: string) {
-    super(`mensagem de saída não encontrada em estado enviável: ${messageId}`);
-    this.name = "MensagemDeSaidaAusente";
-  }
-}
-
-/** Os status de `messages` de onde um envio pode (re)partir. */
-const STATUS_ENVIAVEIS = ["queued", "sending", "failed"] as const;
-
-/** Os status que provam que a mensagem JÁ saiu — reenviar seria duplicar. */
-const STATUS_JA_ENVIADOS = ["sent", "delivered", "read"] as const;
-
-/**
- * O que a marcação `queued → sending` descobriu. União discriminada porque os
- * dois desfechos levam o worker por caminhos diferentes, e um objeto com campos
- * opcionais deixaria "já enviada sem id" ser representável.
- */
-type MarcacaoDeEnvio =
-  | { readonly ja_enviada: false; readonly body: string }
-  | { readonly ja_enviada: true; readonly provider_message_id: string };
-
-const SENT_VIA_POR_EXECUTOR: Record<ActionExecutor, string> = {
-  human: "crm",
+/** §5.17 fala de `user`; §5.8 fala de `human`. O mapa vive num lugar só. */
+const ATOR_DA_AUDITORIA: Record<ActionActor["kind"], AuditActorType> = {
+  human: "user",
   ai: "ai",
   automation: "automation",
 };
 
-interface LinhaDaAuditoria {
-  action: string;
-  resourceId: string | null;
-  metadata: Record<string, unknown>;
+const MS_POR_MINUTO = 60_000;
+
+/** O default de §5.2 para `conversation.confirmation_timeout_minutes`. */
+const TIMEOUT_PADRAO_MINUTOS = 60;
+
+export function atorDaAuditoria(actor: ActionActor): {
+  actor_type: AuditActorType;
+  actor_id: string | null;
+} {
+  return {
+    actor_type: ATOR_DA_AUDITORIA[actor.kind],
+    // Só o humano tem linha em `auth.users`; a FK de `api_audit_log` recusaria
+    // um id de agente. A identidade da IA, quando houver, vai no `payload`.
+    actor_id: actor.kind === "human" ? (actor.user_id ?? null) : null,
+  };
 }
 
 /**
- * `audit: always` de §5.8 em uma função: TODA saída de `execute()` — executada
- * ou negada — deixa uma linha. Devolve o id para o `ActionResult`.
+ * `by_risk` de D33: pendência quando `risk ≥ actions.confirm_from_risk`.
+ *
+ * "Executor `human` nunca gera pendência para si" (§5.8) — quem aprovaria seria
+ * a própria pessoa que pediu, e um passo que só pode terminar de um jeito não é
+ * um controle, é um clique a mais.
  */
-async function auditar(
-  db: TenantDb,
+async function exigeConfirmacao(
   ctx: TenantCtx,
+  entrada: ActionCatalogEntry,
   actor: ActionActor,
-  requestId: string,
-  linha: LinhaDaAuditoria,
-): Promise<string> {
-  const gravada = await db.query<{ id: string }>(
-    `insert into public.api_audit_log
-       (organization_id, actor_user_id, action, resource_type, resource_id,
-        request_id, bypassed_rls, metadata)
-     values ($1::uuid,$2::uuid,$3::text,'messages',$4::uuid,$5::text,true,$6::jsonb)
-    returning id`,
-    [
-      ctx.organization_id,
-      actor.user_id ?? null,
-      linha.action,
-      linha.resourceId,
-      requestId,
-      JSON.stringify({ actor_kind: actor.kind, ...linha.metadata }),
-    ],
-  );
-  const id = gravada.rows[0]?.id;
-  if (id === undefined) throw new Error("api_audit_log não devolveu id da linha gravada");
-  return id;
+  deps: ExecuteDeps,
+): Promise<boolean> {
+  if (actor.kind === "human") return false;
+  if (entrada.confirmation === "none") return false;
+  if (entrada.confirmation === "always") return true;
+
+  const configurado = await getSetting(ctx, "actions.confirm_from_risk", {
+    pool: deps.pool,
+  });
+  // Setting fora do vocabulário é fail-closed: exigir confirmação é o lado
+  // seguro para errar quando não se sabe a partir de que risco confirmar.
+  if (typeof configurado !== "string" || !ACTION_RISKS.includes(configurado as ActionRisk)) {
+    return true;
+  }
+  return nivelDeRisco(entrada.risk) >= nivelDeRisco(configurado as ActionRisk);
 }
 
-async function negar(
+export async function minutosDeTimeout(
+  ctx: TenantCtx,
+  deps: ExecuteDeps,
+): Promise<number> {
+  const valor = await getSetting(ctx, "conversation.confirmation_timeout_minutes", {
+    pool: deps.pool,
+  });
+  // Um valor fora do tipo não vira "sem prazo": pendência sem prazo é pendência
+  // que nunca chega ao `waiting_human`.
+  return typeof valor === "number" && Number.isFinite(valor) && valor > 0
+    ? valor
+    : TIMEOUT_PADRAO_MINUTOS;
+}
+
+interface LinhaDeAuditoria {
+  readonly result: AuditResult;
+  readonly resourceId: string | null;
+  readonly payload: Record<string, unknown>;
+}
+
+export async function auditar(
   ctx: TenantCtx,
   actor: ActionActor,
+  entrada: ActionCatalogEntry | null,
+  name: string,
+  requestId: string,
+  linha: LinhaDeAuditoria,
+  deps: ExecuteDeps,
+): Promise<string> {
+  return withTenant(
+    ctx,
+    async (db) =>
+      recordIn(db, ctx, {
+        ...atorDaAuditoria(actor),
+        action_name: name,
+        risk: entrada?.risk ?? null,
+        result: linha.result,
+        // Nome fora do catálogo não tem `resource_type`: `action` é o que ele é.
+        resource_type: entrada?.resource_type ?? "action",
+        resource_id: linha.resourceId,
+        request_id: requestId,
+        payload: { actor_kind: actor.kind, ...linha.payload },
+      }),
+    { pool: deps.pool },
+  );
+}
+
+export async function negar(
+  ctx: TenantCtx,
+  actor: ActionActor,
+  entrada: ActionCatalogEntry | null,
   name: string,
   reason: ActionDenyReason,
   resourceId: string | null,
-  deps: ExecuteDeps,
   requestId: string,
+  deps: ExecuteDeps,
+  detalhe?: string,
 ): Promise<ActionResult> {
   incrementCounter("actions_denied", { action: name, reason });
-  const auditId = await withTenant(
+  const auditId = await auditar(
     ctx,
-    async (db) =>
-      auditar(db, ctx, actor, requestId, {
-        action: `action.${name}.denied`,
-        resourceId,
-        metadata: { reason },
-      }),
-    { pool: deps.pool },
+    actor,
+    entrada,
+    name,
+    requestId,
+    {
+      result: "denied",
+      resourceId,
+      payload: detalhe === undefined ? { reason } : { reason, detalhe },
+    },
+    deps,
   );
   return { status: "denied", output: null, audit_id: auditId, reason };
 }
 
-interface ConversaDeSaida {
-  saas_state: string;
-  contact_id: string;
-  channel_session_id: string;
-  phone_number: string | null;
-  account_key: string | null;
-  provider: string | null;
+/** O que `execute()` e `confirm()` fazem com o desfecho de um handler. */
+export async function concluir(
+  ctx: TenantCtx,
+  actor: ActionActor,
+  entrada: ActionCatalogEntry,
+  requestId: string,
+  desfecho: ToolOutcome,
+  deps: ExecuteDeps,
+  payloadExtra: Record<string, unknown> = {},
+): Promise<ActionResult> {
+  if (!desfecho.ok) {
+    return negar(
+      ctx,
+      actor,
+      entrada,
+      entrada.name,
+      desfecho.reason,
+      desfecho.resourceId,
+      requestId,
+      deps,
+      desfecho.detalhe,
+    );
+  }
+  const auditId = await auditar(
+    ctx,
+    actor,
+    entrada,
+    entrada.name,
+    requestId,
+    {
+      result: "executed",
+      resourceId: desfecho.resourceId,
+      // Sem corpo de mensagem nem texto de item: auditoria é quem/quando/o quê.
+      payload: payloadExtra,
+    },
+    deps,
+  );
+  incrementCounter("actions_executed", { action: entrada.name, executor: actor.kind });
+  return { status: "executed", output: desfecho.output, audit_id: auditId };
 }
 
-/**
- * `execute(ctx, actor, name, input)` — §5.8.
- *
- * Ordem deliberada: catálogo → executor → schema → guarda de estado → escrita.
- * A guarda de estado vem DEPOIS do schema porque ela custa uma ida ao banco, e
- * antes da escrita porque descobrir no meio que a conversa está arquivada
- * deixaria mensagem gravada sem job.
- */
 export async function execute(
   ctx: TenantCtx,
   actor: ActionActor,
@@ -200,245 +241,143 @@ export async function execute(
   deps: ExecuteDeps = {},
 ): Promise<ActionResult> {
   const requestId = deps.requestId ?? randomUUID();
+
   const entrada = findAction(name);
   if (entrada === null) {
-    return negar(ctx, actor, name, "unknown_action", null, deps, requestId);
+    return negar(ctx, actor, null, name, "unknown_action", null, requestId, deps);
   }
   if (!entrada.executors.includes(actor.kind)) {
-    return negar(ctx, actor, name, "executor_not_allowed", null, deps, requestId);
+    return negar(ctx, actor, entrada, name, "executor_not_allowed", null, requestId, deps);
+  }
+  // §5.8: "`blocked` nega para todo executor e audita a tentativa".
+  if (entrada.risk === "blocked") {
+    return negar(ctx, actor, entrada, name, "risk_blocked", null, requestId, deps);
   }
 
-  const lido = sendMessageInputSchema.safeParse(input);
+  const lido = entrada.input_schema.safeParse(input);
   if (!lido.success) {
-    return negar(ctx, actor, name, "invalid_input", null, deps, requestId);
+    return negar(ctx, actor, entrada, name, "invalid_input", null, requestId, deps);
   }
-  const pedido = lido.data;
+  const pedido = lido.data as Record<string, unknown>;
 
-  // Leitura de política ANTES da transação de escrita: a recusa tem de ser
-  // barata e não pode deixar rastro de escrita pela metade.
-  const conversa = await withTenant(
-    ctx,
-    async (db) => {
-      const linha = await db.query<ConversaDeSaida>(
-        `select c.saas_state, c.contact_id, c.channel_session_id,
-                ct.phone_number, ca.account_key, ca.provider
-           from public.conversations c
-           join public.contacts ct
-             on ct.id = c.contact_id and ct.organization_id = c.organization_id
-           left join public.channel_accounts ca
-             on ca.channel_session_id = c.channel_session_id
-            and ca.organization_id = c.organization_id
-            and ca.status = 'active'
-          where c.id = $1 and c.organization_id = $2`,
-        [pedido.conversation_id, ctx.organization_id],
-      );
-      return linha.rows[0] ?? null;
-    },
-    { pool: deps.pool },
-  );
-
-  if (conversa === null) {
-    return negar(ctx, actor, name, "conversation_not_found", null, deps, requestId);
+  const handler = findHandler(name);
+  if (handler === null) {
+    // Impossível pelo registro total de `tools/index.ts` — mas se um dia for
+    // possível, é recusa contada, não um `undefined is not a function`.
+    return negar(ctx, actor, entrada, name, "unknown_action", null, requestId, deps);
   }
 
-  const estado: ConversationState | null = isConversationState(conversa.saas_state)
-    ? conversa.saas_state
-    : null;
-  if (estado === null || !conversaAceitaEnvio(estado)) {
+  if (await exigeConfirmacao(ctx, entrada, actor, deps)) {
+    return pendurar(ctx, actor, entrada, pedido, requestId, deps);
+  }
+
+  const desfecho = await handler.run({ ctx, actor, deps, requestId }, pedido);
+  return concluir(ctx, actor, entrada, requestId, desfecho, deps);
+}
+
+/**
+ * O caminho de D33: a ação vira LINHA e a conversa vai para
+ * `waiting_confirmation` pelo evento D16 `ai.confirmation_requested`.
+ *
+ * A pendência é COMMITADA antes do movimento de propósito: a guarda
+ * `action_requires_confirmation` lê `pending_actions` de fora da transação de
+ * `transition()`, e uma linha ainda não commitada seria invisível para ela — o
+ * movimento seria recusado por causa de uma pendência que existe.
+ *
+ * Se o movimento for recusado (a conversa não estava em `ai_handling`), a
+ * pendência MORRE junto, marcada `rejected`: deixá-la aberta travaria o índice
+ * único da conversa com algo que nenhum atendente jamais veria.
+ */
+async function pendurar(
+  ctx: TenantCtx,
+  actor: ActionActor,
+  entrada: ActionCatalogEntry,
+  pedido: Record<string, unknown>,
+  requestId: string,
+  deps: ExecuteDeps,
+): Promise<ActionResult> {
+  const conversationId = pedido["conversation_id"];
+  if (typeof conversationId !== "string") {
     return negar(
       ctx,
       actor,
-      name,
-      "conversation_closed",
-      pedido.conversation_id,
-      deps,
+      entrada,
+      entrada.name,
+      "invalid_input",
+      null,
       requestId,
-    );
-  }
-  if (conversa.phone_number === null || conversa.phone_number.length === 0) {
-    return negar(
-      ctx,
-      actor,
-      name,
-      "contact_without_phone",
-      pedido.conversation_id,
       deps,
-      requestId,
-    );
-  }
-  if (conversa.account_key === null || conversa.provider === null) {
-    // Fail-closed (G-27): sem conta de canal ativa não há por onde sair, e
-    // inventar um provider default mandaria a mensagem pela sessão errada.
-    return negar(
-      ctx,
-      actor,
-      name,
-      "channel_account_missing",
-      pedido.conversation_id,
-      deps,
-      requestId,
+      "conversation_required_for_confirmation",
     );
   }
 
-  const provider = conversa.provider as SaasChannelProvider;
-
-  // A mensagem nasce `queued` — o vocabulário herdado de `messages.status` já
-  // tem o valor (baseline.sql:1665); F03 não inventa estado nenhum.
-  const gravada = await withTenant(
-    ctx,
-    async (db) => {
-      const linha = await db.query<{ id: string }>(
-        `insert into public.messages
-           (organization_id, conversation_id, channel_session_id, contact_id,
-            type, direction, status, body, sent_via, sent_by_user_id, metadata)
-         values ($1::uuid,$2::uuid,$3::uuid,$4::uuid,'text','outbound','queued',
-                 $5::text,$6::text,$7::uuid,$8::jsonb)
-        returning id`,
-        [
-          ctx.organization_id,
-          pedido.conversation_id,
-          conversa.channel_session_id,
-          conversa.contact_id,
-          pedido.body,
-          SENT_VIA_POR_EXECUTOR[actor.kind],
-          actor.user_id ?? null,
-          JSON.stringify({ provider, account_key: conversa.account_key }),
-        ],
-      );
-      const id = linha.rows[0]?.id;
-      if (id === undefined) throw new Error("insert de mensagem de saída não devolveu id");
-      return id;
-    },
-    { pool: deps.pool },
+  const agora = (deps.agora ?? (() => new Date()))();
+  const expiraEm = new Date(
+    agora.getTime() + (await minutosDeTimeout(ctx, deps)) * MS_POR_MINUTO,
   );
 
-  const idempotencyKey = pedido.idempotency_key ?? gravada;
-
-  const fila = await enqueue(
-    ctx,
-    "outbound_message",
-    {
-      organization_id: ctx.organization_id,
-      conversation_id: pedido.conversation_id,
-      message_id: gravada,
-      to_e164: conversa.phone_number,
-      provider,
-      account_key: conversa.account_key,
-      idempotency_key: idempotencyKey,
-    },
-    { pool: deps.pool },
-  );
-
-  const auditId = await withTenant(
+  const pendencia = await withTenant(
     ctx,
     async (db) =>
-      auditar(db, ctx, actor, requestId, {
-        action: `action.${name}.executed`,
-        resourceId: gravada,
-        // Sem `body`: auditoria é quem/quando/o quê, não o texto do cliente.
-        metadata: {
-          conversation_id: pedido.conversation_id,
-          job_id: fila.job_id,
-          enqueued: fila.created,
-          risk: entrada.risk,
-        },
+      criarPendencia(db, ctx, {
+        conversation_id: conversationId,
+        action_name: entrada.name,
+        input: pedido,
+        requested_by: actor.kind,
+        expires_at: expiraEm,
       }),
     { pool: deps.pool },
   );
 
-  incrementCounter("actions_executed", { action: name, executor: actor.kind });
-
-  return {
-    status: "executed",
-    output: { message_id: gravada, job_id: fila.job_id, enqueued: fila.created },
-    audit_id: auditId,
-  };
-}
-
-/**
- * A ENTREGA — chamada pelo worker de saída, uma vez por tentativa.
- *
- * Três passos, em três transações curtas de propósito: `sending` commitado
- * ANTES da chamada externa (senão uma queda no meio deixaria a mensagem em
- * `queued` sem ninguém saber que ela já foi ao fio), a chamada ao adapter FORA
- * de transação (segurar conexão durante I/O de rede é como um pool de 4 morre),
- * e `sent` commitado depois.
- */
-export async function entregarSaida(
-  ctx: TenantCtx,
-  entrega: EntregaDeSaida,
-  deps: ExecuteDeps = {},
-): Promise<{ provider_message_id: string; ja_enviada: boolean }> {
-  const marcacao: MarcacaoDeEnvio = await withTenant(
-    ctx,
-    async (db) => {
-      const marcada = await db.query<{ body: string | null }>(
-        `update public.messages
-            set status = 'sending', updated_at = now()
-          where id = $1 and organization_id = $2 and status = any($3::text[])
-        returning body`,
-        [entrega.message_id, ctx.organization_id, [...STATUS_ENVIAVEIS]],
+  try {
+    await transition(
+      ctx,
+      conversationId,
+      "ai.confirmation_requested",
+      { kind: actor.kind === "ai" ? "ai" : "automation" },
+      { pool: deps.pool },
+    );
+  } catch (erro) {
+    await withTenant(
+      ctx,
+      async (db) => resolverPendencia(db, ctx, pendencia.id, "rejected", null),
+      { pool: deps.pool },
+    );
+    if (erro instanceof IllegalTransition) {
+      return negar(
+        ctx,
+        actor,
+        entrada,
+        entrada.name,
+        "illegal_transition",
+        conversationId,
+        requestId,
+        deps,
+        `${erro.from}:${erro.event}:${erro.reason}`,
       );
-      const linha = marcada.rows[0];
-      if (linha !== undefined) return { ja_enviada: false, body: linha.body ?? "" };
-
-      // Não deu para marcar: ou a mensagem já saiu (reprocessamento do MESMO
-      // job depois de um crash entre o envio e o commit), ou ela não existe.
-      // Os dois casos são diferentes e só um deles é defeito.
-      const atual = await db.query<{ status: string; external_id: string | null }>(
-        `select status, external_id from public.messages
-          where id = $1 and organization_id = $2`,
-        [entrega.message_id, ctx.organization_id],
-      );
-      const linhaAtual = atual.rows[0];
-      if (
-        linhaAtual !== undefined &&
-        (STATUS_JA_ENVIADOS as readonly string[]).includes(linhaAtual.status)
-      ) {
-        return { ja_enviada: true, provider_message_id: linhaAtual.external_id ?? "" };
-      }
-      throw new MensagemDeSaidaAusente(entrega.message_id);
-    },
-    { pool: deps.pool },
-  );
-
-  if (marcacao.ja_enviada) {
-    incrementCounter("outbound_reenvio_evitado", { provider: entrega.provider });
-    return { provider_message_id: marcacao.provider_message_id, ja_enviada: true };
+    }
+    throw erro;
   }
 
-  const adapter = getSaasAdapter(entrega.provider, {
-    adapters: deps.adapters,
-    modo: deps.modo,
-  });
-
-  const { provider_message_id } = await adapter.send(ctx, {
-    organization_id: ctx.organization_id,
-    conversation_id: entrega.conversation_id,
-    to_e164: entrega.to_e164,
-    body: marcacao.body,
-    idempotency_key: entrega.idempotency_key,
-    account_key: entrega.account_key,
-  });
-
-  await withTenant(
+  const auditId = await auditar(
     ctx,
-    async (db) => {
-      // `provider` é o do ADAPTER que de fato enviou, não o do payload: sob
-      // `WHATSAPP_MODE=mock` o `getSaasAdapter` devolve o mock qualquer que seja
-      // o pedido (D12), e gravar `waha` numa linha que saiu pelo mock faria o
-      // webhook de status procurar a mensagem pelo par errado.
-      await db.query(
-        `update public.messages
-            set status = 'sent', external_id = $3, provider = $4,
-                sent_at = now(), updated_at = now()
-          where id = $1 and organization_id = $2`,
-        [entrega.message_id, ctx.organization_id, provider_message_id, adapter.provider],
-      );
+    actor,
+    entrada,
+    entrada.name,
+    requestId,
+    {
+      result: "pending",
+      resourceId: conversationId,
+      payload: { pending_action_id: pendencia.id, expires_at: expiraEm.toISOString() },
     },
-    { pool: deps.pool },
+    deps,
   );
+  incrementCounter("actions_pending", { action: entrada.name, executor: actor.kind });
 
-  incrementCounter("outbound_sent", { provider: adapter.provider });
-  return { provider_message_id, ja_enviada: false };
+  return {
+    status: "pending",
+    output: { pending_action_id: pendencia.id, expires_at: expiraEm.toISOString() },
+    audit_id: auditId,
+    pending_action_id: pendencia.id,
+  };
 }

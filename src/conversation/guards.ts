@@ -7,11 +7,23 @@
  *
  * A regra dura desta fase: guarda sem portador real LANÇA. Devolver `true` por
  * omissão faria a máquina andar sozinha para estados que ninguém sabe operar
- * ainda (`waiting_confirmation` só ganha executor na F04/F05), e o defeito
- * apareceria como conversa parada em produção, não como vermelho aqui.
+ * ainda, e o defeito apareceria como conversa parada em produção, não como
+ * vermelho aqui. `GuardNotImplemented` CONTINUA valendo: ele é a regra para
+ * guarda sem portador, não um marcador temporário da F03.
+ *
+ * F04-T02 deu portador às três guardas de confirmação
+ * (`action_requires_confirmation`, `pending_action_executed`,
+ * `confirmation_timeout_elapsed`). As três respondem a partir de
+ * `pending_actions` (migration 9017) — nunca de uma coluna nova em
+ * `conversations`, que seria a segunda verdade sobre "o que está pendente".
  */
 import { entitlement } from "@/src/entitlement/entitlement";
 import type { Capability, EntitlementResposta } from "@/src/entitlement/capability";
+import {
+  existePendenciaAberta,
+  pendenciaExecutadaNestaRodada,
+  pendenciaVencida,
+} from "@/src/actions/pending-store";
 import { getSetting, getStoredSetting } from "@/src/tenant-config/settings";
 import type { ServicePool } from "@/src/tenant-context/db";
 import type { TenantCtx } from "@/src/tenant-context";
@@ -121,10 +133,34 @@ export function resolverDeGuardasF03(deps: GuardDeps = {}): GuardResolver {
         return agora().getTime() - desde.getTime() >= ARCHIVE_WINDOW_DAYS * MS_POR_DIA;
       }
 
+      // ─── As três de D33/D16, com portador desde F04-T02 ─────────────────
+      //
+      // Nenhuma recebe o NOME da ação: a guarda é da CONVERSA, e a conversa só
+      // pode ter uma pendência aberta por vez (índice único parcial
+      // `pending_actions_uma_por_conversa`). É esse índice que torna
+      // "existe pendência aberta" uma resposta sem ambiguidade.
+
+      // `ai.confirmation_requested`: a Action de fato exigiu confirmação, e a
+      // prova disso é a LINHA que `execute()` gravou antes de pedir o
+      // movimento. Perguntar ao catálogo em vez de ao banco aprovaria o
+      // movimento de uma ação que ninguém registrou como pendente — que é
+      // exatamente o defeito que o mutante 40 sabota.
       case "action_requires_confirmation":
+        return existePendenciaAberta(ctx, conversation.id, { pool: deps.pool });
+
+      // `confirmation.approved`: "Action pendente executa ANTES" (§5.6).
       case "pending_action_executed":
+        return pendenciaExecutadaNestaRodada(
+          ctx,
+          conversation.id,
+          comoDate(conversation.saas_state_entered_at),
+          { pool: deps.pool },
+        );
+
+      // `confirmation.timeout`: o prazo é o `expires_at` da pendência, que
+      // nasceu do Setting `conversation.confirmation_timeout_minutes`.
       case "confirmation_timeout_elapsed":
-        throw new GuardNotImplemented(guard);
+        return pendenciaVencida(ctx, conversation.id, agora(), { pool: deps.pool });
 
       default: {
         // Guarda nova na tabela sem linha aqui vira erro de compilação, não

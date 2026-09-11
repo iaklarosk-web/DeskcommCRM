@@ -1,31 +1,79 @@
 /**
- * Action Policy — o catálogo (§5.8, D17/D18).
+ * Action Policy — o catálogo (§5.8, D17/D18/D33/D34).
  *
- * Nasce na F03-T06 com UMA entrada, `send_message`. As outras onze de §5.8
- * chegam em F04-T01 e F06-T03; escrevê-las aqui agora seria catálogo com
- * entrada sem executor — e "pode executar?" respondido por uma linha que não
- * leva a lugar nenhum é pior que a ausência da linha.
+ * DEZ entradas na F04-T01: as nove tools de D18 mais `resume_ai` (D34). As duas
+ * ações LGPD de F06-T03 fecham as doze de §5.8 — não estão aqui porque entrada
+ * de catálogo sem executor é uma linha que não leva a lugar nenhum.
  *
- * `executors: ["human"]` e não `["human","ai","automation"]` como a tabela de
- * §5.8 prevê no fim da Fase 1: a IA só ganha `execute()` na F04-T01 e a
- * automação na F05. Um subset maior que os executores que existem faria a
- * matriz N×3 de §5.8 aprovar um caminho que ninguém percorre.
+ * `toolsFor(ctx, "ai")` devolve exatamente NOVE: `resume_ai` é humana por
+ * desenho (D34 — devolver a conversa à IA é decisão de quem a tirou dela).
+ *
+ * ─── A tabela é DADO ───────────────────────────────────────────────────────
+ *
+ * Nenhum número deste arquivo é escrito à mão em teste nenhum: a matriz
+ * N × 3 executores de §5.8 e a contagem de campos saem daqui em tempo de teste.
+ * Mudar o risco ou a confirmação de uma Action continua sendo 1 linha (§5.19).
  *
  * `src/actions/` é o ÚNICO diretório que chama `adapter.send` (§5.7, invariante
- * 3). A chamada em si mora em `execute.ts`; aqui só a política.
+ * 3). A chamada mora em `outbound.ts`; aqui só a política.
  */
-import { z } from "zod";
+import { toJSONSchema, type z } from "zod";
 
 import { CONVERSATION_STATES, type ConversationState } from "@/src/conversation";
+
+import {
+  createOrderInputSchema,
+  createOrderOutputSchema,
+  createTaskInputSchema,
+  createTaskOutputSchema,
+  getCustomerInputSchema,
+  getCustomerOutputSchema,
+  getOrdersInputSchema,
+  getOrdersOutputSchema,
+  requestConfirmationInputSchema,
+  resumeAiInputSchema,
+  searchProductsInputSchema,
+  searchProductsOutputSchema,
+  sendMessageInputSchema,
+  sendMessageOutputSchema,
+  transferToHumanInputSchema,
+  transferToHumanOutputSchema,
+  transitionOutputSchema,
+  updateOrderQuantityInputSchema,
+  updateOrderQuantityOutputSchema,
+} from "./schemas";
 
 /** Os três executores de §5.8. `job` não é executor: é quem transporta um. */
 export const ACTION_EXECUTORS = ["human", "ai", "automation"] as const;
 export type ActionExecutor = (typeof ACTION_EXECUTORS)[number];
 
-/** Taxonomia de risco — só existe aqui (§5.8, "Esconde"). */
-export type ActionRisk = "low" | "medium" | "high" | "blocked";
+/**
+ * Taxonomia de risco — só existe aqui (§5.8, "Esconde") — e a ORDEM é
+ * semântica: `by_risk` compara o risco da Action com o Setting
+ * `actions.confirm_from_risk`, e comparar enum exige uma escala. O índice neste
+ * array É a escala; uma segunda tabela `{low: 0, medium: 1, …}` poderia
+ * divergir desta lista no dia em que um risco novo aparecesse.
+ */
+export const ACTION_RISKS = ["low", "medium", "high", "blocked"] as const;
+export type ActionRisk = (typeof ACTION_RISKS)[number];
 
 export type ActionConfirmation = "none" | "always" | "by_risk";
+
+export function nivelDeRisco(risco: ActionRisk): number {
+  return ACTION_RISKS.indexOf(risco);
+}
+
+/** Os oito campos de §5.8, em um lugar só — o teste conta a partir daqui. */
+export const ACTION_ENTRY_FIELDS = [
+  "name",
+  "input_schema",
+  "output_schema",
+  "side_effect",
+  "risk",
+  "executors",
+  "confirmation",
+  "audit",
+] as const;
 
 /**
  * Entrada do catálogo. `audit` é o literal `"always"` e não um booleano: §5.8
@@ -42,40 +90,127 @@ export interface ActionCatalogEntry {
   readonly audit: "always";
   readonly input_schema: z.ZodType;
   readonly output_schema: z.ZodType;
-}
-
-export const sendMessageInputSchema = z.strictObject({
-  conversation_id: z.uuid(),
-  body: z.string().trim().min(1).max(4096),
   /**
-   * Opcional: sem ela, `execute()` usa o id da mensagem recém-gravada. É o que
-   * faz "enviar duas vezes o mesmo texto" continuar sendo DOIS envios (duas
-   * mensagens, dois ids) e "reprocessar o mesmo envio" continuar sendo um.
+   * `resource_type` da linha de auditoria. Fica na POLÍTICA e não no executor
+   * porque é o catálogo que sabe sobre o que cada Action age; descobrir isso no
+   * executor faria duas Actions do mesmo domínio divergirem em silêncio.
+   *
+   * NÃO é um dos oito campos de §5.8 — é coluna de `audit_events`, e o
+   * `ACTION_ENTRY_FIELDS` acima é quem define a contagem `fields=8/8`.
    */
-  idempotency_key: z.string().trim().min(1).max(200).optional(),
-});
-
-export type SendMessageInput = z.infer<typeof sendMessageInputSchema>;
-
-export const sendMessageOutputSchema = z.strictObject({
-  message_id: z.uuid(),
-  job_id: z.uuid(),
-  /** `false` quando a fila já tinha o job desta mensagem (idempotência). */
-  enqueued: z.boolean(),
-});
-
-export type SendMessageOutput = z.infer<typeof sendMessageOutputSchema>;
+  readonly resource_type: string;
+}
 
 export const ACTION_CATALOG: readonly ActionCatalogEntry[] = [
   {
+    name: "get_customer",
+    risk: "low",
+    executors: ["human", "ai", "automation"],
+    confirmation: "none",
+    side_effect: "leitura de contacts (nenhuma escrita)",
+    audit: "always",
+    input_schema: getCustomerInputSchema,
+    output_schema: getCustomerOutputSchema,
+    resource_type: "contacts",
+  },
+  {
+    name: "search_products",
+    risk: "low",
+    executors: ["human", "ai", "automation"],
+    confirmation: "none",
+    side_effect: "leitura de catalog_products (nenhuma escrita)",
+    audit: "always",
+    input_schema: searchProductsInputSchema,
+    output_schema: searchProductsOutputSchema,
+    resource_type: "catalog_products",
+  },
+  {
+    name: "get_orders",
+    risk: "low",
+    executors: ["human", "ai", "automation"],
+    confirmation: "none",
+    side_effect: "leitura de crm_orders e crm_order_items (nenhuma escrita)",
+    audit: "always",
+    input_schema: getOrdersInputSchema,
+    output_schema: getOrdersOutputSchema,
+    resource_type: "crm_orders",
+  },
+  {
+    name: "create_order",
+    risk: "medium",
+    executors: ["human", "ai"],
+    confirmation: "by_risk",
+    side_effect: "crm_orders (draft) + crm_order_items + crm_order_events",
+    audit: "always",
+    input_schema: createOrderInputSchema,
+    output_schema: createOrderOutputSchema,
+    resource_type: "crm_orders",
+  },
+  {
+    name: "update_order_quantity",
+    risk: "medium",
+    executors: ["human", "ai"],
+    confirmation: "by_risk",
+    side_effect: "crm_order_items + crm_order_events",
+    audit: "always",
+    input_schema: updateOrderQuantityInputSchema,
+    output_schema: updateOrderQuantityOutputSchema,
+    resource_type: "crm_orders",
+  },
+  {
+    name: "create_task",
+    risk: "low",
+    executors: ["human", "ai", "automation"],
+    confirmation: "none",
+    side_effect: "crm_tasks + crm_task_events (tarefa vinculada ao pedido)",
+    audit: "always",
+    input_schema: createTaskInputSchema,
+    output_schema: createTaskOutputSchema,
+    resource_type: "crm_tasks",
+  },
+  {
+    name: "transfer_to_human",
+    risk: "low",
+    executors: ["human", "ai"],
+    confirmation: "none",
+    side_effect: "transition(handoff.requested) + item de inbox kind=handoff",
+    audit: "always",
+    input_schema: transferToHumanInputSchema,
+    output_schema: transferToHumanOutputSchema,
+    resource_type: "conversations",
+  },
+  {
+    name: "request_confirmation",
+    risk: "low",
+    executors: ["human", "ai"],
+    confirmation: "none",
+    side_effect: "messages (queued) + job_queue; ESTADO DA CONVERSA INALTERADO",
+    audit: "always",
+    input_schema: requestConfirmationInputSchema,
+    output_schema: sendMessageOutputSchema,
+    resource_type: "messages",
+  },
+  {
     name: "send_message",
     risk: "medium",
-    executors: ["human"],
+    executors: ["human", "ai", "automation"],
     confirmation: "none",
     side_effect: "messages (queued) + job_queue (outbound_message) + adapter.send",
     audit: "always",
     input_schema: sendMessageInputSchema,
     output_schema: sendMessageOutputSchema,
+    resource_type: "messages",
+  },
+  {
+    name: "resume_ai",
+    risk: "low",
+    executors: ["human"],
+    confirmation: "none",
+    side_effect: "transition(human.return_to_ai); só de human_handling (D34)",
+    audit: "always",
+    input_schema: resumeAiInputSchema,
+    output_schema: transitionOutputSchema,
+    resource_type: "conversations",
   },
 ];
 
@@ -93,8 +228,48 @@ export function findAction(name: string): ActionCatalogEntry | null {
 }
 
 /**
- * A guarda de estado de `send_message`, em forma de REGISTRO TOTAL sobre os oito
- * estados D16.
+ * A tool como o modelo a recebe (§5.8, `toolsFor`).
+ *
+ * `input_schema` sai como JSON Schema porque é isso que o provedor lê; o objeto
+ * zod não atravessa a fronteira. `risk` e `confirmation` VIAJAM junto: o turno
+ * precisa saber que uma tool pode voltar `pending` sem ter falhado.
+ */
+export interface ToolSpec {
+  readonly name: string;
+  readonly description: string;
+  readonly input_schema: unknown;
+  readonly risk: ActionRisk;
+  readonly confirmation: ActionConfirmation;
+}
+
+/**
+ * `toolsFor(ctx, executor)` — §5.8.
+ *
+ * O `ctx` entra na assinatura porque a Fase 2 filtra por Entitlement do tenant
+ * (capabilities de Calendar e Instagram, §5.20) e mudar a assinatura depois
+ * obrigaria a mexer em todo chamador. Na Fase 1 o filtro é só o subset de
+ * executores — e é ele que faz `toolsFor(ctx, "ai")` devolver nove.
+ *
+ * `io: "input"` no gerador de JSON Schema: com o default do zod (`"output"`),
+ * campo com `.default()` sai como OBRIGATÓRIO, e o modelo passaria a ser
+ * cobrado por `limit`, `priority` e companhia — que existem justamente para ele
+ * não precisar preencher.
+ */
+export function toolsFor(_ctx: unknown, executor: ActionExecutor): readonly ToolSpec[] {
+  return ACTION_CATALOG.filter((entrada) => entrada.executors.includes(executor)).map(
+    (entrada) => ({
+      name: entrada.name,
+      description: entrada.side_effect,
+      input_schema: toJSONSchema(entrada.input_schema, { io: "input" }),
+      risk: entrada.risk,
+      confirmation: entrada.confirmation,
+    }),
+  );
+}
+
+/**
+ * A guarda de estado de `send_message` (e de `request_confirmation`, que também
+ * põe texto no fio), em forma de REGISTRO TOTAL sobre os oito estados D16.
  *
  * Registro e não lista de literais soltos: estado novo em
  * `src/conversation/transitions.ts` vira erro de COMPILAÇÃO aqui, porque
