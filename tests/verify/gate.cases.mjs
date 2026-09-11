@@ -14,9 +14,11 @@ const {
   EXPECTED_F02_E2E_TESTS,
   EXPECTED_F03_E2E_TESTS,
   EXPECTED_F04_E2E_TESTS,
+  EXPECTED_F05_E2E_TESTS,
   REQUIRED_F02_E2E_SPECS,
   REQUIRED_F03_E2E_SPECS,
   REQUIRED_F04_E2E_SPECS,
+  REQUIRED_F05_E2E_SPECS,
   compareF02Inputs,
   snapshotF02Inputs,
   verifyF02Sandbox,
@@ -644,4 +646,87 @@ test("F03 keeps ai_eval pending without failing: required only from F04", () => 
   assert.deepEqual(result.errors, []);
   assert.equal(result.status, "READY (F03)");
   assert.match(render(data, result), /ai_eval: cases=pending/);
+});
+
+// ─── ADR-024 — verify.sh v1.3: F05 mede `handoff` e `reminder` ────────────
+
+const stateF05 = `current_phase: F05
+baseline_n0: 7
+f00_commit: c85f7d72
+baseline_detail: "unit=2/2 db=2/2 e2e=3/3"
+| F03 | Conversa | done(verify=2026-09-11 6d742a6b) |
+| F04 | IA | done(verify=2026-09-11 aaaaaaaa) |
+| F05 | Handoff | pending |
+`;
+const F05_SPEC_COUNTS = [...F04_SPEC_COUNTS, 4];
+const HANDOFF_OK = "handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3/3 notify=3/3";
+const REMINDER_OK = "reminder: runs=2 sent=1 duplicates=0";
+
+function f05Input() {
+  const data = f04Input();
+  data.context = phaseContext(stateF05);
+  const parametros = { specs: REQUIRED_F05_E2E_SPECS, counts: F05_SPEC_COUNTS, total: EXPECTED_F05_E2E_TESTS };
+  data.reports["e2e-plan"] = playwrightReport(parametros);
+  data.reports.e2e = playwrightReport({ ...parametros, actual: true });
+  data.metrics.handoff = HANDOFF_OK;
+  data.metrics.reminder = REMINDER_OK;
+  return data;
+}
+
+test("F05 is gated and reaches READY with handoff and reminder measured", () => {
+  const result = evaluate(f05Input());
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F05)");
+  const bloco = render(f05Input(), result);
+  assert.match(bloco, /handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7\/7 assignee=3\/3 notify=3\/3/);
+  assert.match(bloco, /reminder: runs=2 sent=1 duplicates=0/);
+  assert.match(bloco, /e2e_scope: F05-required passed=41\/41 specs=10\/10/);
+});
+
+for (const [rotulo, linha] of [
+  ["sem handoff nenhum", "handoff: handoffs=0 ai_msgs_after_handoff=0 summary=7/7 assignee=0/0 notify=0/0"],
+  ["poucos handoffs", "handoff: handoffs=2 ai_msgs_after_handoff=0 summary=7/7 assignee=2/2 notify=2/2"],
+  ["IA falou depois", "handoff: handoffs=3 ai_msgs_after_handoff=1 summary=7/7 assignee=3/3 notify=3/3"],
+  ["resumo incompleto", "handoff: handoffs=3 ai_msgs_after_handoff=0 summary=6/7 assignee=3/3 notify=3/3"],
+  ["responsável faltando", "handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=2/3 notify=3/3"],
+  ["notificação faltando", "handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3/3 notify=2/3"],
+]) test(`F05 rejects a handoff line out of contract: ${rotulo}`, () => {
+  const data = f05Input();
+  data.metrics.handoff = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, `linha aceita indevidamente: ${linha}`);
+  assert.ok(result.errors.some((e) => /handoff/i.test(e)), result.errors.join("\n"));
+});
+
+for (const [rotulo, linha] of [
+  ["rodou uma vez só", "reminder: runs=1 sent=1 duplicates=0"],
+  ["mandou duas vezes", "reminder: runs=2 sent=2 duplicates=0"],
+  ["duplicou", "reminder: runs=2 sent=1 duplicates=1"],
+]) test(`F05 rejects a reminder line out of contract: ${rotulo}`, () => {
+  const data = f05Input();
+  data.metrics.reminder = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, `linha aceita indevidamente: ${linha}`);
+  assert.ok(result.errors.some((e) => /reminder/i.test(e)), result.errors.join("\n"));
+});
+
+test("missing handoff or reminder line makes otherwise green F05 fail", () => {
+  for (const campo of ["handoff", "reminder"]) {
+    const data = f05Input();
+    delete data.metrics[campo];
+    const result = evaluate(data);
+    assert.equal(result.exitCode, 1);
+    assert.ok(result.errors.includes(`Métrica obrigatória ausente: ${campo}`), result.errors.join("\n"));
+  }
+});
+
+test("F04 keeps handoff and reminder pending without failing", () => {
+  const data = f04Input();
+  delete data.metrics.handoff;
+  delete data.metrics.reminder;
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F04)");
+  assert.match(render(data, result), /handoff: ai_msgs_after_handoff=pending/);
+  assert.match(render(data, result), /reminder: runs=pending/);
 });

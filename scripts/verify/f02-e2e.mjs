@@ -47,11 +47,24 @@ export const REQUIRED_F04_E2E_SPECS = Object.freeze([
 
 export const EXPECTED_F04_E2E_TESTS = EXPECTED_F03_E2E_TESTS + 10;
 
+/**
+ * F05 acrescenta a tela de uso de IA do tenant_admin (§7.6, F05-T09): duas
+ * jornadas nas DUAS organizações fictícias. O valor exibido é comparado com
+ * `sum(ai_usage_events)` — tela contra BANCO, nunca tela contra tela.
+ */
+export const REQUIRED_F05_E2E_SPECS = Object.freeze([
+  ...REQUIRED_F04_E2E_SPECS,
+  "tests/e2e/f05-ai-usage.spec.ts",
+]);
+
+export const EXPECTED_F05_E2E_TESTS = EXPECTED_F04_E2E_TESTS + 4;
+
 /** Fases com gate fechado de navegador. O nome deste arquivo é histórico. */
 const CLOSED_E2E_PHASES = Object.freeze({
   F02: { specs: REQUIRED_F02_E2E_SPECS, tests: EXPECTED_F02_E2E_TESTS },
   F03: { specs: REQUIRED_F03_E2E_SPECS, tests: EXPECTED_F03_E2E_TESTS },
   F04: { specs: REQUIRED_F04_E2E_SPECS, tests: EXPECTED_F04_E2E_TESTS },
+  F05: { specs: REQUIRED_F05_E2E_SPECS, tests: EXPECTED_F05_E2E_TESTS },
 });
 
 export function hasClosedE2E(phase) {

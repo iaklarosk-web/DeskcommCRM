@@ -14,12 +14,13 @@ const integer = (n) => Number.isSafeInteger(n) && n >= 0;
  * herda TODOS os controles de F02 (sandbox descartável, snapshot SHA-256 dos
  * inputs, E2E fechado) e acrescenta o campo `webhook` medido.
  */
-const GATED_PHASES = ["F00", "F01", "F02", "F03", "F04"];
+const GATED_PHASES = ["F00", "F01", "F02", "F03", "F04", "F05"];
 
 /** §8.3: cada campo passa a ser obrigatório a partir da fase que o cria. */
 const phaseNumber = (phase) => Number(phase.slice(1));
 const requiresWebhook = (phase) => phaseNumber(phase) >= phaseNumber("F03");
 const requiresAiEval = (phase) => phaseNumber(phase) >= phaseNumber("F04");
+const requiresHandoff = (phase) => phaseNumber(phase) >= phaseNumber("F05");
 
 export function phaseContext(state, requestedPhase) {
   const active = /^current_phase:\s*(F\d{2})\b/m.exec(state)?.[1];
@@ -194,6 +195,21 @@ export function evaluate(input) {
       errors.push("Entitlement abaixo dos casos normais do dataset a partir de F04");
     }
   }
+  // §8.3: `handoff` sobre os H handoffs da suíte (H>=3) e `reminder` com o job
+  // rodado duas vezes no mesmo período. `handoffs` é o denominador: sem ele,
+  // `ai_msgs_after_handoff=0` passaria numa suíte que não produziu handoff
+  // nenhum — zero sem denominador não é resultado (G-03).
+  if (requiresHandoff(context.phase)) {
+    const ho = metric("handoff", ["handoffs", "ai_msgs_after_handoff", "summary", "assignee", "notify"]);
+    if (ho && (ho.handoffs < 3 || ho.ai_msgs_after_handoff !== 0 || ho.summary !== 7 ||
+        ho.assignee !== ho.handoffs || ho.notify !== ho.handoffs)) {
+      errors.push("handoff fora do contrato: exige handoffs>=3, ai_msgs_after_handoff=0, summary=7/7, assignee e notify iguais a handoffs");
+    }
+    const rem = metric("reminder", ["runs", "sent", "duplicates"]);
+    if (rem && (rem.runs !== 2 || rem.sent !== 1 || rem.duplicates !== 0)) {
+      errors.push("reminder fora do contrato: exige runs=2, sent=1, duplicates=0");
+    }
+  }
   const clean = errors.length === 0;
   const status = !clean ? "NOT READY" : context.revalidation
     ? `${debt.length ? "REVALIDATED WITH DEBT" : "REVALIDATED"} (${context.phase})`
@@ -227,7 +243,7 @@ export function collect(root, directory, context) {
   // reprova), enquanto §8.3 fixa o rótulo do campo com underscore. O mapa é o
   // único lugar onde essa diferença existe.
   const ARQUIVO_DA_METRICA = { ai_eval: "ai-eval" };
-  for (const name of ["isolation", "rls-coverage", "rbac", "entitlement", "webhook", "ai_eval"]) {
+  for (const name of ["isolation", "rls-coverage", "rbac", "entitlement", "webhook", "ai_eval", "handoff", "reminder"]) {
     metrics[name] = read(path.join(directory, "metrics", `${ARQUIVO_DA_METRICA[name] ?? name}.line`));
   }
   metrics.secrets = read(path.join(directory, "secrets.log"));
@@ -273,8 +289,8 @@ export function render(input, result) {
     `e2e_scope: ${input.context.phase}-required passed=${fraction("e2e")} specs=${specFraction}`,
     ...["isolation", "rls-coverage", "rbac", "entitlement"].map((name) => input.metrics[name] ?? `${name}: pending`),
     input.metrics.ai_eval ?? "ai_eval: cases=pending pass=pending unknown=pending injection=pending cross_tenant=pending provider_calls_at_zero_balance=pending",
-    "handoff: ai_msgs_after_handoff=pending summary=pending assignee=pending notify=pending",
-    "reminder: runs=pending sent=pending duplicates=pending",
+    input.metrics.handoff ?? "handoff: ai_msgs_after_handoff=pending summary=pending assignee=pending notify=pending",
+    input.metrics.reminder ?? "reminder: runs=pending sent=pending duplicates=pending",
     input.metrics.webhook ?? "webhook: replay=pending stored=pending tables_checked=pending",
     replicability,
     input.metrics.secrets ?? "secrets: pending",
