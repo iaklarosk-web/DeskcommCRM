@@ -169,3 +169,58 @@ commit da F03-T09 registra a spec nova no workflow para a CI acompanhar o gate
 local. `gh auth refresh -h github.com -s workflow` destrava.
 **Enquanto não destravar:** o trabalho existe só localmente, e a CI não roda as
 specs novas.
+
+---
+
+## C. Portões do proprietário — o que a engenharia não pode abrir sozinha
+
+D49 suspendeu a pausa por fase de D47, mas preservou D11–D13. Estes itens não
+são preferência técnica: são atos com efeito fora do repositório, ou dependem de
+credencial e dinheiro. Ficam aqui porque a entrega final tem de listá-los.
+
+### C1. `hosting_confirmed: no` bloqueia a F06 por texto explícito
+§7.7 escreve a pré-condição da F06 assim: "`F05=done`, `hosting_confirmed=yes`
+(D03). **Sem isso, BLOCKER e fim da run (D11)**". O `BUILD-STATE.md` tem
+`hosting_confirmed: no`.
+
+D03 tem um DEFAULT escrito (Docker Compose numa VPS, com Postgres apontando
+para **Supabase gerenciado**) e diz "pendência do proprietário: confirmar antes
+da Fase F06". Adotar o default resolve metade: o Compose roda nesta VPS. A outra
+metade não é técnica — um projeto Supabase **gerenciado** para staging é recurso
+externo com credencial e, dependendo do plano, custo. D11 reserva "custo novo" e
+"credencial para validação REAL" ao proprietário.
+
+Consequência honesta: a F06 pode ser **construída** (logs por tenant, rate
+limit, LGPD mínima, `backup.sh`/`restore.sh`, `compose.staging.yml`,
+`smoke.sh`, workflow de CI) e **não pode ser fechada**, porque o critério de
+saída dela é `STATUS: READY (staging)` rodado DENTRO do staging. Fechá-la contra
+o sandbox local seria chamar de staging o que é a máquina de desenvolvimento.
+
+**O que destrava:** confirmar o hosting (ou dizer que o staging é esta VPS com
+Supabase local, o que muda o critério e merece linha na DIRETRIZ) e, se for
+Supabase gerenciado, fornecer o projeto.
+
+### C2. Push bloqueado por escopo de token
+`gh auth refresh -h github.com -s workflow`. Sem isso a branch fica só local e a
+CI não roda as specs novas. Detalhe em B9.
+
+### C3. Itens de D12 que continuam pendentes para a produção
+Domínio, Supabase de produção, chave OpenAI com orçamento, número de WhatsApp
+com aceite de risco de ban da Deka, e-mail transacional, Sentry e usuário
+`platform_admin`. Nenhum deles bloqueia F03/F04/F05, que fecham com mock e
+`NOT VALIDATED (real)` (D12) — mas todos bloqueiam F08 em diante.
+
+### C4. Decisões comerciais que o agente não toma (D14, D28)
+Nome da plataforma, nomes e preços dos planos, gateway de pagamento. F12
+(assinatura e cobrança) não começa sem elas.
+
+### C5. A conversa nova a partir de `archived` (D34)
+Descrita em ADR-019. Exige tornar parcial o índice
+`uniq_conversations_1to1_per_contact_session`, que tem nove dependentes
+provados, entre eles a jornada de fusão de contatos duplicados. Muda o
+comportamento do caminho herdado, não só do SaaS.
+
+### C6. `create_task` pela IA (ver B5)
+O catálogo promete e o domínio nega. Ou a escrita do CRM se abre a executor
+não-humano com auditoria própria, ou `create_task` sai do subset da IA e D18 é
+ajustada.
