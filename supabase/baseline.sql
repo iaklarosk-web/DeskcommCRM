@@ -7737,7 +7737,12 @@ alter table job_queue add constraint job_queue_kind_check
   -- antigos rodam antes e falham em cadeia. Vigiado por
   -- tests/unit/baseline-constraint-reconstruida.test.ts.
   -- 'transactional_delivery' (0226) segue a mesma consolidação de vocabulário.
-  check (kind in ('inbound_turn','followup_turn','watchdog','flywheel','case_reply_turn','operator_turn','transactional_delivery','approved_reply'));
+  -- 'outbound_message' (9016/F03-T07, ADR-017 decisão 5) entra AQUI pelo mesmo
+  -- motivo: o apêndice 9016, no fim do arquivo, NÃO recria esta constraint —
+  -- comenta que o valor mora neste bloco. Ele NÃO entra em
+  -- job_queue_turn_needs_contact logo abaixo: job de saída tem contact_id NULO
+  -- e endereça conversa e mensagem pelo payload.
+  check (kind in ('inbound_turn','followup_turn','watchdog','flywheel','case_reply_turn','operator_turn','transactional_delivery','approved_reply','outbound_message'));
 alter table job_queue drop constraint if exists job_queue_turn_needs_contact;
 do $$
 declare c text;
@@ -25376,6 +25381,216 @@ begin
   end if;
 end
 $f03_t03_t04$;
+
+notify pgrst,'reload schema';
+
+
+--
+-- Apêndice 9016 — fila de SAÍDA sobre job_queue: kind `outbound_message`,
+-- status `blocked`, tabela `job_runs` e o índice de idempotência por mensagem
+-- (F03-T07/T08, ADR-017 decisão 5). Par idempotente da migration
+-- 20260910233000_9016_fila_de_saida.sql. ⚠️ ENTRA ANTES DO BLOCO DA VARREDURA
+-- anon, que é de propósito o último do arquivo: apêndice novo sempre entra
+-- antes dele, e quem o empurrar para o meio desarma a cura para tudo que vier
+-- depois (tests/unit/varredura-anon-e-o-ultimo-bloco.test.ts).
+--
+-- ⚠️ UMA DIVERGÊNCIA DELIBERADA em relação ao arquivo aplicado, e ela é regra
+-- da casa, não descuido: a seção 1 da migration (drop + add de
+-- `job_queue_kind_check`) NÃO é copiada para cá. O valor `outbound_message`
+-- entra no bloco ÚNICO daquela constraint, lá em cima (o da migration 0066),
+-- porque reconstruir a mesma constraint em N blocos do baseline quebra o
+-- `update.sh` de todo clone que já tenha uma linha de vocabulário posterior —
+-- os blocos antigos rodam antes e falham em cadeia, e entre o `drop` e o `add`
+-- que funciona a tabela fica SEM constraint. Vigiado por
+-- `tests/unit/baseline-constraint-reconstruida.test.ts`.
+--
+-- O resto abaixo é byte-fiel ao arquivo aplicado.
+
+-- ---------------------------------------------------------------------------
+-- 2 · job_queue.status aceita `blocked` (sem perder `dead`)
+-- ---------------------------------------------------------------------------
+
+do $f03_t07_status$
+declare
+  v_nome text;
+  v_perdidos text;
+begin
+  select conname into v_nome
+    from pg_constraint
+   where conrelid = 'public.job_queue'::regclass and contype = 'c'
+     and pg_get_constraintdef(oid) ilike '%''dead''%';
+
+  if v_nome is not null then
+    select string_agg(distinct k, ', ') into v_perdidos
+      from (
+        select unnest(regexp_matches(
+                 pg_get_constraintdef(oid), '''([a-z_]+)''', 'g')) as k
+          from pg_constraint
+         where conrelid = 'public.job_queue'::regclass and conname = v_nome
+      ) atual
+     where k not in ('pending','running','done','failed','dead','blocked');
+    if v_perdidos is not null then
+      raise exception
+        'F03-T07 ia ESTREITAR job_queue.status: valor(es) herdado(s) fora da lista nova: %',
+        v_perdidos;
+    end if;
+    execute format('alter table public.job_queue drop constraint %I', v_nome);
+  end if;
+end
+$f03_t07_status$;
+
+alter table public.job_queue add constraint job_queue_status_check
+  check (status in ('pending','running','done','failed','dead','blocked'));
+
+comment on column public.job_queue.status is
+  'pending|running|done|failed|dead|blocked. `blocked` (F03-T07) é a terceira falha do retry N=3: o job PARA e um humano é avisado (agent_inbox_items kind=job_dead). `dead` continua sendo o terminal do motor herdado e não é sinônimo — a fila desistiu sozinha.';
+
+delete from public.job_queue a
+ using public.job_queue b
+ where a.kind = 'outbound_message' and b.kind = 'outbound_message'
+   and a.organization_id = b.organization_id
+   and a.payload->>'message_id' = b.payload->>'message_id'
+   and a.payload->>'message_id' is not null
+   and (a.created_at, a.id) > (b.created_at, b.id);
+
+create unique index if not exists job_queue_outbound_message_uk
+  on public.job_queue (organization_id, (payload->>'message_id'))
+  where kind = 'outbound_message' and payload->>'message_id' is not null;
+
+comment on index public.job_queue_outbound_message_uk is
+  'Idempotência da fila de saída (§5.13): a mesma mensagem não gera segundo job. Parcial em kind=outbound_message para não tocar em nenhuma linha do motor herdado.';
+
+-- ---------------------------------------------------------------------------
+-- 3 · job_runs — uma linha por TENTATIVA
+-- ---------------------------------------------------------------------------
+
+create table if not exists public.job_runs (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  job_id uuid not null references public.job_queue(id) on delete cascade,
+  attempt smallint not null,
+  started_at timestamptz not null default now(),
+  finished_at timestamptz,
+  outcome text check (outcome in ('ok','erro')),
+  error text
+);
+
+delete from public.job_runs a
+ using public.job_runs b
+ where a.organization_id = b.organization_id
+   and a.job_id = b.job_id
+   and a.attempt = b.attempt
+   and (a.started_at, a.id) > (b.started_at, b.id);
+
+create unique index if not exists job_runs_org_job_attempt_unique
+  on public.job_runs (organization_id, job_id, attempt);
+
+create index if not exists job_runs_org_started_idx
+  on public.job_runs (organization_id, started_at desc);
+
+alter table public.job_runs enable row level security;
+
+comment on table public.job_runs is
+  'Uma linha por TENTATIVA de job (§5.13, F03-T07). service_only: RLS ligada, zero policies, só service_role. Única por (organization_id, job_id, attempt).';
+comment on column public.job_runs.error is
+  'Erro NORMALIZADO e truncado pelo código (src/jobs/erros.ts) — nunca conteúdo de mensagem (PII), mesma regra do comment de job_queue.last_error.';
+comment on column public.job_runs.outcome is
+  'ok|erro, e NULL enquanto a tentativa corre. Dois valores porque o desfecho da FILA (blocked, dead) é de job_queue.status: repeti-lo aqui criaria duas verdades para o mesmo fato.';
+
+-- ---------------------------------------------------------------------------
+-- 4 · Rodapé de privilégios (G-54)
+-- ---------------------------------------------------------------------------
+
+revoke all on public.job_runs from public,anon,authenticated,service_role;
+grant all on public.job_runs to service_role;
+
+-- ---------------------------------------------------------------------------
+-- 5 · A migration termina lendo o que afirmou
+-- ---------------------------------------------------------------------------
+
+do $f03_t07_fim$
+declare
+  v_policies integer;
+  v_anon integer;
+  v_auth integer;
+  v_service integer;
+begin
+  if not exists (
+    select 1 from pg_constraint
+     where conrelid = 'public.job_queue'::regclass and conname = 'job_queue_kind_check'
+       and pg_get_constraintdef(oid) ilike '%outbound_message%'
+  ) then
+    raise exception 'F03-T07 não acrescentou outbound_message ao CHECK de job_queue.kind';
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+     where conrelid = 'public.job_queue'::regclass and conname = 'job_queue_status_check'
+       and pg_get_constraintdef(oid) ilike '%blocked%'
+       and pg_get_constraintdef(oid) ilike '%dead%'
+  ) then
+    raise exception 'F03-T07 não deixou job_queue.status com blocked E dead';
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+     where conrelid = 'public.job_queue'::regclass and contype = 'c'
+       and pg_get_constraintdef(oid) ilike '%contact_id is not null%'
+  ) then
+    raise exception 'F03-T07 removeu a CHECK de coerência kind/contact_id de job_queue';
+  end if;
+
+  if not exists (
+    select 1 from pg_indexes where schemaname = 'public' and tablename = 'job_queue'
+      and indexname = 'job_queue_outbound_message_uk'
+  ) then
+    raise exception 'F03-T08 não instalou job_queue_outbound_message_uk';
+  end if;
+
+  if not exists (
+    select 1 from pg_tables where schemaname = 'public' and tablename = 'job_runs'
+  ) then
+    raise exception 'F03-T07 não criou public.job_runs';
+  end if;
+  if exists (
+    select 1 from pg_tables where schemaname = 'public' and tablename = 'job_runs'
+      and not rowsecurity
+  ) then
+    raise exception 'F03-T07 criou job_runs sem RLS';
+  end if;
+  select count(*) into v_policies from pg_policies
+   where schemaname = 'public' and tablename = 'job_runs';
+  if v_policies <> 0 then
+    raise exception 'job_runs é service_only (D35) e apareceu com % policy(ies)', v_policies;
+  end if;
+  if not exists (
+    select 1 from pg_indexes where schemaname = 'public' and tablename = 'job_runs'
+      and indexname = 'job_runs_org_job_attempt_unique'
+  ) then
+    raise exception 'F03-T07 não instalou job_runs_org_job_attempt_unique';
+  end if;
+  if (select count(*) from pg_constraint
+       where conrelid = 'public.job_runs'::regclass and contype = 'f' and convalidated) < 2 then
+    raise exception 'job_runs sem as duas FKs validadas (organizations e job_queue)';
+  end if;
+
+  select count(*) into v_anon from pg_class c,
+    aclexplode(coalesce(c.relacl,'{}'::aclitem[])) a
+   where c.oid = 'public.job_runs'::regclass and a.grantee = 'anon'::regrole;
+  select count(*) into v_auth from pg_class c,
+    aclexplode(coalesce(c.relacl,'{}'::aclitem[])) a
+   where c.oid = 'public.job_runs'::regclass and a.grantee = 'authenticated'::regrole;
+  if v_anon <> 0 or v_auth <> 0 then
+    raise exception 'job_runs exposta: anon=% authenticated=% privilégio(s)', v_anon, v_auth;
+  end if;
+  select count(*) into v_service from pg_class c,
+    aclexplode(coalesce(c.relacl,'{}'::aclitem[])) a
+   where c.oid = 'public.job_runs'::regclass and a.grantee = 'service_role'::regrole;
+  if v_service = 0 then
+    raise exception 'job_runs sem privilégio para service_role — o worker não registraria tentativa';
+  end if;
+end
+$f03_t07_fim$;
 
 notify pgrst,'reload schema';
 
