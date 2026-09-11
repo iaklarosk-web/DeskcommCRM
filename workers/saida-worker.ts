@@ -15,16 +15,19 @@
  * resolvido no boot: um worker que só roda da raiz do repositório é um worker
  * que o cron não sabe chamar, e a descoberta acontece às 3 da manhã.
  *
- * ⚠️ BLOQUEIO CONHECIDO (F03-T07, registrado no relatório da task): hoje este
- * processo AINDA não sobe fora do bundler do Next, e a causa não está aqui.
- * `src/channels/inbound-parse.ts` importa quatro ajudantes de
- * `lib/waha/ingest.ts`, e esse módulo arrasta `lib/channels/pos-entrada.ts` →
- * `lib/dev/kick-local-pipeline.ts` → `lib/event-log/register-handlers.ts` →
- * `workers/lgpd-export-worker.ts` → `@react-pdf/renderer`, que estoura
- * `ERR_PACKAGE_PATH_NOT_EXPORTED` em Node puro. O worker herdado
- * (`workers/agent-worker/main.ts`) sobe porque o grafo dele não passa por ali.
- * O conserto é extrair aqueles quatro ajudantes para um módulo-folha — arquivo
- * de outra frente, não tocado aqui.
+ * ─── Por que existem dois módulos-folha no caminho deste worker ───────────
+ *
+ * Este processo não subia fora do bundler do Next, e a causa não estava aqui:
+ * dois módulos da fronteira de canal importavam ajudantes puros de um módulo de
+ * ingestão que arrasta efeitos pós-entrada e, por transitividade, um renderizador
+ * de PDF que estoura `ERR_PACKAGE_PATH_NOT_EXPORTED` em Node puro. Os ajudantes
+ * foram extraídos para dois módulos-folha do transporte (identidade do fio e
+ * HMAC do webhook — a ADR-017 os nomeia); os módulos antigos reexportam o que
+ * era deles, então nenhum chamador mudou. O nome do transporte não aparece
+ * aqui porque o invariante 1 da doutrina de restrição de canal é catraca de
+ * merge e mede o texto do arquivo, comentário incluído. Medido depois do conserto: de `/tmp`, este arquivo sobe,
+ * imprime o caminho resolvido e morre no `connect ECONNREFUSED` do banco —
+ * igual ao worker herdado.
  *
  * Modos:
  *   --once   executa UM ciclo, imprime a contagem e sai (0 = ciclo completo).

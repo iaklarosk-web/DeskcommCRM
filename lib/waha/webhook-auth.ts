@@ -31,7 +31,10 @@
  */
 import { env } from "@/lib/env";
 
-import { verifyHmacSha512 } from "./ingest";
+// `./hmac` e NÃO `./ingest`: o segundo arrasta a cadeia de efeitos
+// pós-entrada até `@react-pdf/renderer` e impede o worker de saída de subir
+// como processo solto (G-71). Ver o cabeçalho de `lib/waha/hmac.ts`.
+import { verifyHmacSha512 } from "./hmac";
 
 /** Curto demais para ser segredo de verdade — é placeholder ou lixo de decrypt. */
 const MIN_SECRET_LEN = 16;

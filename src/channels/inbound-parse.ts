@@ -26,12 +26,16 @@
 import { incrementCounter } from "@/src/obs/counters";
 import { ackToStatus } from "@/lib/types/messaging";
 import { wahaEnvelopeSchema, wahaPayloadSchema, type WahaPayload } from "@/lib/waha/envelope";
+// `@/lib/waha/jid` e NÃO `@/lib/waha/ingest`: o segundo arrasta efeitos
+// pós-entrada, escalação e, por transitividade, `@react-pdf/renderer`, que em
+// Node puro impede o worker de saída de subir como processo solto (G-71). O
+// módulo-folha existe por causa disso; ver o cabeçalho dele.
 import {
   mediaMimeOf,
   mediaUrlOf,
   parseChatId,
   telefoneAlternativoDe,
-} from "@/lib/waha/ingest";
+} from "@/lib/waha/jid";
 
 import {
   montarRefDeMidia,

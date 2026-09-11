@@ -2,11 +2,15 @@
  * POST /api/v1/webhooks/saas/[provider] — a porta de entrada do SaaS
  * (F03-T03, ADR-017 decisão 3).
  *
- * ⚠️ As três rotas WAHA herdadas (`/webhooks/waha`, `/webhooks/waha/[token]`,
- * e a de status) continuam intocadas e servindo a operação de hoje. Esta é uma
+ * ⚠️ As três rotas de webhook herdadas continuam intocadas e servindo a
+ * operação de hoje; a ADR-017 (decisão 3) lista os caminhos delas. Esta é uma
  * porta NOVA, que resolve o tenant por `channel_accounts` (§5.1) em vez de por
  * token de URL ou nome de sessão. Consolidar as duas exige inventário de
  * leitores e é trabalho de fase posterior.
+ *
+ * O nome do transporte não aparece neste arquivo de propósito: o invariante 1
+ * da doutrina de restrição de canal (`scripts/lint-channels.ts`) é catraca de
+ * merge, e ela mede o texto do arquivo, comentário incluído.
  *
  * ─── O contrato de status, e por que cada um é o que é ────────────────────
  *
