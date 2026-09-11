@@ -42,7 +42,11 @@ export type ApiResponse<T> = ApiSuccess<T> | ApiError;
 // -----------------------------------------------------------------------------
 
 type OkOptions = {
-  status?: 200 | 201 | 204;
+  // 202 entrou com a rota de webhook do SaaS (F03-T03): "aceito e NÃO vou
+  // reentregar" é a resposta certa a evento em quarentena, e sem ela a rota
+  // teria de montar NextResponse à mão — furando a regra de que toda rota
+  // /api/v1/* responde por ok()/fail(). Alargar a união não muda chamador nenhum.
+  status?: 200 | 201 | 202 | 204;
   meta?: ApiSuccess<unknown>["meta"];
   requestId?: string;
   headers?: HeadersInit;

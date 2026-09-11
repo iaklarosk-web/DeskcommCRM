@@ -36,6 +36,7 @@ export {
 export {
   ConversationNotFound,
   EffectNotImplemented,
+  type EffectExecutor,
   IllegalTransition,
   transition,
   type IllegalReason,

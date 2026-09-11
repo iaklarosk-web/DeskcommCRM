@@ -75,9 +75,33 @@ export interface TransitionResult {
   to: ConversationState;
 }
 
+/**
+ * Executor de efeito injetado pelo chamador. Devolve `true` quando ELE cumpriu
+ * o efeito; `false` devolve o efeito ao executor interno (as RPCs de
+ * atribuição) e, se lá também não houver portador, `EffectNotImplemented` sobe.
+ *
+ * Existe porque a tabela D16 declara efeitos que `transition()` não pode
+ * cumprir sozinha: `append_message` é a linha de `messages` que o pipeline de
+ * entrada acabou de gravar (`src/channels/inbound.ts`), e esta função não tem —
+ * nem deve ter — a mensagem em mãos. Sem o seam, `inbound.message` seria
+ * impossível de emitir por aqui, e o pipeline teria de escrever `saas_state`
+ * por fora: uma SEGUNDA autoridade, que é exatamente o que a ADR-016 recusa.
+ *
+ * Omitir a dependência preserva o comportamento anterior byte a byte.
+ */
+export type EffectExecutor = (
+  db: TenantDb,
+  ctx: TenantCtx,
+  conversationId: string,
+  effect: TransitionEffect,
+  actor: TransitionActorRef,
+) => Promise<boolean>;
+
 export interface TransitionDeps {
   pool?: ServicePool;
   guards?: GuardResolver;
+  /** Ver `EffectExecutor`. Ausente = só os efeitos de atribuição têm executor. */
+  effects?: EffectExecutor;
 }
 
 interface ConversationRow {
@@ -218,6 +242,13 @@ export async function transition(
       );
 
       for (const efeito of efeitos) {
+        // O executor injetado tem a primeira palavra e a recusa é explícita:
+        // `false` cai no executor interno, que lança se também não souber. Um
+        // executor que devolvesse `undefined` por engano não engoliria o efeito.
+        if (deps.effects !== undefined) {
+          const cumprido = await deps.effects(db, ctx, conversationId, efeito, actor);
+          if (cumprido === true) continue;
+        }
         await aplicarEfeito(db, ctx, conversationId, efeito, actor);
       }
 
