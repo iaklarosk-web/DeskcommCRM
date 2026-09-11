@@ -13,11 +13,20 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * 0173: essa mesma RPC agora grava `bot_silenced_until='infinity'` — assumir CALA
  * o atendimento automático. Antes disso o motor moderno nunca soube que alguém
  * assumiu (ele não lê `assignee_kind`) e os dois atendiam o mesmo cliente.
+ *
+ * F03-T09: a rota não chama mais a RPC direto. Quem move a conversa é
+ * `transition()` (§5.6, ADR-016): ela valida o par D16, escreve `saas_state` e
+ * delega a atribuição à MESMA `fn_conversation_assign` — nada do que está escrito
+ * acima muda de dono. O lock otimista fica AQUI porque é da porta, não do
+ * movimento: `transition()` não tem — nem deve ter — a expectativa de quem
+ * clicou. O caso "assumir a conversa do automático" está em
+ * `lib/inbox/acoes-d16.ts`.
  */
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 
 import { audit } from "@/lib/audit";
+import { ctxDoInbox, erroDeApiDaTransicao, moverPeloInbox } from "@/lib/inbox/acoes-d16";
 import { registrarTrocaDeComando } from "@/lib/inbox/atividade-de-comando";
 import { ApiError } from "@/lib/api/types";
 import { ok, fail } from "@/lib/api/wrappers";
@@ -61,22 +70,50 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   }
 
   // Optimistic lock (spec 04 §9.2): expected null/omitido = só assume se livre;
-  // expected uuid = takeover consciente. UPDATE + evento na mesma transação.
-  const { data, error } = await supabase.rpc("fn_conversation_assign", {
-    p_organization_id: authz.org.orgId,
-    p_conversation_id: id,
-    p_to_user_id: user.id,
-    p_reason: "claim",
-    ...(input.expected_assignee ? { p_expected_assignee: input.expected_assignee } : {}),
-    p_enforce_expected: true,
-  });
+  // expected uuid = takeover consciente. A leitura é do client do REQUEST, então
+  // a RLS é quem responde "esta conversa é visível para você" — ler com service
+  // role aqui deixaria um agent fora de escopo assumir o que nem enxerga.
+  const { data: atual, error: leituraErro } = await supabase
+    .from("conversations")
+    .select("id, assigned_to_user_id")
+    .eq("id", id)
+    .eq("organization_id", authz.org.orgId)
+    .maybeSingle();
+  if (leituraErro) return fail("internal_error", leituraErro.message, 500, { requestId });
+  if (!atual) return fail("not_found", t("Conversa não encontrada."), 404, { requestId });
+  const donoAtual = (atual as { assigned_to_user_id: string | null }).assigned_to_user_id;
+  if (donoAtual !== (input.expected_assignee ?? null)) {
+    return fail("state_conflict", t("Outro atendente já assumiu."), 409, { requestId });
+  }
 
+  try {
+    await moverPeloInbox(
+      ctxDoInbox(authz.org.orgId, user.id, authz.org.role),
+      id,
+      "assumir",
+      { kind: "attendant", userId: user.id },
+    );
+  } catch (err) {
+    const apiErr = erroDeApiDaTransicao(err, requestId, t);
+    if (!apiErr) throw err;
+    return fail(apiErr.code, apiErr.message, apiErr.status, {
+      details: apiErr.details,
+      requestId,
+    });
+  }
+
+  // A linha DEPOIS do movimento: o corpo da resposta é o que a tela recarrega.
+  const { data: row, error } = await supabase
+    .from("conversations")
+    .select("*")
+    .eq("id", id)
+    .eq("organization_id", authz.org.orgId)
+    .maybeSingle();
   if (error) {
     return fail("internal_error", error.message, 500, { requestId });
   }
-  const row = data?.[0];
   if (!row) {
-    return fail("state_conflict", t("Outro atendente já assumiu."), 409, { requestId });
+    return fail("not_found", t("Conversa não encontrada."), 404, { requestId });
   }
 
   const conv = row as unknown as Conversation;

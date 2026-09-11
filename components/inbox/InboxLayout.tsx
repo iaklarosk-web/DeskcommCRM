@@ -32,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { comandosDaFila } from "@/lib/inbox/comando-da-conversa";
+import { ehEstadoD16, ESTADOS_D16_ENCERRADOS } from "@/lib/inbox/estado-d16";
 import { useAutomaticoAtivo } from "@/hooks/ai/useAutomaticoAtivo";
 
 /**
@@ -124,23 +125,43 @@ export function InboxLayout({ initialSelectedId = null }: InboxLayoutProps = {})
   const searchParams = useSearchParams();
   const tab = parseFilterParam(searchParams.get("filter"));
 
-  // tab vive na URL (?filter=); os demais filtros são estado local de sessão.
-  const [aux, setAux] = useState<Omit<InboxFiltersValue, "tab">>({
+  /**
+   * ESTADO E RESPONSÁVEL VIVEM NA URL (F03-T09), como a aba.
+   *
+   * Não é gosto: §7.4 pede que o filtro sobreviva à recarga, e o padrão desta
+   * casa para estado compartilhável é a querystring — foi assim que `?filter=`
+   * nasceu. Em `useState` os dois se perderiam no F5 e o recorte não poderia ser
+   * mandado a um colega.
+   *
+   * Valor de estado fora dos oito é IGNORADO em vez de propagado: uma URL colada
+   * errada não pode fazer a lista pedir um filtro que a tabela D16 não tem — a
+   * rota devolveria 422 e a tela ficaria vazia sem dizer por quê.
+   */
+  const estadoDaUrl = searchParams.get("estado");
+  const estado = ehEstadoD16(estadoDaUrl) ? estadoDaUrl : undefined;
+  const responsavel = searchParams.get("responsavel") ?? undefined;
+
+  // tab, estado e responsável vivem na URL; os demais são estado local de sessão.
+  const [aux, setAux] = useState<Omit<InboxFiltersValue, "tab" | "estado" | "responsavel">>({
     search: "",
     onlyUnread: false,
   });
-  const filterValue: InboxFiltersValue = { tab, ...aux };
+  const filterValue: InboxFiltersValue = { tab, estado, responsavel, ...aux };
   const setFilterValue = useCallback(
     (next: InboxFiltersValue) => {
-      if (next.tab !== tab) {
+      if (next.tab !== tab || next.estado !== estado || next.responsavel !== responsavel) {
         const params = new URLSearchParams(searchParams);
         params.set("filter", next.tab);
+        if (next.estado) params.set("estado", next.estado);
+        else params.delete("estado");
+        if (next.responsavel) params.set("responsavel", next.responsavel);
+        else params.delete("responsavel");
         router.replace(`${pathname}?${params.toString()}`, { scroll: false });
       }
-      const { tab: _t, ...rest } = next;
+      const { tab: _t, estado: _e, responsavel: _r, ...rest } = next;
       setAux(rest);
     },
-    [tab, searchParams, router, pathname],
+    [tab, estado, responsavel, searchParams, router, pathname],
   );
 
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
@@ -172,6 +193,11 @@ export function InboxLayout({ initialSelectedId = null }: InboxLayoutProps = {})
   const filters: ConversationsFilters = useMemo(
     () => ({
       ...tabToFilter(filterValue.tab, automaticoDaOrg),
+      // Depois do espalhamento da aba, de propósito: escolher um responsável é
+      // um pedido MAIS específico que "Minhas" ou "Fila", e a aba não pode
+      // contradizê-lo em silêncio.
+      ...(filterValue.responsavel ? { assigned_to: filterValue.responsavel } : {}),
+      ...(filterValue.estado ? { saas_state: [filterValue.estado] } : {}),
       search: filterValue.search || undefined,
       channel_session_id: filterValue.channel_session_id,
       tag: filterValue.tag,
@@ -179,6 +205,8 @@ export function InboxLayout({ initialSelectedId = null }: InboxLayoutProps = {})
     [
       filterValue.tab,
       automaticoDaOrg,
+      filterValue.estado,
+      filterValue.responsavel,
       filterValue.search,
       filterValue.channel_session_id,
       filterValue.tag,
@@ -456,7 +484,16 @@ export function InboxLayout({ initialSelectedId = null }: InboxLayoutProps = {})
               conversationId={selectedConversation.id}
               blockedReason={supportReadonly ? "Acompanhamento somente leitura" : blockedReason}
               janelaFechada={motivoDaJanela}
-              disabled={selectedConversation.status === "closed"}
+              // O composer fecha também no desfecho D16. Sem isto, "Fechar" —
+              // que em D16 é `human.resolved` e grava o status legado `resolved`,
+              // não `closed` — deixaria o campo aberto numa conversa em que a
+              // máquina vai recusar `human.reply_sent` com 409. Oferecer o que
+              // será recusado é pior que não oferecer.
+              disabled={
+                selectedConversation.status === "closed" ||
+                (ehEstadoD16(selectedConversation.saas_state) &&
+                  ESTADOS_D16_ENCERRADOS.includes(selectedConversation.saas_state))
+              }
               contactName={selectedConversation.contacts?.name ?? null}
               respondendo={respondendo}
               onCancelarResposta={() => setRespondendo(null)}

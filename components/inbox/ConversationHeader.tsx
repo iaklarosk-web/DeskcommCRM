@@ -15,6 +15,7 @@ import { usePauseAiAttendance } from "@/hooks/inbox/usePauseAiAttendance";
 import { useAutomaticoAtivo } from "@/hooks/ai/useAutomaticoAtivo";
 import { OwnerBadge } from "@/components/kanban/OwnerBadge";
 import { comandoDaConversa, ROTULO_DO_MOTIVO } from "@/lib/inbox/comando-da-conversa";
+import { rotuloDoEstadoD16 } from "@/lib/inbox/estado-d16";
 import { ReassignDialog } from "@/components/inbox/ReassignDialog";
 import { SnoozeButton } from "@/components/inbox/SnoozeButton";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
@@ -69,6 +70,7 @@ export function ConversationHeader({ conversation }: Props) {
   const displayName = rotuloDoContato(c, t);
   const phone = c?.phone_number ? phoneForDisplay(c.phone_number) : null;
   const status = conversation.status;
+  const rotuloDoEstado = rotuloDoEstadoD16(conversation.saas_state);
   const isMineAssigned = conversation.assigned_to_user_id === user.id;
   const isOpen = status === "open" || conversation.assigned_to_user_id == null;
 
@@ -148,6 +150,21 @@ export function ConversationHeader({ conversation }: Props) {
           <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
             {t(STATUS_LABEL[status] ?? status)}
           </Badge>
+          {/* O ESTADO D16 (F03-T09, §7.4: "estado exibido … no cabeçalho").
+              Ao LADO do chip herdado, não no lugar dele: aquele nomeia o ciclo
+              legado que `fn_service_status` escreve, este nomeia o vocabulário de
+              §5.6 que `transition()` escreve. São duas colunas de verdade, e
+              fundi-las numa só esconderia justamente a divergência que a
+              projeção existe para tornar impossível. */}
+          {rotuloDoEstado && (
+            <Badge
+              variant="outline"
+              data-testid="estado-d16-cabecalho"
+              className="h-4 px-1.5 text-[10px] font-normal"
+            >
+              {t(rotuloDoEstado)}
+            </Badge>
+          )}
           {/* Ao lado do estado, não escondido num painel: a pergunta "dá para
               escrever agora?" se faz ANTES de digitar, não depois de receber um
               `failed` com um código de cinco dígitos. */}

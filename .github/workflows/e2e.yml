@@ -605,6 +605,7 @@ jobs:
         f02-api-active-org.spec.ts
         f02-support-readonly-api.spec.ts
         f02-daily-checks.spec.ts
+        f03-inbox.spec.ts
 
       FORA_DO_CI: >-
         vps-fresh-onboarding.spec.ts

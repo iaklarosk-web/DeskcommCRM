@@ -4563,6 +4563,21 @@ export const DICIONARIO: Traducoes = {
   Arquivada: { es: "Archivada" },
   "Aguardando o cliente": { es: "Esperando al cliente" },
 
+  // ─── Inbox: os oito estados D16 (§5.6) e os dois filtros de F03-T09 ───
+  //
+  // Os rótulos vêm de `lib/inbox/estado-d16.ts` e chegam à tela como VARIÁVEL
+  // (`t(rotuloDoEstado)`), igual ao vocabulário persistido mais abaixo: a
+  // varredura de `t("literal")` não os alcança, e sem estas linhas o cliente em
+  // espanhol leria o selo em português. `Aberta`, `Arquivada`, `Resolvida`,
+  // `Aguardando atendente`, `Aguardando o cliente` e `Aguardando confirmação`
+  // já existem no dicionário — não se repetem aqui.
+  "Atendimento automático": { es: "Atención automática" },
+  "Em atendimento humano": { es: "En atención humana" },
+  "Filtrar por estado da conversa": { es: "Filtrar por estado de la conversación" },
+  "Todos os estados": { es: "Todos los estados" },
+  "Filtrar por responsável": { es: "Filtrar por responsable" },
+  "Todos os responsáveis": { es: "Todos los responsables" },
+
   // ─── Inbox: painel lateral CRM (demandas, leads, pedidos, atividade) ───
   "Nenhuma demanda aberta.": { es: "No hay demandas abiertas." },
   "Demandas abertas": { es: "Demandas abiertas" },

@@ -7,6 +7,11 @@
  */
 import { z } from "zod";
 import { COMANDOS_DO_BANCO, type ComandoDoBanco } from "@/lib/inbox/comando-da-conversa";
+// Os oito estados de §5.6 vêm da TABELA, nunca de uma cópia aqui: schema e
+// máquina de estados divergindo em silêncio é o defeito que D16 existe para
+// impedir. O import é do módulo de dados — o índice de `src/conversation`
+// reexporta `transition()`, que arrasta o pool de service-role para o grafo.
+import { CONVERSATION_STATES, type ConversationState } from "@/src/conversation/transitions";
 
 /**
  * O que a API aceita ESCREVER. Cinco valores, e a ausência de `pending`/`resolved`
@@ -295,6 +300,41 @@ export const listConversationsQuerySchema = z.object({
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             message: `comando inválido: ${item}`,
+          });
+          return z.NEVER;
+        }
+        validos.push(r.data);
+      }
+      return validos;
+    }),
+  /**
+   * O ESTADO D16 (§5.6) — um valor, ou vários separados por vírgula.
+   *
+   * Terceira pergunta, diferente das outras duas: `status` é o ciclo herdado,
+   * `comando` é quem responde a próxima mensagem, e `saas_state` é o vocabulário
+   * de oito estados que `src/conversation/transition.ts` escreve. Os nomes
+   * aceitos saem de `CONVERSATION_STATES` — a própria tabela D16.
+   *
+   * Valor desconhecido RECUSA, pela mesma razão de `status` acima: uma lista
+   * menor sem explicação parece resposta.
+   */
+  saas_state: z
+    .union([z.enum(CONVERSATION_STATES), z.string()])
+    .optional()
+    .transform((v, ctx) => {
+      if (v === undefined) return undefined;
+      const itens = v
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (itens.length === 0) return undefined;
+      const validos: ConversationState[] = [];
+      for (const item of itens) {
+        const r = z.enum(CONVERSATION_STATES).safeParse(item);
+        if (!r.success) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `saas_state inválido: ${item}`,
           });
           return z.NEVER;
         }
