@@ -53,7 +53,15 @@ export const D16_TO_LEGACY: Record<ConversationState, LegacyStatus> = {
   waiting_confirmation: "pending",
   waiting_human: "pending",
   human_handling: "claimed",
-  resolved: "resolved",
+  // `closed` e NÃO `resolved`, embora o nome coincida. O vocabulário legado tem
+  // os dois, e o produto só conta UM como encerrado:
+  // `CONVERSATION_TERMINAL_STATUSES` é `["closed","archived"]`
+  // (`lib/schemas/messaging.ts:195`), e o comentário de lá diz que `resolved` é
+  // legado "se um dia passar a valer". Mapear D16 `resolved` para o legado
+  // `resolved` foi medido: a conversa resolvida pelo inbox sumia da aba
+  // "Fechadas", continuava no `exclude_finished` e escapava do varredor de
+  // silêncio. Resolver pelo D16 tem de encerrar de verdade.
+  resolved: "closed",
   archived: "archived",
 };
 
@@ -71,8 +79,10 @@ export const COARSENINGS: readonly Coarsening[] = [
   // "a IA está redigindo" de "a IA já respondeu e espera o cliente".
   { from: "waiting_customer", to: "ai_handling" },
   { from: "waiting_confirmation", to: "waiting_human" },
-  // Dois valores legados de vocabulários diferentes para o mesmo desfecho.
-  { from: "closed", to: "resolved" },
+  // Dois valores legados de vocabulários diferentes para o mesmo desfecho: os
+  // dois projetam para D16 `resolved`, e a volta escolhe o que o produto conta
+  // como encerrado. Quem não sobrevive à ida e volta é o legado `resolved`.
+  { from: "resolved", to: "closed" },
 ];
 
 /** `true` quando o par perdido na ida e volta está declarado. */

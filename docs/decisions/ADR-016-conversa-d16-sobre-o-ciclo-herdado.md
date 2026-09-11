@@ -34,7 +34,16 @@ de D16 — `waiting_customer` e `waiting_confirmation` — não têm portador le
    `set_config('app.conversation_transition','1',true)` na mesma transação.
 4. Os dois mapas são totais e o engrossamento é finito e declarado:
    `waiting_customer → ai_handling`, `waiting_confirmation → waiting_human` e
-   `closed → resolved`. Fora desses três pares, ida e volta são identidade.
+   `resolved → closed` (legado). Fora desses três pares, ida e volta são
+   identidade.
+   O estado D16 `resolved` traduz para o legado **`closed`**, não para o legado
+   `resolved`, embora o nome coincida. O vocabulário herdado tem os dois e o
+   produto só conta um como encerrado: `CONVERSATION_TERMINAL_STATUSES` é
+   `["closed","archived"]` (`lib/schemas/messaging.ts:195`). Medido na F03-T09:
+   com a tradução para o homônimo, a conversa resolvida pelo inbox sumia da aba
+   "Fechadas", continuava contada em `exclude_finished` e escapava do varredor
+   de silêncio. Uma prova unitária compara os terminais de D16 com a constante
+   de produto, nos dois sentidos.
 5. Par `(estado, evento)` fora da tabela lança `IllegalTransition` e incrementa
    `conversation_illegal_transition{from, event}`.
 

@@ -12,6 +12,7 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { CONVERSATION_TERMINAL_STATUSES } from "@/lib/schemas/messaging";
 import { counterTotal, counterValue, resetCounters } from "@/src/obs/counters";
 import {
   COARSENINGS,
@@ -271,5 +272,49 @@ describe("F03-T01 — os mapas com o ciclo herdado são totais e o engrossamento
       `conversation-states: coarsenings_declared=${COARSENINGS.length} ` +
         `coarsenings_observed=${perdidos.length}/${COARSENINGS.length}`,
     );
+  });
+});
+
+describe("F03-T01 — resolver pelo D16 encerra de verdade no vocabulário do produto", () => {
+  it("os estados terminais de D16 caem dentro de CONVERSATION_TERMINAL_STATUSES", () => {
+    // Arrange — "acabou" é decisão de produto e mora num lugar só
+    // (lib/schemas/messaging.ts). D16 não pode ter um segundo entendimento.
+    const terminaisDoProduto = new Set<string>(CONVERSATION_TERMINAL_STATUSES);
+
+    // Act
+    const traduzidos = (["resolved", "archived"] as const).map((estado) => ({
+      estado,
+      legado: D16_TO_LEGACY[estado],
+    }));
+
+    // Assert — o defeito medido: com `resolved -> resolved`, a conversa
+    // resolvida pelo inbox sumia da aba "Fechadas", continuava contada em
+    // `exclude_finished` e escapava do varredor de silêncio.
+    for (const { estado, legado } of traduzidos) {
+      expect(
+        terminaisDoProduto.has(legado),
+        `D16 ${estado} traduz para "${legado}", que o produto NÃO conta como encerrado`,
+      ).toBe(true);
+    }
+    console.log(
+      `conversation-states: terminais_d16=${traduzidos.length}/${traduzidos.length} ` +
+        `dentro_do_produto=${traduzidos.length}/${traduzidos.length}`,
+    );
+  });
+
+  it("nenhum estado NÃO terminal de D16 traduz para um encerrado do produto", () => {
+    // Guarda de vacuidade: sem ela, marcar tudo como terminal passaria acima.
+    const terminaisDoProduto = new Set<string>(CONVERSATION_TERMINAL_STATUSES);
+    const naoTerminais = CONVERSATION_STATES.filter(
+      (estado) => estado !== "resolved" && estado !== "archived",
+    );
+
+    for (const estado of naoTerminais) {
+      expect(
+        terminaisDoProduto.has(D16_TO_LEGACY[estado]),
+        `D16 ${estado} traduz para "${D16_TO_LEGACY[estado]}", que encerraria a conversa`,
+      ).toBe(false);
+    }
+    expect(naoTerminais).toHaveLength(CONVERSATION_STATES.length - 2);
   });
 });

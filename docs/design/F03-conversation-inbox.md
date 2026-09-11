@@ -79,12 +79,16 @@ mesma coluna.
 | `waiting_confirmation` | `pending` |
 | `waiting_human` | `pending` |
 | `human_handling` | `claimed` |
-| `resolved` | `resolved` |
+| `resolved` | `closed` |
 | `archived` | `archived` |
 
 O engrossamento é declarado e finito: `waiting_customer → ai_handling`,
-`waiting_confirmation → waiting_human` e `closed → resolved`. Fora desses três
-pares, ida e volta são identidade. O teste enumera os 8 estados e os 7 valores
+`waiting_confirmation → waiting_human` e o legado `resolved → closed`. Fora
+desses três pares, ida e volta são identidade.
+
+D16 `resolved` traduz para o legado **`closed`**, não para o homônimo: o
+vocabulário herdado tem os dois e só `closed` conta como encerrado
+(`CONVERSATION_TERMINAL_STATUSES`, `lib/schemas/messaging.ts:195`). O teste enumera os 8 estados e os 7 valores
 legados e falha se aparecer par de engrossamento não declarado.
 
 ### 1.4 Prova

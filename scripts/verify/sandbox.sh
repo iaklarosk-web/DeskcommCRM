@@ -110,11 +110,36 @@ case "${1:-}" in
   up)
     preparar_workdir
     $SUPABASE start --workdir "$WORKDIR"
+    # O baseline vem de `pg_dump`: ele REFERENCIA `public.vector`, `public.citext`,
+    # `gin_trgm_ops` e `extensions.uuid_generate_v4`, mas não cria nenhuma delas.
+    # Sem este passo o `psql` morre na primeira referência e o sandbox sobe com
+    # meio schema — que foi o que aconteceu na primeira execução deste script.
+    # A lista é a mesma de `scripts/test-db.sh:213-217`, o outro lugar que
+    # levanta banco do zero; divergir das duas seria criar duas verdades.
+    echo "==> criando as extensões que o baseline referencia e não cria"
+    PGPASSWORD=postgres psql -h 127.0.0.1 -p "$DB_PORT" -U postgres -d postgres \
+      -v ON_ERROR_STOP=1 >"$WORKDIR/extensoes.log" <<'SQL'
+create schema if not exists extensions;
+create extension if not exists "uuid-ossp" with schema extensions;
+create extension if not exists pgcrypto with schema extensions;
+create extension if not exists vector with schema public;
+create extension if not exists citext with schema public;
+create extension if not exists pg_trgm with schema public;
+SQL
+
     echo "==> aplicando supabase/baseline.sql no banco do sandbox"
     PGPASSWORD=postgres psql -h 127.0.0.1 -p "$DB_PORT" -U postgres -d postgres \
       -v ON_ERROR_STOP=1 -f supabase/baseline.sql > "$WORKDIR/baseline.log"
     echo "==> baseline aplicado; $(wc -l < "$WORKDIR/baseline.log") linhas de saída em $WORKDIR/baseline.log"
     echo "==> portas de pé: $(portas_ocupadas | tr '\n' ' ')"
+    echo "==> antes de rodar o navegador, exporte E2E_PORT=$APP_PORT: o"
+    echo "    playwright.config.ts lê process.env.E2E_PORT ANTES de publicar o"
+    echo "    .env.e2e, então sem isso ele tenta a porta 3001 e o build sobe no"
+    echo "    lugar errado. Medido na F03-T09."
+    echo "==> [realtime] fica DESLIGADO neste sandbox, como na F02: nenhuma spec"
+    echo "    do inventário obrigatório usa realtime, e o container custa RAM que"
+    echo "    esta VPS de dois núcleos não tem. A spec inbox-tempo-real NÃO roda"
+    echo "    aqui — ela já está declarada fora do CI."
     echo "==> .env.e2e NÃO é regravado por este script: as chaves locais do"
     echo "    Supabase são determinísticas por projeto, então o arquivo privado"
     echo "    preservado continua valendo. Para regerar: pnpm e2e:env com o"
