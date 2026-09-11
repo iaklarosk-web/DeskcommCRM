@@ -1,41 +1,79 @@
 ---
-updated_at: 2026-09-10T06:14:51Z
-head_commit: 03ec6a3b56826ab882782efb1dd5185f47e52a8c   # código validado pelo gate integral07; commits posteriores somente documentais
+updated_at: 2026-09-11T08:10:41Z
+head_commit: 6d742a6bc2f6c080055c9200c2b0aaf613b1b75b   # código validado pelo gate f03-gate-03; commits posteriores somente documentais
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
-plan_version: "2.3 (2026-09-09); D38–D48; ADR-006…015"
+plan_version: "2.4 (2026-09-11); D38–D49; ADR-006…021"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
 current_phase: F03
-next_task: F03-T10             # fechamento da F03; D49 suspendeu a pausa por fase de D47
+next_task: F04-T01             # D49 suspendeu a pausa por fase; a cadeia é F04→F07→F11→F17
 status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
 hosting_confirmed: no          # confirmar D03 antes da F06; orçamento proposto não aprova contratação
-build_env: "Codex na VPS, worktree DeskcommCRM-v1.17.0; validação em serviços/bancos descartáveis; WHATSAPP_MODE=mock AI_PROVIDER=mock"
-verify_summary_last_context: "Gate07 aprovado em 10/09/2026 sobre 03ec6a3b; F02 concluída tecnicamente e pausada antes de F03. Não é READY_STAGING nem aceite comercial."
+build_env: "Claude Code na VPS, worktree DeskcommCRM-v1.17.0; validação em serviços/bancos descartáveis; WHATSAPP_MODE=mock AI_PROVIDER=mock"
+verify_summary_last_context: "f03-gate-03 aprovado em 11/09/2026 sobre 6d742a6b, 4031s, exit 0. F03 concluída tecnicamente; a construção segue para F04 por D49. Não é READY_STAGING nem aceite comercial."
 verify_summary_last: |
   VERIFY SUMMARY
-  scope=phase phase=F02 current_phase=F02
+  scope=phase phase=F03 current_phase=F03
   build=ok lint=ok typecheck=ok shell=ok
-  unit=8380/8380 integration=72/72 db=1585/1585 e2e=13/13 baseline_n0=8997
-  baseline_comparable: scope=unit+db passed=9965 required=8738 full_n0=pending
-  e2e_scope: F02-required passed=13/13 specs=7/7
-  isolation: tables=127 ops=4 dirs=2 leaks=0 (material_cross_org=91/127)
-  rls-coverage: tables_with_org_id=127 policies_found=116 missing=0 service_only_with_grant=0
+  unit=8408/8408 integration=87/87 db=1616/1616 e2e=27/27 baseline_n0=8997
+  baseline_comparable: scope=unit+db passed=10024 required=8738 full_n0=pending
+  e2e_scope: F03-required passed=27/27 specs=8/8
+  isolation: tables=129 ops=4 dirs=2 leaks=0 (material_cross_org=92/129)
+  rls-coverage: tables_with_org_id=129 policies_found=116 missing=0 service_only_with_grant=0
   rbac: roles=3 denied_expected=19 denied_actual=19
   entitlement: usage_events_written=2
   ai_eval: cases=pending pass=pending unknown=pending injection=pending cross_tenant=pending provider_calls_at_zero_balance=pending
   handoff: ai_msgs_after_handoff=pending summary=pending assignee=pending notify=pending
   reminder: runs=pending sent=pending duplicates=pending
-  webhook: replay=pending stored=pending tables_checked=pending
-  replicability: e2e[fictitious_A_B]=13/13 specs=7/7 grep_deka_in_src=0
-  secrets: files_scanned=396 findings=0
-  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=27/27
+  webhook: replay=2 stored=1 tables_checked=7
+  replicability: e2e[fictitious_A_B]=27/27 specs=8/8 grep_deka_in_src=0
+  secrets: files_scanned=420 findings=0
+  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=36/36
   debt_known=0 skip_only_occurrences=15 violations=0
-  STATUS: READY (F02)
-
+  STATUS: READY (F03)
 ---
 
 # BUILD-STATE
+
+## Estado vigente — F03 concluída em 11/09/2026
+
+`./scripts/verify.sh` saiu 0 com `STATUS: READY (F03)` sobre
+`6d742a6bc2f6c080055c9200c2b0aaf613b1b75b`, em 4031 s (67,2 min), com zero
+violações: unit 8408/8408, integração 87/87, banco 1616/1616, navegador 27/27
+em oito specs, mutantes 36/36, nenhum teste apagado, pulado ou pendente. Os
+3.394 arquivos de entrada conservaram o mesmo SHA-256 antes e depois
+(`f323a031…f27c0f4`). O campo `webhook` deixou de ser `pending` e foi medido:
+`replay=2 stored=1 tables_checked=7`.
+[Evidência F03](docs/migration/evidence/construction-f03-20260911.txt).
+
+Duas tentativas anteriores reprovaram e nenhuma foi reclassificada. A primeira
+apontou `mock_outbox` e `job_runs` como tabelas tenant-aware sem prova
+comportamental de RLS — os testes conferiam catálogo, não comportamento; a
+prova de verdade foi escrita em dois tenants e o anti-vácuo foi medido nas
+duas tabelas. A segunda apontou uma corrida de deadlock nossa, de F02-T03, que
+afirmava ordem de chegada em vez de partição; a asserção passou a ser mais
+forte que a anterior. As duas medições estão na evidência versionada.
+
+T01–T10 entregues: máquina de estados D16 sobre o ciclo herdado por coluna
+própria e projeção total; contrato de canal com adapter WAHA embrulhado e
+adapter mock; tenant do webhook por `channel_accounts` com quarentena contada;
+idempotência de entrada aditiva; pipeline de entrada preservando demanda e
+revisão; envio humano pelo catálogo de ações; fila de saída com retry,
+`blocked` e worker que sobe solto; inbox operando pelas transições com o estado
+visível e filtrável; e o verificador v1.1 com o campo `webhook` medido.
+Decisões em ADR-016 a ADR-021.
+
+D49 (11/09/2026) suspendeu a pausa por fase de D47: a construção segue para F04
+sem aguardar nova mensagem. Continuam do proprietário, e viram pendência
+declarada: produção, mensagem real a pessoa, número real da Deka, gasto novo,
+gateway de pagamento e preço/plano/nome da plataforma.
+
+Limites de F03: tudo com `WHATSAPP_MODE=mock` e duas empresas fictícias;
+nenhuma mensagem saiu para pessoa e nenhum provedor real foi contatado. A
+conversa nova a partir de `archived` que D34 pede não foi entregue e depende de
+decisão do proprietário (ADR-019). O sandbox descartável foi derrubado ao fim.
+
 
 ## Estado vigente — F02 concluída e construção pausada em 10/09/2026
 
