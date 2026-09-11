@@ -178,18 +178,42 @@ describe.sequential("segurança de tarefas legadas no upgrade", () => {
           error,
         }));
 
-      const first = await Promise.race([taskQuery, contactQuery]);
-      expect(first.ok, "o primeiro desfecho precisa ser a vítima do deadlock").toBe(false);
-      if (first.ok) throw new Error("corrida terminou sem detectar o ciclo de locks");
-      expect(first.error.code).toBe("40P01");
+      // Os DOIS desfechos, não o primeiro a chegar.
+      //
+      // Quem é a vítima do ciclo de locks é escolha do Postgres, e o teste já
+      // trata os dois lados — o que era frágil é outra coisa: `Promise.race`
+      // assumia que o ERRO da vítima chega antes do SUCESSO do sobrevivente.
+      // Não chega necessariamente. Quando o Postgres aborta a vítima, os locks
+      // dela caem no mesmo instante, o sobrevivente completa em seguida, e qual
+      // dos dois o event loop entrega primeiro é corrida de microtask — não
+      // invariante de banco. Medido: este teste passou nos gates anteriores e
+      // reprovou no gate 02 da F03 afirmando "o primeiro desfecho precisa ser a
+      // vítima", sem que nada do caminho de produção tivesse mudado.
+      //
+      // Esperar os dois é mais forte, não mais frouxo: em vez de uma afirmação
+      // sobre ORDEM, afirma a partição — exatamente uma abortada por 40P01 e
+      // exatamente uma sobrevivente. Duas vítimas, dois sobreviventes ou um
+      // aborto por outro motivo reprovam, e nenhum deles reprovava antes.
+      const desfechos = await Promise.all([taskQuery, contactQuery]);
+      const vitimas = desfechos.filter((desfecho) => !desfecho.ok);
+      const sobreviventes = desfechos.filter((desfecho) => desfecho.ok);
+      expect(
+        vitimas.map((v) => v.side),
+        "o ciclo de locks precisa abortar exatamente uma das duas transações",
+      ).toHaveLength(1);
+      expect(
+        sobreviventes.map((s) => s.side),
+        "exatamente uma das duas transações precisa sobreviver",
+      ).toHaveLength(1);
+      const vitima = vitimas[0]!;
+      if (vitima.ok) throw new Error("classificação da vítima inconsistente");
+      expect(vitima.error.code, `vítima (${vitima.side}) não abortou por deadlock`).toBe("40P01");
 
-      if (first.side === "task") {
+      if (vitima.side === "task") {
         await taskClient.query("rollback");
-        expect(await contactQuery).toMatchObject({ side: "contact", ok: true });
         await contactClient.query("commit");
       } else {
         await contactClient.query("rollback");
-        expect(await taskQuery).toMatchObject({ side: "task", ok: true });
         await taskClient.query("commit");
       }
     } finally {
