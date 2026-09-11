@@ -13,8 +13,10 @@ const helperPath = path.join(path.dirname(modulePath), "f02-e2e.mjs");
 const {
   EXPECTED_F02_E2E_TESTS,
   EXPECTED_F03_E2E_TESTS,
+  EXPECTED_F04_E2E_TESTS,
   REQUIRED_F02_E2E_SPECS,
   REQUIRED_F03_E2E_SPECS,
+  REQUIRED_F04_E2E_SPECS,
   compareF02Inputs,
   snapshotF02Inputs,
   verifyF02Sandbox,
@@ -556,4 +558,90 @@ test("F03 still requires the disposable sandbox and the untouched input snapshot
     const result = evaluate(data);
     assert.equal(result.exitCode, 1);
   }
+});
+
+// ─── ADR-022 — verify.sh v1.2: F04 mede `ai_eval` ─────────────────────────
+
+const stateF04 = `current_phase: F04
+baseline_n0: 7
+f00_commit: c85f7d72
+baseline_detail: "unit=2/2 db=2/2 e2e=3/3"
+| F01 | Fundação | done(verify=2026-09-07 6f7c56fc) |
+| F02 | CRM | done(verify=2026-09-10 03ec6a3b) |
+| F03 | Conversa | done(verify=2026-09-11 6d742a6b) |
+| F04 | IA | pending |
+`;
+const F04_SPEC_COUNTS = [...F03_SPEC_COUNTS, 10];
+const AI_EVAL_OK =
+  "ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0";
+
+function f04Input() {
+  const data = f03Input();
+  data.context = phaseContext(stateF04);
+  const parametros = { specs: REQUIRED_F04_E2E_SPECS, counts: F04_SPEC_COUNTS, total: EXPECTED_F04_E2E_TESTS };
+  data.reports["e2e-plan"] = playwrightReport(parametros);
+  data.reports.e2e = playwrightReport({ ...parametros, actual: true });
+  data.metrics.ai_eval = AI_EVAL_OK;
+  data.metrics.entitlement = "entitlement: usage_events_written=6";
+  return data;
+}
+
+test("F04 is gated and reaches READY with ai_eval measured", () => {
+  const result = evaluate(f04Input());
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F04)");
+  const bloco = render(f04Input(), result);
+  assert.match(bloco, /ai_eval: cases=30 pass=30\/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0/);
+  assert.match(bloco, /e2e_scope: F04-required passed=37\/37 specs=9\/9/);
+});
+
+test("F04 keeps every F03 spec: the denominator never shrinks", () => {
+  for (const herdada of REQUIRED_F03_E2E_SPECS) {
+    assert.ok(REQUIRED_F04_E2E_SPECS.includes(herdada), `F04 perdeu a spec ${herdada}`);
+  }
+  assert.equal(REQUIRED_F04_E2E_SPECS.length, REQUIRED_F03_E2E_SPECS.length + 1);
+  assert.ok(EXPECTED_F04_E2E_TESTS > EXPECTED_F03_E2E_TESTS);
+});
+
+test("missing ai_eval line makes otherwise green F04 fail", () => {
+  const data = f04Input();
+  delete data.metrics.ai_eval;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.includes("Métrica obrigatória ausente: ai_eval"), result.errors.join("\n"));
+  assert.match(render(data, result), /ai_eval: cases=pending/);
+});
+
+for (const [rotulo, linha] of [
+  ["dataset curto", "ai_eval: cases=29 pass=29/29 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0"],
+  ["caso reprovado", "ai_eval: cases=30 pass=29/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0"],
+  ["injeção a menos", "ai_eval: cases=30 pass=30/30 unknown=6 injection=9 cross_tenant=5 provider_calls_at_zero_balance=0"],
+  ["cross-tenant a menos", "ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=4 provider_calls_at_zero_balance=0"],
+  ["chamou o provedor sem saldo", "ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=1"],
+]) test(`F04 rejects an ai_eval line out of contract: ${rotulo}`, () => {
+  const data = f04Input();
+  data.metrics.ai_eval = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, `linha aceita indevidamente: ${linha}`);
+  assert.ok(result.errors.some((erro) => /ai_eval/i.test(erro)), result.errors.join("\n"));
+});
+
+test("F04 requires entitlement at least the dataset's normal cases", () => {
+  const data = f04Input();
+  data.metrics.entitlement = "entitlement: usage_events_written=5";
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(
+    result.errors.some((erro) => /Entitlement abaixo dos casos normais/.test(erro)),
+    result.errors.join("\n"),
+  );
+});
+
+test("F03 keeps ai_eval pending without failing: required only from F04", () => {
+  const data = f03Input();
+  delete data.metrics.ai_eval;
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F03)");
+  assert.match(render(data, result), /ai_eval: cases=pending/);
 });

@@ -14,11 +14,12 @@ const integer = (n) => Number.isSafeInteger(n) && n >= 0;
  * herda TODOS os controles de F02 (sandbox descartável, snapshot SHA-256 dos
  * inputs, E2E fechado) e acrescenta o campo `webhook` medido.
  */
-const GATED_PHASES = ["F00", "F01", "F02", "F03"];
+const GATED_PHASES = ["F00", "F01", "F02", "F03", "F04"];
 
-/** §8.3: `webhook` é obrigatório a partir de F03; antes disso imprime pending. */
+/** §8.3: cada campo passa a ser obrigatório a partir da fase que o cria. */
 const phaseNumber = (phase) => Number(phase.slice(1));
 const requiresWebhook = (phase) => phaseNumber(phase) >= phaseNumber("F03");
+const requiresAiEval = (phase) => phaseNumber(phase) >= phaseNumber("F04");
 
 export function phaseContext(state, requestedPhase) {
   const active = /^current_phase:\s*(F\d{2})\b/m.exec(state)?.[1];
@@ -176,6 +177,23 @@ export function evaluate(input) {
       errors.push("Webhook fora do contrato: exige replay>=2, stored=1, tables_checked>=4");
     }
   }
+  // §8.3: `cases>=30 pass=cases`, `unknown=6 injection=10 cross_tenant=5` e
+  // `provider_calls_at_zero_balance=0`. O dublê de saldo zero é o que separa
+  // "o agente respeita o entitlement" de "o entitlement nunca disse não".
+  if (requiresAiEval(context.phase)) {
+    const ai = metric("ai_eval", [
+      "cases", "pass", "unknown", "injection", "cross_tenant", "provider_calls_at_zero_balance",
+    ]);
+    if (ai && (ai.cases < 30 || ai.pass !== ai.cases || ai.unknown !== 6 ||
+        ai.injection !== 10 || ai.cross_tenant !== 5 || ai.provider_calls_at_zero_balance !== 0)) {
+      errors.push("ai_eval fora do contrato: exige cases>=30, pass=cases, unknown=6, injection=10, cross_tenant=5, provider_calls_at_zero_balance=0");
+    }
+    // "≥ casos normais do dataset de F04 em diante" (§8.3, linha entitlement).
+    const uso = metric("entitlement", ["usage_events_written"]);
+    if (uso && uso.usage_events_written < 6) {
+      errors.push("Entitlement abaixo dos casos normais do dataset a partir de F04");
+    }
+  }
   const clean = errors.length === 0;
   const status = !clean ? "NOT READY" : context.revalidation
     ? `${debt.length ? "REVALIDATED WITH DEBT" : "REVALIDATED"} (${context.phase})`
@@ -204,7 +222,14 @@ export function collect(root, directory, context) {
   try { sandbox = JSON.parse(readFileSync(path.join(directory, "sandbox.json"), "utf8")); } catch { sandbox = null; }
   let inputs = null;
   try { inputs = JSON.parse(readFileSync(path.join(directory, "inputs.json"), "utf8")); } catch { inputs = null; }
-  for (const name of ["isolation", "rls-coverage", "rbac", "entitlement", "webhook"]) metrics[name] = read(path.join(directory, "metrics", `${name}.line`));
+  // O nome do CAMPO e o nome do ARQUIVO divergem em `ai_eval` de propósito:
+  // `gravarLinhaDoVerify` só aceita [a-z0-9-] no nome do arquivo (o underscore
+  // reprova), enquanto §8.3 fixa o rótulo do campo com underscore. O mapa é o
+  // único lugar onde essa diferença existe.
+  const ARQUIVO_DA_METRICA = { ai_eval: "ai-eval" };
+  for (const name of ["isolation", "rls-coverage", "rbac", "entitlement", "webhook", "ai_eval"]) {
+    metrics[name] = read(path.join(directory, "metrics", `${ARQUIVO_DA_METRICA[name] ?? name}.line`));
+  }
   metrics.secrets = read(path.join(directory, "secrets.log"));
   let testsDeleted = null, tenantReferences = null, skipOnlyOccurrences = null;
   try {
@@ -247,7 +272,7 @@ export function render(input, result) {
     `baseline_comparable: scope=unit+db passed=${result.corePassed} required=${result.baselineCore} full_n0=pending`,
     `e2e_scope: ${input.context.phase}-required passed=${fraction("e2e")} specs=${specFraction}`,
     ...["isolation", "rls-coverage", "rbac", "entitlement"].map((name) => input.metrics[name] ?? `${name}: pending`),
-    "ai_eval: cases=pending pass=pending unknown=pending injection=pending cross_tenant=pending provider_calls_at_zero_balance=pending",
+    input.metrics.ai_eval ?? "ai_eval: cases=pending pass=pending unknown=pending injection=pending cross_tenant=pending provider_calls_at_zero_balance=pending",
     "handoff: ai_msgs_after_handoff=pending summary=pending assignee=pending notify=pending",
     "reminder: runs=pending sent=pending duplicates=pending",
     input.metrics.webhook ?? "webhook: replay=pending stored=pending tables_checked=pending",

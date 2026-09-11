@@ -23,6 +23,7 @@ PHASE=$(node -e 'const value=JSON.parse(process.argv[1]); if(!/^F\d{2}$/.test(va
 case "$PHASE" in
   F02) CLOSED_E2E=1; EXPECTED_SPECS=7 ;;
   F03) CLOSED_E2E=1; EXPECTED_SPECS=8 ;;
+  F04) CLOSED_E2E=1; EXPECTED_SPECS=9 ;;
   *)   CLOSED_E2E=0; EXPECTED_SPECS=0 ;;
 esac
 export WHATSAPP_MODE=mock AI_PROVIDER=mock CI=1
