@@ -16,8 +16,40 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { motivoDoErro, sql } from "@/tests/invariants/psql-transporte";
 
 const ORG = "f0300007-0000-4000-8000-000000000001";
+/**
+ * A SEGUNDA organização, com o SEGUNDO usuário, existe para a prova
+ * comportamental de RLS de `job_runs`: um tenant só provaria "este usuário não
+ * alcança", e deixaria de fora a hipótese de o grant existir para UM deles.
+ */
+const ORG_B = "f0300007-0000-4000-8000-000000000002";
+const USER_A = "f0300007-9000-4000-8000-000000000001";
+const USER_B = "f0300007-9000-4000-8000-000000000002";
 const CONTATO = "f0300007-2000-4000-8000-000000000001";
 const JOB_DA_TENTATIVA = "f0300007-5000-4000-8000-000000000001";
+/** Job usado só pelo controle positivo de `service_role` (guarda de vacuidade). */
+const JOB_DA_VACUIDADE = "f0300007-5000-4000-8000-000000000002";
+
+/** As QUATRO operações. Nome + SQL: o denominador sai da lista, não do banco. */
+const OPERACOES = ["select", "insert", "update", "delete"] as const;
+
+function comandoDe(operacao: (typeof OPERACOES)[number], org: string, job: string): string {
+  switch (operacao) {
+    case "select":
+      return "select count(*) from public.job_runs";
+    case "insert":
+      return `insert into public.job_runs (organization_id, job_id, attempt)
+              values ('${org}','${job}',9)`;
+    case "update":
+      return "update public.job_runs set outcome='ok'";
+    case "delete":
+      return "delete from public.job_runs";
+  }
+}
+
+/** JWT do usuário, no mesmo contrato que o `auth.uid()` do Supabase lê. */
+function claims(userId: string): string {
+  return `select set_config('request.jwt.claims','{"sub":"${userId}"}',true);`;
+}
 
 /**
  * Os kinds do vocabulário DEPOIS da 9016. Os oito primeiros são herdados; o
@@ -69,12 +101,61 @@ function inserirJob(id: string, kind: string, status = "pending"): string {
           values ('${id}','${ORG}',${contato},'${kind}','${status}','{}'::jsonb);`;
 }
 
+/** `null` quando o script rodou; o motivo do Postgres quando ele recusou. */
+function erroDe(script: string): string | null {
+  try {
+    sql(script);
+    return null;
+  } catch (erro) {
+    return motivoDoErro(erro);
+  }
+}
+
+/**
+ * Roda UM comando sob UM papel — e, quando há usuário, sob o JWT dele.
+ *
+ * `set local role` + claim é o que separa esta prova da leitura de catálogo:
+ * quem tenta é a sessão que o PostgREST abriria para o navegador, não o
+ * superusuário do harness (que passaria com ou sem grant).
+ */
+function erroSob(
+  papel: "anon" | "authenticated" | "service_role",
+  comando: string,
+  usuario?: string,
+): string | null {
+  return erroDe(`
+    begin;
+    set local role ${papel};
+    ${usuario ? claims(usuario) : ""}
+    ${comando};
+    rollback;
+  `);
+}
+
+/**
+ * O que vai para a asserção quando o comando NÃO deu erro.
+ *
+ * `toContain` sobre `null` reprova — mas reprova falando do TIPO do argumento,
+ * não do que aconteceu. Trocando o `null` por esta frase, o vermelho do gate
+ * (e o do mutante que sabota o grant) diz a coisa certa: o papel EXECUTOU o
+ * comando.
+ */
+const SEM_ERRO = "<o comando PASSOU: o papel alcançou a tabela>";
+
 beforeAll(() => {
   sql(`
-    insert into public.organizations (id, slug, legal_name, display_name)
-      values ('${ORG}','f03-t07-fila','F03 T07 Fila de saida','F03 T07');
+    insert into auth.users (id, email) values
+      ('${USER_A}','f03-t07-a@invariant.test'),
+      ('${USER_B}','f03-t07-b@invariant.test');
+    insert into public.organizations (id, slug, legal_name, display_name) values
+      ('${ORG}','f03-t07-fila','F03 T07 Fila de saida','F03 T07'),
+      ('${ORG_B}','f03-t07-fila-b','F03 T07 Fila de saida B','F03 T07 B');
+    insert into public.user_organizations (organization_id, user_id, role, accepted_at) values
+      ('${ORG}','${USER_A}','agent',now()),
+      ('${ORG_B}','${USER_B}','agent',now());
     insert into public.contacts (id, organization_id, display_name, phone_number)
       values ('${CONTATO}','${ORG}','Contato F03 T07','+5511900000007');
+    ${inserirJob(JOB_DA_VACUIDADE, "outbound_message")}
   `);
 });
 
@@ -191,6 +272,103 @@ describe("F03-T07 — job_runs é service_only (D35)", () => {
     expect(observado, "job_runs fora do desenho service_only (D35/G-54)").toBe("1|0|0|0|0|1");
     console.log(
       "f03-t07-job-runs: rls=1/1 policies=0/0 anon=0/0 authenticated=0/0 public=0/0 service_role=1/1",
+    );
+  });
+});
+
+/**
+ * A PROVA COMPORTAMENTAL exigida por `rls-completude-varredura.test.ts`.
+ *
+ * O caso acima lê o CATÁLOGO (`relrowsecurity`, `pg_policies`, `relacl`) — ele
+ * descreve a FORMA que a proteção tem de ter, e forma não é proteção: um grant
+ * que chegue por outro caminho, ou uma policy que exista e não isole, passam
+ * naquela contagem inteira. O que fecha a lacuna é TENTAR — sob `set local
+ * role`, com o JWT de um usuário que existe e é membro de uma organização de
+ * verdade — e medir a recusa do Postgres pelo nome (`permission denied`), nos
+ * DOIS tenants.
+ *
+ * O controle positivo de `service_role` é a guarda de vacuidade: sem ele, uma
+ * tabela apagada ou renomeada faria as oito recusas continuarem "passando" por
+ * ausência de tabela, e o teste pararia de medir sem ficar vermelho.
+ */
+describe("F03-T07 — job_runs: prova comportamental de RLS nos dois tenants", () => {
+  it("authenticated recebe permission denied nas quatro operações em A e B", () => {
+    // Arrange — dois usuários reais, cada um membro da sua organização.
+    const casos = [
+      [USER_A, ORG],
+      [USER_B, ORG_B],
+    ] as const;
+
+    // Act + Assert — 4 operações × 2 usuários = 8 recusas nomeadas.
+    let negadas = 0;
+    for (const [usuario, org] of casos) {
+      for (const operacao of OPERACOES) {
+        const motivo = erroSob("authenticated", comandoDe(operacao, org, JOB_DA_VACUIDADE), usuario);
+        expect(
+          motivo ?? SEM_ERRO,
+          `authenticated (${usuario}) alcançou job_runs no ${operacao} — service_only furado (D35/G-54)`,
+        ).toContain("permission denied");
+        negadas += 1;
+      }
+    }
+
+    const esperado = OPERACOES.length * casos.length;
+    expect(negadas).toBe(esperado);
+    console.info(`f03-t07-job-runs-rls: authenticated_negado=${negadas}/${esperado}`);
+  });
+
+  it("anon recebe permission denied nas quatro operações", () => {
+    // Arrange + Act — anon não tem JWT: é a sessão da anon key sem login.
+    let negadas = 0;
+    for (const operacao of OPERACOES) {
+      const motivo = erroSob("anon", comandoDe(operacao, ORG, JOB_DA_VACUIDADE));
+      // Assert
+      expect(
+        motivo ?? SEM_ERRO,
+        `anon alcançou job_runs no ${operacao} — a anon key lê o registro de execução`,
+      ).toContain("permission denied");
+      negadas += 1;
+    }
+
+    console.info(`f03-t07-job-runs-rls: anon_negado=${negadas}/${OPERACOES.length}`);
+  });
+
+  it("service_role continua escrevendo e lendo (guarda de vacuidade)", () => {
+    // Arrange + Act — as mesmas quatro operações, agora pelo dono do dado.
+    let permitidas = 0;
+    for (const operacao of OPERACOES) {
+      const motivo = erroSob("service_role", comandoDe(operacao, ORG, JOB_DA_VACUIDADE));
+      // Assert — se QUALQUER uma falhar, as recusas acima deixam de significar
+      // "grant ausente" e podem significar "tabela ausente".
+      expect(
+        // Aqui o argumento é o `motivo` CRU: a asserção é `toBeNull()`, e
+        // `?? SEM_ERRO` transformaria o caso verde em vermelho.
+        motivo,
+        `service_role perdeu o ${operacao} em job_runs — o worker para de registrar tentativa`,
+      ).toBeNull();
+      permitidas += 1;
+    }
+
+    // E a linha escrita pelo service_role é LIDA por ele na mesma transação:
+    // "não deu erro" sozinho aprovaria um grant que não alcança dado nenhum.
+    const lida =
+      sql(`
+        begin;
+        set local role service_role;
+        insert into public.job_runs (organization_id, job_id, attempt)
+          values ('${ORG}','${JOB_DA_VACUIDADE}',9);
+        select count(*)::text || '/1' from public.job_runs
+          where organization_id='${ORG}' and job_id='${JOB_DA_VACUIDADE}' and attempt=9;
+        rollback;
+      `)
+        .split("\n")
+        .map((linha) => linha.trim())
+        .filter((linha) => /^\d+\/\d+$/.test(linha))
+        .at(-1) ?? "";
+    expect(lida, "service_role escreveu e não leu de volta").toBe("1/1");
+
+    console.info(
+      `f03-t07-job-runs-rls: service_role_permitido=${permitidas}/${OPERACOES.length} linha_lida_de_volta=${lida}`,
     );
   });
 });

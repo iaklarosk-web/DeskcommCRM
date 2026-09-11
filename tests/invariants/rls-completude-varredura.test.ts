@@ -265,6 +265,39 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "tenants; só `recordUsage` (service role, via withTenant) escreve, e a " +
       "leitura do tenant chega por agregação server-side na Fase 2.",
   },
+  // ─── migrations 9014 e 9016 (F03) — mesma postura deny-all (D35) ───
+  //
+  // As duas nasceram `service_only`: RLS ligada, ZERO policies, `revoke all`
+  // de public/anon/authenticated e `grant all` só para service_role. Como nas
+  // quatro entradas acima, a prova NÃO conta linha cross-org — não há regra de
+  // tenant para acertar ou errar quando não há privilégio nenhum. Ela mede a
+  // recusa: `set local role` + JWT de usuário real, as QUATRO operações, nos
+  // DOIS tenants, e o `permission denied` conferido pelo nome. Por isso também
+  // não podem entrar em `TABLES`: lá o `countAs` receberia `permission denied`
+  // onde espera `0`, e a "correção" natural seria criar uma policy — isto é,
+  // passar a SERVIR pelo PostgREST a caixa de saída e o registro de execução.
+  {
+    tabela: "mock_outbox",
+    razao:
+      "tests/invariants/f03-t02-mock-outbox.test.ts — duas organizações e dois " +
+      "usuários reais em auth.users/user_organizations; `permission denied` " +
+      "medido sob `set local role authenticated` + JWT nas quatro operações " +
+      "(select/insert/update/delete) para os DOIS usuários (8/8), as mesmas " +
+      "quatro negadas para `anon` (4/4), e controle positivo de `service_role` " +
+      "que escreve e lê a linha de volta (guarda de vacuidade). O catálogo " +
+      "— RLS ligada, zero policies, relacl sem anon/authenticated/PUBLIC — é " +
+      "conferido à parte no mesmo arquivo.",
+  },
+  {
+    tabela: "job_runs",
+    razao:
+      "tests/invariants/f03-t07-fila-de-saida.test.ts — mesma prova da linha " +
+      "acima sobre o registro de tentativa: dois tenants e dois usuários reais, " +
+      "`permission denied` sob `set local role authenticated` + JWT nas quatro " +
+      "operações (8/8), `anon` negado nas quatro (4/4) e `service_role` " +
+      "inserindo e lendo de volta (guarda de vacuidade). O catálogo " +
+      "service_only continua conferido no caso `job_runs é service_only (D35)`.",
+  },
 ];
 
 /**
