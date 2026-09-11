@@ -30,8 +30,10 @@
 import { randomUUID } from "node:crypto";
 
 import { IllegalTransition, transition } from "@/src/conversation";
+import { papeisDaFila } from "@/src/handoff/registro";
+import { membrosPorPapel, notify } from "@/src/notifications";
 import { incrementCounter } from "@/src/obs/counters";
-import { getSetting } from "@/src/tenant-config/settings";
+import { getSetting, getSettingIn } from "@/src/tenant-config/settings";
 import { withTenant, type TenantCtx } from "@/src/tenant-context";
 
 import { recordIn, type AuditActorType, type AuditResult } from "./audit";
@@ -358,6 +360,31 @@ async function pendurar(
     }
     throw erro;
   }
+
+  // `notify(confirmation.requested)` (§5.16) para quem confirma: os mesmos
+  // papéis que veem a fila de handoff (D33: "quem confirma: attendant do
+  // tenant, pelo inbox"). Vem DEPOIS do movimento porque uma pendência que a
+  // máquina recusou morre `rejected` acima, e avisar alguém dela seria avisar
+  // de uma pergunta que ninguém vai ver.
+  await withTenant(
+    ctx,
+    async (db) => {
+      const fila = await membrosPorPapel(
+        db,
+        ctx,
+        papeisDaFila(await getSettingIn(db, ctx, "handoff.queue_roles")),
+      );
+      await notify(db, ctx, "confirmation.requested", fila, {
+        pending_action_id: pendencia.id,
+        conversation_id: conversationId,
+        action_name: entrada.name,
+        risk: entrada.risk,
+        requested_by: actor.kind,
+        expires_at: expiraEm.toISOString(),
+      });
+    },
+    { pool: deps.pool },
+  );
 
   const auditId = await auditar(
     ctx,

@@ -15,6 +15,13 @@
  *        Mh > 0. ⚠️ O TÍTULO do caso de T04 não tem parêntese nem `>`: o
  *        mutante 49 o seleciona com `-t`, que o vitest lê como REGEX, e um
  *        parêntese no título faria o filtro não casar com caso nenhum.
+ *   T05  `notify=H` — cada um dos H handoffs avisou pelo menos uma pessoa da
+ *        fila em `notifications` (§5.16), e a fila desta fixture tem DUAS
+ *        pessoas, então as linhas são 2H (não-vacuidade do "por destinatário").
+ *
+ * É o caso de T04 que GRAVA a linha `handoff:` do VERIFY SUMMARY (ADR-024):
+ * ela só passou a ser gravada quando o campo `notify` ganhou produtor (T05) —
+ * antes disso, gravá-la pela metade reprovaria o gate por métrica inválida.
  *
  * ═══ A parte de T04 que quase não se mede ═════════════════════════════════
  *
@@ -54,6 +61,7 @@ import {
   type ResumoDoHandoff,
 } from "@/src/handoff";
 import type { TenantCtx } from "@/src/tenant-context";
+import { gravarLinhaDoVerify } from "@/tests/lib/verify-metrics";
 
 import { CFG_LLM, mensagemDoPrompt, semearTenant, type ConfigDeTenant } from "./f04-turno-fixtures";
 
@@ -868,11 +876,34 @@ describe("F05-T04 — depois do handoff a IA não envia", () => {
     expect(comAssignee).toBe(dossies.length);
     expect(completos).toBe(dossies.length);
 
-    console.info(
-      `handoff: handoffs=${dossies.length} ai_msgs_after_handoff=${aiDepois} ` +
-        `summary=${CAMPOS_DO_RESUMO.length} assignee=${comAssignee} ` +
-        `msgs_after=${humanasDepois} provider_calls_after=${chamadasAoProvedor}`,
+    // ═══ T05 — `notify=H`: cada handoff avisou a fila (§5.16) ══════════════
+    //
+    // Lido do BANCO, pelo id do dossiê no payload: "há linhas em notifications"
+    // aprovaria avisos de outro handoff. A fila desta fixture tem DOIS
+    // attendants (A e B), então H handoffs = 2H linhas — é o denominador que
+    // separa "+1 por destinatário" de "+1 por handoff, para alguém".
+    const avisados = await pool.query<{ handoff_id: string; pessoas: string | number }>(
+      `select payload->>'handoff_id' as handoff_id, count(distinct user_id) as pessoas
+         from public.notifications
+        where organization_id = $1 and event = 'handoff.created'
+          and payload->>'handoff_id' = any($2::text[])
+        group by payload->>'handoff_id'`,
+      [ORG, dossies],
     );
+    const notificados = avisados.rows.length;
+    const linhasDeAviso = avisados.rows.reduce((soma, r) => soma + Number(r.pessoas), 0);
+    expect(notificados, "algum handoff não avisou ninguém (§5.16)").toBe(dossies.length);
+    expect(linhasDeAviso, "a fila tem dois attendants e nem todos foram avisados").toBe(
+      dossies.length * 2,
+    );
+
+    const linha =
+      `handoff: handoffs=${dossies.length} ai_msgs_after_handoff=${aiDepois} ` +
+      `summary=${CAMPOS_DO_RESUMO.length}/${CAMPOS_DO_RESUMO.length} assignee=${comAssignee} ` +
+      `notify=${notificados} notify_rows=${linhasDeAviso} ` +
+      `msgs_after=${humanasDepois} provider_calls_after=${chamadasAoProvedor}`;
+    console.info(linha);
+    gravarLinhaDoVerify("handoff", linha);
   });
 
   it("a MESMA fixture responde numa conversa que nunca foi para a fila (não é verde por acidente)", async () => {

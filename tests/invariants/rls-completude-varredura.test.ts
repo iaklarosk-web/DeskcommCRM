@@ -361,6 +361,29 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "oito motivos do enum, as cinco posições de `last_messages`, a unicidade " +
       "do dossiê aberto por conversa e a coerência claimed_by ⇔ claimed_at.",
   },
+  // F05-T05 (§5.16, migration 9021). O aviso por usuário carrega ids e rótulos
+  // da conversa de um cliente, e a caixa de saída do e-mail mock carrega o
+  // endereço da pessoa: os dois são servidos pelo SERVIDOR (`src/notifications`,
+  // via `withTenant`). Como nas entradas acima, a prova mede a RECUSA.
+  {
+    tabela: "notifications",
+    razao:
+      "tests/invariants/f05-t05-notifications-schema.test.ts — duas organizações e " +
+      "dois usuários reais; `permission denied` medido sob `set local role " +
+      "authenticated` + JWT nas quatro operações para os DOIS usuários (8/8 por " +
+      "tabela), as mesmas quatro negadas para `anon` (4/4) e controle positivo de " +
+      "`service_role` que escreve e lê a linha de volta (guarda de vacuidade). " +
+      "Catálogo (RLS ligada, zero policies, relacl sem anon/authenticated/PUBLIC), " +
+      "os seis eventos do enum no CHECK e o payload-objeto conferidos à parte.",
+  },
+  {
+    tabela: "email_outbox",
+    razao:
+      "tests/invariants/f05-t05-notifications-schema.test.ts — mesma prova da " +
+      "irmã `notifications`, na mesma corrida: 8/8 recusas para authenticated em " +
+      "dois tenants, 4/4 para anon, service_role escreve e lê de volta; os seis " +
+      "eventos no CHECK e destinatário/assunto/corpo não vazios conferidos à parte.",
+  },
 ];
 
 /**

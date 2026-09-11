@@ -59,6 +59,9 @@ import {
   type ConversationState,
   type TransitionEffect,
 } from "@/src/conversation";
+import { papeisDaFila } from "@/src/handoff/registro";
+import { donoOuFila, notify } from "@/src/notifications";
+import { getSettingIn } from "@/src/tenant-config";
 import { fromWebhook, withTenant, type TenantCtx, type TenantDb } from "@/src/tenant-context";
 import type { ServicePool } from "@/src/tenant-context/db";
 
@@ -88,6 +91,12 @@ const EVENTO_DE_DESPACHO = "ai_agent.dispatch_requested";
  * efeito `notify_customer_replied_while_human` da tabela D16, e o barramento é
  * o portador: `event_log` já é o canal de notificação de §5.13, e inventar uma
  * segunda substância de aviso nesta task criaria mecanismo sem consumidor.
+ *
+ * Desde a F05-T05 o MESMO efeito também grava o aviso POR USUÁRIO de §5.16
+ * (`customer.replied_while_human`): para o atendente que assumiu, quando há um
+ * (`human_handling`); para a fila, quando ainda não há (`waiting_human`). O
+ * evento no barramento continua — os dois convivem porque respondem a leitores
+ * diferentes.
  */
 const EVENTO_DE_RESPOSTA_COM_HUMANO = "conversation.customer_replied_while_human";
 
@@ -207,7 +216,7 @@ function executorDeEfeitosDaEntrada(
 ) {
   return async (
     db: TenantDb,
-    _ctx: TenantCtx,
+    ctx: TenantCtx,
     _conversationId: string,
     effect: TransitionEffect,
   ): Promise<boolean> => {
@@ -229,6 +238,19 @@ function executorDeEfeitosDaEntrada(
           organizationId,
         ],
       );
+      // O aviso POR USUÁRIO (§5.16), na mesma transação. Só ids no payload: o
+      // texto da mensagem fica em `messages`, que a pessoa abre pela conversa.
+      const destinatarios = await donoOuFila(
+        db,
+        ctx,
+        conversationId,
+        papeisDaFila(await getSettingIn(db, ctx, "handoff.queue_roles")),
+      );
+      await notify(db, ctx, "customer.replied_while_human", destinatarios, {
+        conversation_id: conversationId,
+        contact_id: contactId,
+        inbound_message_id: messageId,
+      });
       return true;
     }
     return false;

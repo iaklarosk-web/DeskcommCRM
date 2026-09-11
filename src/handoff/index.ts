@@ -53,6 +53,7 @@ export {
   gravarHandoff,
   modalidadeDeAtribuicao,
   PAPEIS_DA_FILA_PADRAO,
+  papeisDaFila,
   papelNaOrganizacao,
   type DepsDoHandoff,
   type HandoffNaFila,

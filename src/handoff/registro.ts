@@ -67,6 +67,9 @@ export interface DepsDoHandoff {
 /**
  * Grava o dossiê DENTRO da transação de `transition()` e devolve o id.
  *
+ * Devolve o id e se a linha foi CRIADA agora (`criado`), para que o aviso por
+ * usuário (§5.16) saia uma vez por episódio, não uma por reprocessamento.
+ *
  * Deduplica por EPISÓDIO, exatamente como o aviso herdado
  * (`human-handoff.ts:173-186`, "dedup por episódio ABERTO"): o índice parcial
  * `handoffs_um_aberto_por_conversa` faz do segundo `handoff.requested` da mesma
@@ -86,7 +89,7 @@ export async function gravarHandoff(
     readonly created_by: "ai" | "system" | "human";
     readonly resumo: ResumoDoHandoff;
   },
-): Promise<string> {
+): Promise<{ readonly id: string; readonly criado: boolean }> {
   const faltando = camposAusentes(entrada.resumo);
   if (faltando.length > 0) throw new ResumoIncompleto(faltando);
 
@@ -114,7 +117,7 @@ export async function gravarHandoff(
   const criado = gravado.rows[0]?.id;
   if (criado !== undefined) {
     incrementCounter("handoff_registrado", { reason: entrada.resumo.reason });
-    return criado;
+    return { id: criado, criado: true };
   }
 
   // `do nothing` não devolve linha: o episódio já tinha dossiê aberto.
@@ -128,7 +131,10 @@ export async function gravarHandoff(
     throw new Error("handoffs não devolveu id nem tinha dossiê aberto para o episódio");
   }
   incrementCounter("handoff_deduplicado", { reason: entrada.resumo.reason });
-  return id;
+  // `criado: false` é o que diz ao chamador para NÃO avisar de novo (§5.16):
+  // o episódio já tinha dossiê, já tinha aviso, e um segundo aviso pelo mesmo
+  // fato é ruído para a mesma pessoa.
+  return { id, criado: false };
 }
 
 // ─── 2 · A fila (§5.11, `assignment = queue`) ───────────────────────────────
@@ -162,7 +168,13 @@ export class AtribuicaoNaoSuportada extends Error {
   }
 }
 
-function papeisDaFila(valor: unknown): readonly PapelD15[] {
+/**
+ * Os papéis D15 que veem a fila, a partir do valor de `handoff.queue_roles`.
+ * Exportada porque o aviso `handoff.created` (§5.16) vai para as MESMAS pessoas
+ * que veem a fila — dois leitores da mesma Setting com duas interpretações
+ * seriam uma fila que avisa A e mostra a B.
+ */
+export function papeisDaFila(valor: unknown): readonly PapelD15[] {
   if (!Array.isArray(valor)) return PAPEIS_DA_FILA_PADRAO;
   const lidos = valor.filter(
     (item): item is PapelD15 =>

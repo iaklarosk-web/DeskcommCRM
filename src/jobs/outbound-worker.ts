@@ -23,17 +23,20 @@
  * workers na mesma linha terminarem com um vencedor e um zero-linhas, sem
  * precisar de lock explícito.
  *
- * ─── Por que o `notify` é uma linha em `agent_inbox_items` ─────────────────
+ * ─── O `notify(job.blocked)` tem DUAS linhas, de propósito ─────────────────
  *
- * `kind='job_dead'` é o aviso operacional que a organização JÁ tem
- * (`supabase/baseline.sql:6456-6458`). O módulo `src/notifications/` com os seis
- * eventos é F05-T02/T03 (§5.16); criá-lo aqui deixaria dois avisos concorrentes
- * para o mesmo fato, e o segundo seria o que ninguém lê.
+ * `agent_inbox_items(kind='job_dead')` é o aviso operacional que a organização
+ * JÁ tem (`supabase/baseline.sql:6456-6458`) e continua sendo escrito. Desde a
+ * F05-T05 o mesmo bloqueio também grava o aviso POR USUÁRIO de §5.16
+ * (`job.blocked`, para os `tenant_admin` ativos), na mesma transação. Não são
+ * dois avisos concorrentes para o mesmo leitor: um é o cartão da Central; o
+ * outro é a linha que a pessoa marca como lida e que pode virar e-mail.
  */
 import { randomUUID } from "node:crypto";
 
 import { entregarSaida, type ExecuteDeps } from "@/src/actions/execute";
 import type { SaasChannelAdapter, SaasChannelProvider } from "@/src/channels/contract";
+import { membrosPorPapel, notify } from "@/src/notifications";
 import { incrementCounter } from "@/src/obs/counters";
 import { fromJob, withTenant, type TenantCtx } from "@/src/tenant-context";
 import { getServicePool, type ServicePool } from "@/src/tenant-context/db";
@@ -226,6 +229,22 @@ async function fecharComErro(
           `job=${jobId} erro=${normalizado}`,
           jobId,
         ],
+      );
+
+      // notify(job.blocked) POR USUÁRIO (§5.16, F05-T05): quem administra o
+      // tenant. Mesmo payload de ids e erro normalizado — nunca o texto.
+      await notify(
+        db,
+        ctx,
+        "job.blocked",
+        await membrosPorPapel(db, ctx, ["tenant_admin"]),
+        {
+          job_id: jobId,
+          kind: "outbound_message",
+          attempts: tentativa,
+          error: normalizado,
+          message_id: messageId,
+        },
       );
     },
     { pool: deps.pool },

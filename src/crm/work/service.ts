@@ -7,6 +7,7 @@ import {
   type CrmCommandPermission,
   type TrustedCrmExecutor,
 } from "@/src/crm/authorization";
+import { notify } from "@/src/notifications";
 import { can, papelD15DoHerdado } from "@/src/rbac/matrix";
 
 import {
@@ -298,6 +299,7 @@ export async function executeLinkedTaskCommand(
       }
 
       let beforeStatus: TaskStatus | null = null;
+      let assigneeAntes: string | null = null;
       let eventType: "created" | "edited" | "status_changed";
       let task: TaskRow;
       if (command.command === "create_linked_task") {
@@ -340,6 +342,7 @@ export async function executeLinkedTaskCommand(
           throw new CrmWorkServiceError("revision_conflict", 409);
         }
         beforeStatus = current.status;
+        assigneeAntes = current.assigned_to;
         if (command.command === "edit_linked_task") {
           await validateAssignee(db, org, command.assigned_to);
           const updated = await db.query<TaskRow>(
@@ -394,6 +397,23 @@ export async function executeLinkedTaskCommand(
         eventType,
         beforeStatus,
       );
+      // `notify(task.assigned)` (§5.16, F05-T05): quando a tarefa GANHA dono —
+      // criada já atribuída, ou reatribuída para outra pessoa. Mesma transação
+      // da tarefa; só ids no payload. Quem se atribui a si mesmo não é avisado
+      // do que acabou de fazer.
+      if (
+        task.assigned_to !== null &&
+        task.assigned_to !== assigneeAntes &&
+        task.assigned_to !== actorId
+      ) {
+        await notify(db, ctx, "task.assigned", [task.assigned_to], {
+          task_id: task.id,
+          order_id: task.order_id,
+          contact_id: task.contact_id,
+          assigned_by: actorId,
+          priority: task.priority,
+        });
+      }
       const auditAction =
         eventType === "created"
           ? "crm_task.created"

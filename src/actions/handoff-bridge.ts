@@ -1,5 +1,5 @@
 /**
- * O efeito `create_handoff` de D16 — DUAS escritas, na mesma transação.
+ * O efeito `create_handoff` de D16 — TRÊS escritas, na mesma transação.
  *
  * ─── O que mudou na F05-T01/T02, e o que NÃO mudou ─────────────────────────
  *
@@ -17,15 +17,19 @@
  * serem o mesmo fato — uma conversa em `waiting_human` sem as duas linhas é uma
  * conversa que ninguém vai ver.
  *
- * ─── O que AINDA não está aqui ─────────────────────────────────────────────
+ * ─── O que a F05-T05 acrescentou: o aviso POR USUÁRIO ──────────────────────
  *
- * LIMITE DECLARADO: `notify(handoff.created)` por USUÁRIO (a tabela
- * `notifications` de §5.16) é F05-T05. O aviso de ORGANIZAÇÃO abaixo é o que
- * existe hoje, e nenhum aviso existente deixou de aparecer.
+ * `notify(handoff.created)` (§5.16) para as MESMAS pessoas que veem a fila
+ * (`handoff.queue_roles`, §5.11) — uma linha em `notifications` por attendant
+ * ativo, e e-mail mock se o tenant ligou. Sai UMA vez por episódio: quando o
+ * dossiê já existia (`criado=false`, reprocessamento do mesmo turno) ninguém é
+ * avisado de novo. É a terceira escrita, na mesma transação das outras duas.
  */
 import type { MotivoDeHandoff } from "@/src/handoff/motivos";
-import { gravarHandoff } from "@/src/handoff/registro";
+import { gravarHandoff, papeisDaFila } from "@/src/handoff/registro";
 import { montarResumo, type ResumoDoHandoff } from "@/src/handoff/resumo";
+import { membrosPorPapel, notify } from "@/src/notifications";
+import { getSettingIn } from "@/src/tenant-config";
 import type { TenantCtx, TenantDb } from "@/src/tenant-context";
 
 export interface PedidoDeHandoff {
@@ -42,11 +46,13 @@ export interface HandoffGravado {
   readonly handoff_id: string;
   readonly inbox_item_id: string;
   readonly resumo: ResumoDoHandoff;
+  /** Quantas pessoas receberam `handoff.created` (0 quando o episódio já tinha dossiê). */
+  readonly notificados: number;
 }
 
 /**
- * Monta o dossiê, grava-o e cria o aviso da organização — tudo DENTRO da
- * transação de `transition()`.
+ * Monta o dossiê, grava-o, cria o aviso da organização e avisa as pessoas da
+ * fila — tudo DENTRO da transação de `transition()`.
  *
  * A ordem importa: o resumo é montado ANTES das escritas porque ele LÊ o
  * histórico, e lê-lo depois de o estado mudar daria um dossiê de um instante
@@ -69,7 +75,7 @@ export async function gravarItemDeHandoff(
     pending_action: pedido.pending_action,
   });
 
-  const handoffId = await gravarHandoff(db, ctx, {
+  const dossie = await gravarHandoff(db, ctx, {
     conversation_id: pedido.conversation_id,
     created_by: pedido.created_by,
     resumo,
@@ -86,5 +92,24 @@ export async function gravarItemDeHandoff(
   if (inboxItemId === undefined) {
     throw new Error("agent_inbox_items não devolveu id do handoff");
   }
-  return { handoff_id: handoffId, inbox_item_id: inboxItemId, resumo };
+
+  let notificados = 0;
+  if (dossie.criado) {
+    const fila = await membrosPorPapel(
+      db,
+      ctx,
+      papeisDaFila(await getSettingIn(db, ctx, "handoff.queue_roles")),
+    );
+    // Só ids e rótulos no payload (§5.16): o resumo fica no dossiê, que a
+    // pessoa abre pela fila.
+    const aviso = await notify(db, ctx, "handoff.created", fila, {
+      handoff_id: dossie.id,
+      conversation_id: pedido.conversation_id,
+      reason: pedido.reason,
+      created_by: pedido.created_by,
+    });
+    notificados = aviso.count;
+  }
+
+  return { handoff_id: dossie.id, inbox_item_id: inboxItemId, resumo, notificados };
 }

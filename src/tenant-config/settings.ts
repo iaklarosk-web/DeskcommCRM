@@ -6,7 +6,7 @@
  */
 import { incrementCounter } from "@/src/obs/counters";
 import type { ServicePool } from "@/src/tenant-context/db";
-import { withTenant, type TenantCtx } from "@/src/tenant-context";
+import { withTenant, type TenantCtx, type TenantDb } from "@/src/tenant-context";
 import { marcaDaOrganizacaoDeSettings } from "@/lib/branding/organizacao";
 import {
   baseDoStorage,
@@ -165,6 +165,40 @@ export async function getSetting(
     return structuredClone(entrada.default);
   }
   return valor;
+}
+
+/**
+ * `getSetting` DENTRO de uma transação já aberta (F05-T05).
+ *
+ * Existe por uma razão de conexão, não de conveniência: quem está dentro de
+ * `withTenant` — o efeito `create_handoff` da `transition()`, o worker de saída
+ * ao bloquear um job — e precisa de uma Setting não pode chamar `getSetting`,
+ * porque ela abriria uma SEGUNDA conexão do pool enquanto a primeira segura a
+ * linha da conversa. Sob carga, com o pool cheio, é um impasse que só termina
+ * por timeout (o mesmo motivo do `poolNaTransacao` de `src/channels/inbound.ts`).
+ *
+ * Só chaves ARMAZENADAS: alias canônico (`business.timezone`, `branding.*`) tem
+ * a sua leitura em `getSetting`, e duplicá-la aqui daria duas respostas para a
+ * mesma pergunta. `src/tenant-config` continua sendo o único módulo que lê
+ * `tenant_settings` (invariante 4 da §5.2): o chamador recebe o valor, nunca a
+ * tabela.
+ */
+export async function getSettingIn(
+  db: TenantDb,
+  ctx: TenantCtx,
+  key: string,
+): Promise<unknown> {
+  const entrada = exigirEntrada(key);
+  if (entrada.canonical) {
+    throw new CanonicalSettingAliasError(key, entrada.canonical.destination);
+  }
+  const r = await db.query<{ value: unknown }>(
+    `select value from public.tenant_settings
+      where organization_id = $1 and key = $2`,
+    [ctx.organization_id, key],
+  );
+  const valor = r.rows[0]?.value;
+  return valor === undefined ? structuredClone(entrada.default) : valor;
 }
 
 /**
