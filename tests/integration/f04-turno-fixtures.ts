@@ -313,6 +313,14 @@ const ABRE_DO_CLIENTE = "<customer_message>";
 const FECHA_DO_CLIENTE = "</customer_message>";
 
 /**
+ * O prompt INTEIRO como texto — para roteiros que precisam ler um bloco do
+ * contexto (o LEMBRETE de F05-T08 chega ao modelo assim), não só a mensagem.
+ */
+export function promptComoTexto(prompt: readonly { content: unknown }[]): string {
+  return prompt.map((parte) => textoDaParte(parte.content)).join("\n");
+}
+
+/**
  * O SDK entrega `content` ora como string (system), ora como LISTA DE PARTES
  * (user). Serializar a lista com `JSON.stringify` traria as quebras de linha
  * ESCAPADAS, e o recorte entre as tags voltaria com `\\n` literal grudado no

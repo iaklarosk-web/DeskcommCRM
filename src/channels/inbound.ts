@@ -61,6 +61,7 @@ import {
 } from "@/src/conversation";
 import { papeisDaFila } from "@/src/handoff/registro";
 import { donoOuFila, notify } from "@/src/notifications";
+import { registrarRespostaAoLembrete } from "@/src/reminder/resposta";
 import { getSettingIn } from "@/src/tenant-config";
 import { fromWebhook, withTenant, type TenantCtx, type TenantDb } from "@/src/tenant-context";
 import type { ServicePool } from "@/src/tenant-context/db";
@@ -530,6 +531,22 @@ async function ingerirMensagem(
           ),
         },
       );
+
+      // §5.12 (F05-T08): se esta conversa esperava a resposta a um LEMBRETE,
+      // a resposta é um FATO da entrada — carimbada aqui, na transação da
+      // mensagem, com `replied_late` decidido contra o `cutoff_at` gravado no
+      // envio. Quem lê a quantidade é o turno (§5.9); quem registra que o
+      // cliente falou é a entrada, mesmo com a IA desligada.
+      const lembrete = await registrarRespostaAoLembrete(
+        db,
+        ctx,
+        conversationId,
+        messageId,
+        new Date(),
+      );
+      if (lembrete !== null) {
+        incrementCounter("reminder_reply_ingested", { late: String(lembrete.late) });
+      }
 
       // O MESMO evento da rota herdada, com o MESMO payload campo a campo
       // (`lib/channels/pos-entrada.ts:305-318`). É o que faz opt-out, demanda,

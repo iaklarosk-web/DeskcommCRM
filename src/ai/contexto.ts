@@ -35,6 +35,7 @@ import {
   type ProductCard,
 } from "@/src/crm/reads";
 import { buscar, type Embutidor, type TrechoEncontrado } from "@/src/knowledge";
+import { lembreteDaConversa, type LembreteDaConversa } from "@/src/reminder/resposta";
 import { getSetting, listSchema } from "@/src/tenant-config";
 import type { ServicePool } from "@/src/tenant-context/db";
 import type { TenantCtx } from "@/src/tenant-context";
@@ -101,6 +102,13 @@ export interface ContextoDoTurno {
   };
   /** Exatamente `toolsFor(ctx,"ai")` — o modelo não vê nome fora daqui (§5.9). */
   readonly tools: readonly ToolSpec[];
+  /**
+   * O lembrete recorrente que esta conversa espera responder (§5.12, F05-T08),
+   * ou `null`. Presente só com a tag `awaiting_quantity`: carrega o período, o
+   * prazo, se a resposta chegou tarde e o pedido `draft` do cliente com os ids
+   * e a revisão que `update_order_quantity` exige.
+   */
+  readonly lembrete: LembreteDaConversa | null;
 }
 
 export interface EntradaDoContexto {
@@ -186,6 +194,10 @@ export async function montarContexto(
     },
   );
 
+  const lembrete = await lembreteDaConversa(ctx, entrada.conversation_id, {
+    ...(deps.pool === undefined ? {} : { pool: deps.pool }),
+  });
+
   return {
     organization_id: ctx.organization_id,
     conversa,
@@ -199,6 +211,7 @@ export async function montarContexto(
       fontes_consultadas: acervo.fontesConsultadas,
     },
     tools: toolsFor(ctx, "ai"),
+    lembrete,
   };
 }
 
@@ -244,6 +257,17 @@ export function instrucoesDoSistema(contexto: ContextoDoTurno): string {
       "",
       "ASSUNTOS PROIBIDOS PELA EMPRESA (peça handoff com reason \"tenant_rule\"):",
       proibidos.map((t) => `- ${String(t)}`).join("\n"),
+    );
+  }
+  if (contexto.lembrete !== null) {
+    linhas.push(
+      "",
+      "LEMBRETE DE PEDIDO RECORRENTE (§5.12):",
+      "O cliente está respondendo a um lembrete para repetir o pedido da semana. Extraia as",
+      "quantidades que ele escreveu e, se houver `pedido_draft` em LEMBRETE, chame",
+      "`update_order_quantity` com `order_id`, o `item_id` do item, `quantity` e",
+      "`expected_revision` = `revision` do pedido. Se não houver pedido draft, chame",
+      "`create_order` com os itens que ele pediu. Não invente quantidade: sem número, pergunte.",
     );
   }
 
@@ -317,6 +341,9 @@ export function contextoComoTexto(contexto: ContextoDoTurno): string {
       contexto.acervo.trechos.map((t) => ({ fonte: t.source_name, conteudo: t.content })),
     ),
     "",
+    ...(contexto.lembrete === null
+      ? []
+      : ["LEMBRETE DE PEDIDO RECORRENTE:", JSON.stringify(contexto.lembrete), ""]),
     `CONVERSA (estado ${contexto.conversa.estado}, últimas ${contexto.conversa.mensagens.length} mensagens):`,
     historico,
     "",

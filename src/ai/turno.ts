@@ -34,6 +34,16 @@
  *  5. AÇÃO DE RISCO ALTO (F05-T01): tool `high`/`blocked` no catálogo vira
  *     handoff EM VEZ de execução. Negar não é chamar gente — a recusa deixaria
  *     o cliente esperando por algo que ninguém soube que ele pediu.
+ *  2a. RESPOSTA TARDIA AO LEMBRETE (F05-T08, §7.6): se a conversa espera a
+ *     quantidade de um lembrete e a resposta chegou DEPOIS do `cutoff_at`
+ *     (`replied_late`, decidido pela entrada), o turno NÃO extrai quantidade
+ *     nem toca no pedido: chama gente (`tenant_rule`), sem gastar token — a
+ *     regra de exceção da empresa é configuração futura (D48), e o único
+ *     desfecho honesto até lá é humano. Roda entre o contexto e o provedor.
+ *  8. CONCLUSÃO DO LEMBRETE: quando a resposta ao lembrete virou pedido
+ *     (`update_order_quantity`/`create_order` executada ou pendente) ou
+ *     handoff, o turno fecha o ciclo (`concluirLembrete`) e a tag sai. Turno
+ *     que só conversou deixa a tag — a próxima mensagem ainda é do lembrete.
  *
  * ═══ Erro do provedor NÃO tem laço (F04-T09) ═══
  *
@@ -57,6 +67,7 @@ import { acoesDeRiscoAlto, gatilhoDeTexto } from "@/src/handoff/gatilhos";
 import { resumoDeterministico } from "@/src/handoff/motivos";
 import type { Embutidor } from "@/src/knowledge";
 import { incrementCounter } from "@/src/obs/counters";
+import { concluirLembrete, type DesfechoDoLembrete } from "@/src/reminder/resposta";
 import type { TenantCtx } from "@/src/tenant-context";
 import type { LlmEdgeConfig } from "@/lib/agent-engine/edge/llm/run-model-call";
 import type { ProviderRegistry } from "@/lib/agent-engine/edge/llm/providers";
@@ -246,6 +257,21 @@ async function responderAoCliente(
   }
 }
 
+/**
+ * Fecha o ciclo do lembrete (§5.12) quando o turno lhe deu um desfecho. Não é
+ * efeito de domínio — é a automação encerrando o próprio pedido de resposta,
+ * como `ai.reply_sent` encerra o da resposta.
+ */
+async function concluirSeLembrete(
+  ctx: TenantCtx,
+  contexto: ContextoDoTurno | null,
+  desfecho: DesfechoDoLembrete,
+  deps: DepsDoTurno,
+): Promise<void> {
+  if (contexto?.lembrete === null || contexto === null) return;
+  await concluirLembrete(ctx, contexto.lembrete.reminder_run_id, desfecho, { pool: deps.pool });
+}
+
 function silenciar(
   motivo: MotivoDoSilencio,
   estadoInicial: string | null,
@@ -313,6 +339,22 @@ export async function responderTurno(
   );
   if (contexto.settings["ai.enabled"] === false) {
     return silenciar("ia_desligada", conversa.estado);
+  }
+
+  // 2a. RESPOSTA TARDIA AO LEMBRETE (F05-T08) — antes do provedor, sem token.
+  if (contexto.lembrete?.replied_late === true) {
+    incrementCounter("ai_lembrete_resposta_tardia");
+    const resultado = await pedirHandoff(
+      ctx,
+      pedido,
+      "tenant_rule",
+      "resposta_apos_o_corte_do_lembrete",
+      estado,
+      conversa.estado,
+      deps,
+    );
+    await concluirSeLembrete(ctx, contexto, "handoff_late_reply", deps);
+    return resultado;
   }
 
   // 2b. UMA chamada ao provedor. Sem laço, sem segunda tentativa (F04-T09).
@@ -386,8 +428,11 @@ async function decidir(
   estadoInicial: string,
   deps: DepsDoTurno,
 ): Promise<ResultadoDoTurno> {
-  const handoff = (motivo: MotivoDoHandoff): Promise<ResultadoDoTurno> =>
-    pedirHandoff(ctx, pedido, motivo, saida.intent, estado, estadoInicial, deps);
+  const handoff = async (motivo: MotivoDoHandoff): Promise<ResultadoDoTurno> => {
+    const resultado = await pedirHandoff(ctx, pedido, motivo, saida.intent, estado, estadoInicial, deps);
+    await concluirSeLembrete(ctx, contexto, "handoff", deps);
+    return resultado;
+  };
 
   // 3a. O modelo reconheceu um pedido proibido que a barreira determinística
   //     não pegou. Vale como gatilho de segurança, nunca como permissão.
@@ -470,7 +515,7 @@ async function decidir(
   const arriscadas = acoesDeRiscoAlto(triagem.aceitas, contexto.tools);
   if (arriscadas.length > 0) {
     incrementCounter("ai_acao_de_risco_alto", { name: arriscadas[0]! });
-    return pedirHandoff(
+    const resultado = await pedirHandoff(
       ctx,
       pedido,
       "high_risk_action",
@@ -480,9 +525,12 @@ async function decidir(
       deps,
       arriscadas[0],
     );
+    await concluirSeLembrete(ctx, contexto, "handoff", deps);
+    return resultado;
   }
 
   let enviouPelaTool = false;
+  let desfechoDoLembrete: DesfechoDoLembrete | null = null;
   for (const chamada of triagem.aceitas) {
     const resultado = await execute(ctx, IA, chamada.name, chamada.input, depsDeAcao(deps));
     estado.tools.push({
@@ -494,7 +542,15 @@ async function decidir(
       enviouPelaTool = true;
       estado.enviadas += 1;
     }
+    // 8. A resposta ao lembrete virou PEDIDO — executado, ou pendente para o
+    //    attendant (D33). Recusa não conclui: o cliente respondeu e ninguém
+    //    registrou a quantidade; a tag fica para o próximo turno ou a pessoa.
+    if (resultado.status === "executed" || resultado.status === "pending") {
+      if (chamada.name === "update_order_quantity") desfechoDoLembrete = "order_updated";
+      else if (chamada.name === "create_order") desfechoDoLembrete ??= "order_created";
+    }
   }
+  if (desfechoDoLembrete !== null) await concluirSeLembrete(ctx, contexto, desfechoDoLembrete, deps);
 
   // 7. A RESPOSTA. Não duplica o que a tool já enviou: `reply` e um
   //    `send_message` pedido pelo modelo são o mesmo texto pedido duas vezes.
