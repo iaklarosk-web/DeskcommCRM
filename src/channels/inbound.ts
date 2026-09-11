@@ -114,6 +114,18 @@ export type ResultadoDaEntrada =
     }
   /** A linha já existia: reentrega reconhecida, nada escrito, 200. */
   | { readonly status: "duplicado"; readonly provider_message_id: string }
+  /**
+   * A mensagem foi gravada, mas a fronteira herdada não a atribuiu a nenhum
+   * atendimento: chegou antes do fechamento (`sent_at <= service_closed_at`)
+   * ou é de grupo. Nada se perde e nada se move; 200, e o fato é contado.
+   */
+  | {
+      readonly status: "fora_da_fronteira";
+      readonly conversation_id: string;
+      readonly contact_id: string;
+      readonly message_id: string;
+      readonly provider_message_id: string;
+    }
   | {
       readonly status: "ack_aplicado";
       readonly provider_message_id: string;
@@ -442,6 +454,44 @@ async function ingerirMensagem(
       // Reabertura, demanda e revisão de serviço são DELA. Só aceita id de
       // mensagem persistida, por isso vem depois do INSERT.
       await db.query(`select public.fn_service_inbound($1::uuid)`, [messageId]);
+
+      // ─── A fronteira herdada precede a máquina D16 ────────────────────────
+      //
+      // `fn_service_inbound` desiste em silêncio quando a mensagem chega
+      // ANTES do fechamento do atendimento (`m.sent_at <= c.service_closed_at`)
+      // ou quando a conversa é de grupo: nesses casos ela não carimba
+      // `messages.service_revision`, e a conversa permanece terminal. É a
+      // guarda de janela do ServiceBoundary, que a ADR-016 manda preservar.
+      //
+      // Sem esta leitura, a transição rodaria a partir de `archived` — e a
+      // linha D16 desse par declara o efeito `new_conversation`, que o schema
+      // herdado não comporta (`uniq_conversations_1to1_per_contact_session`
+      // tem uma conversa por contato e sessão, e oito provas dependem disso).
+      // O resultado medido era 500 numa mensagem legítima de cliente, com a
+      // linha já gravada e a transação desfeita. A mensagem NÃO se perde: ela
+      // fica persistida, fora da janela de serviço, e o fato é contado.
+      const fronteira = await db.query<{ service_revision: string | null; saas_state: string }>(
+        `select m.service_revision, c.saas_state
+           from public.messages m
+           join public.conversations c
+             on c.id = m.conversation_id and c.organization_id = m.organization_id
+          where m.id = $1 and m.organization_id = $2`,
+        [messageId, ctx.organization_id],
+      );
+      const linhaDaFronteira = fronteira.rows[0];
+      if (linhaDaFronteira === undefined || linhaDaFronteira.service_revision === null) {
+        incrementCounter("conversation_inbound_fora_da_fronteira", {
+          provider,
+          state: linhaDaFronteira?.saas_state ?? "desconhecido",
+        });
+        return {
+          status: "fora_da_fronteira",
+          conversation_id: conversationId,
+          contact_id: contactId,
+          message_id: messageId,
+          provider_message_id: evento.provider_message_id,
+        } as const;
+      }
 
       const movimento = await transition(
         ctx,

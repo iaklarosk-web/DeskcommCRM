@@ -82,6 +82,11 @@ export function criarHandlerDeWebhookSaas(deps: RecebeEntradaDeps = {}) {
         return ok({ accepted: true, replay: true }, { requestId });
       case "ingerido":
         return ok({ accepted: true, replay: false }, { requestId });
+      case "fora_da_fronteira":
+        // A mensagem ESTÁ gravada; a fronteira herdada é que não a atribuiu a
+        // nenhum atendimento (chegou antes do fechamento, ou é de grupo).
+        // 200 porque o provedor entregou certo: reentregar não mudaria nada.
+        return ok({ accepted: true, replay: false, in_service_window: false }, { requestId });
       case "ack_aplicado":
         return ok({ accepted: true, ack: resultado.ack_status }, { requestId });
       case "ack_sem_mensagem":

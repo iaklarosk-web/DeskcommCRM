@@ -174,6 +174,12 @@ rejeita payload sem `organization_id` e conta a recusa; o job é idempotente por
 `message_id`. Retry N=3 com backoff; na terceira falha o job vai para `blocked`
 com erro registrado e `notify(job.blocked)`.
 
+`notify(job.blocked)` na F03 é uma linha em `agent_inbox_items` com o `kind`
+herdado `job_dead` (`supabase/baseline.sql:6456-6458`), que já é o aviso
+operacional da organização. O módulo `src/notifications/` com os seis eventos e
+o e-mail transacional é F05-T02/T03 (§5.16): criá-lo aqui antecipa escopo de
+outra fase e deixa dois avisos concorrentes para o mesmo fato.
+
 Provas: `outbound-failure: attempts=3 final=sent` e
 `final=blocked error_logged=1 notified=1`;
 `outbound-queue: rejected_without_tenant=2/2 duplicate_sends=0/2`.
