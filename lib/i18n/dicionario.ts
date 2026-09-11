@@ -8488,6 +8488,24 @@ export const DICIONARIO: Traducoes = {
   "Indexando…": {"es":"Indexando…"},
   "Nenhum material ainda. Sem acervo, o agente responde o texto de “não sei”.": {"es":"Todavía no hay material. Sin acervo, el agente responde el texto de “no sé”."},
   "Como o agente fala, quando ele chama uma pessoa e o acervo desta empresa.": {"es":"Cómo habla el agente, cuándo llama a una persona y el acervo de esta empresa."},
+  // Tela de USO de IA do tenant_admin (F05-T09): tokens e custo estimado por período.
+  "Uso de IA desta empresa": {"es":"Uso de IA de esta empresa"},
+  "Tokens e custo estimado por período, somados do registro de uso — uma linha por chamada ao modelo.": {"es":"Tokens y costo estimado por período, sumados del registro de uso: una línea por llamada al modelo."},
+  "Período inválido; mostrando o mês corrente.": {"es":"Período inválido; mostrando el mes actual."},
+  "Este mês": {"es":"Este mes"},
+  "Mês passado": {"es":"Mes pasado"},
+  "Aplicar": {"es":"Aplicar"},
+  "Totais do período": {"es":"Totales del período"},
+  "Chamadas": {"es":"Llamadas"},
+  "Tokens de entrada": {"es":"Tokens de entrada"},
+  "Tokens de saída": {"es":"Tokens de salida"},
+  "Custo estimado": {"es":"Costo estimado"},
+  "centavos": {"es":"centavos"},
+  "Total de tokens": {"es":"Total de tokens"},
+  "Por modelo": {"es":"Por modelo"},
+  "Operação": {"es":"Operación"},
+  "Nenhuma chamada ao modelo neste período.": {"es":"Ninguna llamada al modelo en este período."},
+  "Tokens e custo estimado das chamadas ao modelo, por período.": {"es":"Tokens y costo estimado de las llamadas al modelo, por período."},
 };
 
 /**

@@ -114,14 +114,14 @@ export default async function AiUsagePage({
         ) : null}
         <div className="mt-3 flex flex-wrap gap-2 text-sm">
           <Link
-            className="rounded border px-3 py-1 hover:bg-muted"
+            className="rounded-md border px-3 py-1 hover:bg-muted"
             data-testid="uso-ia-este-mes"
             href={`${TELA}?desde=${esteMes.desde}&ate=${esteMes.ate}`}
           >
             {traduzir("Este mês", idioma)}
           </Link>
           <Link
-            className="rounded border px-3 py-1 hover:bg-muted"
+            className="rounded-md border px-3 py-1 hover:bg-muted"
             data-testid="uso-ia-mes-passado"
             href={`${TELA}?desde=${mesPassado.desde}&ate=${mesPassado.ate}`}
           >
@@ -131,13 +131,13 @@ export default async function AiUsagePage({
         <form method="get" action={TELA} className="mt-3 flex flex-wrap items-end gap-3 text-sm">
           <label className="flex flex-col gap-1">
             <span>{traduzir("De", idioma)}</span>
-            <input className="rounded border px-2 py-1" type="date" name="desde" defaultValue={datas.desde} data-testid="uso-ia-desde" />
+            <input className="rounded-md border px-2 py-1" type="date" name="desde" defaultValue={datas.desde} data-testid="uso-ia-desde" />
           </label>
           <label className="flex flex-col gap-1">
             <span>{traduzir("Até", idioma)}</span>
-            <input className="rounded border px-2 py-1" type="date" name="ate" defaultValue={datas.ate} data-testid="uso-ia-ate" />
+            <input className="rounded-md border px-2 py-1" type="date" name="ate" defaultValue={datas.ate} data-testid="uso-ia-ate" />
           </label>
-          <button type="submit" className="rounded border px-3 py-1 hover:bg-muted" data-testid="uso-ia-aplicar">
+          <button type="submit" className="rounded-md border px-3 py-1 hover:bg-muted" data-testid="uso-ia-aplicar">
             {traduzir("Aplicar", idioma)}
           </button>
         </form>
