@@ -635,6 +635,19 @@ export const NAV_CATALOG = [
     minRole: "admin",
   },
   {
+    // Fica em Organização, e não em IA, porque o que se configura aqui é o que o
+    // agente pode dizer EM NOME DESTA EMPRESA — persona, resposta de "não sei",
+    // limiar de confiança e acervo do tenant. O grupo `ia` é a oficina do
+    // agente (versões, provedores, execuções); este é o contrato comercial dele.
+    href: "/app/settings/tenant/ia",
+    label: "Agente de IA",
+    description: "Como o agente fala, quando ele chama uma pessoa e o acervo desta empresa.",
+    icon: "Brain",
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "admin",
+  },
+  {
     // Mora em Organização e não em Canais de propósito: o que se configura aqui
     // é a CONTA DE ANÚNCIOS da empresa — dinheiro e identidade comercial, ao lado
     // de billing e API tokens. Canais é por onde se FALA com o cliente, e os dois

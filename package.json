@@ -34,7 +34,8 @@
     "worker": "tsx --env-file=.env --env-file=.env.local workers/agent-worker/main.ts",
     "dev:crons": "tsx --env-file=.env --env-file=.env.local scripts/dev-crons.ts",
     "flywheel:judge": "tsx --env-file=.env --env-file=.env.local scripts/flywheel-judge-live.ts",
-    "test:integration": "bash scripts/test-integration.sh"
+    "test:integration": "bash scripts/test-integration.sh",
+    "ai:eval": "tsx scripts/ai-eval.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.16",
