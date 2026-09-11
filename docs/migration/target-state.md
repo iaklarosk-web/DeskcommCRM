@@ -1,5 +1,33 @@
 # target-state — revisão para Deskcomm v1.17.0 e pedidos do dia
 
+## Checkpoint F03 — Conversation, Channel Adapter e Inbox
+
+Este bloco tem precedência sobre as descrições anteriores das linhas 5.6, 5.7 e
+5.13. Decisões em [ADR-016](../decisions/ADR-016-conversa-d16-sobre-o-ciclo-herdado.md),
+[ADR-017](../decisions/ADR-017-canal-saas-e-webhook.md),
+[ADR-018](../decisions/ADR-018-verify-v1.1.md) e
+[ADR-019](../decisions/ADR-019-conversa-arquivada-e-a-janela-de-servico.md);
+desenho em [F03](../design/F03-conversation-inbox.md).
+
+| Superfície | Implementação | Onde |
+|---|---|---|
+| Estados D16 | Coluna `conversations.saas_state` com CHECK dos oito estados; `transition()` é a única autoridade de evento e delega o lado legado a `fn_service_status`/`fn_conversation_assign`; gatilho `trg_saas_state_project` traduz escrita legada pelo mapa total, suprimido quando o movimento veio da autoridade | `src/conversation/`, migration 9013 |
+| Contrato de canal | `SaasChannelAdapter` com dois adapters: `waha` embrulha o herdado, `mock` grava em `mock_outbox`. O `ChannelAdapter` de `lib/channels/types.ts` segue servindo as rotas herdadas | `src/channels/`, migration 9014 |
+| Tenant do webhook | Rota nova resolve por `channel_accounts` antes de qualquer escrita; sem match vai para `webhook_quarantine` com contador e 202. `channel_accounts` ganhou `phone_e164` e `channel_session_id` — o vínculo explícito com a sessão herdada, exigido porque `conversations`/`messages` têm `channel_session_id NOT NULL` | `app/api/v1/webhooks/saas/[provider]`, migration 9015 |
+| Idempotência | Índice único parcial `(organization_id, provider, external_id)`; a constraint herdada `messages_org_external_id_unique` permanece | migration 9015 |
+| Janela de serviço | A fronteira herdada precede a máquina: mensagem que `fn_service_inbound` não atribui a atendimento fica gravada, não transiciona e é contada (ADR-019) | `src/channels/inbound.ts` |
+| Envio e fila | `send_message` no catálogo de ações; `job_queue` ganhou o kind `outbound_message` e o status `blocked` por adição; `job_runs` registra cada tentativa; worker de saída sobe como processo solto | `src/actions/`, `src/jobs/`, `workers/saida-worker.ts`, migration 9016 |
+| Inbox | As cinco ações atravessam `transition()`; assumir a partir de `ai_handling` é `handoff.requested` + `human.claimed`, duas transições legais; estado D16 visível na lista e no cabeçalho, com filtro por estado e responsável | `lib/inbox/`, `components/inbox/`, rotas de `conversations` |
+| Verificador v1.1 | F03 entra na lista de fases com gate completo, herdando os controles fechados de F02; `webhook` passa a ser medido; inventário de specs por fase | `scripts/verify.sh`, `scripts/verify/`, ADR-018 |
+| Sandbox | `scripts/verify/sandbox.sh` deriva o ambiente descartável do `config.toml` versionado por substituições conferidas, cria as extensões que o baseline referencia e não cria, e derruba só o que subiu | `scripts/verify/sandbox.sh` |
+
+Limites desta fase: Meta Cloud, Instagram, e-mail de entrada e webchat seguem
+fora (D05); número real da Deka é item humano (D04); toda a execução usa
+`WHATSAPP_MODE=mock` com empresas fictícias e nenhuma mensagem sai para pessoa.
+A conversa nova a partir de `archived` que D34 pede **não** foi entregue: o
+índice `uniq_conversations_1to1_per_contact_session` tem nove dependentes
+provados e a mudança é decisão do proprietário (ADR-019).
+
 ## Checkpoint F02 concluído tecnicamente — 03ec6a3b56826ab882782efb1dd5185f47e52a8c
 
 Este checkpoint tem precedência sobre descrições históricas do estado atual.
