@@ -1,40 +1,67 @@
 ---
-updated_at: 2026-09-11T08:10:41Z
-head_commit: 6d742a6bc2f6c080055c9200c2b0aaf613b1b75b   # código validado pelo gate f03-gate-03; commits posteriores somente documentais
+updated_at: 2026-09-11T16:25:11Z
+head_commit: 76c0b00bdadd2d21c0527bf3a34a0879d6ec8130   # código validado pelo gate f04-gate-01; inclui F05-T01..T04/T10 (não gateados como F05)
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
-plan_version: "2.4 (2026-09-11); D38–D49; ADR-006…021"
+plan_version: "2.4 (2026-09-11); D38–D49; ADR-006…025"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
-current_phase: F03
-next_task: F04-T01             # D49 suspendeu a pausa por fase; a cadeia é F04→F07→F11→F17
+current_phase: F04
+next_task: F05-T05             # F05-T01..T04 e T10 prontos; faltam T05 notificações, T06-T08 lembrete, T09 tela de uso
 status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
 hosting_confirmed: no          # confirmar D03 antes da F06; orçamento proposto não aprova contratação
 build_env: "Claude Code na VPS, worktree DeskcommCRM-v1.17.0; validação em serviços/bancos descartáveis; WHATSAPP_MODE=mock AI_PROVIDER=mock"
-verify_summary_last_context: "f03-gate-03 aprovado em 11/09/2026 sobre 6d742a6b, 4031s, exit 0. F03 concluída tecnicamente; a construção segue para F04 por D49. Não é READY_STAGING nem aceite comercial."
+verify_summary_last_context: "f04-gate-01 aprovado em 11/09/2026 sobre 76c0b00b, 5143s, exit 0, primeira tentativa. F04 concluída tecnicamente; F05 parcial na árvore. Não é READY_STAGING nem aceite comercial."
 verify_summary_last: |
   VERIFY SUMMARY
-  scope=phase phase=F03 current_phase=F03
+  scope=phase phase=F04 current_phase=F04
   build=ok lint=ok typecheck=ok shell=ok
-  unit=8408/8408 integration=87/87 db=1616/1616 e2e=27/27 baseline_n0=8997
-  baseline_comparable: scope=unit+db passed=10024 required=8738 full_n0=pending
-  e2e_scope: F03-required passed=27/27 specs=8/8
-  isolation: tables=129 ops=4 dirs=2 leaks=0 (material_cross_org=92/129)
-  rls-coverage: tables_with_org_id=129 policies_found=116 missing=0 service_only_with_grant=0
+  unit=8462/8462 integration=128/128 db=1637/1637 e2e=37/37 baseline_n0=8997
+  baseline_comparable: scope=unit+db passed=10099 required=8738 full_n0=pending
+  e2e_scope: F04-required passed=37/37 specs=9/9
+  isolation: tables=132 ops=4 dirs=2 leaks=0 (material_cross_org=95/132)
+  rls-coverage: tables_with_org_id=132 policies_found=116 missing=0 service_only_with_grant=0
   rbac: roles=3 denied_expected=19 denied_actual=19
-  entitlement: usage_events_written=2
-  ai_eval: cases=pending pass=pending unknown=pending injection=pending cross_tenant=pending provider_calls_at_zero_balance=pending
+  entitlement: usage_events_written=23
+  ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0
   handoff: ai_msgs_after_handoff=pending summary=pending assignee=pending notify=pending
   reminder: runs=pending sent=pending duplicates=pending
   webhook: replay=2 stored=1 tables_checked=7
-  replicability: e2e[fictitious_A_B]=27/27 specs=8/8 grep_deka_in_src=0
-  secrets: files_scanned=420 findings=0
-  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=36/36
+  replicability: e2e[fictitious_A_B]=37/37 specs=9/9 grep_deka_in_src=0
+  secrets: files_scanned=453 findings=0
+  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=46/46
   debt_known=0 skip_only_occurrences=15 violations=0
-  STATUS: READY (F03)
+  STATUS: READY (F04)
 ---
 
 # BUILD-STATE
+
+## Estado vigente — F04 concluída em 11/09/2026; F05 parcial; construção pausada para troca de sessão
+
+`./scripts/verify.sh` saiu 0 com `STATUS: READY (F04)` sobre `76c0b00b`, em
+5143 s (85,7 min), na primeira tentativa e com zero violações: unit 8462/8462,
+integração 128/128, banco 1637/1637, navegador 37/37 em nove specs, mutantes
+46/46, nenhum teste apagado, pulado ou pendente. `ai_eval` foi medido:
+`cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5
+provider_calls_at_zero_balance=0`. Os 3.463 arquivos de entrada conservaram o
+SHA-256 antes e depois. [Evidência F04](docs/migration/evidence/construction-f04-20260911.txt).
+
+F05 tem T01–T04 (handoff: oito motivos em enum, dossiê de sete campos, fila de
+claim, guarda pós-handoff) e T10 (verificador v1.3) na árvore, provados
+focalmente e cobertos pelo gate acima como código, **não** como fase: as
+linhas `handoff` e `reminder` seguem `pending` de propósito. Faltam T05
+(notificações), T06–T08 (lembrete recorrente) e T09 (tela de uso de IA).
+`next_task: F05-T05`.
+
+F06 está bloqueada por `hosting_confirmed: no` (§7.7, D03, D11). F07 depende
+dela. Portões do proprietário, achados abertos e o mapa de retomada estão em
+[VARREDURA-MELHORIAS](docs/migration/VARREDURA-MELHORIAS.md) e
+[RETOMADA-20260911](docs/migration/RETOMADA-20260911.md).
+
+O push da branch está bloqueado por falta do escopo `workflow` no token do
+`gh`; tudo está commitado localmente. Sandbox descartável derrubado, zero
+containers e portas livres.
+
 
 ## Estado vigente — F03 concluída em 11/09/2026
 
