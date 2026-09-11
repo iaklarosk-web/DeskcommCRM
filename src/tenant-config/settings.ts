@@ -5,7 +5,7 @@
  * esquecimento de filtro aqui não vira vazamento — vira linha nenhuma.
  */
 import { incrementCounter } from "@/src/obs/counters";
-import type { ServicePool } from "@/src/tenant-context/db";
+import { getServicePool, type ServicePool } from "@/src/tenant-context/db";
 import { withTenant, type TenantCtx, type TenantDb } from "@/src/tenant-context";
 import { marcaDaOrganizacaoDeSettings } from "@/lib/branding/organizacao";
 import {
@@ -287,6 +287,32 @@ export async function setSetting(
     },
     deps,
   );
+}
+
+/**
+ * Os tenants cuja chave `orders.recurring_reminder` está com `enabled=true` —
+ * a fonte de `listEligible("orders.recurring_reminder")` de §5.1/§5.12.
+ *
+ * É a ÚNICA leitura cross-tenant deste módulo, e é só leitura: descobrir QUEM
+ * é elegível é justamente o passo que ainda não tem tenant (a mesma separação
+ * de `candidatosDeSaida` no worker de saída). Devolve ids; cada tenant é então
+ * visitado dentro do seu `withTenant` por `forEachEligibleTenant`. Continua
+ * valendo o invariante 4 de §5.2: ninguém fora daqui lê `tenant_settings`.
+ */
+export async function listarTenantsComLembreteLigado(
+  deps: { pool?: ServicePool } = {},
+): Promise<string[]> {
+  const pool = deps.pool ?? (await getServicePool());
+  const r = await pool.query<{ organization_id: string }>(
+    `select ts.organization_id
+       from public.tenant_settings ts
+       join public.organizations o on o.id = ts.organization_id
+      where ts.key = 'orders.recurring_reminder'
+        and (ts.value->>'enabled')::boolean is true
+        and o.status = 'active'
+      order by ts.organization_id`,
+  );
+  return r.rows.map((linha) => linha.organization_id);
 }
 
 /** Alimenta a UI de configuração do tenant_admin e os testes derivados. */

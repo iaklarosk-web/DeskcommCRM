@@ -384,6 +384,19 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "dois tenants, 4/4 para anon, service_role escreve e lê de volta; os seis " +
       "eventos no CHECK e destinatário/assunto/corpo não vazios conferidos à parte.",
   },
+  // F05-T06 (§5.12, migration 9022). Registro da automação, lido pelo job, pela
+  // entrada e pelo turno via `withTenant`; a FK composta para `contacts` é o
+  // que impede cliente de outro tenant. A prova mede a RECUSA.
+  {
+    tabela: "reminder_runs",
+    razao:
+      "tests/invariants/f05-t06-reminder-schema.test.ts — duas organizações e " +
+      "dois usuários reais; `permission denied` medido sob `set local role " +
+      "authenticated` + JWT nas quatro operações para os DOIS usuários (8/8), " +
+      "as mesmas quatro negadas para `anon` (4/4) e controle positivo de " +
+      "`service_role` que escreve e lê a linha de volta. Catálogo, índice único " +
+      "do período, FK composta cruzada e as CHECKs de coerência conferidos à parte.",
+  },
 ];
 
 /**

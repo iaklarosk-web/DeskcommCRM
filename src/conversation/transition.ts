@@ -166,11 +166,17 @@ async function aplicarEfeito(
       );
       return;
     }
+    case "create_conversation_if_absent":
+      // Alcançar `transition()` já significa que a conversa EXISTE (ela foi
+      // travada `for no key update` acima): o efeito está cumprido por
+      // construção. O caso "nenhuma" da tabela de §5.6 — não há conversa para
+      // travar — é `iniciarPorAutomacao()`, abaixo, que cria a linha e a põe
+      // em `waiting_customer` sem passar por aqui.
+      return;
     case "append_message":
     case "new_conversation":
     case "notify_customer_replied_while_human":
     case "create_handoff":
-    case "create_conversation_if_absent":
       throw new EffectNotImplemented(effect);
     default: {
       // Efeito novo na tabela sem linha aqui vira erro de compilação.
@@ -275,4 +281,121 @@ export async function transition(
     },
     { pool: deps.pool },
   );
+}
+
+/**
+ * O caso "nenhuma" da linha `automation.outbound` de §5.6: "a partir de
+ * nenhuma a conversa é criada" e nasce em `waiting_customer`.
+ *
+ * ─── Por que não é `transition()` ──────────────────────────────────────────
+ *
+ * `transition()` valida um par `(estado, evento)`, e "nenhuma" não é estado —
+ * não há linha para travar nem `from` para consultar na tabela. A tabela D16
+ * declara o evento legal a partir de `resolved` e `waiting_customer`; qualquer
+ * OUTRO estado (`open`, `ai_handling`, `waiting_human`, `human_handling`,
+ * `waiting_confirmation`, `archived`) é uma conversa OCUPADA, e a automação não
+ * fala no meio dela — a recusa sobe como `IllegalTransition`, que é a mesma
+ * recusa que `transition()` daria.
+ *
+ * ─── O que este arquivo continua sendo ─────────────────────────────────────
+ *
+ * O único código de aplicação que escreve `saas_state` (ADR-016). A linha nova
+ * é criada pela RPC herdada `fn_upsert_wa_conversation` (a MESMA que a entrada
+ * usa; `uniq_conversations_1to1_per_contact_session` continua sendo a
+ * identidade) e recebe o estado D16 aqui, na mesma transação, com o legado
+ * projetado por `fn_service_status` como em todo movimento. Se a conversa já
+ * existia — inclusive por corrida com uma entrada simultânea, serializada por
+ * `fn_service_lock` —, o caminho volta a ser `transition()`, com o par
+ * validado contra a tabela.
+ */
+export interface InicioPorAutomacao {
+  readonly conversation_id: string;
+  /** `null` quando a conversa acabou de ser criada ("nenhuma"). */
+  readonly from: ConversationState | null;
+  readonly to: ConversationState;
+  readonly created: boolean;
+}
+
+export async function iniciarPorAutomacao(
+  ctx: TenantCtx,
+  alvo: { readonly contact_id: string; readonly channel_session_id: string },
+  deps: TransitionDeps = {},
+): Promise<InicioPorAutomacao> {
+  const existente = await withTenant(
+    ctx,
+    async (db) => {
+      const r = await db.query<{ id: string }>(
+        `select id from public.conversations
+          where organization_id = $1 and contact_id = $2 and channel_session_id = $3
+            and is_group = false`,
+        [ctx.organization_id, alvo.contact_id, alvo.channel_session_id],
+      );
+      return r.rows[0]?.id ?? null;
+    },
+    { pool: deps.pool },
+  );
+
+  if (existente === null) {
+    const criada = await withTenant(
+      ctx,
+      async (db) => {
+        // Serializa com a entrada (§5.7): duas criações simultâneas da mesma
+        // pessoa terminam com uma criando e a outra vendo a criada.
+        await db.query(`select public.fn_service_lock($1::uuid,$2::uuid)`, [
+          ctx.organization_id,
+          alvo.contact_id,
+        ]);
+        const upsert = await db.query<{ fn_upsert_wa_conversation: string | null }>(
+          `select public.fn_upsert_wa_conversation($1::uuid,$2::uuid,$3::uuid)`,
+          [ctx.organization_id, alvo.contact_id, alvo.channel_session_id],
+        );
+        const id = upsert.rows[0]?.fn_upsert_wa_conversation ?? null;
+        if (id === null) throw new Error("fn_upsert_wa_conversation não devolveu conversa para a automação");
+
+        // Criada NESTA transação ⇔ `created_at = now()` (o default da coluna é
+        // o `now()` da transação). Se outra sessão criou entre a leitura e o
+        // lock, a linha é mais velha e o caminho é o de conversa existente.
+        const linha = await db.query<{ nova: boolean; service_revision: string; status: LegacyStatus }>(
+          `select (created_at = now()) as nova, service_revision, status
+             from public.conversations where id = $1 and organization_id = $2
+             for no key update`,
+          [id, ctx.organization_id],
+        );
+        const atual = linha.rows[0];
+        if (atual === undefined || !atual.nova) return { id, nova: false as const };
+
+        const to: ConversationState = "waiting_customer";
+        await db.query(`select set_config('app.conversation_transition','1',true)`);
+        const legado = D16_TO_LEGACY[to];
+        if (legado !== atual.status) {
+          await db.query(`select public.fn_service_status($1::uuid,$2::uuid,$3::text,$4::bigint)`, [
+            ctx.organization_id,
+            id,
+            legado,
+            atual.service_revision,
+          ]);
+        }
+        await db.query(
+          `update public.conversations
+              set saas_state = $3, saas_state_entered_at = clock_timestamp()
+            where id = $1 and organization_id = $2`,
+          [id, ctx.organization_id, to],
+        );
+        if (deps.effects !== undefined) {
+          await deps.effects(db, ctx, id, "create_conversation_if_absent", { kind: "automation" });
+        }
+        incrementCounter("conversation_created_by_automation");
+        return { id, nova: true as const, to };
+      },
+      { pool: deps.pool },
+    );
+    if (criada.nova) {
+      return { conversation_id: criada.id, from: null, to: criada.to, created: true };
+    }
+    const movimento = await transition(ctx, criada.id, "automation.outbound", { kind: "automation" }, deps);
+    return { conversation_id: criada.id, from: movimento.from, to: movimento.to, created: false };
+  }
+
+  const movimento = await transition(ctx, existente, "automation.outbound", { kind: "automation" }, deps);
+  return { conversation_id: existente, from: movimento.from, to: movimento.to, created: false };
 }

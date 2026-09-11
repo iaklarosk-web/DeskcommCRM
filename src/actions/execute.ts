@@ -63,6 +63,13 @@ export interface ActionResult {
   readonly output: Record<string, unknown> | null;
   readonly audit_id: string;
   readonly reason?: ActionDenyReason;
+  /**
+   * O código do DOMÍNIO por trás de uma recusa `domain_rejected` (ou o do
+   * movimento recusado), quando houver — o mesmo que vai ao `payload` da
+   * auditoria. Etiqueta, nunca frase (G-78). Existe desde a F05-T08 para que
+   * o corte do lembrete grave POR QUE a tarefa não nasceu.
+   */
+  readonly detalhe?: string;
   /** Preenchido só quando `status = "pending"` — é o id que `confirm()` recebe. */
   readonly pending_action_id?: string;
 }
@@ -191,7 +198,13 @@ export async function negar(
     },
     deps,
   );
-  return { status: "denied", output: null, audit_id: auditId, reason };
+  return {
+    status: "denied",
+    output: null,
+    audit_id: auditId,
+    reason,
+    ...(detalhe === undefined ? {} : { detalhe }),
+  };
 }
 
 /** O que `execute()` e `confirm()` fazem com o desfecho de um handler. */

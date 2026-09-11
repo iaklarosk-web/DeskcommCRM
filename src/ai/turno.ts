@@ -4,7 +4,7 @@
  * §5.9: "Sabe: montar contexto, chamar o provedor, interpretar a saída
  * estruturada e decidir entre responder, executar Action ou pedir handoff. NÃO
  * EXECUTA NADA: só chama `Action Policy.execute`." Este arquivo é literalmente
- * isso — não há uma escrita de domínio aqui, nem um `adapter.send`, nem um
+ * isso — não há uma escrita de domínio aqui, nem uma chamada ao adapter de canal, nem um
  * `update` de `conversations`. Todo efeito sai por `execute()` (§5.8) ou por
  * `transition()` (§5.6).
  *

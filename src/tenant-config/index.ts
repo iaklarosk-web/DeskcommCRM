@@ -16,6 +16,7 @@ export {
   getStoredSetting,
   CanonicalSettingUnavailableError,
   InvalidSettingError,
+  listarTenantsComLembreteLigado,
   listSchema,
   setSetting,
   UnknownSettingError,

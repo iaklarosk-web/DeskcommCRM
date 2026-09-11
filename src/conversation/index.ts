@@ -38,9 +38,18 @@ export {
   EffectNotImplemented,
   type EffectExecutor,
   IllegalTransition,
+  iniciarPorAutomacao,
   transition,
   type IllegalReason,
+  type InicioPorAutomacao,
   type TransitionActorRef,
   type TransitionDeps,
   type TransitionResult,
 } from "./transition";
+export {
+  CONVERSATION_TAGS,
+  limparTag,
+  marcarTag,
+  tagsDaConversa,
+  type ConversationTag,
+} from "./tags";
