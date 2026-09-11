@@ -40,11 +40,17 @@ export const transferToHuman: ToolRunner = bind(
   transferToHumanInputSchema,
   async ({ ctx, actor, deps }, input) => {
     let itemDeInbox = "";
+    let dossie = "";
     try {
       // O ator da TABELA D16 para `handoff.requested` é `ai` ou `system`. Um
       // humano que empurra a conversa para a fila entra como `system` (o
       // "gatilho D19" da linha); QUEM puxou o gatilho fica em
       // `audit_events.actor_id`, que é onde identidade mora.
+      //
+      // `created_by` do dossiê (§5.11) é OUTRA pergunta e por isso tem outro
+      // valor: ali interessa se o dossiê nasceu da IA, de um gatilho de sistema
+      // ou de uma pessoa — e `automation` vira `system`, porque o cron também é
+      // gatilho e não é gente.
       const movimento = await transition(
         ctx,
         input.conversation_id,
@@ -54,18 +60,28 @@ export const transferToHuman: ToolRunner = bind(
           pool: deps.pool,
           effects: async (db, ctxEfeito, conversationId, efeito) => {
             if (efeito !== "create_handoff") return false;
-            itemDeInbox = await gravarItemDeHandoff(db, ctxEfeito, {
+            const gravado = await gravarItemDeHandoff(db, ctxEfeito, {
               conversation_id: conversationId,
               reason: input.reason,
               summary: input.summary,
+              intent: input.intent,
+              pending_action: input.pending_action,
+              created_by: actor.kind === "automation" ? "system" : actor.kind,
             });
+            itemDeInbox = gravado.inbox_item_id;
+            dossie = gravado.handoff_id;
             return true;
           },
         },
       );
       return {
         ok: true,
-        output: { from: movimento.from, to: movimento.to, inbox_item_id: itemDeInbox },
+        output: {
+          from: movimento.from,
+          to: movimento.to,
+          inbox_item_id: itemDeInbox,
+          handoff_id: dossie,
+        },
         resourceId: input.conversation_id,
       };
     } catch (erro) {

@@ -200,14 +200,41 @@ export const createTaskOutputSchema = z.strictObject({
 export const transferToHumanInputSchema = z.strictObject({
   conversation_id: uuid,
   reason: z.enum(HANDOFF_REASONS),
-  /** §5.11 pede ≥1 frase. O resumo de sete campos é de F05; aqui é o texto. */
+  /**
+   * §5.11 pede ≥1 frase. É a BASE do campo `summary` do dossiê de sete campos
+   * (F05-T02): quando o texto já é uma frase, ele prevalece sobre o template —
+   * é o caso do atendente que escreve por que está passando a conversa adiante,
+   * e trocá-lo por um texto de catálogo apagaria a única informação que só ele
+   * tem. Os outros seis campos são montados do checkpoint/histórico.
+   */
   summary: texto(2000),
+  /**
+   * A etiqueta de intenção que o turno leu (campo `intent` de D19). Opcional
+   * porque nem todo chamador tem uma — o atendente que manda a conversa para a
+   * fila não leu intenção nenhuma —, e ausente cai no padrão do motivo. NUNCA
+   * frase: `intent` é campo de filtro na fila (G-78).
+   */
+  intent: z.string().trim().max(120).optional(),
+  /**
+   * A Action do catálogo que ficou pendurada (§5.11,
+   * `requestHandoff(..., pending_action?)`). AUSENTE = o montador procura a
+   * pendência aberta da conversa no banco; `null` EXPLÍCITO = o chamador afirma
+   * que não há. A distinção existe para que "não procurei" e "procurei e não
+   * havia" não virem a mesma coisa dentro do dossiê.
+   */
+  pending_action: z.string().trim().max(120).nullable().optional(),
 });
 
 export const transferToHumanOutputSchema = z.strictObject({
   from: z.string(),
   to: z.string(),
   inbox_item_id: z.string(),
+  /**
+   * O dossiê de §5.11 (F05-T01/T02). Deduplicado por EPISÓDIO: repetir o
+   * handoff na mesma conversa ainda aberta devolve o MESMO id, como o aviso
+   * herdado já fazia.
+   */
+  handoff_id: z.string(),
 });
 
 export const requestConfirmationInputSchema = z.strictObject({

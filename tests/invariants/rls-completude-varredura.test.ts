@@ -336,6 +336,31 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "inserindo e lendo de volta (guarda de vacuidade). O catálogo " +
       "service_only continua conferido no caso `job_runs é service_only (D35)`.",
   },
+  // ─── migration 9020 (F05) — mesma postura deny-all (D35) ───
+  //
+  // O dossiê de handoff (§5.11) carrega o TEXTO da conversa do cliente: nome,
+  // últimas cinco mensagens, resumo. Servi-lo pelo PostgREST seria pôr o
+  // conteúdo da conversa a uma anon key de distância — e um registro que o
+  // navegador lê é um registro que o navegador pode escrever. A fila do
+  // atendente é servida pelo SERVIDOR (`src/handoff/registro.ts`, via
+  // `withTenant`). Como nas entradas acima, a prova mede a RECUSA, não a
+  // contagem cross-org: sem privilégio nenhum não há regra de tenant para
+  // acertar, e em `TABLES` o `countAs` receberia `permission denied` onde
+  // espera `0`.
+  {
+    tabela: "handoffs",
+    razao:
+      "tests/invariants/f05-t01-handoff-schema.test.ts — duas organizações e " +
+      "dois usuários reais em auth.users/user_organizations; `permission denied` " +
+      "medido sob `set local role authenticated` + JWT nas quatro operações " +
+      "(select/insert/update/delete) para os DOIS usuários (8/8), as mesmas " +
+      "quatro negadas para `anon` (4/4) e controle positivo de `service_role` " +
+      "que escreve e lê a linha de volta (guarda de vacuidade). O catálogo " +
+      "— RLS ligada, zero policies, relacl sem anon/authenticated/PUBLIC — é " +
+      "conferido à parte no caso `handoffs é service_only (D35)`, junto com os " +
+      "oito motivos do enum, as cinco posições de `last_messages`, a unicidade " +
+      "do dossiê aberto por conversa e a coerência claimed_by ⇔ claimed_at.",
+  },
 ];
 
 /**

@@ -18,12 +18,22 @@
  *     contexto — o dado do tenant nem chega a ser lido, que é a forma mais
  *     forte de "sem dado do tenant" (§5.9).
  *  2. CONTEXTO (F04-T04) e UMA chamada ao provedor, pela porta de `chamada.ts`.
+ *  2b. GATILHOS DETERMINÍSTICOS de D19 (F05-T01): pedido explícito de atendente,
+ *     reclamação e assunto proibido pelo tenant. Rodam DEPOIS do provedor — ver
+ *     `src/handoff/gatilhos.ts` — e por isso são um PISO: só acrescentam o
+ *     handoff que o modelo deixou passar, nunca apagam o que ele pediu. Vêm
+ *     antes do "fora da base" e do limiar porque são mais FIÉIS ao que o cliente
+ *     escreveu: um pedido explícito de gente respondido com confiança baixa é
+ *     `customer_request`, não `low_confidence`.
  *  3. FORA DA BASE antes do LIMIAR. A ordem importa: uma resposta de "não sei"
  *     costuma vir com confiança baixa, e testar o limiar primeiro faria a
  *     PRIMEIRA pergunta fora da base virar handoff — quando D19 manda responder
  *     `ai.unknown_answer` e só chamar humano na SEGUNDA.
  *  4. LIMIAR (D19, G-77), depois o handoff que o próprio modelo pediu, e só
  *     então as tools — uma resposta em que não se confia não executa ação.
+ *  5. AÇÃO DE RISCO ALTO (F05-T01): tool `high`/`blocked` no catálogo vira
+ *     handoff EM VEZ de execução. Negar não é chamar gente — a recusa deixaria
+ *     o cliente esperando por algo que ninguém soube que ele pediu.
  *
  * ═══ Erro do provedor NÃO tem laço (F04-T09) ═══
  *
@@ -43,6 +53,8 @@ import {
 } from "@/src/actions";
 import { IllegalTransition, transition } from "@/src/conversation";
 import { EntitlementDenied } from "@/src/entitlement";
+import { acoesDeRiscoAlto, gatilhoDeTexto } from "@/src/handoff/gatilhos";
+import { resumoDeterministico } from "@/src/handoff/motivos";
 import type { Embutidor } from "@/src/knowledge";
 import { incrementCounter } from "@/src/obs/counters";
 import type { TenantCtx } from "@/src/tenant-context";
@@ -127,31 +139,6 @@ export interface DepsDoTurno {
 
 const IA = { kind: "ai" } as const;
 
-/**
- * O resumo do handoff da F04 é TEMPLATE, sempre — inclusive fora do
- * `provider_error`.
- *
- * §5.11 exige o resumo de sete campos e permite uma chamada `ai.summary` para
- * gerá-lo; isso é F05-T02. Aqui o resumo é determinístico porque os dois motivos
- * mais prováveis de handoff nesta fase — provedor fora do ar e injeção — são
- * exatamente aqueles em que pedir texto ao modelo seria pedir ao componente que
- * falhou, ou ao texto que se está tentando conter.
- */
-function resumoDeterministico(motivo: MotivoDoHandoff, intent: string): string {
-  const porque: Record<MotivoDoHandoff, string> = {
-    customer_request: "O cliente pediu para falar com uma pessoa.",
-    high_risk_action: "A ação pedida exige autorização humana.",
-    low_confidence: "A IA não teve confiança suficiente na própria resposta.",
-    out_of_knowledge: "A pergunta não é coberta pela base de conhecimento do tenant.",
-    complaint: "O cliente demonstrou insatisfação.",
-    provider_error: "O provedor de IA falhou nesta conversa; nenhuma nova tentativa foi feita.",
-    tenant_rule: "Uma regra do tenant interrompeu o atendimento automático.",
-    forbidden_request:
-      "O texto recebido pediu configuração, dado de outro cliente ou quebra de regra.",
-  };
-  return `${porque[motivo]} Intenção lida: ${intent}.`;
-}
-
 interface EstadoDoTurno {
   chamadas: number;
   confidence: number;
@@ -169,7 +156,14 @@ function depsDeAcao(deps: DepsDoTurno): ExecuteDeps {
   };
 }
 
-/** O handoff, pela ÚNICA porta que existe: a tool `transfer_to_human` (§5.8). */
+/**
+ * O handoff, pela ÚNICA porta que existe: a tool `transfer_to_human` (§5.8).
+ *
+ * `intent` e `pending_action` viajam junto desde a F05-T02: são dois dos sete
+ * campos do dossiê de §5.11, e são os únicos que só o TURNO conhece — o montador
+ * do resumo sabe ler o histórico e a pendência aberta do banco, mas não sabe o
+ * que o modelo leu como intenção nem qual tool provocou a passagem.
+ */
 async function pedirHandoff(
   ctx: TenantCtx,
   pedido: PedidoDoTurno,
@@ -178,6 +172,7 @@ async function pedirHandoff(
   estado: EstadoDoTurno,
   estadoInicial: string | null,
   deps: DepsDoTurno,
+  pendingAction?: string,
 ): Promise<ResultadoDoTurno> {
   const resultado = await execute(
     ctx,
@@ -187,6 +182,8 @@ async function pedirHandoff(
       conversation_id: pedido.conversation_id,
       reason: motivo,
       summary: resumoDeterministico(motivo, intent),
+      intent,
+      ...(pendingAction === undefined ? {} : { pending_action: pendingAction }),
     },
     depsDeAcao(deps),
   );
@@ -399,6 +396,24 @@ async function decidir(
     return handoff("forbidden_request");
   }
 
+  // 3a-bis. A CAMADA DETERMINÍSTICA de F05-T01 (`customer_request`,
+  //         `complaint`, `tenant_rule`). Vem DEPOIS do provedor de propósito —
+  //         ver o cabeçalho de `src/handoff/gatilhos.ts`: aqui ela é um PISO,
+  //         que só acrescenta o handoff que o modelo deixou passar.
+  //
+  //         E vem ANTES de "fora da base" e do limiar porque estes três motivos
+  //         são mais FIÉIS ao que o cliente escreveu: um pedido explícito de
+  //         atendente respondido com confiança baixa é `customer_request`, não
+  //         `low_confidence` — e é o motivo que a pessoa vai ler na fila.
+  const gatilho = gatilhoDeTexto(
+    pedido.mensagem_do_cliente,
+    contexto.settings["ai.forbidden_topics"],
+  );
+  if (gatilho !== null) {
+    incrementCounter("ai_gatilho_deterministico", { motivo: gatilho.motivo });
+    return handoff(gatilho.motivo);
+  }
+
   // 3b. FORA DA BASE — antes do limiar, por causa de D19 ("após 1 tentativa").
   if (estaForaDaBase(saida, contexto.acervo.trechos.length)) {
     const texto = textoDeDesconhecido(contexto.settings["ai.unknown_answer"]);
@@ -441,6 +456,30 @@ async function decidir(
   estado.descartadas = [...triagem.descartadas];
   for (const descartada of triagem.descartadas) {
     incrementCounter("ai_tool_call_descartada", { name: descartada });
+  }
+
+  // 6a. AÇÃO DE RISCO ALTO (D19, gatilho 2) — o handoff acontece em vez da
+  //     execução, não depois dela. `execute()` também recusaria uma Action
+  //     `blocked`, mas recusar não é chamar gente: a recusa deixaria o cliente
+  //     esperando por algo que ninguém foi avisado de que ele pediu.
+  //
+  //     O risco sai do CATÁLOGO (`contexto.tools`, que carrega o `risk` de cada
+  //     ToolSpec). Hoje nenhuma das dez entradas é `high`/`blocked`, então este
+  //     caminho não dispara em produção — e é por isso que a prova dos oito
+  //     gatilhos o mede com um catálogo injetado, em vez de fingir que disparou.
+  const arriscadas = acoesDeRiscoAlto(triagem.aceitas, contexto.tools);
+  if (arriscadas.length > 0) {
+    incrementCounter("ai_acao_de_risco_alto", { name: arriscadas[0]! });
+    return pedirHandoff(
+      ctx,
+      pedido,
+      "high_risk_action",
+      saida.intent,
+      estado,
+      estadoInicial,
+      deps,
+      arriscadas[0],
+    );
   }
 
   let enviouPelaTool = false;
