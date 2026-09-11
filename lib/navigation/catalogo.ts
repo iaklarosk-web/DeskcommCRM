@@ -648,6 +648,17 @@ export const NAV_CATALOG = [
     minRole: "admin",
   },
   {
+    // O USO fica ao lado do contrato do agente (F05-T09): tokens e custo
+    // estimado por período, somados do registro de uso da própria empresa.
+    href: "/app/settings/tenant/ia/uso",
+    label: "Uso de IA",
+    description: "Tokens e custo estimado das chamadas ao modelo, por período.",
+    icon: "Brain",
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "admin",
+  },
+  {
     // Mora em Organização e não em Canais de propósito: o que se configura aqui
     // é a CONTA DE ANÚNCIOS da empresa — dinheiro e identidade comercial, ao lado
     // de billing e API tokens. Canais é por onde se FALA com o cliente, e os dois

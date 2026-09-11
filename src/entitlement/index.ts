@@ -11,3 +11,13 @@ export {
   type Usage,
 } from "./entitlement";
 export { estimatedCostCents, modeloTemPreco } from "./pricing";
+export {
+  mesAnteriorA,
+  mesDe,
+  PeriodoInvalido,
+  periodoDeDatas,
+  resumoDeUso,
+  type LinhaDeUso,
+  type PeriodoDeUso,
+  type ResumoDeUso,
+} from "./uso";
