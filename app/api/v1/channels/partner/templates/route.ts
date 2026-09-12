@@ -43,8 +43,17 @@ import { traduzir } from "@/lib/i18n/dicionario";
 import type { Idioma } from "@/lib/i18n/idiomas";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
+
+const corpoSchema = z.object({
+  acao: z.string().max(32).optional(),
+  name: z.string().max(512).optional(),
+  language: z.string().max(16).optional(),
+  category: z.string().max(32).optional(),
+  components: z.array(z.unknown()).optional(),
+});
 
 interface Contexto {
   orgId: string;
@@ -158,13 +167,13 @@ export async function POST(req: NextRequest): Promise<Response> {
     return fail("not_implemented", t("Este canal não gerencia definições."), 501, { requestId });
   }
 
-  const corpo = (await req.json().catch(() => ({}))) as {
-    acao?: string;
-    name?: string;
-    language?: string;
-    category?: string;
-    components?: unknown[];
-  };
+  // F06-T02: corpo por schema. Campo fora do contrato é ignorado; tipo errado
+  // recusa com 400, que é o que o `if` abaixo já respondia para o ausente.
+  const lidoCorpo = corpoSchema.safeParse(await req.json().catch(() => ({})));
+  if (!lidoCorpo.success) {
+    return fail("invalid_request", t("Faltam nome, idioma ou conteúdo."), 400, { requestId });
+  }
+  const corpo = lidoCorpo.data;
 
   try {
     if (corpo.acao === "criar") {

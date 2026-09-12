@@ -15,6 +15,7 @@ import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 
 import { ApiError } from "@/lib/api/types";
+import { chaveDeIdempotencia, idDaMensagemIdempotente } from "@/lib/api/idempotency";
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -69,6 +70,14 @@ export async function POST(req: NextRequest): Promise<Response> {
     });
   }
 
+  // F06-T02 (§B10): o `apiClient` repete o POST após 10 s sem resposta e manda
+  // `Idempotency-Key` sempre; com a chave, a mensagem ganha id fixo por
+  // (organização, atendente, chave) e a repetição devolve a linha existente.
+  const chave = chaveDeIdempotencia(req.headers);
+  const idempotencia = chave
+    ? { internalMessageId: idDaMensagemIdempotente(activeOrg.orgId, user.id, chave), idempotentReplay: true }
+    : {};
+
   try {
     const message = await sendMessageHandler(
       supabase,
@@ -77,6 +86,7 @@ export async function POST(req: NextRequest): Promise<Response> {
         actor: { type: "user", id: user.id },
         requestId,
         idioma: user.idioma,
+        ...idempotencia,
       },
       input as SendMessageInput,
     );

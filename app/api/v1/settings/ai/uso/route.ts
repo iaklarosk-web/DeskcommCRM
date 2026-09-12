@@ -14,8 +14,14 @@ import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { mesDe, PeriodoInvalido, periodoDeDatas, resumoDeUso } from "@/src/entitlement";
 import type { TenantCtx } from "@/src/tenant-context";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
+
+const consultaSchema = z.object({
+  desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  ate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
 
 export async function GET(req: Request): Promise<Response> {
   const requestId = getRequestId(req);
@@ -32,11 +38,15 @@ export async function GET(req: Request): Promise<Response> {
     source: "session",
   };
 
-  const url = new URL(req.url);
-  const desde = url.searchParams.get("desde");
-  const ate = url.searchParams.get("ate");
+  // F06-T02: entrada por schema (o formato das datas é conferido por
+  // `periodoDeDatas`, que é quem sabe o que é período válido).
+  const consulta = consultaSchema.safeParse(Object.fromEntries(new URL(req.url).searchParams));
+  if (!consulta.success) {
+    return fail("validation_failed", "Período inválido: use desde=YYYY-MM-DD&ate=YYYY-MM-DD.", 422, { requestId });
+  }
+  const { desde, ate } = consulta.data;
   try {
-    const periodo = desde !== null && ate !== null ? periodoDeDatas(desde, ate) : mesDe(new Date());
+    const periodo = desde !== undefined && ate !== undefined ? periodoDeDatas(desde, ate) : mesDe(new Date());
     return ok(await resumoDeUso(ctx, periodo), { requestId });
   } catch (erro) {
     if (erro instanceof PeriodoInvalido) {

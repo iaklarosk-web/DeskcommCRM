@@ -15,6 +15,7 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { env } from "@/lib/env";
 import { drainStorageRedactionQueue } from "@/lib/lgpd/storage-redaction-queue";
 import { registrarRequisicaoDe } from "@/src/obs/log";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
@@ -39,11 +40,13 @@ export async function GET(req: NextRequest): Promise<Response> {
   // F06-T01: linha api.request da rota global de cron (sem organização por desenho).
   registrarRequisicaoDe(req, { scope: "cron", outcome: "allowed", request_id: requestId, status: 200 });
 
-  const url = new URL(req.url);
-  const limitParam = Number.parseInt(url.searchParams.get("limit") ?? "", 10);
+  // F06-T02: entrada por schema; inválido cai no padrão, como antes.
+  const consulta = z
+    .object({ limit: z.coerce.number().int().positive().optional() })
+    .safeParse(Object.fromEntries(new URL(req.url).searchParams));
   const limit =
-    Number.isFinite(limitParam) && limitParam > 0
-      ? Math.min(limitParam, MAX_LIMIT)
+    consulta.success && consulta.data.limit !== undefined
+      ? Math.min(consulta.data.limit, MAX_LIMIT)
       : DEFAULT_LIMIT;
 
   const stats = await drainStorageRedactionQueue({ limit });

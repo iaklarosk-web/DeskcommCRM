@@ -19,6 +19,8 @@
  * verificável, em vez de um caso rico pela metade.
  */
 import { getRequestId } from "@/lib/api/request-id";
+import { z } from "zod";
+
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { requireSupportWrite } from "@/lib/impersonate/support";
@@ -68,6 +70,11 @@ export async function GET(req?: Request): Promise<Response> {
   }
 }
 
+const formularioSchema = z.object({
+  file: z.instanceof(File),
+  name: z.string().max(4096).optional(),
+});
+
 export async function POST(req: Request): Promise<Response> {
   const requestId = getRequestId(req);
   const suporteNegado = await requireSupportWrite();
@@ -80,11 +87,16 @@ export async function POST(req: Request): Promise<Response> {
   if (!authz.ok) return authz.response;
 
   const formulario = await req.formData().catch(() => null);
-  const arquivo = formulario?.get("file");
-  const nomeInformado = formulario?.get("name");
-  if (!(arquivo instanceof File)) {
+  // F06-T02: o formulário passa por schema — arquivo obrigatório, nome opcional.
+  const lido = formularioSchema.safeParse({
+    file: formulario?.get("file") ?? undefined,
+    name: formulario?.get("name") ?? undefined,
+  });
+  if (!lido.success) {
     return fail("validation_failed", "Envie um arquivo de texto.", 422, { requestId });
   }
+  const arquivo = lido.data.file;
+  const nomeInformado = lido.data.name;
   if (!extensaoAceita(arquivo.name)) {
     return fail(
       "validation_failed",

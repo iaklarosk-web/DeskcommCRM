@@ -21,6 +21,7 @@ import { podarHistoricoDeCaptacao } from "@/lib/webhooks/retencao-da-captacao";
 import { env } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { registrarRequisicaoDe } from "@/src/obs/log";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
@@ -47,10 +48,12 @@ export async function GET(req: NextRequest): Promise<Response> {
   // atrasadas, e o operador quer alcançar o estado estável sem esperar dias.
   // O teto existe porque um lote gigante segura a tabela em que TODO webhook
   // escreve — a poda derrubando a entrada de mensagem seria o oposto do ponto.
-  const url = new URL(req.url);
-  const pedido = Number.parseInt(url.searchParams.get("lote") ?? "", 10);
+  // F06-T02: entrada por schema; inválido cai no padrão, como antes.
+  const consulta = z
+    .object({ lote: z.coerce.number().int().positive().optional() })
+    .safeParse(Object.fromEntries(new URL(req.url).searchParams));
   const lote =
-    Number.isFinite(pedido) && pedido > 0 ? Math.min(pedido, LOTE_MAXIMO) : LOTE_PADRAO;
+    consulta.success && consulta.data.lote !== undefined ? Math.min(consulta.data.lote, LOTE_MAXIMO) : LOTE_PADRAO;
 
   const admin = createAdminClient();
 

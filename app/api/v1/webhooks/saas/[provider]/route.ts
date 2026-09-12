@@ -39,6 +39,8 @@ import {
   type SaasChannelProvider,
 } from "@/src/channels/contract";
 import { recebeEntrada, type RecebeEntradaDeps } from "@/src/channels/inbound";
+import { limitarWebhook, type LimiteDoWebhook } from "@/src/channels/rate-limit";
+import { incrementCounter } from "@/src/obs/counters";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -53,13 +55,25 @@ interface ContextoDaRota {
  * injetado, em vez de fazer POST contra endpoint no ar. Produção usa o `POST`
  * exportado abaixo, sem dependência injetada nenhuma.
  */
-export function criarHandlerDeWebhookSaas(deps: RecebeEntradaDeps = {}) {
+export function criarHandlerDeWebhookSaas(deps: RecebeEntradaDeps & { rateLimit?: LimiteDoWebhook } = {}) {
   return async function POST(req: NextRequest, contexto: ContextoDaRota): Promise<Response> {
     const requestId = getRequestId(req);
     const { provider } = await contexto.params;
 
     if (!SAAS_CHANNEL_PROVIDERS.includes(provider as SaasChannelProvider)) {
       return fail("not_found", "provedor de canal desconhecido", 404, { requestId });
+    }
+
+    // F06-T02: teto por (provedor, IP) ANTES de ler o corpo — quem estourou
+    // não custa HMAC nem banco. 429 com Retry-After, contado e logado.
+    const limite = await limitarWebhook(provider, req.headers, deps.rateLimit);
+    if (!limite.allowed) {
+      incrementCounter("webhook_rate_limited", { provider });
+      registrarRequisicaoDe(req, { outcome: "rate_limited", scope: "unresolved", request_id: requestId, status: 429 });
+      return fail("rate_limited", "muitas requisições; tente de novo em instantes", 429, {
+        requestId,
+        headers: { "Retry-After": String(limite.retryAfterSec) },
+      });
     }
 
     // O corpo EXATO, em bytes: a assinatura é sobre o que chegou, não sobre o

@@ -39,6 +39,14 @@ export interface HandlerCtx {
   approvedReply?: ApprovedReplyContext;
   meetingBooking?: MeetingBookingContext;
   internalMessageId?: string;
+  /**
+   * F06-T02 (§B10): `internalMessageId` veio de um `Idempotency-Key` do
+   * cliente. Se a linha já existe, ela é DEVOLVIDA como está — inclusive
+   * `queued`, que é o estado da primeira tentativa ainda em voo — e o canal
+   * não é chamado de novo. Sem este flag, a colisão só encurta o caminho para
+   * mensagens já entregues (comportamento herdado do envio inline do agente).
+   */
+  idempotentReplay?: boolean;
   proactiveContext?: ProactiveContext;
   /** Trusted origin captured by the runtime, never request-body metadata. */
   serviceBoundary?: ServiceBoundary | null;

@@ -552,6 +552,10 @@ export async function sendMessageHandler(
     if (existing.error) throw new Error("inline_message_identity_mismatch");
     created = existing.data;
     insErr = null;
+    // F06-T02 (§B10): repetição do MESMO POST (Idempotency-Key) devolve a
+    // linha que a primeira tentativa criou, em qualquer estado — inclusive
+    // `queued`, com o envio ainda em voo. Reenviar aqui é o defeito medido.
+    if (ctx.idempotentReplay) return created as unknown as Message;
     if (
       ["sent", "delivered", "read", "failed"].includes(
         String((created as unknown as Message).status),
