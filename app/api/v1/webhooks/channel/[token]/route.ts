@@ -39,6 +39,7 @@ import {
 import { acceptsInboundWebhook, handleInboundWebhook } from "@/lib/channels/inbound";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptWebhookSecret } from "@/lib/webhooks/secrets";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -85,6 +86,8 @@ export async function POST(
   } | null;
 
   if (!sessao) return fail("not_found", "unknown webhook token", 404, { requestId });
+  // F06-T01: tenant resolvido pelo token do canal — a linha sai aqui.
+  registrarRequisicaoDe(req, { outcome: "accepted", organization_id: sessao.organization_id, request_id: requestId });
 
   // Canal arquivado não ingere: o usuário mandou excluí-lo, e aceitar evento em
   // voo ressuscitaria a conversa no inbox com o operador sem poder responder.

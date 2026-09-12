@@ -20,6 +20,8 @@
  */
 import path from "node:path";
 
+import { logger } from "@/lib/logger";
+import { capturarErro } from "@/src/obs/erros";
 import { rodarCortes } from "@/src/reminder/corte";
 import { rodarLembretes } from "@/src/reminder/envio";
 
@@ -35,19 +37,33 @@ function intervaloDoAmbiente(): number {
 
 async function umCiclo(): Promise<void> {
   const disparo = await rodarLembretes();
-  console.info(
-    `reminder-worker: tenants_eligible=${disparo.tenants_eligible} fired=${disparo.tenants_fired} ` +
-      `failed=${disparo.tenants_failed} sent=${disparo.sent} duplicates_avoided=${disparo.duplicates_avoided}`,
-  );
+  // F06-T01: ciclo em JSON de uma linha. As linhas POR tenant/job, com o
+  // `organization_id`, saem de `src/reminder/envio.ts` (`job.run`).
+  logger.info("worker.cycle", {
+    worker: "reminder",
+    request_id: `cycle-${process.pid}-${Date.now()}`,
+    organization_id: null,
+    tenants_eligible: disparo.tenants_eligible,
+    fired: disparo.tenants_fired,
+    failed: disparo.tenants_failed,
+    sent: disparo.sent,
+    duplicates_avoided: disparo.duplicates_avoided,
+  });
   const corte = await rodarCortes();
-  console.info(
-    `reminder-cutoff: tenants_eligible=${corte.tenants_eligible} runs_cut=${corte.runs_cut} ` +
-      `notified=${corte.notified} tasks_created=${corte.tasks_created} tasks_denied=${corte.tasks_denied}`,
-  );
+  logger.info("worker.cycle", {
+    worker: "reminder-cutoff",
+    request_id: `cycle-${process.pid}-${Date.now()}`,
+    organization_id: null,
+    tenants_eligible: corte.tenants_eligible,
+    runs_cut: corte.runs_cut,
+    notified: corte.notified,
+    tasks_created: corte.tasks_created,
+    tasks_denied: corte.tasks_denied,
+  });
 }
 
 async function principal(): Promise<void> {
-  console.info(`reminder-worker: iniciando de ${CAMINHO_ABSOLUTO}`);
+  logger.info("worker.start", { worker: "reminder", path: CAMINHO_ABSOLUTO });
   if (process.argv.includes("--once")) {
     await umCiclo();
     return;
@@ -56,7 +72,7 @@ async function principal(): Promise<void> {
   let parando = false;
   const parar = (): void => {
     parando = true;
-    console.info("reminder-worker: sinal recebido, encerrando após o ciclo atual");
+    logger.info("worker.stop", { worker: "reminder", reason: "signal" });
   };
   process.on("SIGTERM", parar);
   process.on("SIGINT", parar);
@@ -73,7 +89,8 @@ principal().then(
   () => process.exit(0),
   (erro: unknown) => {
     // Cron que sai 0 com falha dentro é cron que ninguém descobre parado (G-27).
-    console.error("reminder-worker: ciclo falhou", erro);
+    logger.error("worker.cycle_failed", { worker: "reminder", error_code: erro instanceof Error ? erro.name : "unknown" });
+    capturarErro(erro, { job_type: "recurring_reminder", error_code: erro instanceof Error ? erro.name : "unknown" });
     process.exit(1);
   },
 );

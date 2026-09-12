@@ -1,3 +1,4 @@
+import type { NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -7,13 +8,16 @@ import { cookieSecure } from "@/lib/supabase/cookie-secure";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { IMPERSONATE_COOKIE_NAME } from "@/lib/impersonate/cookie";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 
 /** A própria sessão pode sair depois de expiração/revogação de plataforma. */
-export async function POST() {
+export async function POST(req?: NextRequest) {
   const requestId = randomUUID();
   const db = await createClient();
   const { data: { user } } = await db.auth.getUser();
   if (!user) return fail("unauthenticated", "Entre novamente.", 401, { requestId });
+  // F06-T01: fim de acompanhamento é ato da plataforma — sem organização por desenho.
+  registrarRequisicaoDe(req ?? { headers: new Headers(), method: "POST" }, { outcome: "allowed", scope: "platform_admin", request_id: requestId, actor_id: user.id });
   const { data: claims } = await db.auth.getClaims();
   const sessionId = claims?.claims.session_id;
   if (!z.string().uuid().safeParse(sessionId).success) return fail("unauthenticated", "Sessão inválida.", 401, { requestId });

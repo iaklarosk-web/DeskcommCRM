@@ -18,7 +18,9 @@
  */
 import { redirect } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { registrarRequisicao } from "@/src/obs/log";
 
 export interface PlatformAdminInfo {
   user_id: string;
@@ -58,6 +60,27 @@ export async function requirePlatformAdmin(): Promise<PlatformAdminContext> {
     if (aalData?.currentLevel !== "aal2") {
       redirect("/login/mfa?next=/admin");
     }
+  }
+
+  // F06-T01: a linha `api.request` da superfície de administração. Sem
+  // organização por desenho — o escopo diz por quê.
+  try {
+    const hdrs = await headers();
+    const path = hdrs.get("x-pathname");
+    if (path?.startsWith("/api/")) {
+      registrarRequisicao({
+        request_id: hdrs.get("x-request-id") ?? `sem-request-id:${crypto.randomUUID()}`,
+        organization_id: null,
+        scope: "platform_admin",
+        outcome: "allowed",
+        path,
+        method: hdrs.get("x-request-method"),
+        actor_id: user.id,
+        status: 200,
+      });
+    }
+  } catch {
+    /* fora de request scope: nada a correlacionar */
   }
 
   return {

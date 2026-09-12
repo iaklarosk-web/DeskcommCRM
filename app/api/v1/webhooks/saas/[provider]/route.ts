@@ -33,6 +33,7 @@ import type { NextRequest } from "next/server";
 
 import { fail, ok } from "@/lib/api/wrappers";
 import { getRequestId } from "@/lib/api/request-id";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 import {
   SAAS_CHANNEL_PROVIDERS,
   type SaasChannelProvider,
@@ -73,8 +74,11 @@ export function criarHandlerDeWebhookSaas(deps: RecebeEntradaDeps = {}) {
 
     switch (resultado.status) {
       case "sem_credencial":
+        // F06-T01: recusa antes de qualquer tenant — a linha sai daqui, sem organização.
+        registrarRequisicaoDe(req, { outcome: "rejected", scope: "unresolved", request_id: requestId, status: 503 });
         return fail("internal_error", "canal sem credencial de assinatura", 503, { requestId });
       case "assinatura_invalida":
+        registrarRequisicaoDe(req, { outcome: "rejected", scope: "unresolved", request_id: requestId, status: 401 });
         return fail("unauthorized", "assinatura do webhook inválida", 401, { requestId });
       case "sem_sessao_de_canal":
         return fail("internal_error", "conta de canal sem sessão vinculada", 503, { requestId });

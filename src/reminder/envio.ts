@@ -45,6 +45,7 @@ import {
 } from "@/src/conversation";
 import { listOrderCards } from "@/src/crm/reads";
 import { incrementCounter } from "@/src/obs/counters";
+import { registrarJob } from "@/src/obs/log";
 import { listarTenantsComLembreteLigado } from "@/src/tenant-config";
 import type { ServicePool } from "@/src/tenant-context/db";
 import { forEachEligibleTenant, withTenant, type TenantCtx, type TenantDb } from "@/src/tenant-context";
@@ -341,6 +342,8 @@ export async function abrirJob(ctx: TenantCtx, kind: string, period: string, ago
         `insert into public.job_runs (organization_id, job_id, attempt, started_at) values ($1::uuid,$2::uuid,1, now())`,
         [ctx.organization_id, id],
       );
+      // F06-T01: uma linha JSON por job, com o tenant e o job_id como correlacionador.
+      registrarJob({ request_id: id, organization_id: ctx.organization_id, job_type: kind, outcome: "claimed", attempt: 1 });
       return id;
     },
     { pool: deps.pool },
@@ -353,6 +356,7 @@ export async function fecharJob(
   counts: Record<string, unknown>,
   erro: string | null,
   deps: DepsDoLembrete,
+  kind = "recurring_reminder",
 ): Promise<void> {
   await withTenant(
     ctx,
@@ -372,6 +376,19 @@ export async function fecharJob(
     },
     { pool: deps.pool },
   );
+  const numeros: Record<string, number> = {};
+  for (const [chave, valor] of Object.entries(counts)) {
+    if (typeof valor === "number") numeros[chave] = valor;
+  }
+  registrarJob({
+    request_id: jobId,
+    organization_id: ctx.organization_id,
+    job_type: kind,
+    outcome: erro === null ? "ok" : "failed",
+    attempt: 1,
+    counts: numeros,
+    ...(erro === null ? {} : { error_code: erro.slice(0, 120) }),
+  });
 }
 
 /** O disparo de UM tenant, já dentro do seu contexto. */

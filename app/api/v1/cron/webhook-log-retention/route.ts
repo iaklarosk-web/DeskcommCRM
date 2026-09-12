@@ -20,6 +20,7 @@ import { LOTE_PADRAO, podarArquivoDeWebhooks } from "@/lib/channels/retencao-do-
 import { podarHistoricoDeCaptacao } from "@/lib/webhooks/retencao-da-captacao";
 import { env } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,8 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (aceitos.length === 0 || !provided || !aceitos.includes(provided)) {
     return fail("forbidden", "Cron secret missing or invalid.", 403, { requestId });
   }
+  // F06-T01: linha api.request da rota global de cron (sem organização por desenho).
+  registrarRequisicaoDe(req, { scope: "cron", outcome: "allowed", request_id: requestId, status: 200 });
 
   // O lote é ajustável pela URL para o PRIMEIRO dia, que é o caso incomum: uma
   // instalação que nunca podou chega aqui com dezenas de milhares de linhas

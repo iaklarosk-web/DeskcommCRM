@@ -14,6 +14,7 @@ import type { NextRequest } from "next/server";
 import { ok, fail } from "@/lib/api/wrappers";
 import { env } from "@/lib/env";
 import { drainStorageRedactionQueue } from "@/lib/lgpd/storage-redaction-queue";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,8 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (accepted.length === 0 || !provided || !accepted.includes(provided)) {
     return fail("forbidden", "Cron secret missing or invalid.", 403, { requestId });
   }
+  // F06-T01: linha api.request da rota global de cron (sem organização por desenho).
+  registrarRequisicaoDe(req, { scope: "cron", outcome: "allowed", request_id: requestId, status: 200 });
 
   const url = new URL(req.url);
   const limitParam = Number.parseInt(url.searchParams.get("limit") ?? "", 10);

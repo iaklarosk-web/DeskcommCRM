@@ -18,6 +18,7 @@ import { getConfig, SUBSCRIBED_EVENTS, eventToSlug } from "@/lib/nuvemshop/confi
 import { exchangeCodeForToken } from "@/lib/nuvemshop/oauth";
 import { NuvemshopApiClient } from "@/lib/nuvemshop/api-client";
 import { verifyState } from "@/lib/nuvemshop/state";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 
 export const dynamic = "force-dynamic";
 
@@ -38,12 +39,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   const state = verifyState(stateParam);
   if (!state) {
+    registrarRequisicaoDe(req, { outcome: "rejected", scope: "unresolved", status: 302 }); // F06-T01
     await audit({
       action: "nuvemshop.oauth_failed",
       metadata: { reason: "invalid_state" },
     });
     return redirectTo(`/app/integrations/nuvemshop?error=invalid_state`);
   }
+  registrarRequisicaoDe(req, { outcome: "accepted", organization_id: state.orgId, actor_id: state.userId }); // F06-T01
 
   if (!code) {
     await audit({

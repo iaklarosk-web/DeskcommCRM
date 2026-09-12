@@ -54,6 +54,7 @@
 import { randomUUID } from "node:crypto";
 
 import { incrementCounter } from "@/src/obs/counters";
+import { registrarRequisicao } from "@/src/obs/log";
 import {
   transition,
   type ConversationState,
@@ -649,8 +650,28 @@ export async function recebeEntrada(
   try {
     ctx = await fromWebhook(provider, accountKey, payload, { pool: deps.pool });
   } catch {
+    registrarRequisicao({
+      request_id: deps.requestId ?? randomUUID(),
+      organization_id: null,
+      scope: "unresolved",
+      outcome: "quarantined",
+      path: `/api/v1/webhooks/saas/${provider}`,
+      method: "POST",
+      status: 202,
+    });
     return { status: "quarentena", reason: "unknown_account" };
   }
+  // F06-T01: a linha `api.request` do webhook sai AQUI, no ponto em que o
+  // tenant acaba de ser resolvido por `channel_accounts` — a rota só conhece
+  // o desfecho, não a organização. Recusas anteriores (credencial, assinatura)
+  // saem na própria rota, com organização nula e escopo declarado.
+  registrarRequisicao({
+    request_id: deps.requestId ?? randomUUID(),
+    organization_id: ctx.organization_id,
+    outcome: "accepted",
+    path: `/api/v1/webhooks/saas/${provider}`,
+    method: "POST",
+  });
 
   // 5 · O contrato do payload. Recusa é CONTADA por causa, nunca descartada.
   const lido = adapter.parseInbound(payload);

@@ -20,6 +20,8 @@ export async function proxy(request: NextRequest) {
   requestHeaders.set("x-request-id", requestId);
   // Expose pathname to Server Components via header (used by onboarding layout).
   requestHeaders.set("x-pathname", pathname);
+  // F06-T01: o método viaja com o caminho para a linha de log do guarda.
+  requestHeaders.set("x-request-method", request.method);
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   // Mantém o fallback herdado para handlers que ainda não usam wrappers.

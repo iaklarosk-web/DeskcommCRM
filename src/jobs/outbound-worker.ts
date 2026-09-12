@@ -38,6 +38,8 @@ import { entregarSaida, type ExecuteDeps } from "@/src/actions/execute";
 import type { SaasChannelAdapter, SaasChannelProvider } from "@/src/channels/contract";
 import { membrosPorPapel, notify } from "@/src/notifications";
 import { incrementCounter } from "@/src/obs/counters";
+import { capturarErro } from "@/src/obs/erros";
+import { registrarJob } from "@/src/obs/log";
 import { fromJob, withTenant, type TenantCtx } from "@/src/tenant-context";
 import { getServicePool, type ServicePool } from "@/src/tenant-context/db";
 
@@ -315,6 +317,14 @@ export async function rodarCicloDeSaida(
     // a rodada é o desfecho certo — não é erro e não conta como falha.
     if (reivindicado === null) continue;
     resultado.reivindicados += 1;
+    // F06-T01: uma linha JSON por transição do job, com o tenant e o job_id.
+    registrarJob({
+      request_id: candidato.id,
+      organization_id: ctx.organization_id,
+      job_type: "outbound_message",
+      outcome: "claimed",
+      attempt: reivindicado.attempts,
+    });
 
     const entrega = entregaDoPayload(candidato.payload);
     const messageId = typeof candidato.payload["message_id"] === "string"
@@ -330,6 +340,14 @@ export async function rodarCicloDeSaida(
       });
       await fecharComSucesso(ctx, candidato.id, reivindicado.attempts, deps);
       resultado.entregues += 1;
+      registrarJob({
+        request_id: candidato.id,
+        organization_id: ctx.organization_id,
+        job_type: "outbound_message",
+        outcome: "ok",
+        attempt: reivindicado.attempts,
+        counts: { messages_sent: 1 },
+      });
     } catch (erro) {
       const { bloqueado } = await fecharComErro(
         ctx,
@@ -342,6 +360,21 @@ export async function rodarCicloDeSaida(
       );
       resultado.falhas += 1;
       if (bloqueado) resultado.bloqueados += 1;
+      const errorCode = normalizarErro(erro).slice(0, 120);
+      registrarJob({
+        request_id: candidato.id,
+        organization_id: ctx.organization_id,
+        job_type: "outbound_message",
+        outcome: bloqueado ? "blocked" : "failed",
+        attempt: reivindicado.attempts,
+        error_code: errorCode,
+      });
+      capturarErro(erro, {
+        request_id: candidato.id,
+        organization_id: ctx.organization_id,
+        job_type: "outbound_message",
+        error_code: errorCode,
+      });
     }
   }
 

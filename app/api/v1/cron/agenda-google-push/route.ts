@@ -5,6 +5,7 @@ import { reconcileAppointment } from "@/lib/agenda/google/sync-executor";
 import { audit } from "@/lib/audit";
 import { env } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 export const dynamic = "force-dynamic";
 async function executar(req: NextRequest) {
   if (
@@ -16,6 +17,7 @@ async function executar(req: NextRequest) {
       { error: { code: "unauthenticated", message: "cron secret inválido" } },
       { status: 401 },
     );
+  registrarRequisicaoDe(req, { scope: "cron", outcome: "allowed", status: 200 }); // F06-T01
   const db = createAdminClient();
   const { data, error } = await googlePushCandidates(db);
   if (error)

@@ -201,10 +201,10 @@ export async function cortarParaTenant(
       tasks_created: cortes.filter((c) => c.task_id !== null).length,
       tasks_denied: cortes.filter((c) => c.task_id === null).length,
     };
-    await fecharJob(ctx, jobId, counts, null, deps);
+    await fecharJob(ctx, jobId, counts, null, deps, "recurring_reminder_cutoff");
     return { organization_id: ctx.organization_id, job_id: jobId, ...counts, cortes };
   } catch (erro) {
-    await fecharJob(ctx, jobId, { runs_cut: cortes.length }, erro instanceof Error ? erro.name : "erro", deps);
+    await fecharJob(ctx, jobId, { runs_cut: cortes.length }, erro instanceof Error ? erro.name : "erro", deps, "recurring_reminder_cutoff");
     throw erro;
   }
 }

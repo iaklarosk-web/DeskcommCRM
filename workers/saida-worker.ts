@@ -39,7 +39,9 @@
  */
 import path from "node:path";
 
+import { logger } from "@/lib/logger";
 import { rodarCicloDeSaida } from "@/src/jobs/outbound-worker";
+import { capturarErro } from "@/src/obs/erros";
 
 /**
  * O caminho com que ESTE processo foi chamado. Vem de `argv[1]` e não de
@@ -63,14 +65,22 @@ function imprimirCiclo(r: {
   falhas: number;
   bloqueados: number;
 }): void {
-  console.info(
-    `outbound-worker: claimed=${r.reivindicados} sent=${r.entregues} ` +
-      `failed=${r.falhas} blocked=${r.bloqueados}`,
-  );
+  // F06-T01: o ciclo sai como JSON de uma linha, com contagem e denominador.
+  // O ciclo é cross-tenant (lê a fila inteira); as linhas POR job, com o
+  // `organization_id`, saem de `src/jobs/outbound-worker.ts` (`job.run`).
+  logger.info("worker.cycle", {
+    worker: "outbound",
+    request_id: `cycle-${process.pid}-${Date.now()}`,
+    organization_id: null,
+    claimed: r.reivindicados,
+    sent: r.entregues,
+    failed: r.falhas,
+    blocked: r.bloqueados,
+  });
 }
 
 async function principal(): Promise<void> {
-  console.info(`outbound-worker: iniciando de ${CAMINHO_ABSOLUTO}`);
+  logger.info("worker.start", { worker: "outbound", path: CAMINHO_ABSOLUTO });
   const umaVez = process.argv.includes("--once");
 
   if (umaVez) {
@@ -81,7 +91,7 @@ async function principal(): Promise<void> {
   let parando = false;
   const parar = (): void => {
     parando = true;
-    console.info("outbound-worker: sinal recebido, encerrando após o ciclo atual");
+    logger.info("worker.stop", { worker: "outbound", reason: "signal" });
   };
   process.on("SIGTERM", parar);
   process.on("SIGINT", parar);
@@ -99,7 +109,8 @@ principal().then(
   (erro: unknown) => {
     // Erro de ciclo NÃO é silencioso e NÃO sai 0: cron que sai 0 com falha
     // dentro é cron que ninguém descobre estar parado (G-27).
-    console.error("outbound-worker: ciclo falhou", erro);
+    logger.error("worker.cycle_failed", { worker: "outbound", error_code: erro instanceof Error ? erro.name : "unknown" });
+    capturarErro(erro, { job_type: "outbound_message", error_code: erro instanceof Error ? erro.name : "unknown" });
     process.exit(1);
   },
 );

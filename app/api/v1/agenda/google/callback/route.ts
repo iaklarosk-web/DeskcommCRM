@@ -59,6 +59,7 @@ import { trocarCodigoPorToken } from "@/lib/agenda/google/token";
 import { contaDaAgendaPrimaria } from "@/lib/agenda/google/calendarios";
 import { classificarErroDoGoogle } from "@/lib/agenda/google/erros";
 import { env } from "@/lib/env";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 
 export const dynamic = "force-dynamic";
 
@@ -166,6 +167,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return voltar("erro=retorno_nao_verificavel");
   }
   const { organizationId, userId } = estado;
+  // F06-T01: o tenant vem do `state` ASSINADO — é aqui que ele passa a existir.
+  registrarRequisicaoDe(req, { outcome: "accepted", organization_id: organizationId, actor_id: userId });
 
   // ⚠️ QUEM VOLTOU É QUEM SAIU — e esta verificação vem ANTES da queima do nonce.
   //

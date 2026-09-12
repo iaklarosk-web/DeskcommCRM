@@ -8,7 +8,7 @@ import { lerInterface } from "@/lib/navigation/interface";
  * and then filter by `user_id` (a trusted source).
  */
 import { readSupportContext } from "@/lib/impersonate/support";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { logger } from "@/lib/logger";
 import { createClient } from "@/lib/supabase/server";
@@ -16,6 +16,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { empresaExigeMfa, exigeCadastroDeMfa } from "@/lib/auth/politica-mfa";
 import { normalizarIdioma } from "@/lib/i18n/idiomas";
 import type { AuthUser, Role, UserOrgMembership, ActiveOrg } from "./types";
+import { registrarRequisicao } from "@/src/obs/log";
 
 const ACTIVE_ORG_COOKIE = "active_org";
 
@@ -266,7 +267,21 @@ export async function loadAuthUser(): Promise<AuthUser | null> {
  * Priority: cookie `active_org` (if member of) → first membership.
  * Returns null if user has zero memberships.
  */
-export async function resolveActiveOrg(authUser: AuthUser): Promise<ActiveOrg | null> {
+export async function resolveActiveOrg(
+  authUser: AuthUser,
+  opts: { log?: boolean } = {},
+): Promise<ActiveOrg | null> {
+  const org = await resolverOrganizacaoAtiva(authUser);
+  // F06-T01: as rotas herdadas que resolvem a organização SEM passar pelo
+  // `requireRole` ganham a linha `api.request` aqui, no único ponto comum.
+  // `requireRole` passa `log: false` porque emite a própria linha, com o
+  // desfecho do papel; fora de `/api/` (páginas) não há linha — é render,
+  // não chamada de API.
+  if (opts.log !== false) await logarResolucao(authUser, org);
+  return org;
+}
+
+async function resolverOrganizacaoAtiva(authUser: AuthUser): Promise<ActiveOrg | null> {
   if (authUser.support) {
     if (authUser.support.status !== "active") redirect("/support-ended");
     return {
@@ -284,6 +299,30 @@ export async function resolveActiveOrg(authUser: AuthUser): Promise<ActiveOrg | 
     role: ativo.role,
     interface_settings: ativo.interface_settings,
   };
+}
+
+async function logarResolucao(authUser: AuthUser, org: ActiveOrg | null): Promise<void> {
+  let path: string | null = null;
+  let method: string | null = null;
+  let requestId: string | null = null;
+  try {
+    const hdrs = await headers();
+    path = hdrs.get("x-pathname");
+    method = hdrs.get("x-request-method");
+    requestId = hdrs.get("x-request-id");
+  } catch {
+    return; // fora de um request scope (teste de unidade): nada a correlacionar
+  }
+  if (!path?.startsWith("/api/")) return;
+  registrarRequisicao({
+    request_id: requestId ?? `sem-request-id:${crypto.randomUUID()}`,
+    organization_id: org?.orgId ?? null,
+    outcome: org ? "resolved" : "forbidden_tenant",
+    path,
+    method,
+    actor_id: authUser.id,
+    ...(org ? {} : { scope: "unresolved" as const }),
+  });
 }
 
 /**

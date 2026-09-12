@@ -19,6 +19,7 @@ import { audit } from "@/lib/audit";
 import { env } from "@/lib/env";
 import { HEARTBEAT_TIMEOUT_MINUTES } from "@/lib/routing/eligibility";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,8 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (accepted.length === 0 || !provided || !accepted.includes(provided)) {
     return fail("forbidden", "Cron secret missing or invalid.", 403, { requestId });
   }
+  // F06-T01: linha api.request da rota global de cron (sem organização por desenho).
+  registrarRequisicaoDe(req, { scope: "cron", outcome: "allowed", request_id: requestId, status: 200 });
 
   const cutoff = new Date(Date.now() - HEARTBEAT_TIMEOUT_MINUTES * 60_000).toISOString();
 

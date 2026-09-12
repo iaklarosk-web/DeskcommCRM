@@ -46,6 +46,7 @@ import {
   encodeCursor,
 } from "@/lib/leads/timeline-query";
 import type { TimelineItem } from "@/lib/types/contacts";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +68,15 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   }
   const authUser = await loadAuthUser();
   const t = (texto: string) => traduzir(texto, authUser?.idioma ?? "pt-BR");
+  // F06-T01: a rota herdada lê por RLS (organização da sessão); a linha leva a
+  // primeira associação do usuário, que é a que o cookie de org ativa refina.
+  registrarRequisicaoDe(req, {
+    outcome: "allowed",
+    organization_id: authUser?.organizations[0]?.organization_id ?? null,
+    scope: "unresolved",
+    request_id: requestId,
+    actor_id: user.id,
+  });
 
   const url = new URL(req.url);
   const types = url.searchParams.getAll("type").filter(Boolean);
