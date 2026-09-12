@@ -50,6 +50,25 @@ jobs:
       - name: Unit tests
         run: pnpm test:unit
 
+      # F06-T04 (§5.18, §7.7): varredura de segredos nas quatro pastas de §5.18
+      # (src, scripts, supabase, workers), com a fixture negativa que PRECISA
+      # ser pega (G-51). Imprime `secrets: files_scanned=F findings=0` — é a
+      # linha que o BUILD-STATE cita. Achado = exit 1 = PR bloqueado.
+      - name: Varredura de segredos (F06-T04)
+        run: bash scripts/scan-secrets.sh
+
+      # F06-T04: o inventário do `.env.example` é GERADO por grep no código
+      # (ADR-004). Variável nova lida por `process.env` sem a linha
+      # `arquivo:linha` correspondente deixa o arquivo versionado diferente do
+      # regenerado — e o diff reprova o PR em vez de virar dívida silenciosa.
+      - name: Inventário do .env.example em dia (F06-T04)
+        run: |
+          bash scripts/env-inventory.sh
+          git diff --exit-code -- .env.example || {
+            echo "::error::.env.example desatualizado: rode scripts/env-inventory.sh e versione o resultado" >&2
+            exit 1
+          }
+
 
       # Scripts do kit self-host num repo git descartável (docker/crontab
       # dublados). É o único gate que exercita o update.sh — um erro aqui

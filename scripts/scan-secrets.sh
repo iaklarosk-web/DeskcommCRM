@@ -38,7 +38,14 @@ ACHADOS=$(echo "$FILES" | xargs grep -nE "$PADRAO" 2>/dev/null \
 N=$(if [ -z "$ACHADOS" ]; then echo 0; else echo "$ACHADOS" | wc -l | tr -d ' '; fi)
 
 # G-51: a fixture negativa PRECISA ser pega pelo mesmo padrão.
-FIXTURE_HITS=$(grep -cE "$PADRAO" "$FIXTURE" 2>/dev/null || echo 0)
+#
+# `grep -c` IMPRIME a contagem mesmo quando sai 1 (zero acertos), então o
+# `|| echo 0` antigo produzia "0\n0" nesse caso, o `[ -lt 2 ]` reclamava de
+# "integer expression expected" e o script SAÍA 0 — o scanner com padrão
+# quebrado passava. Medido pelo mutante 56 (F06-T04): a guarda estava morta
+# desde a F01. Agora a contagem é lida como está e só o vazio vira 0.
+FIXTURE_HITS=$(grep -cE "$PADRAO" "$FIXTURE" 2>/dev/null)
+FIXTURE_HITS=${FIXTURE_HITS:-0}
 
 echo "secrets: files_scanned=$F findings=$N"
 if [ "$N" != 0 ]; then

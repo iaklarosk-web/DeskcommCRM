@@ -35,7 +35,14 @@ cd "$(dirname "$0")/.."
 SUPABASE="supabase"
 command -v supabase >/dev/null 2>&1 || SUPABASE="npx supabase"
 
-if ! $SUPABASE status >/dev/null 2>&1; then
+# F06-T08: o sandbox descartável do gate (`scripts/verify/sandbox.sh`) vive num
+# workdir próprio (project_id e portas 5542x). Com `SUPABASE_WORKDIR` apontado
+# para ele, este script lê as chaves DESSE stack — é assim que o CI gera o
+# `.env.e2e` do verify sem um arquivo privado preservado.
+WORKDIR_ARGS=()
+if [ -n "${SUPABASE_WORKDIR:-}" ]; then WORKDIR_ARGS=(--workdir "$SUPABASE_WORKDIR"); fi
+
+if ! $SUPABASE status "${WORKDIR_ARGS[@]}" >/dev/null 2>&1; then
   echo "==> O Supabase local não está de pé. Rode 'npx supabase start' antes." >&2
   exit 1
 fi
@@ -52,12 +59,16 @@ fi
 [ "${#CHAVE_WAHA}" -ge 44 ] || CHAVE_WAHA="$(openssl rand -base64 32)"
 [ "${#CHAVE_AI}" -ge 44 ] || CHAVE_AI="$(openssl rand -base64 32)"
 
-ENVOUT="$($SUPABASE status -o env 2>/dev/null)"
+ENVOUT="$($SUPABASE status "${WORKDIR_ARGS[@]}" -o env 2>/dev/null)"
 ler() { printf '%s\n' "$ENVOUT" | grep "^$1=" | cut -d= -f2- | tr -d '"'; }
 
 API_URL="$(ler API_URL)"
 ANON="$(ler ANON_KEY)"
 SERVICE="$(ler SERVICE_ROLE_KEY)"
+# A URL do banco vem do PRÓPRIO stack (o sandbox do gate escuta em 55422, o de
+# desenvolvimento em 54322); o antigo literal fixo só valia para o segundo.
+DB_URL="$(ler DB_URL)"
+[ -n "$DB_URL" ] || DB_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 
 if [ -z "$API_URL" ] || [ -z "$ANON" ] || [ -z "$SERVICE" ]; then
   echo "==> Não consegui ler as chaves do stack local (API_URL/ANON_KEY/SERVICE_ROLE_KEY)." >&2
@@ -96,7 +107,7 @@ cat > .env.e2e <<EOF
 NEXT_PUBLIC_SUPABASE_URL=$API_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON
 SUPABASE_SERVICE_ROLE_KEY=$SERVICE
-SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+SUPABASE_DB_URL=$DB_URL
 
 # Precisa bater com o baseURL real do Playwright (ver comentário acima).
 NEXT_PUBLIC_APP_URL=http://localhost:$E2E_PORT
