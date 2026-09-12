@@ -59,13 +59,39 @@ export const REQUIRED_F05_E2E_SPECS = Object.freeze([
 
 export const EXPECTED_F05_E2E_TESTS = EXPECTED_F04_E2E_TESTS + 4;
 
+/**
+ * F06 (ADR-028) não cria tela: hardening e staging. O inventário é o de F05,
+ * inteiro — o denominador já provado não diminui e nenhuma spec nova é
+ * exigida.
+ */
+export const REQUIRED_F06_E2E_SPECS = REQUIRED_F05_E2E_SPECS;
+export const EXPECTED_F06_E2E_TESTS = EXPECTED_F05_E2E_TESTS;
+
 /** Fases com gate fechado de navegador. O nome deste arquivo é histórico. */
 const CLOSED_E2E_PHASES = Object.freeze({
   F02: { specs: REQUIRED_F02_E2E_SPECS, tests: EXPECTED_F02_E2E_TESTS },
   F03: { specs: REQUIRED_F03_E2E_SPECS, tests: EXPECTED_F03_E2E_TESTS },
   F04: { specs: REQUIRED_F04_E2E_SPECS, tests: EXPECTED_F04_E2E_TESTS },
   F05: { specs: REQUIRED_F05_E2E_SPECS, tests: EXPECTED_F05_E2E_TESTS },
+  F06: { specs: REQUIRED_F06_E2E_SPECS, tests: EXPECTED_F06_E2E_TESTS },
 });
+
+/**
+ * Os dois ambientes que o gate aceita (ADR-028 §2). `sandbox` é o descartável
+ * de F02–F05; `staging` é o Compose persistente desta VPS (56421/56422), com o
+ * `next start` do gate em 3202 no host. Ambos em loopback: o que muda é o
+ * ALVO, e a evidência diz qual foi.
+ */
+export const VERIFY_ENVIRONMENTS = Object.freeze({
+  sandbox: { marker: F02_SANDBOX_ID, api: 55421, db: 55422, app: 3102 },
+  staging: { marker: "crm-staging", api: 56421, db: 56422, app: 3202 },
+});
+
+export function verifyEnvironmentName(processEnv = process.env) {
+  const nome = processEnv.VERIFY_ENVIRONMENT ?? "sandbox";
+  if (!Object.hasOwn(VERIFY_ENVIRONMENTS, nome)) fail(`VERIFY_ENVIRONMENT desconhecido: ${nome}`);
+  return nome;
+}
 
 export function hasClosedE2E(phase) {
   return Object.hasOwn(CLOSED_E2E_PHASES, phase);
@@ -121,18 +147,18 @@ function exactLoopbackHttp(raw, port, key) {
   }
 }
 
-function exactDatabase(raw) {
+function exactDatabase(raw, port) {
   let url;
   try {
     url = new URL(raw);
   } catch {
     fail("SUPABASE_DB_URL não é URL válida");
   }
-  if (!new Set(["postgres:", "postgresql:"]).has(url.protocol) || !loopback.has(url.hostname) || url.port !== "55422") {
-    fail("SUPABASE_DB_URL deve apontar ao PostgreSQL loopback na porta 55422");
+  if (!new Set(["postgres:", "postgresql:"]).has(url.protocol) || !loopback.has(url.hostname) || url.port !== String(port)) {
+    fail(`SUPABASE_DB_URL deve apontar ao PostgreSQL loopback na porta ${port}`);
   }
   if (url.pathname !== "/postgres" || url.search || url.hash) {
-    fail("SUPABASE_DB_URL deve selecionar somente o banco postgres do sandbox");
+    fail("SUPABASE_DB_URL deve selecionar somente o banco postgres do ambiente");
   }
 }
 
@@ -142,18 +168,20 @@ export function verifyF02Sandbox(root, processEnv = process.env) {
   const envReal = realpathSync(envPath);
   if (path.dirname(envReal) !== rootReal) fail(".env.e2e deve pertencer à raiz verificada");
   const values = parseEnvFile(envPath);
+  const environment = verifyEnvironmentName(processEnv);
+  const perfil = VERIFY_ENVIRONMENTS[environment];
 
   const api = requireValue(values, "NEXT_PUBLIC_SUPABASE_URL");
   const app = requireValue(values, "NEXT_PUBLIC_APP_URL");
   const database = requireValue(values, "SUPABASE_DB_URL");
   requireValue(values, "NEXT_PUBLIC_SUPABASE_ANON_KEY");
   requireValue(values, "SUPABASE_SERVICE_ROLE_KEY");
-  exactLoopbackHttp(api, 55421, "NEXT_PUBLIC_SUPABASE_URL");
-  exactLoopbackHttp(app, 3102, "NEXT_PUBLIC_APP_URL");
-  exactDatabase(database);
+  exactLoopbackHttp(api, perfil.api, "NEXT_PUBLIC_SUPABASE_URL");
+  exactLoopbackHttp(app, perfil.app, "NEXT_PUBLIC_APP_URL");
+  exactDatabase(database, perfil.db);
 
-  if (processEnv.F02_E2E_SANDBOX_ID !== F02_SANDBOX_ID) fail("marker do sandbox descartável está ausente ou incorreto");
-  if (processEnv.E2E_PORT !== "3102") fail("E2E_PORT deve ser 3102");
+  if (processEnv.F02_E2E_SANDBOX_ID !== perfil.marker) fail(`marker do ambiente ${environment} está ausente ou incorreto`);
+  if (processEnv.E2E_PORT !== String(perfil.app)) fail(`E2E_PORT deve ser ${perfil.app}`);
   if (processEnv.WHATSAPP_MODE !== "mock" || processEnv.AI_PROVIDER !== "mock") fail("provedores devem estar em modo mock");
   if (processEnv.CI !== "1") fail("CI deve ser 1 para execução fechada");
 
@@ -171,10 +199,11 @@ export function verifyF02Sandbox(root, processEnv = process.env) {
 
   return {
     ok: true,
-    sandbox: F02_SANDBOX_ID,
-    api: "loopback:55421",
-    database: "loopback:55422/postgres",
-    app: "loopback:3102",
+    environment,
+    sandbox: perfil.marker,
+    api: `loopback:${perfil.api}`,
+    database: `loopback:${perfil.db}/postgres`,
+    app: `loopback:${perfil.app}`,
     providers: { whatsapp: "mock", ai: "mock" },
     credentials: { anon: "present", service_role: "present" },
   };

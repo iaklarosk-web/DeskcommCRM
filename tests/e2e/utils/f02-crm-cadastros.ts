@@ -14,7 +14,10 @@ export function f02E2eSandbox() {
   if (!isLoopbackHttpUrl(url)) {
     throw new Error("F02 E2E recusado: NEXT_PUBLIC_SUPABASE_URL não é loopback.");
   }
-  if (sandboxId !== "f02-crm-cadastros-disposable") {
+  // Dois ambientes dedicados e NUNCA produção: o sandbox descartável do gate
+  // e o staging desta VPS (ADR-028 §2), ambos em loopback — o marcador diz
+  // qual, e o `verify.sh` confere as portas de cada um.
+  if (sandboxId !== "f02-crm-cadastros-disposable" && sandboxId !== "crm-staging") {
     throw new Error("F02 E2E recusado: sandbox descartável dedicado não foi identificado.");
   }
   if (!serviceRole)

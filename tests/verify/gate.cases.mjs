@@ -730,3 +730,116 @@ test("F04 keeps handoff and reminder pending without failing", () => {
   assert.match(render(data, result), /handoff: ai_msgs_after_handoff=pending/);
   assert.match(render(data, result), /reminder: runs=pending/);
 });
+
+// ─── ADR-028 — verify.sh v1.4: F06 mede `logs`, `rate-limit`, `lgpd`; ambiente `staging` ──
+
+const stateF06 = `current_phase: F06
+baseline_n0: 7
+f00_commit: c85f7d72
+baseline_detail: "unit=2/2 db=2/2 e2e=3/3"
+| F04 | IA | done(verify=2026-09-11 aaaaaaaa) |
+| F05 | Handoff | done(verify=2026-09-12 5aa5de54) |
+| F06 | Hardening | pending |
+`;
+const LOGS_OK = "logs: routes=269 routes_logged=269 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7";
+const RATE_LIMIT_OK = "rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=269 routes_with_schema=269 routes_reading_input=142 validated=142";
+const LGPD_OK = "lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2";
+
+function f06Input() {
+  const data = f05Input();
+  data.context = phaseContext(stateF06);
+  data.metrics.logs = LOGS_OK;
+  data.metrics["rate-limit"] = RATE_LIMIT_OK;
+  data.metrics.lgpd = LGPD_OK;
+  return data;
+}
+
+function stagingEvidence() {
+  return {
+    ok: true,
+    environment: "staging",
+    sandbox: "crm-staging",
+    api: "loopback:56421",
+    database: "loopback:56422/postgres",
+    app: "loopback:3202",
+    providers: { whatsapp: "mock", ai: "mock" },
+    credentials: { anon: "present", service_role: "present" },
+  };
+}
+
+test("F06 is gated: in the sandbox it reaches READY (F06) with the three hardening lines measured", () => {
+  const data = f06Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F06)");
+  const bloco = render(data, result);
+  assert.match(bloco, /environment=sandbox/);
+  assert.match(bloco, /logs: routes=269 routes_logged=269/);
+  assert.match(bloco, /rate-limit: requests=101 status_429=1/);
+  assert.match(bloco, /lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2/);
+  assert.match(bloco, /e2e_scope: F06-required passed=41\/41 specs=10\/10/);
+});
+
+test("F06 inside the staging environment prints READY (staging) and environment=staging", () => {
+  const data = f06Input();
+  data.sandbox = stagingEvidence();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (staging)");
+  assert.match(render(data, result), /environment=staging/);
+});
+
+test("staging evidence with the wrong ports or marker is rejected, and F05 never earns READY (staging)", () => {
+  for (const patch of [{ api: "loopback:55421" }, { sandbox: "f02-crm-cadastros-disposable" }, { app: "loopback:3102" }, { database: "loopback:56422/outro" }]) {
+    const data = f06Input();
+    data.sandbox = { ...stagingEvidence(), ...patch };
+    const result = evaluate(data);
+    assert.equal(result.exitCode, 1, JSON.stringify(patch));
+    assert.ok(result.errors.some((e) => /sandbox: evidência/.test(e)), result.errors.join("\n"));
+  }
+  const f05 = f05Input();
+  f05.sandbox = stagingEvidence();
+  const result = evaluate(f05);
+  assert.equal(result.status, "READY (F05)");
+});
+
+for (const [rotulo, campo, linha] of [
+  ["rota sem log", "logs", "logs: routes=269 routes_logged=268 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7"],
+  ["worker sem log", "logs", "logs: routes=269 routes_logged=269 workers=4 workers_logged=3 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7"],
+  ["request sem organization_id", "logs", "logs: routes=269 routes_logged=269 workers=4 workers_logged=4 request_log_org_id=0/1 sentry_mock_captured=1 pii_fields=4/7"],
+  ["sentry mudo", "logs", "logs: routes=269 routes_logged=269 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=0 pii_fields=4/7"],
+  ["allowlist vazou", "logs", "logs: routes=269 routes_logged=269 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=7/7"],
+  ["sem 429", "rate-limit", "rate-limit: requests=101 status_429=0 auth_requests=101 auth_blocked=1 routes=269 routes_with_schema=269 routes_reading_input=142 validated=142"],
+  ["login sem teto", "rate-limit", "rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=0 routes=269 routes_with_schema=269 routes_reading_input=142 validated=142"],
+  ["rota sem schema", "rate-limit", "rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=269 routes_with_schema=268 routes_reading_input=142 validated=141"],
+  ["poucas requisições", "rate-limit", "rate-limit: requests=50 status_429=1 auth_requests=101 auth_blocked=1 routes=269 routes_with_schema=269 routes_reading_input=142 validated=142"],
+  ["sobrou linha", "lgpd", "lgpd: tables=9 rows=11 rows_remaining=1 audit_rows=2"],
+  ["sem auditoria", "lgpd", "lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=1"],
+  ["cliente vazio", "lgpd", "lgpd: tables=1 rows=1 rows_remaining=0 audit_rows=2"],
+]) test(`F06 rejects a hardening line out of contract: ${rotulo}`, () => {
+  const data = f06Input();
+  data.metrics[campo] = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, `linha aceita indevidamente: ${linha}`);
+  assert.ok(result.errors.some((e) => e.includes(campo)), result.errors.join("\n"));
+});
+
+test("missing logs, rate-limit or lgpd line makes otherwise green F06 fail", () => {
+  for (const campo of ["logs", "rate-limit", "lgpd"]) {
+    const data = f06Input();
+    delete data.metrics[campo];
+    const result = evaluate(data);
+    assert.equal(result.exitCode, 1);
+    assert.ok(result.errors.includes(`Métrica obrigatória ausente: ${campo}`), result.errors.join("\n"));
+  }
+});
+
+test("F05 keeps logs, rate-limit and lgpd pending without failing", () => {
+  const data = f05Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F05)");
+  assert.match(render(data, result), /logs: routes=pending/);
+  assert.match(render(data, result), /rate-limit: requests=pending/);
+  assert.match(render(data, result), /lgpd: tables=pending/);
+});

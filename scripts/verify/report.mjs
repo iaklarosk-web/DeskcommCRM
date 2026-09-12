@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { closedE2EPlan, hasClosedE2E, parseF02E2E } from "./f02-e2e.mjs";
+import { closedE2EPlan, hasClosedE2E, parseF02E2E, VERIFY_ENVIRONMENTS } from "./f02-e2e.mjs";
 
 // Dívidas de c85f7d72 saneadas: não podem reaparecer nem em revalidação.
 // As identidades e resultados históricos permanecem na evidência de ADR-007.
@@ -14,13 +14,16 @@ const integer = (n) => Number.isSafeInteger(n) && n >= 0;
  * herda TODOS os controles de F02 (sandbox descartável, snapshot SHA-256 dos
  * inputs, E2E fechado) e acrescenta o campo `webhook` medido.
  */
-const GATED_PHASES = ["F00", "F01", "F02", "F03", "F04", "F05"];
+const GATED_PHASES = ["F00", "F01", "F02", "F03", "F04", "F05", "F06"];
 
 /** §8.3: cada campo passa a ser obrigatório a partir da fase que o cria. */
 const phaseNumber = (phase) => Number(phase.slice(1));
 const requiresWebhook = (phase) => phaseNumber(phase) >= phaseNumber("F03");
 const requiresAiEval = (phase) => phaseNumber(phase) >= phaseNumber("F04");
 const requiresHandoff = (phase) => phaseNumber(phase) >= phaseNumber("F05");
+// ADR-028: hardening (F06) — `logs`, `rate-limit` e `lgpd` gravados pelas
+// próprias suítes; `restore:` e `smoke:` ficam no BUILD-STATE, fora do bloco.
+const requiresHardening = (phase) => phaseNumber(phase) >= phaseNumber("F06");
 
 export function phaseContext(state, requestedPhase) {
   const active = /^current_phase:\s*(F\d{2})\b/m.exec(state)?.[1];
@@ -109,10 +112,14 @@ export function evaluate(input) {
         inputs.hash_after !== inputs.hash_before) {
       errors.push("inputs: snapshot ausente, inválido ou árvore alterada durante o gate");
     }
+    // ADR-028: dois ambientes aceitos, cada um com marcador e portas próprios.
+    // A evidência diz qual foi; `environment` sai no bloco e decide o rótulo.
     const sandbox = input.sandbox;
-    if (!sandbox || sandbox.ok !== true || sandbox.sandbox !== "f02-crm-cadastros-disposable" ||
-        sandbox.api !== "loopback:55421" || sandbox.database !== "loopback:55422/postgres" ||
-        sandbox.app !== "loopback:3102" || sandbox.providers?.whatsapp !== "mock" ||
+    const perfil = sandbox && Object.hasOwn(VERIFY_ENVIRONMENTS, sandbox.environment ?? "sandbox")
+      ? VERIFY_ENVIRONMENTS[sandbox.environment ?? "sandbox"] : null;
+    if (!sandbox || !perfil || sandbox.ok !== true || sandbox.sandbox !== perfil.marker ||
+        sandbox.api !== `loopback:${perfil.api}` || sandbox.database !== `loopback:${perfil.db}/postgres` ||
+        sandbox.app !== `loopback:${perfil.app}` || sandbox.providers?.whatsapp !== "mock" ||
         sandbox.providers?.ai !== "mock" || sandbox.credentials?.anon !== "present" ||
         sandbox.credentials?.service_role !== "present") {
       errors.push("sandbox: evidência segura ausente ou inválida");
@@ -210,11 +217,33 @@ export function evaluate(input) {
       errors.push("reminder fora do contrato: exige runs=2, sent=1, duplicates=0");
     }
   }
+  // ADR-028 §1: as três métricas do hardening, obrigatórias a partir de F06.
+  if (requiresHardening(context.phase)) {
+    const logs = metric("logs", ["routes", "routes_logged", "workers", "workers_logged", "request_log_org_id", "sentry_mock_captured", "pii_fields"]);
+    if (logs && (logs.routes < 200 || logs.routes_logged !== logs.routes || logs.workers < 4 ||
+        logs.workers_logged !== logs.workers || logs.request_log_org_id !== 1 || logs.sentry_mock_captured < 1 ||
+        logs.pii_fields !== 4)) {
+      errors.push("logs fora do contrato: exige routes_logged=routes (>=200), workers_logged=workers (>=4), request_log_org_id=1, sentry_mock_captured>=1, pii_fields=4");
+    }
+    const rl = metric("rate-limit", ["requests", "status_429", "auth_requests", "auth_blocked", "routes", "routes_with_schema", "routes_reading_input", "validated"]);
+    if (rl && (rl.requests < 101 || rl.status_429 < 1 || rl.auth_requests < 101 || rl.auth_blocked < 1 ||
+        rl.routes < 200 || rl.routes_with_schema !== rl.routes || rl.validated !== rl.routes_reading_input)) {
+      errors.push("rate-limit fora do contrato: exige requests>=101, status_429>=1, auth_blocked>=1, routes_with_schema=routes, validated=routes_reading_input");
+    }
+    const lgpd = metric("lgpd", ["tables", "rows", "rows_remaining", "audit_rows"]);
+    if (lgpd && (lgpd.tables < 5 || lgpd.rows < 5 || lgpd.rows_remaining !== 0 || lgpd.audit_rows !== 2)) {
+      errors.push("lgpd fora do contrato: exige tables>=5, rows>=5, rows_remaining=0, audit_rows=2");
+    }
+  }
   const clean = errors.length === 0;
+  // ADR-028 §2: a partir de F06, o gate limpo rodado no ambiente `staging`
+  // sai `READY (staging)`; no sandbox sai `READY (Fnn)` — prova de código.
+  const environment = input.sandbox?.environment ?? "sandbox";
+  const staging = requiresHardening(context.phase) && environment === "staging";
   const status = !clean ? "NOT READY" : context.revalidation
     ? `${debt.length ? "REVALIDATED WITH DEBT" : "REVALIDATED"} (${context.phase})`
-    : `READY (${context.phase})`;
-  return { status, exitCode: clean ? 0 : 1, errors, debt, suites, corePassed, baselineCore };
+    : staging ? "READY (staging)" : `READY (${context.phase})`;
+  return { status, exitCode: clean ? 0 : 1, errors, debt, suites, corePassed, baselineCore, environment };
 }
 
 function read(file) {
@@ -243,7 +272,7 @@ export function collect(root, directory, context) {
   // reprova), enquanto §8.3 fixa o rótulo do campo com underscore. O mapa é o
   // único lugar onde essa diferença existe.
   const ARQUIVO_DA_METRICA = { ai_eval: "ai-eval" };
-  for (const name of ["isolation", "rls-coverage", "rbac", "entitlement", "webhook", "ai_eval", "handoff", "reminder"]) {
+  for (const name of ["isolation", "rls-coverage", "rbac", "entitlement", "webhook", "ai_eval", "handoff", "reminder", "logs", "rate-limit", "lgpd"]) {
     metrics[name] = read(path.join(directory, "metrics", `${ARQUIVO_DA_METRICA[name] ?? name}.line`));
   }
   metrics.secrets = read(path.join(directory, "secrets.log"));
@@ -282,7 +311,7 @@ export function render(input, result) {
     : `replicability: e2e[deka]=pending e2e[demo2]=pending src_diff_lines=pending grep_deka_in_src=${input.tenantReferences ?? "pending"}`;
   return [
     "VERIFY SUMMARY",
-    `scope=${input.context.revalidation ? "revalidation" : "phase"} phase=${input.context.phase} current_phase=${input.context.active}`,
+    `scope=${input.context.revalidation ? "revalidation" : "phase"} phase=${input.context.phase} current_phase=${input.context.active} environment=${result.environment ?? "sandbox"}`,
     `build=${ok("build")} lint=${ok("lint")} typecheck=${ok("typecheck")} shell=${ok("shell")}`,
     `unit=${fraction("unit")} integration=${fraction("integration")} db=${fraction("db")} e2e=${fraction("e2e")} baseline_n0=${input.context.baseline.total}`,
     `baseline_comparable: scope=unit+db passed=${result.corePassed} required=${result.baselineCore} full_n0=pending`,
@@ -292,6 +321,9 @@ export function render(input, result) {
     input.metrics.handoff ?? "handoff: ai_msgs_after_handoff=pending summary=pending assignee=pending notify=pending",
     input.metrics.reminder ?? "reminder: runs=pending sent=pending duplicates=pending",
     input.metrics.webhook ?? "webhook: replay=pending stored=pending tables_checked=pending",
+    input.metrics.logs ?? "logs: routes=pending routes_logged=pending workers=pending workers_logged=pending request_log_org_id=pending sentry_mock_captured=pending pii_fields=pending",
+    input.metrics["rate-limit"] ?? "rate-limit: requests=pending status_429=pending auth_requests=pending auth_blocked=pending routes=pending routes_with_schema=pending routes_reading_input=pending validated=pending",
+    input.metrics.lgpd ?? "lgpd: tables=pending rows=pending rows_remaining=pending audit_rows=pending",
     replicability,
     input.metrics.secrets ?? "secrets: pending",
     `tests_deleted=${input.testsDeleted ?? "pending"} tests_skipped=${count("skipped")} expected_failures=${count("expectedFailures")} tests_failed=${count("failed")} tests_pending=${count("pending")} mutants_killed=${input.mutants.killed ?? "pending"}/${input.mutants.total ?? "pending"}`,
