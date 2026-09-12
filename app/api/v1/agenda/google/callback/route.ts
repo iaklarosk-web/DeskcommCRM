@@ -1,3 +1,4 @@
+import { supportCallbackWriteAllowed } from "@/lib/impersonate/support";
 /**
  * GET /api/v1/agenda/google/callback — a volta do consentimento do Google.
  *
@@ -58,6 +59,7 @@ import { trocarCodigoPorToken } from "@/lib/agenda/google/token";
 import { contaDaAgendaPrimaria } from "@/lib/agenda/google/calendarios";
 import { classificarErroDoGoogle } from "@/lib/agenda/google/erros";
 import { env } from "@/lib/env";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 
 export const dynamic = "force-dynamic";
 
@@ -165,6 +167,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return voltar("erro=retorno_nao_verificavel");
   }
   const { organizationId, userId } = estado;
+  // F06-T01: o tenant vem do `state` ASSINADO — é aqui que ele passa a existir.
+  registrarRequisicaoDe(req, { outcome: "accepted", organization_id: organizationId, actor_id: userId });
 
   // ⚠️ QUEM VOLTOU É QUEM SAIU — e esta verificação vem ANTES da queima do nonce.
   //
@@ -221,6 +225,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   // `code` do Google — que é de uso único — antes de descobrir que o `state`
   // era repetido, e quem apresentasse o legítimo receberia "código já usado",
   // um erro que aponta para o Google e não para o replay.
+  if (!(await supportCallbackWriteAllowed(organizationId, userId, estado.authSessionId))) return voltar("erro=retorno_nao_verificavel");
   const admin = createAdminClient();
   const { error: erroDoNonce } = await admin.from("calendar_oauth_nonces").insert({
     nonce: estado.nonce,
@@ -430,6 +435,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 
   await audit({
+    actorUserId: userId,
+    actorAuthSessionId: estado.authSessionId,
     action: "agenda.google.conexao_concluida",
     organizationId,
     metadata: { user_id: userId, account_email: conta.conta.email, fuso: conta.conta.fuso },

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
@@ -98,7 +99,7 @@ export function CalendarioDeTarefas({ tarefas, podeEditar, aoAbrirTarefa, aoClic
         {cabecalhos.map((rotulo) => (
           <div
             key={rotulo}
-            className="py-2 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+            className="py-2 text-center text-[11px] font-semibold tracking-wider text-muted-foreground uppercase"
           >
             {rotulo}
           </div>
@@ -134,27 +135,42 @@ export function CalendarioDeTarefas({ tarefas, podeEditar, aoAbrirTarefa, aoClic
                 {dia.getDate()}
               </span>
 
-              {doDia.slice(0, POR_DIA_VISIVEIS).map((tarefa) => (
-                <button
-                  key={tarefa.id}
-                  type="button"
-                  title={tarefa.title}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    aoAbrirTarefa(tarefa);
-                  }}
-                  className={cn(
-                    "w-full truncate rounded-md px-1.5 py-0.5 text-left text-[10px] font-medium",
-                    estaEncerrada(tarefa)
-                      ? "bg-muted text-muted-foreground line-through"
-                      : estaAtrasada(tarefa)
-                        ? "bg-destructive/15 font-semibold text-destructive"
-                        : "bg-primary/10 text-primary",
-                  )}
-                >
-                  {tarefa.title}
-                </button>
-              ))}
+              {doDia.slice(0, POR_DIA_VISIVEIS).map((tarefa) => {
+                const className = cn(
+                  "w-full truncate rounded-md px-1.5 py-0.5 text-left text-[10px] font-medium",
+                  estaEncerrada(tarefa)
+                    ? "bg-muted text-muted-foreground line-through"
+                    : estaAtrasada(tarefa)
+                      ? "bg-destructive/15 font-semibold text-destructive"
+                      : "bg-primary/10 text-primary",
+                );
+                return tarefa.order_id ? (
+                  <Link
+                    key={tarefa.id}
+                    href={`/app/orders/${encodeURIComponent(tarefa.order_id)}#tarefas`}
+                    title={`${tarefa.title} · ${t("Gerenciar no pedido")}`}
+                    aria-label={`${tarefa.title} · ${t("Gerenciar no pedido")}`}
+                    onClick={(event) => event.stopPropagation()}
+                    className={className}
+                  >
+                    {tarefa.title}
+                  </Link>
+                ) : (
+                  <button
+                    key={tarefa.id}
+                    type="button"
+                    title={tarefa.title}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (podeEditar) aoAbrirTarefa(tarefa);
+                    }}
+                    disabled={!podeEditar}
+                    className={className}
+                  >
+                    {tarefa.title}
+                  </button>
+                );
+              })}
 
               {excedente > 0 ? (
                 <span className="pl-1 text-[10px] font-semibold text-muted-foreground">

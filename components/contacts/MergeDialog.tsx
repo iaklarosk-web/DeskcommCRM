@@ -32,6 +32,7 @@
  * imobiliária e infoproduto; o `vocabulary` do funil renomeia lead/deal, não
  * pessoa.
  */
+import { useContactPermissions } from "@/hooks/contacts/useContactPermissions";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useT } from "@/hooks/i18n/useT";
@@ -65,6 +66,7 @@ import type { MotivoDeDuplicidade } from "@/lib/contacts/duplicados";
 
 interface Props {
   open: boolean;
+  canMerge?: boolean;
   onOpenChange: (v: boolean) => void;
 }
 
@@ -76,9 +78,11 @@ const ROTULO_DO_MOTIVO: Record<MotivoDeDuplicidade, string> = {
 
 function GrupoDeDuplicados({
   grupo,
+  canMerge,
   onFundido,
 }: {
   grupo: GrupoDuplicado;
+  canMerge: boolean;
   onFundido: () => void;
 }) {
   const t = useT();
@@ -86,32 +90,39 @@ function GrupoDeDuplicados({
   const [principal, setPrincipal] = useState(grupo.principal_sugerido);
   const [confirmando, setConfirmando] = useState(false);
 
-  const secundarios = grupo.contatos.map((c) => c.id).filter((id) => id !== principal);
+  const secundarios = grupo.contatos
+    .map((c) => c.id)
+    .filter((id) => id !== principal);
   const contatoPrincipal = grupo.contatos.find((c) => c.id === principal);
-  const nomeDeQuemFica = contatoPrincipal ? rotuloDoContato(contatoPrincipal, t) : "";
+  const nomeDeQuemFica = contatoPrincipal
+    ? rotuloDoContato(contatoPrincipal, t)
+    : "";
   const nomesAbsorvidos = grupo.contatos
     .filter((c) => c.id !== principal)
     .map((c) => rotuloDoContato(c, t))
     .join(", ");
 
   async function juntar() {
+    if (!canMerge || merge.isPending) return;
     setConfirmando(false);
     try {
       const res = await merge.mutateAsync({
         primary_contact_id: principal,
         secondary_contact_ids: secundarios,
       });
-      const pendentes = Object.values(res.data.nao_repontado).reduce((a, b) => a + b, 0);
+      const pendentes = Object.values(res.data.nao_repontado).reduce(
+        (a, b) => a + b,
+        0,
+      );
       // O parcial tem voz própria. Uma fusão que deixou linhas na lápide (por
       // colisão com um índice único de runtime) não é a mesma coisa que uma
       // fusão limpa, e dizer "pronto" nas duas esconderia justamente o caso em
       // que alguém precisa olhar.
       if (pendentes > 0) {
         toast.warning(
-          t("Contatos juntados. {n} registro(s) continuaram no cadastro antigo — veja a auditoria.").replace(
-            "{n}",
-            String(pendentes),
-          ),
+          t(
+            "Contatos juntados. {n} registro(s) continuaram no cadastro antigo — veja a auditoria.",
+          ).replace("{n}", String(pendentes)),
         );
       } else {
         toast.success(t("Contatos juntados."));
@@ -125,7 +136,8 @@ function GrupoDeDuplicados({
   return (
     <div className="rounded-lg border border-border bg-surface p-3">
       <p className="mb-2 text-xs text-muted-foreground">
-        {t("Agrupados por")}: {grupo.motivos.map((m) => t(ROTULO_DO_MOTIVO[m])).join(", ")}
+        {t("Agrupados por")}:{" "}
+        {grupo.motivos.map((m) => t(ROTULO_DO_MOTIVO[m])).join(", ")}
       </p>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -133,7 +145,9 @@ function GrupoDeDuplicados({
           <label
             key={c.id}
             className={`flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm ${
-              c.id === principal ? "border-primary bg-primary/5" : "border-border bg-card"
+              c.id === principal
+                ? "border-primary bg-primary/5"
+                : "border-border bg-card"
             }`}
           >
             <input
@@ -141,12 +155,17 @@ function GrupoDeDuplicados({
               name={`principal-${grupo.chave}`}
               className="mt-1"
               checked={c.id === principal}
+              disabled={!canMerge || merge.isPending}
               onChange={() => setPrincipal(c.id)}
               aria-label={t("Manter este cadastro")}
             />
             <span className="min-w-0">
-              <span className="block truncate font-medium">{rotuloDoContato(c, t)}</span>
-              <span className="block truncate text-muted-foreground">{c.email ?? "—"}</span>
+              <span className="block truncate font-medium">
+                {rotuloDoContato(c, t)}
+              </span>
+              <span className="block truncate text-muted-foreground">
+                {c.email ?? "—"}
+              </span>
               <span className="block truncate text-muted-foreground">
                 {c.phone_number ? phoneForDisplay(c.phone_number) : "—"}
               </span>
@@ -170,13 +189,15 @@ function GrupoDeDuplicados({
             "Conversas, mensagens, negócios e histórico passam para quem fica. O cadastro antigo não é apagado — vira registro de fusão. Não há como desfazer.",
           )}
         </p>
-        <Button
-          size="sm"
-          onClick={() => setConfirmando(true)}
-          disabled={merge.isPending || secundarios.length === 0}
-        >
-          {merge.isPending ? t("Juntando…") : t("Juntar")}
-        </Button>
+        {canMerge && (
+          <Button
+            size="sm"
+            onClick={() => setConfirmando(true)}
+            disabled={merge.isPending || secundarios.length === 0}
+          >
+            {merge.isPending ? t("Juntando…") : t("Juntar")}
+          </Button>
+        )}
       </div>
 
       {/*
@@ -184,7 +205,7 @@ function GrupoDeDuplicados({
         que precisa pegar é "escolhi o vencedor errado", e para esse erro
         "tem certeza?" não serve de nada.
       */}
-      <AlertDialog open={confirmando} onOpenChange={setConfirmando}>
+      <AlertDialog open={canMerge && confirmando} onOpenChange={setConfirmando}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("Juntar estes cadastros?")}</AlertDialogTitle>
@@ -195,7 +216,9 @@ function GrupoDeDuplicados({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={merge.isPending}>{t("Cancelar")}</AlertDialogCancel>
+            <AlertDialogCancel disabled={merge.isPending}>
+              {t("Cancelar")}
+            </AlertDialogCancel>
             <Button
               variant="destructive"
               onClick={() => void juntar()}
@@ -210,7 +233,13 @@ function GrupoDeDuplicados({
   );
 }
 
-export function MergeDialog({ open, onOpenChange }: Props) {
+export function MergeDialog({
+  open,
+  onOpenChange,
+  canMerge: allowedByParent,
+}: Props) {
+  const permissions = useContactPermissions();
+  const canMerge = permissions.canMerge && allowedByParent !== false;
   const t = useT();
   const q = useContactDuplicates(open);
   const grupos = q.data?.data ?? [];
@@ -227,8 +256,24 @@ export function MergeDialog({ open, onOpenChange }: Props) {
           </DialogDescription>
         </DialogHeader>
 
+        {!canMerge && (
+          <p className="text-sm text-muted-foreground">
+            {t(
+              "Você pode consultar duplicados. Apenas gerentes e administradores podem juntá-los.",
+            )}
+          </p>
+        )}
         {q.isLoading ? (
           <Skeleton className="h-40 w-full" />
+        ) : q.isError ? (
+          <div className="space-y-2">
+            <p role="alert">
+              {t("Não foi possível carregar os contatos duplicados.")}
+            </p>
+            <Button variant="outline" onClick={() => void q.refetch()}>
+              {t("Tentar novamente")}
+            </Button>
+          </div>
         ) : grupos.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
             {t("Nenhum contato duplicado encontrado.")}
@@ -239,6 +284,7 @@ export function MergeDialog({ open, onOpenChange }: Props) {
               <GrupoDeDuplicados
                 key={grupo.chave}
                 grupo={grupo}
+                canMerge={canMerge}
                 onFundido={() => void q.refetch()}
               />
             ))}

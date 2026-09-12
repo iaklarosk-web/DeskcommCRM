@@ -2,6 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookieSecure } from "@/lib/supabase/cookie-secure";
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
+import { getRequestId } from "@/lib/api/request-id";
 import { isPublicPath } from "@/lib/auth/public-paths";
 import {
   verifyImpersonateCookieEdge,
@@ -11,16 +12,21 @@ import {
 const COOKIE_NAME = "sb-deskcomm-auth";
 
 export async function proxy(request: NextRequest) {
-  const response = NextResponse.next({ request: { headers: request.headers } });
-
-  // Inject X-Request-Id for downstream correlation (audit log, error wrappers).
-  const requestId = request.headers.get("x-request-id") ?? crypto.randomUUID();
-  response.headers.set("x-request-id", requestId);
-
   const { pathname, search } = request.nextUrl;
+  const requestId = getRequestId(request);
+  const requestHeaders = new Headers(request.headers);
+
+  // A rota, o wrapper e a auditoria recebem o mesmo ID que volta ao cliente.
+  requestHeaders.set("x-request-id", requestId);
   // Expose pathname to Server Components via header (used by onboarding layout).
+  requestHeaders.set("x-pathname", pathname);
+  // F06-T01: o método viaja com o caminho para a linha de log do guarda.
+  requestHeaders.set("x-request-method", request.method);
+
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  // Mantém o fallback herdado para handlers que ainda não usam wrappers.
+  response.headers.set("x-request-id", requestId);
   response.headers.set("x-pathname", pathname);
-  request.headers.set("x-pathname", pathname);
 
   // EPIC-11: in dev we route by path (`/admin/*`); in prod the
   // `admin.deskcomm.com` sub-domain is mapped via Vercel rewrites to the same
@@ -90,9 +96,8 @@ export async function proxy(request: NextRequest) {
 
   // EPIC-11 S-11.07: validate impersonate cookie on /app/* paths. Middleware
   // runs in Edge — no DB access, only HMAC + expiry. On any failure we delete
-  // the cookie (defence-in-depth) and let the request continue (the layout
-  // re-checks server-side; downstream code that depends on the cookie will
-  // simply see no impersonation in effect).
+  // the presentation cookie. The database support session remains authoritative:
+  // expired/revoked support still blocks the app until explicit exit.
   if (pathname.startsWith("/app")) {
     const impCookie = request.cookies.get(IMPERSONATE_COOKIE_NAME_EDGE)?.value;
     if (impCookie) {

@@ -1,0 +1,25 @@
+{
+  "event": "message.any",
+  "session": "f03-sessao-ficticia",
+  "payload": {
+    "id": "false_250302204792918@lid_3EB0F03LID001",
+    "from": "250302204792918@lid",
+    "to": "5511900000099@c.us",
+    "fromMe": false,
+    "body": "Cheguei por aqui mesmo",
+    "type": "chat",
+    "hasMedia": false,
+    "timestamp": 1789000060,
+    "_data": {
+      "pushName": "Cliente Ficticio Dois",
+      "key": {
+        "remoteJid": "250302204792918@lid",
+        "remoteJidAlt": "5511900000002@s.whatsapp.net",
+        "addressingMode": "lid",
+        "fromMe": false,
+        "id": "3EB0F03LID001"
+      },
+      "message": { "conversation": "Cheguei por aqui mesmo" }
+    }
+  }
+}

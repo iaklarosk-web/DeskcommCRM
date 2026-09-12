@@ -27,6 +27,7 @@ import type { NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { createClient } from "@/lib/supabase/server";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,8 @@ export async function GET(_req: NextRequest): Promise<Response> {
   if (authErr || !user) {
     return fail("unauthenticated", "Auth required.", 401, { requestId, headers: NO_STORE });
   }
+  // F06-T01: token de realtime é da SESSÃO, não de uma organização — a linha diz isso.
+  registrarRequisicaoDe(_req, { outcome: "allowed", scope: "unresolved", request_id: requestId, actor_id: user.id });
 
   // getSession() aqui NÃO autentica (o getUser acima já autenticou): serve só
   // para extrair o token que o cookie httpOnly guarda.

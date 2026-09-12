@@ -1,10 +1,11 @@
 "use client";
+import Link from "next/link";
 
 import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
 
 import { useT } from "@/hooks/i18n/useT";
 
-import { format, isBefore } from "date-fns";
+import { format } from "date-fns";
 import * as React from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -66,7 +67,11 @@ function separar(agendamentos: Agendamento[], agora: Date): Record<AbaDoHistoric
     // uma resposta errada com cara de certa.
     if (a.situacao === "cancelled") { vazio.cancelados.push(a); continue; }
     if (a.situacao === "pending") { vazio.aguardando.push(a); continue; }
-    (isBefore(new Date(a.comeca), agora) ? vazio.passados : vazio.proximos).push(a);
+    // Um desfecho registrado é histórico; sem desfecho, o intervalo só acaba
+    // em `termina`. Quem está sendo atendido continua visível em Próximos.
+    const encerrado = a.situacao === "completed" || a.situacao === "no_show"
+      || new Date(a.termina).getTime() <= agora.getTime();
+    (encerrado ? vazio.passados : vazio.proximos).push(a);
   }
   return vazio;
 }
@@ -196,7 +201,7 @@ export function HistoricoDaAgenda({
                         cadastrou em Tipos de agendamento) e saem como ele
                         escreveu. Só o fallback "Agendamento" é rótulo nosso, e
                         esse traduz. */}
-                    <div className="truncate text-sm">{a.quemSeraAtendido ?? a.titulo}</div>
+                    <Link className="block truncate text-sm underline" href={`/app/agenda?compromisso=${a.id}`}>{a.quemSeraAtendido ?? a.titulo}</Link>
                     <div className="truncate text-[11px] text-text-muted">
                       {a.tipo || t("Agendamento")}
                       {pessoa ? ` · ${t("com")} ${pessoa.nome}` : ""}

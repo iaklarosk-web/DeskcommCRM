@@ -1,0 +1,68 @@
+F02 T04–T08 — checkpoint parcial, 09/09/2026
+Base publicada: 5f87917570011142fa603e43fe99a1d08540c58c.
+Escopo: alterações locais ainda em construção; não equivale ao gate F02.
+
+T04–T06
+Leitores de contato: timeline/crm-summary com organização ativa explícita.
+Perfil do contato com pedidos; vínculo comercial e canal declarado no pedido.
+Catálogo paginado, busca literal e erros distintos de lista vazia.
+Matriz: 18 módulos, 29 operações (14 leitura/15 escrita). A composição dos
+145 cenários de papel não representa 145 requisições reais. A evidência HTTP
+pré-reboot executou 32 células novas (C02–C05,E01–E05,P02–P04,L01–L04), além de
+22 células anteriores. Quatro células C06/C07 ainda aguardam execução.
+Sessão/composição e scanner de suporte: 16/16 casos aprovados.
+Os 108 casos no relatório unit.json aprovaram, mas o processo não concluiu
+com sucesso: não é prova de execução integral verde. Rechecagem da fixture
+de contato: 16/16. Jornada UI A/B inicial falhou no catálogo e numa corrida
+de navegação. As correções existem; repetição final ainda pendente.
+
+9011 — catálogo
+A policy FOR ALL de escrita participava também do SELECT e executava a
+checagem de papel por linha. Separada em INSERT/UPDATE/DELETE, com os mesmos
+predicados e sem ampliar acesso. Matriz SQL antes/depois: 64/64 células iguais.
+Leitura autenticada PostgREST com 509 produtos: limit=50 -> 206,50 linhas,99ms;
+limit=500 -> 206,500 linhas,74ms. Remoção das fixtures confirmada: zero linhas.
+Essas medidas foram observadas antes da reinicialização; arquivos temporários
+se perderam. Não são apresentados como novo benchmark pós-reboot.
+SHA256 9011: 5edc478beabb71e8551787cb51b201cd52556b4824605227611d3b66d95c7c2d
+
+T07
+Ver construction-f02-t07-20260909.txt. Seeds fictícios opt-in, marcador no
+banco, execução transacional e idempotente; sem clientes ou provedores reais.
+A prova CLI foi ampliada na T08 para checar identidade/timezone canônicos,
+ausência de aliases ativos e preservação da personalização no segundo seed.
+Sete casos CLI aprovados na execução integration.json da T08.
+
+T08
+Dados canônicos de organização e branding preservados. API/tela comercial,
+validação estrita de campos e escrita autorizada na mesma transação da auditoria.
+Aliases antigos são diagnosticados e arquivados privadamente quando o dado
+canônico é salvo; nenhum backfill automático foi executado. O arquivo privado
+não tem policies nem grants de cliente ou service_role. RPC de diagnóstico
+retorna somente metadados, sem expor valores legados. A ação legada de identidade
+usa o novo RPC para salvar/arquivar; sua auditoria legada segue fora da transação.
+Não se atribui atomicidade nova ao caminho legado inteiro.
+9010 aplicada somente no sandbox descartável, exit=0, 0,63s.
+SHA256: 06e5b36995ca9ed849e4a5593842e22cbeeca192b834f0674bc71cbaaae4a3a8
+Instalação e reaplicação do baseline + schema/RLS/anonimização: 41/41 em 5 arquivos.
+Integração comercial: 7/7 no relatório integration-admin-recheck.json. A primeira
+fixture usava parâmetros de organização trocados; a seguinte usava manager para
+RPC admin. Ambas corrigidas sem relaxar permissões. Também foram demonstradas
+negações a admin sem aceite e organização suspensa, sem alteração/arquivamento.
+Unit: 59 casos aprovados em 7 arquivos antes do reboot; o processo terminou com
+timeouts de workers. Os 4 arquivos restantes passaram após reboot: 45/45.
+Os 104 casos são cobertura reconciliada em execuções distintas, não uma única
+execução integral verde. Nenhum teste ignorado foi criado para encobrir falha.
+
+Pós-reboot
+TypeScript integral: heap 2048MB atingiu limite do processo; heap 3072MB saiu 0.
+A causa do travamento original da VPS permanece não estabelecida. Ver evidence
+construction-f02-recovery-20260909.txt. Migrações aplicadas não foram alteradas.
+Tipos regenerados de public,graphql_public,storage: 14 linhas novas, zero removidas
+contra HEAD, antes da integração posterior da conferência (9012).
+Mutantes reais em série: 24=1/1 (18,59s),25=1/1 (22,79s),26=5/5 (26,05s); todos exit0.
+Logs persistentes em .verify-logs/f02-t04-t06 e .verify-logs/f02-t08.
+
+Ainda não validado neste checkpoint: bundle/browser final T04–T12, novo gate F02,
+operador Deka, provedores reais, staging publicado ou produção. D48 remove a
+entrevista Deka como bloqueio de construção; configurações reais serão do cliente.

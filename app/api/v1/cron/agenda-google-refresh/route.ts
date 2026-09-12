@@ -40,6 +40,7 @@ import { classificarErroDoGoogle, estadoDaConexaoApos } from "@/lib/agenda/googl
 import { fundirTokens, precisaRenovar, type TokenDoGoogle } from "@/lib/agenda/google/oauth";
 import { renovarToken } from "@/lib/agenda/google/token";
 import { env } from "@/lib/env";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 
 export const dynamic = "force-dynamic";
 
@@ -214,6 +215,7 @@ async function executar(req: NextRequest): Promise<Response> {
   if (!autorizado(req)) {
     return NextResponse.json({ error: { code: "unauthenticated", message: "cron secret inválido" } }, { status: 401 });
   }
+  registrarRequisicaoDe(req, { scope: "cron", outcome: "allowed", status: 200 }); // F06-T01
   const resumo = await renovarAgendasDoGoogle(createAdminClient(), { agora: new Date() });
   return NextResponse.json({ data: resumo });
 }

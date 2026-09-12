@@ -1,0 +1,158 @@
+# target-state — revisão para Deskcomm v1.17.0 e pedidos do dia
+
+## Checkpoint F03 — Conversation, Channel Adapter e Inbox
+
+Este bloco tem precedência sobre as descrições anteriores das linhas 5.6, 5.7 e
+5.13. Decisões em [ADR-016](../decisions/ADR-016-conversa-d16-sobre-o-ciclo-herdado.md),
+[ADR-017](../decisions/ADR-017-canal-saas-e-webhook.md),
+[ADR-018](../decisions/ADR-018-verify-v1.1.md) e
+[ADR-019](../decisions/ADR-019-conversa-arquivada-e-a-janela-de-servico.md);
+desenho em [F03](../design/F03-conversation-inbox.md).
+
+| Superfície | Implementação | Onde |
+|---|---|---|
+| Estados D16 | Coluna `conversations.saas_state` com CHECK dos oito estados; `transition()` é a única autoridade de evento e delega o lado legado a `fn_service_status`/`fn_conversation_assign`; gatilho `trg_saas_state_project` traduz escrita legada pelo mapa total, suprimido quando o movimento veio da autoridade | `src/conversation/`, migration 9013 |
+| Contrato de canal | `SaasChannelAdapter` com dois adapters: `waha` embrulha o herdado, `mock` grava em `mock_outbox`. O `ChannelAdapter` de `lib/channels/types.ts` segue servindo as rotas herdadas | `src/channels/`, migration 9014 |
+| Tenant do webhook | Rota nova resolve por `channel_accounts` antes de qualquer escrita; sem match vai para `webhook_quarantine` com contador e 202. `channel_accounts` ganhou `phone_e164` e `channel_session_id` — o vínculo explícito com a sessão herdada, exigido porque `conversations`/`messages` têm `channel_session_id NOT NULL` | `app/api/v1/webhooks/saas/[provider]`, migration 9015 |
+| Idempotência | Índice único parcial `(organization_id, provider, external_id)`; a constraint herdada `messages_org_external_id_unique` permanece | migration 9015 |
+| Janela de serviço | A fronteira herdada precede a máquina: mensagem que `fn_service_inbound` não atribui a atendimento fica gravada, não transiciona e é contada (ADR-019) | `src/channels/inbound.ts` |
+| Envio e fila | `send_message` no catálogo de ações; `job_queue` ganhou o kind `outbound_message` e o status `blocked` por adição; `job_runs` registra cada tentativa; worker de saída sobe como processo solto | `src/actions/`, `src/jobs/`, `workers/saida-worker.ts`, migration 9016 |
+| Inbox | As cinco ações atravessam `transition()`; assumir a partir de `ai_handling` é `handoff.requested` + `human.claimed`, duas transições legais; estado D16 visível na lista e no cabeçalho, com filtro por estado e responsável | `lib/inbox/`, `components/inbox/`, rotas de `conversations` |
+| Verificador v1.1 | F03 entra na lista de fases com gate completo, herdando os controles fechados de F02; `webhook` passa a ser medido; inventário de specs por fase | `scripts/verify.sh`, `scripts/verify/`, ADR-018 |
+| Sandbox | `scripts/verify/sandbox.sh` deriva o ambiente descartável do `config.toml` versionado por substituições conferidas, cria as extensões que o baseline referencia e não cria, e derruba só o que subiu | `scripts/verify/sandbox.sh` |
+
+Limites desta fase: Meta Cloud, Instagram, e-mail de entrada e webchat seguem
+fora (D05); número real da Deka é item humano (D04); toda a execução usa
+`WHATSAPP_MODE=mock` com empresas fictícias e nenhuma mensagem sai para pessoa.
+A conversa nova a partir de `archived` que D34 pede **não** foi entregue: o
+índice `uniq_conversations_1to1_per_contact_session` tem nove dependentes
+provados e a mudança é decisão do proprietário (ADR-019).
+
+## Checkpoint F02 concluído tecnicamente — 03ec6a3b56826ab882782efb1dd5185f47e52a8c
+
+Este checkpoint tem precedência sobre descrições históricas do estado atual.
+As medições F00/F01 preservadas abaixo continuam atribuídas a seus commits.
+D47 determina pausa após F02; D48 retira dados Deka dos gates de engenharia.
+[ADR-014](../decisions/ADR-014-F02-configuravel-e-pausas.md) e [desenho F02](../design/F02-pedidos-do-dia.md) registram o contrato genérico.
+
+| Superfície | Fonte no checkpoint | Implementação |
+|---|---|---|
+| Cliente e pedidos da ficha | `components/crm/ContactOrders.tsx:23` | Leitura paginada, vazio/erro e acesso ao pedido do contato. |
+| Empresas | `app/api/v1/companies/route.ts:49` | CRUD sob organização ativa; vínculo de empresa e snapshot do pedido. |
+| Catálogo | `lib/catalogo/listar.ts:33` | Busca literal e paginação; leitura e escrita têm policies por operação (9011). |
+| Pedidos/itens | `src/crm/orders/service.ts:115` | Comandos transacionais com identidade, revisão, snapshots, histórico e idempotência. |
+| Notas | `components/crm/CrmNotes.tsx:28` | Notas humanas vinculadas ao titular/pedido, sem lead fictício. |
+| Tarefas | `components/crm/LinkedOrderTasks.tsx:40` | Tarefas e histórico vinculados ao pedido. |
+| Configuração comercial | `src/tenant-config/commercial-service.ts:357` | Identidade/timezone/moeda canônicos em organizations; seis campos comerciais em tenant_settings; aliases antigos arquivados privadamente. |
+| Relatório diário | `src/crm/orders/daily.ts:345` | Data e critério explícitos; identidade canônica da empresa, consulta completa, grupos e centavos/milésimos exatos. |
+| Conferência | `src/crm/orders/checks-service.ts:119` | Quantidade conferida por item/revisão, separada da venda; recibos privados e histórico imutável. |
+| Seeds fictícios | `scripts/f02-fixture-writer.ts:185` | Opt-in em sandbox com marcador do banco; gravação idempotente. |
+| Exportação de pedidos | `src/crm/orders/export.ts:124` | Escopo pelo titular e organização; inclui journal de conferência sem recibos/chaves/hashes. |
+
+Branding permanece em `organizations.settings.branding`; o arquivo legado é a
+tabela privada `private.tenant_setting_alias_archive`, criada na 9010, com RLS,
+zero policies e nenhum grant direto a anon/authenticated/service_role. A fachada
+`src/tenant-config/settings.ts` lê os aliases da origem canônica e recusa escrita
+nesses aliases. Não é uma migração geral dos seis escritores de branding para
+`setSetting`; a descrição histórica que propunha isso não reflete a implementação.
+
+O journal de conferência da 9012 tem `USING (organization_id in (select
+public.fn_user_org_ids()))`; as leituras HTTP/RPC especificam também organização.
+O recibo privado mantém RLS, zero policies e nenhum grant de cliente. As provas
+medem tabelas existentes e o catálogo de policies; números F00 não são contagens
+atuais. O baseline preserva a varredura final de anon e migrações aplicadas são
+imutáveis. Nenhum dado `orders` externo foi apagado ou reinterpretado.
+
+[Evidência T04–T08](evidence/construction-f02-t04-t08-20260909.txt) preserva provas
+focais e tentativas. O gate05 sobre o código funcional `5f3df2cf` aprovou
+unit8380/8380, integração72/72, banco1585/1585 e E2E13/13, mas reprovou quatro
+mecanismos de teste (23/27 scripts mutantes). O checkpoint `4ec7bb56` corrigiu
+esses mecanismos, com controle RLS9/9, vazamentos8/8 e rechecagens02=1/1,03=5/5,26=5/5.
+O gate06 aprovou 27/27 scripts, mas encerrou NOT READY com E2E12/13 por uma espera
+insuficiente na lista do viewer. O checkpoint `03ec6a3b` sincroniza a resposta
+GET HTTP200, a fixture exata e sua exibição na UI
+(`tests/e2e/f02-crm-navigation.spec.ts:316-337`); a rechecagem A/B passou2/2.
+A CI34439000032 e o Docker34439000033 desse checkpoint passaram. O gate07 terminou
+com exit 0 em `4617.77s`, concluído às `2026-09-10T06:11:30Z`:
+unit8380/8380, integração72/72, DB1585/1585, E2E13/13 em sete specs,
+mutantes27/27, `tests_pending=0`, `debt_known=0` e zero violações. Os indicadores
+das fases futuras continuam `pending` e não entram no fechamento de F02.
+O verificador registrou `STATUS: READY (F02)` em
+`.verify-logs/f02-final-07/orchestration.log:15-33`; o término está em
+`.verify-logs/f02-final-07/result.json:1-4`. [Evidência T13](evidence/construction-f02-t13-20260909.txt)
+e [matriz das APIs](evidence/f02-t04-api-matrix.md). F02 conclui seu escopo técnico
+e a construção pausa antes de F03, conforme D47.
+
+Conforme a [ADR-015](../decisions/ADR-015-request-id-canonico-F02.md), 21 módulos e
+34 operações F02 usam o identificador canônico nos envelopes e auditorias.
+O E2E comprovou suporte somente leitura, quatro grupos de leitura/quatro recusas,
+duas auditorias correlacionadas e IDs gerado/ecoado. As 11 referências da tabela
+foram revalidadas contra o checkpoint acima; arquivos de aplicação não mudaram
+no reparo dos mecanismos de teste. Toda a execução usa fixtures fictícias e
+WhatsApp/IA mock. Aceite visual do proprietário, operação Deka, provedores
+reais, produção e E2E integral do upstream não foram validados. Esses limites
+permanecem explícitos, mas dados e operação Deka não bloqueiam a engenharia
+genérica concluída em F02, conforme D48.
+
+
+Saída original da F00-T07 em `c85f7d72eebe33649812fe5cae174b7dd80e0e9f`, revista em 08/09/2026 por autorização do proprietário para atualizar o desenho, sem construir a F02. Referência desta revisão: release v1.17.0, `db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d`; o código da integração com nossa F01 está registrado em `a86ca7c4234722d8422e833dbefcaf986fad1797`. O [BUILD-STATE](../../BUILD-STATE.md) registra a revalidação concluída com três dívidas herdadas, sem substituir o histórico da F00/F01 por uma declaração de prontidão da combinação.
+
+As contagens e descrições não revistas da matriz abaixo pertencem à auditoria histórica em `c85f7d7`, registrada em `deskcomm-audit.md`; não são uma nova medição de banco ou cobertura. As linhas revistas apontam para evidências da v1.17.0 ao fim deste arquivo. Classes são decisões de destino, não declarações de funcionalidade já entregue. `src/…` indica uma fronteira lógica prevista: preservar código compatível em `lib/`, `app/` e `workers/` evita mover ou duplicar módulos só para cumprir um caminho textual.
+
+O [ADR-008](../decisions/ADR-008-F02-pedidos-do-dia.md) registra a revisão e o [desenho F02](../design/F02-pedidos-do-dia.md) detalha pedidos, lista do dia, impressão, conferência, pendências e tasks futuras já incorporadas à [DIRETRIZ 2.1](../DIRETRIZ.md), junto das decisões desta sessão. Valores e regras comerciais ainda não confirmados continuam pendentes até resposta do proprietário/Deka. O destino completo é SaaS comercial com várias empresas, planos, cobrança, suporte e marca própria, planejado até F17; F02 é uma etapa desse destino e não foi implementada por esta revisão.
+
+| Módulo (§5) | Classe | Caminho atual → alvo | Tabelas atuais → alvo | Tasks |
+|---|---|---|---|---|
+| 5.1 TenantContext | ADAPTAR | `lib/supabase/admin.ts` + `.eq("organization_id")` manual em 135/237 handlers; `lib/mcp/auth.ts` (tenant por `api_tokens`) → `src/tenant-context/` (`fromSession`, `fromJob`, `fromWebhook`, `fromApiToken`, `forEachEligibleTenant`, `withTenant` com `set_config('app.organization_id')`) e função SQL `current_organization_id()` que lê o GUC **ou** o JWT | `user_organizations` (mantida); `channel_accounts` e `webhook_quarantine` (novas) | F01-T01, F01-T02, F03-T03 |
+| 5.2 TenantConfiguration | ADAPTAR | `organizations.settings jsonb` com 6 escritores próprios + colunas `organizations.timezone/locale` → `src/tenant-config/schema.ts` + `getSetting/setSetting/validateSeed/listSchema`; os 6 escritores passam a chamar `setSetting` | `organizations.settings` (lida só por compatibilidade) → `tenant_settings(organization_id, key, value, schema_version, source, …)` | F01-T05, F01-T06, F02-T08, F04-T10 |
+| 5.3 Entitlement | ADAPTAR | `lib/ai/budget/`, `lib/ai/pricing.ts` (só 3 prefixos Claude), `llm_calls` + trigger de orçamento → `src/entitlement/` (`entitlement()`, `recordUsage()`, `withEntitlement()`, `pricing.ts` por modelo OpenAI) | `llm_calls`, `ai_budgets` (mantidas, lidas) → `ai_usage_events` (nova, única escrita de uso) | F01-T08, F04-T09, F05-T09 |
+| 5.4 Identity & RBAC | ADAPTAR | `lib/auth/require-role.ts`, `lib/auth/types.ts` (5 papéis), `platform_admins` → `src/rbac/matrix.ts` com vocabulário D15 traduzido para `admin`/`agent` (ADR-003); 21 rotas sem `requireRole` entram no gate ou em `public_routes.ts` | `user_organizations` (CHECK inalterado), `platform_admins` (mantida) | F01-T07 |
+| 5.5 CRM Core | ADAPTAR; CRIAR lacunas de pedidos | Preservar handlers de contatos/catálogo e seus IDs; fachada lógica `customers/products/tasks` usa `contacts/catalog_products/crm_tasks`. Acrescentar domínio de pedidos/itens, lista por produto/entrega, impressão e conferência | Sem rename físico obrigatório de `contacts` ou `catalog_products`; `companies` e `order_items` são lacunas históricas a confirmar. `orders` tem contrato de e-commerce: F02-T02 define adaptação/migração preservando registros e leitores. Timeline/notas mantêm identidade e integração herdadas; escolher extensão ou novas relações após inventário | F02-T01…T09 preservadas; T10…T13 incorporadas à DIRETRIZ §7.3, execução futura |
+| 5.6 Conversation | ADAPTAR | Preservar `lib/inbox/comando-da-conversa.ts`, ciclo de demandas e `ServiceBoundary`; compatibilizar D16/D34 por uma autoridade de transição com tradução documentada, sem segunda máquina de estados concorrente | Preservar `conversations`, `messages`, vínculos de contato/demanda e revisões. Não substituir CHECKs nem remover `force_human`/silêncio antes de provar todos os leitores/escritores e trabalhos assíncronos | F03-T01, F03-T05, F03-T09 |
+| 5.7 Channel Adapter | ADAPTAR | `lib/channels/`, `lib/waha/ingest.ts` e webhook herdado → contrato de entrada/saída + modo mock e fixtures. Deka usará WAHA nesta etapa, conforme resposta de 08/09/2026; API oficial não é requisito do piloto | Conciliar `whatsapp_connections` com `channel_accounts` criada na F01 por vínculo/mapeamento explícito; não renomear nem copiar identidades indiscriminadamente. `mock_outbox`/quarentena seguem o contrato aprovado | F03-T02, T03, T04, T06, T07 |
+| 5.8 Action Policy | ADAPTAR + completar lacunas | Integrar catálogo, executores, auditoria e confirmações de D17/D18 ao motor existente. `applyPreviewPolicy` já distingue leitura/proposta; revisão de texto assistido não substitui confirmação comercial. Uma autoridade para cada ação, sem catálogos independentes no caminho da execução | Reconciliar pendências, recibos e auditoria existentes antes de criar `pending_actions`/`audit_events`; ações de pedido recebem schema e revisão do pedido | F03-T06, F04-T01, F04-T02, F06-T03 |
+| 5.9 AI Agent | ADAPTAR (revê REFAZER da F00) | Preservar `lib/agent-engine/`; elegibilidade da resposta normal legada é false na v1.17.0. Acrescentar contexto/ações de pedido, contrato de provedor/mock e evidências D18/D19 ao mesmo motor | Conservar proveniência do turno, demanda e revisão; conciliar `llm_calls` e `ai_usage_events` sem registrar duas cobranças ou divergir sobre uma mesma chamada | F04-T03…T08, F04-T11 |
+| 5.10 Knowledge/RAG | ADAPTAR | `lib/ai/embeddings/`, `workers/rag-indexer.ts`, RPC `fn_buscar_trechos_das_fontes` → `src/knowledge/` (`ingest/search/reindex`), ping de dimensão no boot, uso gravado | `ai_chunks` (vector(1536), mantida), `ai_knowledge_sources.agent_id` deixa de ser NOT NULL (acervo é da organização) | F04-T04, F04-T05 |
+| 5.11 Handoff | ADAPTAR (revê REFAZER da F00) | Ampliar `lib/agent-engine/agent/human-handoff.ts`: preservar guarda de atendimento, silêncio, cancelamento de trabalhos e deduplicação; acrescentar motivos estruturados, resumo de D19, claim e prova após handoff | Reutilizar identidade do episódio e avisos existentes; extensão/tabela complementar só onde faltar campo exigido, sem dois estados de handoff | F05-T01…T04 |
+| 5.12 Recurring Reminder | CRIAR regra; ADAPTAR infraestrutura | Regra PJ específica sobre filas/envio existentes; separar timeout de ausência de resposta de fechamento da produção e janela de entrega. Agenda, exceções e múltiplas entregas continuam dependentes da entrevista | `reminder_runs` com idempotência por tenant/contato/período. Essa chave deduplica lembretes; não impõe um único pedido ou entrega por semana | F05-T06…T08; distinção de corte/janela incorporada à DIRETRIZ §7.6, implementação e parâmetros pendentes |
+| 5.13 Workers & Jobs | ADAPTAR | `event_log` + `drain.ts` e `job_queue` + `queue.ts` (duas filas) → ADR na F03: `event_log` = bus, `job_queue` = Job da §5.13; `enqueue()` rejeita sem `organization_id`; retry 3 e `blocked`; `--once` | `event_log`, `job_queue` (mantidas) → `job_runs` (nova) | F03-T08, F05-T08 |
+| 5.14 API | REUTILIZAR | `lib/api/wrappers.ts`, `lib/api/errors.ts`, `proxy.ts` (`X-Request-Id`) — mantidos; rotas novas seguem o padrão | — | F02-T04 |
+| 5.15 Banco/RLS/migrations | ADAPTAR | `supabase/baseline.sql` (fonte real) + `migrations/` (cadeia não sobe do zero) + `MANIFEST.md` → migrations novas SEMPRE em par (arquivo + apêndice idempotente no baseline), `service_only` no manifest, revoke/grant explícitos; `current_organization_id()` para as policies | 117 tabelas; 107 com `organization_id`; 3 com `organization_id` e sem policy; 49 com grant a `anon` (revogar) | F01-T03, F01-T04, F02-T01 |
+| 5.16 Notificações | CRIAR | `agent_inbox_items` (aviso da org, 18 kinds), Web Push já existente → `src/notifications/` (`notify()` para os 6 eventos; in-app por usuário; e-mail via Resend com mock) | `notifications` (nova, por `user_id`); `agent_inbox_items` mantida para avisos operacionais herdados | F05-T02, F05-T03 |
+| 5.17 Observabilidade | ADAPTAR | `api_audit_log` (sem `actor_type/risk/result`), `lib/audit/`, Sentry scrub por denylist, `/api/v1/health` sem contadores → `audit_events` escrita por Action Policy/Conversation/Identity/Jobs/Config; health com contadores; scrub por allowlist | `api_audit_log` (mantida, herdada) + `audit_events` (nova) | F04-T01, F06-T04 |
+| 5.18 Segurança/LGPD | ADAPTAR | `lib/env.ts` (Zod) + 44 arquivos com `process.env` solto; rate limit sem cobrir webhook WAHA; LGPD completa (`export-collector.ts`, `redact-cascade.ts`, 7 rotas, 2 workers) → `src/config/env.ts` único; rate limit no webhook; scanner de segredos com fixture negativa; LGPD reutilizada pelas 2 ações do catálogo | `lgpd_requests` (mantida) | F01-T09, F01-T10, F06-T02, F06-T03 |
+
+Módulos herdados sem correspondente direto na Fase 1: MCP, instalação, white-label, LGPD, flywheel e onboarding são candidatos a reaproveitamento, respeitando os limites do piloto. A decisão histórica de REMOVER Nuvemshop não equivale a autorização para apagar registros existentes: o desenho da F02 exige revalidar dependências, exportação e migração de `orders` antes de qualquer operação destrutiva. Nenhum schema ou módulo foi removido nesta revisão.
+
+Regra que atravessa todas as linhas: o `baseline.sql` é o contrato do schema (a cadeia de migrations não sobe do zero); toda migration da Fase 1 nasce com o par migration + apêndice idempotente, e a prova de RLS lê `pg_tables`/`pg_policies` do banco, nunca a lista de arquivos.
+
+## Decisões de RLS registradas na F01-T03 (0220)
+
+Registro histórico da F01, mantido abaixo. Os números não incluem as migrations da v1.17.0 e não representam a cobertura atual. O [MANIFEST da integração](../../supabase/migrations/MANIFEST.md) registra o schema combinado; a consolidação das contagens e dos resultados da revalidação pertence ao [BUILD-STATE](../../BUILD-STATE.md).
+
+- **Predicado novo × herdado:** tabela criada da F02 em diante usa `USING (organization_id = public.current_organization_id())` com `WITH CHECK` idêntico (§5.15). As 162 policies herdadas continuam sobre `fn_user_org_ids()`: reescrevê-las em bloco trocaria um predicado comportalmente provado (rls-isolation) por um novo sem prova, nas 114 tabelas de uma vez. Migração de predicado, se vier, é 1 tabela por migration com a prova no mesmo commit.
+- **`organization_id` anulável nas 9 herdadas** (`agent_inbox_items`, `api_audit_log`, `incidents`, `metrics`, `playbook_pointers`, `playbook_versions`, `skill_pointers`, `skill_versions`, `webhook_events_log`): mistas por desenho — linha com organização NULL é escopo de plataforma (ex.: a policy `audit_log_insert_tenant_member` aceita `organization_id IS NULL` explicitamente; playbooks/skills globais têm ponteiro sem org). `NOT NULL` nelas quebraria instalação com dados no `update.sh` (que roda sem `ON_ERROR_STOP` e engoliria o erro). Tabela NOVA de tenant nasce `not null` (0219 é o precedente); esta lista não cresce — quem criar tabela mista nova justifica no MANIFEST.
+- **`channel_accounts` não é service_only**, divergindo do exemplo da §5.15 (lista de 03/09/2026): o desenho da F03-T03 adapta `whatsapp_connections` — que TEM tela — para ela; revogar authenticated agora quebraria a prova comportamental de rls-isolation e seria desfeito na F03. A lista da §5.15 é exemplo declarado ("a lista é exemplo, a marcação é a regra"); a marcação real vive no MANIFEST.
+- **Allowlist de globais** em `tests/db/global_tables.txt` (11 tabelas sem `organization_id`); **service_only** no MANIFEST (5: `webhook_quarantine` + 4 herdadas de ads/calendar). As duas listas são lidas pela prova `rls-coverage`, nunca duplicadas nela.
+
+## Evidências da revisão de 08/09/2026
+
+Leitura estática de blobs da release `db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d`, não saída de testes da integração:
+
+| Fato observado | Evidência no commit da release | Implicação para o alvo |
+|---|---|---|
+| Resposta normal pelo worker legado está desabilitada | `lib/ai/agents/no-ar.ts:33` | A antiga justificativa de dois respondedores não basta para refazer o motor |
+| Preview compartilha política de ferramentas e não executa escrita proposta | `lib/agent-engine/agent/preview.ts:130` | Adaptar a supervisão existente; confirmação de pedido exige contrato próprio |
+| Trabalho carrega tenant, contato, conversa, demanda e revisões | `lib/atendimento/fronteira.ts:2`; validação em `:49` | Preservar proveniência ao vincular pedido e ao recusar efeitos antigos |
+| Handoff tem guarda e trava do contato | `lib/agent-engine/agent/human-handoff.ts:118`; escrita guardada em `:140` | Complementar D19 mantendo silêncio e episódio existentes |
+| API de produtos lê/escreve `catalog_products` | `app/api/v1/products/route.ts:31`, `:70` | Nomes lógicos não justificam rename físico nem tabela de catálogo paralela |
+| Catálogo tem código, nome, preço em centavos e moeda | `supabase/migrations/20260901120000_0204_catalogo_de_produtos_da_loja.sql:46` | Mapear vocabulário do seed; ampliar embalagem/unidade sem duplicar preço |
+| Contatos já têm identidade, consentimento e anonimização | `supabase/baseline.sql:1324` | Preservar IDs e fluxos LGPD/inbox; não criar um cliente desligado do contato |
+| Pedido herdado exige provedor externo e tem status de e-commerce | `supabase/baseline.sql:1696` | F02-T02 precisa de migração compatível, não de reaproveitamento por nome apenas |
+
+## Provas ainda exigidas
+
+- Integração v1.17.0 + F01: revalidação da fundação concluída com dívida herdada, conforme [BUILD-STATE](../../BUILD-STATE.md) e [evidência composta](evidence/revalidation-f01-v117.txt); unitários, banco, integração e mutantes executados. E2E da combinação permanece pendente. A [evidência de upgrade em banco descartável](evidence/upgrade-f01-v117.txt) e seu [procedimento reproduzível](../../scripts/verify/upgrade-f01-v117/README.md) registram a atualização/reaplicação do baseline com fixtures e cobertura focal. Não substituem a bateria completa de RLS, papéis/suporte, atendimento e catálogo, nem comprovam a cadeia individual de migrations, serviços reais ou prontidão.
+- F02: matriz de cenários e tarefas do [desenho](../design/F02-pedidos-do-dia.md); dados fictícios e dois tenants. Contagens de tabelas físicas vêm do catálogo, sem exigir `K+8` quando entidades forem mapeadas para estruturas existentes.
+- F03–F05: paridade das transições, silêncio após handoff, recusa de trabalho de demanda antiga, chamada/consumo únicos e confirmação comercial separada de aprovação de resposta.
+- Serviços reais, configuração comercial Deka e aceite operacional não foram verificados nesta alteração documental.

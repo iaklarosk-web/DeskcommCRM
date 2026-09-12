@@ -8,6 +8,8 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { createAdminClient } from "@/lib/supabase/admin";
+import { observeServiceOrigin } from "@/lib/atendimento/origem";
 import { ApiError } from "@/lib/api/types";
 import type { Actor, HandlerCtx } from "@/lib/api/handlers/types";
 import { audit } from "@/lib/audit";
@@ -29,7 +31,7 @@ import { contactListQuerySchema } from "@/lib/schemas";
 type SB = SupabaseClient;
 
 const SELECT_COLS =
-  "id, organization_id, name, display_name, email, email_normalized, phone_number, cpf_hash, birthdate, is_blocked, blocked_reason, is_anonymized, anonymized_at, is_merged_into, merged_at, consent, tags, source, source_metadata, custom_fields, created_at, updated_at, last_activity_at";
+  "id, organization_id, name, display_name, email, email_normalized, phone_number, cpf_hash, birthdate, is_blocked, blocked_reason, is_anonymized, anonymized_at, is_merged_into, merged_at, consent, tags, source, source_metadata, custom_fields, company_id, recurring, created_at, updated_at, last_activity_at";
 
 interface CursorPayload {
   sort: string | null;
@@ -464,8 +466,9 @@ export async function patchContactHandler(
     // patch dele passou a ser MERGE (ver abaixo), e merge precisa do estado
     // anterior.
     .select(
-      "id, organization_id, is_anonymized, tags, email, phone_number, name, display_name, consent, custom_fields",
+      "id, organization_id, is_anonymized, tags, email, phone_number, name, display_name, consent, custom_fields, company_id, recurring",
     )
+    .eq("organization_id", ctx.organization_id)
     .eq("id", contactId)
     .maybeSingle();
 
@@ -489,6 +492,30 @@ export async function patchContactHandler(
       ctx.requestId,
       traduzir("Contato anonimizado — edição bloqueada (LGPD).", ctx.idioma ?? "pt-BR"),
     );
+  }
+
+  // Não basta confiar na FK: ela devolve erro de banco e pode revelar que uma
+  // empresa existe fora da organização ativa. A busca segue organização + RLS e
+  // trata ausência como entrada inválida (422), sem distinguir os dois casos.
+  if (input.company_id !== undefined && input.company_id !== null) {
+    const { data: company, error: companyErr } = await supabase
+      .from("crm_companies")
+      .select("id")
+      .eq("organization_id", ctx.organization_id)
+      .eq("id", input.company_id)
+      .maybeSingle();
+    if (companyErr) {
+      throw new ApiError(500, "internal_error", undefined, ctx.requestId, companyErr.message);
+    }
+    if (!company) {
+      throw new ApiError(
+        422,
+        "validation_failed",
+        undefined,
+        ctx.requestId,
+        traduzir("Empresa inválida para este contato.", ctx.idioma ?? "pt-BR"),
+      );
+    }
   }
 
   const patch: Record<string, unknown> = {};
@@ -536,6 +563,8 @@ export async function patchContactHandler(
     const enc = await encryptCpfSql(supabase, input.cpf);
     if (enc) patch.cpf_encrypted = enc;
   }
+  if (input.company_id !== undefined) patch.company_id = input.company_id;
+  if (input.recurring !== undefined) patch.recurring = input.recurring;
 
   if (Object.keys(patch).length === 0) {
     throw new ApiError(
@@ -547,11 +576,15 @@ export async function patchContactHandler(
     );
   }
 
+  const tagServiceOrigin = input.tags !== undefined
+    ? await observeServiceOrigin(createAdminClient(), ctx.organization_id, contactId)
+    : null;
   patch.updated_at = new Date().toISOString();
 
   const { data: updated, error: updErr } = await supabase
     .from("contacts")
     .update(patch)
+    .eq("organization_id", ctx.organization_id)
     .eq("id", contactId)
     .select(SELECT_COLS)
     .maybeSingle();
@@ -615,12 +648,12 @@ export async function patchContactHandler(
     const prevTags: string[] = (existing as { tags?: string[] }).tags ?? [];
     const addedTags = input.tags.filter((t) => !prevTags.includes(t));
     if (addedTags.length) {
-      await supabase
+      await createAdminClient()
         .rpc("emit_event", {
           p_event_type: "contact.tag_added",
           p_entity_kind: "contact",
           p_entity_id: contact.id,
-          p_payload: { added_tags: addedTags, tags: input.tags },
+          p_payload: { added_tags: addedTags, tags: input.tags, service_origin: tagServiceOrigin },
           p_metadata: { request_id: ctx.requestId, ...a.metadataActor },
           p_organization_id: contact.organization_id,
         })

@@ -33,6 +33,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
+import { z } from "zod";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { loadAuthUser } from "@/lib/auth/server";
@@ -46,12 +47,19 @@ import {
   encodeCursor,
 } from "@/lib/leads/timeline-query";
 import type { TimelineItem } from "@/lib/types/contacts";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 
 export const dynamic = "force-dynamic";
 
 interface RouteCtx {
   params: Promise<{ id: string }>;
 }
+
+const consultaSchema = z.object({
+  type: z.array(z.string().max(64)),
+  limit: z.coerce.number().optional(),
+  cursor: z.string().max(512).optional(),
+});
 
 export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const requestId = randomUUID();
@@ -67,12 +75,28 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   }
   const authUser = await loadAuthUser();
   const t = (texto: string) => traduzir(texto, authUser?.idioma ?? "pt-BR");
+  // F06-T01: a rota herdada lê por RLS (organização da sessão); a linha leva a
+  // primeira associação do usuário, que é a que o cookie de org ativa refina.
+  registrarRequisicaoDe(req, {
+    outcome: "allowed",
+    organization_id: authUser?.organizations[0]?.organization_id ?? null,
+    scope: "unresolved",
+    request_id: requestId,
+    actor_id: user.id,
+  });
 
+  // F06-T02: entrada por schema. `type` repete; `limit` inválido cai em 50 e
+  // é grampeado em [1, 100] — o mesmo comportamento de antes, declarado.
   const url = new URL(req.url);
-  const types = url.searchParams.getAll("type").filter(Boolean);
-  const limitRaw = Number(url.searchParams.get("limit") ?? 50);
+  const consulta = consultaSchema.safeParse({
+    type: url.searchParams.getAll("type"),
+    limit: url.searchParams.get("limit") ?? undefined,
+    cursor: url.searchParams.get("cursor") ?? undefined,
+  });
+  const types = consulta.success ? consulta.data.type.filter(Boolean) : [];
+  const limitRaw = consulta.success && consulta.data.limit !== undefined ? consulta.data.limit : 50;
   const limit = Number.isFinite(limitRaw) ? Math.min(100, Math.max(1, limitRaw)) : 50;
-  const cursorRaw = url.searchParams.get("cursor");
+  const cursorRaw = consulta.success ? (consulta.data.cursor ?? null) : null;
   const cursor = cursorRaw ? decodeCursor(cursorRaw) : null;
   if (cursorRaw && !cursor) {
     return fail("invalid_cursor", t("Cursor inválido."), 400, { requestId });

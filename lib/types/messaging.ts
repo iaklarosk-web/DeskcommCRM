@@ -10,7 +10,20 @@ export interface Conversation {
   channel_session_id: string;
   channel: string;
   status: string;
+  /**
+   * O estado D16 (§5.6), escrito por `src/conversation/transition.ts` e projetado
+   * do `status` legado pelo gatilho `trg_saas_state_project` (ADR-016). Opcional
+   * porque uma resposta em cache do react-query, anterior à coluna, não o tem —
+   * e ausente é "não sei", não "sem estado": a tela omite o selo em vez de
+   * afirmar um estado que não leu.
+   */
+  saas_state?: string | null;
+  saas_state_entered_at?: string | null;
   status_changed_at: string;
+  service_revision?: number;
+  service_closed_at?: string | null;
+  service_started_at?: string | null;
+  current_demanda_id?: string | null;
   assigned_to_user_id: string | null;
   /**
    * Cópia desnormalizada do nome de quem atende (migration 0202), escrita por

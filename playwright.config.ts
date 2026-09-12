@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 
 import { defineConfig } from "@playwright/test";
+import { isLoopbackHttpUrl } from "./tests/lib/loopback-url";
 
 /**
  * Lê o `.env.e2e` — o ambiente LOCAL da suíte.
@@ -31,8 +32,8 @@ function envDoE2E(): Record<string, string> {
   const url = env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   // Um `.env.e2e` apontando para fora do localhost é pior que nenhum, porque
   // parece seguro.
-  if (!url.startsWith("http://127.0.0.1") && !url.startsWith("http://localhost")) {
-    throw new Error(`.env.e2e aponta para um Supabase que não é local (${url}) — recusado.`);
+  if (!isLoopbackHttpUrl(url)) {
+    throw new Error(".env.e2e aponta para um Supabase que não é local — recusado.");
   }
   return env;
 }
@@ -78,6 +79,18 @@ function envDoE2E(): Record<string, string> {
  * como `INTERNAL_SECRET` derrubou 8 specs com 401.
  */
 function publicarNoProcesso(env: Record<string, string>): Record<string, string> {
+  // Runner e servidor precisam usar a mesma conexão. Uma variável herdada de
+  // outro ambiente não pode fazer o seed escapar do endereço validado acima.
+  for (const key of [
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_DB_URL",
+  ]) {
+    if (env[key] !== undefined && process.env[key] !== undefined && process.env[key] !== env[key]) {
+      throw new Error(`E2E recusado: ${key} diverge entre o arquivo de teste e o processo.`);
+    }
+  }
   for (const [chave, valor] of Object.entries(env)) {
     if (process.env[chave] === undefined) process.env[chave] = valor;
   }

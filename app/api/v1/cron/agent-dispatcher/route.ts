@@ -16,6 +16,7 @@ import type { NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { env } from "@/lib/env";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,8 @@ async function handle(req: NextRequest): Promise<Response> {
   if (accepted.length === 0 || !provided || !accepted.includes(provided)) {
     return fail("forbidden", "Cron secret missing or invalid.", 403, { requestId });
   }
+  // F06-T01: linha api.request da rota global de cron (sem organização por desenho).
+  registrarRequisicaoDe(req, { scope: "cron", outcome: "allowed", request_id: requestId, status: 200 });
 
   // Fase 0 (convergência, spec 2026-07-23): o dispatch nativo foi aposentado —
   // o agent-worker (drain) é o único consumidor de ai_agent.dispatch_requested.

@@ -1,0 +1,100 @@
+F05 — Handoff + Notificações + Recurring Reminder + uso de IA. Evidência de construção.
+Fechamento: 2026-09-12T06:55Z (03:55 de Brasília). Branch feat/F03-conversation-inbox.
+Código validado: 5aa5de5446e14ec5f269e281966b572a5c5ace90 (T01–T04 e T10 já validados como código
+pelo gate f04-gate-01; T05–T09 e os consertos desta sessão).
+
+== GATE INTEGRAL ==
+./scripts/verify.sh, WHATSAPP_MODE=mock AI_PROVIDER=mock CI=1, um worker, zero retries,
+sandbox descartável f02-crm-cadastros-disposable (loopback 55421/55422/3102).
+Execução f05-gate-07, 7616 s (126,9 min), exit 0, STATUS: READY (F05), violations=0, SÉTIMA tentativa.
+
+VERIFY SUMMARY
+scope=phase phase=F05 current_phase=F05
+build=ok lint=ok typecheck=ok shell=ok
+unit=8472/8472 integration=148/148 db=1651/1651 e2e=41/41 baseline_n0=8997
+baseline_comparable: scope=unit+db passed=10123 required=8738 full_n0=pending
+e2e_scope: F05-required passed=41/41 specs=10/10
+isolation: tables=135 ops=4 dirs=2 leaks=0 (material_cross_org=97/135)
+rls-coverage: tables_with_org_id=135 policies_found=116 missing=0 service_only_with_grant=0
+rbac: roles=3 denied_expected=19 denied_actual=19
+entitlement: usage_events_written=23
+ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0
+handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3 notify=3 notify_rows=6 msgs_after=3 provider_calls_after=0
+reminder: runs=2 sent=1 duplicates=0 tables_summed=3
+webhook: replay=2 stored=1 tables_checked=7
+replicability: e2e[fictitious_A_B]=41/41 specs=10/10 grep_deka_in_src=0
+secrets: files_scanned=469 findings=0
+tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=49/49
+debt_known=0 skip_only_occurrences=15 violations=0
+STATUS: READY (F05)
+
+Inputs: 3492 arquivos, SHA-256 59f58e1e…abd6fe idêntico antes e depois.
+Etapas: typecheck 26 s · lint 150 s · build 289 s · shell 60 s · unit 3232 s · integration 75 s ·
+db 938 s · e2e 1922 s · mutantes 49/49. Logs em .verify-logs/f05-gate-07/ (não versionado).
+
+== AS SEIS TENTATIVAS ANTERIORES (nenhuma reclassificada) ==
+gate-01 (18:11Z, interrompido em unit): duas réguas pegaram a página nova — i18n sem espanhol para
+  18 textos e `rounded` puro. Conserto: commit 9efd4e11.
+gate-02 (19:37Z, 148 min, NOT READY, violations=8): unit 8471/8472 (baseline reconstruía
+  job_queue_kind_check em dois blocos), db 1650/1651 (replay da 9005 não soltava a FK nova de
+  reminder_runs), e2e 39/41 (f02-daily-checks A por timeout; f03-inbox responder B, ver gate-06).
+  Consertos: commit 5aa5de54 (bloco único da constraint; FK solta no replay).
+gate-03 (22:10Z, interrompido em shell): prova herdada do kit de instalação ("cópia irmã") falhou
+  uma vez; 3/3 verde em isolamento, verde nos gates 01, 02 e 04–07. Não explicado; não alterado.
+gate-04 (22:25Z, 134 min, NOT READY, violations=2): tudo verde menos e2e 37/41 — quatro timeouts
+  de 5 s em specs de F02, com load average 12–15 (e2e de outro projeto em paralelo na VPS).
+gate-05 (00:41Z, 128 min, NOT READY, violations=2): idem, e2e 37/41 com ECONNRESET e timeouts,
+  load 15–21 (tsc de outro projeto em paralelo).
+gate-06 (02:50Z, 117 min, NOT READY, violations=2): e2e 40/41. A única falha, recorrente
+  (gates 02/05/06), foi explicada pelo trace do Playwright: DOIS POSTs a /api/v1/messages —
+  o primeiro sem resposta em 10 s (timeout do apiClient herdado, que repete o POST), o segundo 201.
+  O cliente envia Idempotency-Key; o handler herdado /api/v1/messages NÃO a lê → sob latência
+  > 10 s a repetição grava uma segunda mensagem e a bolha aparece duas vezes. Defeito herdado
+  (F03/legado), exposto pela VPS sobrecarregada; sem código de F05 no caminho; registrado na
+  VARREDURA-MELHORIAS §B10, não aplicado (ADR-020 §6).
+gate-07 (04:48Z, 127 min): READY, com e2e 41/41 em 1922 s (F04 fez 37/37 em 1775 s).
+
+== O QUE A FASE ENTREGOU ==
+T01 oito motivos em enum: handoff-triggers triggers=8 pass=8/8. ADR-025. Migration 9020.
+T02 dossiê de sete campos: fields_present=7/7; zero chamadas ai.summary (divergência declarada).
+T03 fila de claim: assignee H/H, double_claim_rejected H/H, fora_da_fila 0/H.
+T04 guarda pós-handoff: handoffs=3 ai_msgs_after_handoff=0 msgs_after=3 provider_calls_after=0. Mutante 49.
+T05 notificações (commit db2560ec): notifications events=6 rows=6/6 email_outbox=6/6; caminhos
+    reais: transfer_to_human fila=2/2 admin=0 revogado=0; create_order pela IA → confirmation.requested
+    fila=2/2; tarefa assignee=1/1 (a si mesmo 0/0, reatribuída 1/1); webhook em waiting_human fila=2/2
+    texto_vazado=0/0; job bloqueado admin=1/1 cartão_herdado=1/1. handoff: notify=3 notify_rows=6.
+    Migration 9021 (notifications, email_outbox service_only; RLS comportamental 16/16 + 8/8 +
+    service_role 8/8 e lê de volta 2/2). Mutante 50. ADR-026 §1.
+T06/T07 lembrete (commit d1070edb): reminder runs=2 sent=1 duplicates=0 tables_summed=3; tenants
+    eligible=3/3 fired=2/2; enabled=false → 0 job runs; Manaus dispara às 19Z e não às 18Z (SP o
+    inverso); N=3 clientes → 3 mock_outbox; 4º elegível em human_handling pulado
+    (conversation_busy, 0 mensagens, dono intacto); conversa criada (1), reaberta de resolved (1),
+    movida no lugar (1). audit_rows=5/5 actor_type=automation; grep "adapter.send\|channelAdapter"
+    fora de src/actions = 0/0. Migration 9022 (reminder_runs service_only, saas_tags, kinds por
+    adição; RLS comportamental 8/8 + 4/4 + service_role). Mutante 51. ADR-026 §2–5.
+T08 resposta (commit af4a1424): reminder-reply scenarios=3 pass=3/3; order_items.quantity por
+    query 2/2 (S1 1.000→10.000 só após confirm(approved) do attendant; S3 intacta). S2 runs_cut=3/3
+    notified=3/3 tasks_created=0 tasks_denied=3/3 (non_human_executor_denied=2 auditadas,
+    no_draft_order=1), segunda passada 0/0. S3 replied_late → handoff tenant_rule com
+    provider_calls=0. Mutante 52. ADR-026 §6–7.
+T09 tela de uso (commits cc8b04f3, 9efd4e11): f05-ai-usage.spec 4/4 (2 jornadas × 2 organizações):
+    tela == soma da fixture == GET /api/v1/settings/ai/uso; soma ≠ outro tenant; período por URL;
+    inventário F05 = 41 testes em 10 specs. 18 textos com espanhol. ADR-026 §8.
+T10 verify v1.3 (commit 5f817184): handoff e reminder obrigatórios e medidos. Mutante 48. ADR-024.
+
+== LIMITES DECLARADOS ==
+A tarefa do corte do lembrete (§5.12) NÃO é criada: o domínio da F02 recusa executor não-humano
+(non_human_executor_denied); a recusa é auditada e gravada em reminder_runs.task_denied_code.
+Abrir a escrita do CRM a automação é decisão do proprietário (VARREDURA §B5/§C6), listada por ele
+como pendência dele em 11/09. O aviso reminder.no_reply sai hoje.
+Resposta tardia ao lembrete vai sempre para gente (tenant_rule, 0 chamadas ao provedor): a
+"exceção configurável" de §7.6 T08 não existe (D48).
+Tag awaiting_quantity permanece quando uma pessoa resolve a conversa sem turno da IA.
+E-mail transacional e provedor de IA reais: NOT VALIDATED (real) (D12). email_outbox é o que
+TERIA saído. Nenhum byte saiu para rede em teste.
+Tela in-app de notificações não é entrega de F05; a lista é servida por src/notifications.
+/app/ai/usage (herdada, por agente, llm_calls) coexiste com a nova (ai_usage_events); unificação F11/F13.
+POST /api/v1/messages herdado não honra Idempotency-Key (VARREDURA §B10) — visível só sob
+latência > 10 s; não alterado nesta fase.
+Ambiente: os gates rodaram numa VPS de 2 núcleos dividida com outros projetos (load average até 21);
+o gate que fechou levou 127 min contra 86 da F04. Capacidade é limite declarado para a F06 (ADR-027 §5).

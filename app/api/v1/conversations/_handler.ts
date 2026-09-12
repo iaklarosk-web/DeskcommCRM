@@ -1,3 +1,4 @@
+import { createAdminClient } from "@/lib/supabase/admin";
 /**
  * Core handlers para /api/v1/conversations.
  *
@@ -9,6 +10,12 @@ import { ApiError } from "@/lib/api/types";
 import type { Actor, HandlerCtx } from "@/lib/api/handlers/types";
 import { audit } from "@/lib/audit";
 import { traduzir } from "@/lib/i18n/dicionario";
+import {
+  ctxDoInbox,
+  erroDeApiDaTransicao,
+  moverPeloInbox,
+  type AcaoDoInbox,
+} from "@/lib/inbox/acoes-d16";
 import { CONVERSATION_TERMINAL_STATUSES } from "@/lib/schemas";
 import type {
   ListConversationsQuery,
@@ -81,7 +88,8 @@ function idsQueCabemNaURL(ids: string[]): string[] {
 
 const SELECT_COLS = `
   id, organization_id, contact_id, channel_session_id, channel, status,
-  status_changed_at, assigned_to_user_id, assigned_to_user_name, assignee_kind, assigned_at, last_inbound_at,
+  saas_state, saas_state_entered_at,
+  status_changed_at, service_revision, service_closed_at, service_started_at, current_demanda_id, assigned_to_user_id, assigned_to_user_name, assignee_kind, assigned_at, last_inbound_at,
   last_outbound_at, last_message_at, last_message_preview,
   unread_count_for_assignee, is_group, group_chat_id, tags, metadata,
   snooze_until, created_at, updated_at,
@@ -173,6 +181,11 @@ export async function listConversationsHandler(
   // estados de espera numa consulta só, em vez de filtrar em memória o que a
   // página já truncou.
   if (q.status && q.status.length > 0) query = query.in("status", q.status);
+  // O filtro por ESTADO D16 (F03-T09). Pergunta diferente de `status` e de
+  // `comando`: é o vocabulário de §5.6, escrito por `transition()` e projetado
+  // do legado pelo gatilho. Vai no banco (índice
+  // `idx_conversations_saas_state`, org à frente) para o cursor continuar valendo.
+  if (q.saas_state && q.saas_state.length > 0) query = query.in("saas_state", q.saas_state);
   // O filtro de QUEM MANDA (migration 0203). Vai no banco, e não em memória, para
   // o cursor de paginação continuar valendo: filtrar depois de paginar devolveria
   // páginas curtas e um "carregar mais" que às vezes não traz nada.
@@ -386,62 +399,103 @@ export async function getConversationHandler(
 // update status (claim/close/release)
 // ---------------------------------------------------------------------------
 
+/**
+ * OS TRÊS `status` QUE SÃO AÇÃO DO INBOX (F03-T09).
+ *
+ * `claimed`, `closed` e `open` são, em D16, `human.claimed`, `human.resolved` e
+ * `human.reopened`. `ai_handling` e `archived` NÃO estão aqui de propósito: não
+ * são ação humana do inbox, e a ADR-016 já prevê o escritor legado —
+ * `trg_saas_state_project` espelha a escrita deles para `saas_state` sem
+ * inventar transição nenhuma.
+ */
+const ACAO_DO_STATUS: Partial<Record<string, AcaoDoInbox>> = {
+  claimed: "assumir",
+  closed: "resolver",
+  open: "reabrir",
+};
+
 export async function patchConversationHandler(
   supabase: SB,
   ctx: HandlerCtx,
   conversationId: string,
   input: PatchConversationInput,
 ): Promise<Conversation> {
-  const now = new Date().toISOString();
   const update: Record<string, unknown> = {};
 
   /**
-   * O ATALHO `status='claimed'` PASSA PELA RPC, e não escreve o dono aqui.
+   * O ATALHO DE STATUS NÃO ESCREVE DONO NEM STATUS AQUI.
    *
-   * Ele gravava `assigned_to_user_id` direto na tabela, e isso deixava TRÊS
-   * coisas para trás em relação ao `POST /claim`: nenhum evento em
+   * `status='claimed'` já gravou `assigned_to_user_id` direto na tabela, e isso
+   * deixava TRÊS coisas para trás em relação ao `POST /claim`: nenhum evento em
    * `conversation_assignment_events` (a auditoria de troca de dono simplesmente
    * não existia por este caminho), `assignee_kind` intocado — o que viola a
    * constraint `conversations_assignee_kind_coherence` quando a linha já tinha
    * `assignee_kind='ai'` — e, desde a 0173, o silêncio do automático não sendo
    * ligado, produzindo uma conversa com dono humano e o robô ainda respondendo.
-   *
    * É a API pública versionada, alcançável por qualquer bearer agent+: dois
    * caminhos de assumir com efeitos diferentes é o defeito, não a conveniência.
+   *
+   * Em F03-T09 esse "um caminho" virou `transition()` — a mesma autoridade das
+   * rotas dedicadas. Ela chama a MESMA `fn_conversation_assign` pelo efeito de
+   * atribuição e o MESMO `fn_service_status` pelo lado legado, então nada do
+   * parágrafo acima muda de dono; o que passa a existir antes é a validação do
+   * par D16. É por aqui que o "Reabrir" do cabeçalho passa: ele manda
+   * `status: "open"` (ver `useReopenConversation`).
    */
-  const assumirPelaRpc =
-    input.status === "claimed" && ctx.actor.type === "user" ? ctx.actor.id : null;
+  const acaoDoInbox =
+    ctx.actor.type === "user" && input.status !== undefined
+      ? ACAO_DO_STATUS[input.status]
+      : undefined;
+  const atorHumano = ctx.actor.type === "user" ? ctx.actor.id : undefined;
 
-  if (assumirPelaRpc !== null) {
-    const { error: erroRpc } = await supabase.rpc("fn_conversation_assign", {
-      p_organization_id: ctx.organization_id,
-      p_conversation_id: conversationId,
-      p_to_user_id: assumirPelaRpc,
-      p_reason: "claim",
-      p_expected_assignee: null,
-      // Sem lock otimista: este atalho nunca teve um, e passar a exigi-lo faria
-      // um cliente da API que hoje funciona começar a receber 409.
-      p_enforce_expected: false,
-    });
-    if (erroRpc) {
-      throw new ApiError(500, "internal_error", undefined, ctx.requestId, erroRpc.message);
+  if (input.status !== undefined && acaoDoInbox !== undefined && atorHumano !== undefined) {
+    const observed = await getConversationHandler(supabase, ctx, conversationId);
+    // O CAS por revisão é da PORTA: `transition()` faz o seu próprio com a
+    // revisão que lê sob lock e não tem como saber que a tela viu outra.
+    if (
+      input.expected_revision !== undefined &&
+      input.expected_revision !== observed.service_revision
+    ) {
+      throw new ApiError(
+        409,
+        "conflict",
+        undefined,
+        ctx.requestId,
+        traduzir("O atendimento mudou. Atualize e tente novamente.", ctx.idioma ?? "pt-BR"),
+      );
     }
-  }
-
-  if (input.status !== undefined) {
-    update.status = input.status;
-    update.status_changed_at = now;
+    try {
+      await moverPeloInbox(
+        ctxDoInbox(ctx.organization_id, atorHumano),
+        conversationId,
+        acaoDoInbox,
+        { kind: "attendant", userId: atorHumano },
+      );
+    } catch (err) {
+      const apiErr = erroDeApiDaTransicao(err, ctx.requestId, (texto) =>
+        traduzir(texto, ctx.idioma ?? "pt-BR"),
+      );
+      throw apiErr ?? err;
+    }
+  } else if (input.status !== undefined) {
+    const observed = await getConversationHandler(supabase, ctx, conversationId);
+    const { error: statusError } = await createAdminClient().rpc("fn_service_status", {
+      p_org: ctx.organization_id, p_conversation: conversationId, p_status: input.status,
+      p_expected: input.expected_revision ?? observed.service_revision,
+    });
+    if (statusError) throw new ApiError(statusError.code === "40001" ? 409 : statusError.code === "P0002" ? 404 : 500,
+      statusError.code === "40001" ? "conflict" : statusError.code === "P0002" ? "not_found" : "internal_error", undefined, ctx.requestId, statusError.message);
   }
   if (input.tags !== undefined) {
     update.tags = input.tags;
   }
 
-  const { data, error } = await supabase
-    .from("conversations")
-    .update(update)
+  const query = Object.keys(update).length > 0
+    ? supabase.from("conversations").update(update)
+    : supabase.from("conversations");
+  const { data, error } = await query.select(SELECT_COLS)
     .eq("id", conversationId)
     .eq("organization_id", ctx.organization_id)
-    .select(SELECT_COLS)
     .maybeSingle();
 
   if (error) {
@@ -459,20 +513,6 @@ export async function patchConversationHandler(
 
   const conv = data as unknown as Conversation;
 
-  // MESMA REGRA DO `POST /close`, senão existem dois jeitos de fechar com efeitos
-  // opostos sobre a trava do automático. Condicionado a `last_handoff_at is null`
-  // pelo mesmo motivo de lá: fechar encerra o EPISÓDIO, não desfaz uma escalação.
-  const virouTerminal =
-    input.status !== undefined &&
-    (CONVERSATION_TERMINAL_STATUSES as readonly string[]).includes(input.status);
-  if (virouTerminal) {
-    await supabase
-      .from("conversations")
-      .update({ bot_silenced_until: null })
-      .eq("id", conversationId)
-      .eq("organization_id", ctx.organization_id)
-      .is("last_handoff_at", null);
-  }
   const a = actorAuditPayload(ctx.actor);
 
   if (input.status !== undefined) {

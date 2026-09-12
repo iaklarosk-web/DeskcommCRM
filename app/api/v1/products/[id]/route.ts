@@ -1,3 +1,5 @@
+import { requireSupportWrite } from "@/lib/impersonate/support";
+import { getRequestId } from "@/lib/api/request-id";
 /**
  * PATCH  /api/v1/products/:id — muda o que veio, não encosta no resto.
  * DELETE /api/v1/products/:id — remove do catálogo.
@@ -6,7 +8,6 @@
  * de auditar: sem isso, um DELETE barrado pela RLS devolveria sucesso e gravaria
  * auditoria de uma mutação que não aconteceu.
  */
-import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 
 import { audit } from "@/lib/audit";
@@ -22,7 +23,10 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const requestId = randomUUID();
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
+
+  const requestId = getRequestId(req);
   const authz = await requireRole("manager", { requestId, resource: "catalog_products" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
@@ -74,7 +78,10 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const requestId = randomUUID();
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
+
+  const requestId = getRequestId(_req);
   const authz = await requireRole("manager", { requestId, resource: "catalog_products" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
