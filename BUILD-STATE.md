@@ -1,40 +1,87 @@
 ---
-updated_at: 2026-09-11T16:25:11Z
-head_commit: 76c0b00bdadd2d21c0527bf3a34a0879d6ec8130   # código validado pelo gate f04-gate-01; inclui F05-T01..T04/T10 (não gateados como F05)
+updated_at: 2026-09-12T07:10:00Z
+head_commit: 5aa5de5446e14ec5f269e281966b572a5c5ace90   # código validado pelo gate f05-gate-07 (READY F05)
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
-plan_version: "2.4 (2026-09-11); D38–D49; ADR-006…025"
+plan_version: "2.5 (2026-09-11); D38–D50; ADR-006…027"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
-current_phase: F04
-next_task: F05-T05             # F05-T01..T04 e T10 prontos; faltam T05 notificações, T06-T08 lembrete, T09 tela de uso
+current_phase: F05
+next_task: F06-T01             # F05 concluída; F06 só começa com nova mensagem do proprietário (D50 c)
 status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
-hosting_confirmed: no          # confirmar D03 antes da F06; orçamento proposto não aprova contratação
+hosting_confirmed: yes         # D50 (11/09/2026): staging nesta VPS, Docker Compose com Supabase local, acesso só por Tailscale — ADR-027
 build_env: "Claude Code na VPS, worktree DeskcommCRM-v1.17.0; validação em serviços/bancos descartáveis; WHATSAPP_MODE=mock AI_PROVIDER=mock"
-verify_summary_last_context: "f04-gate-01 aprovado em 11/09/2026 sobre 76c0b00b, 5143s, exit 0, primeira tentativa. F04 concluída tecnicamente; F05 parcial na árvore. Não é READY_STAGING nem aceite comercial."
+verify_summary_last_context: "f05-gate-07 aprovado em 12/09/2026 sobre 5aa5de54, 7616s, exit 0, sétima tentativa (01 e 03 interrompidas; 02 reprovou por dois defeitos reais consertados; 04–06 reprovaram só no navegador, sob VPS sobrecarregada — ver evidência). F05 concluída tecnicamente. Não é READY_STAGING nem aceite comercial."
 verify_summary_last: |
   VERIFY SUMMARY
-  scope=phase phase=F04 current_phase=F04
+  scope=phase phase=F05 current_phase=F05
   build=ok lint=ok typecheck=ok shell=ok
-  unit=8462/8462 integration=128/128 db=1637/1637 e2e=37/37 baseline_n0=8997
-  baseline_comparable: scope=unit+db passed=10099 required=8738 full_n0=pending
-  e2e_scope: F04-required passed=37/37 specs=9/9
-  isolation: tables=132 ops=4 dirs=2 leaks=0 (material_cross_org=95/132)
-  rls-coverage: tables_with_org_id=132 policies_found=116 missing=0 service_only_with_grant=0
+  unit=8472/8472 integration=148/148 db=1651/1651 e2e=41/41 baseline_n0=8997
+  baseline_comparable: scope=unit+db passed=10123 required=8738 full_n0=pending
+  e2e_scope: F05-required passed=41/41 specs=10/10
+  isolation: tables=135 ops=4 dirs=2 leaks=0 (material_cross_org=97/135)
+  rls-coverage: tables_with_org_id=135 policies_found=116 missing=0 service_only_with_grant=0
   rbac: roles=3 denied_expected=19 denied_actual=19
   entitlement: usage_events_written=23
   ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0
-  handoff: ai_msgs_after_handoff=pending summary=pending assignee=pending notify=pending
-  reminder: runs=pending sent=pending duplicates=pending
+  handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3 notify=3 notify_rows=6 msgs_after=3 provider_calls_after=0
+  reminder: runs=2 sent=1 duplicates=0 tables_summed=3
   webhook: replay=2 stored=1 tables_checked=7
-  replicability: e2e[fictitious_A_B]=37/37 specs=9/9 grep_deka_in_src=0
-  secrets: files_scanned=453 findings=0
-  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=46/46
+  replicability: e2e[fictitious_A_B]=41/41 specs=10/10 grep_deka_in_src=0
+  secrets: files_scanned=469 findings=0
+  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=49/49
   debt_known=0 skip_only_occurrences=15 violations=0
-  STATUS: READY (F04)
+  STATUS: READY (F05)
 ---
 
 # BUILD-STATE
+
+## Estado vigente — F05 concluída em 12/09/2026; construção PAUSADA antes da F06 (D50)
+
+`./scripts/verify.sh` saiu 0 com `STATUS: READY (F05)` sobre `5aa5de54`, em
+7616 s (126,9 min), com zero violações: unit 8472/8472, integração 148/148,
+banco 1651/1651, navegador 41/41 em dez specs, mutantes 49/49, nenhum teste
+apagado, pulado ou pendente. `handoff` e `reminder` deixaram de ser `pending`
+e foram medidos: `handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7
+assignee=3 notify=3` e `reminder: runs=2 sent=1 duplicates=0`. `isolation`
+cresceu de 132 para 135 tabelas (`notifications`, `email_outbox`,
+`reminder_runs`), leaks=0. Os 3.492 arquivos de entrada conservaram o SHA-256.
+[Evidência F05](docs/migration/evidence/construction-f05-20260912.txt).
+
+Foi a sétima tentativa, e nenhuma foi reclassificada: a 01 e a 03 foram
+interrompidas ao ver a falha; a 02 apontou dois defeitos reais (a constraint
+`job_queue_kind_check` reconstruída em dois blocos do baseline; a FK composta
+nova presa ao índice que o replay da 9005 derruba) — consertados em `5aa5de54`;
+a 04, a 05 e a 06 reprovaram só no navegador, com a VPS dividida com outros
+projetos (load average 12–21). A única falha recorrente foi explicada pelo
+trace: o `POST /api/v1/messages` herdado não honra `Idempotency-Key` e o
+`apiClient` repete o POST após 10 s — mensagem duplicada sob latência
+(VARREDURA §B10, não aplicado).
+
+T05–T09 entregues: notificações por usuário para os seis eventos de §5.16 com
+e-mail mock (`notifications`, `email_outbox`); lembrete recorrente PJ por
+período (`reminder_runs`, cron por tenant em `job_queue`/`job_runs`, conversa
+criada ou reaberta em `waiting_customer` com a tag `awaiting_quantity`, envio
+só pelo catálogo com executor `automation`); resposta do cliente virando
+`update_order_quantity` com confirmação `by_risk`, corte sem resposta com aviso
+e tentativa de tarefa registrada, resposta tardia para gente; tela de uso de
+IA do `tenant_admin` sobre `ai_usage_events`. Decisões em ADR-026; hosting em
+ADR-027.
+
+**D50 (11/09/2026)**: `hosting_confirmed: yes` — staging nesta VPS, Docker
+Compose com Supabase local, acesso só por Tailscale; o PR em rascunho da branch
+é aberto após este READY; **a F06 não começa antes da próxima mensagem do
+proprietário** (a pausa de D47 volta a valer para F05→F06). `next_task` aponta
+F06-T01 como retomada, não como autorização.
+
+Limites de F05: tudo com `WHATSAPP_MODE=mock` e `AI_PROVIDER=mock`, duas
+empresas fictícias; nenhuma mensagem saiu para pessoa e nenhum provedor real
+foi contatado (e-mail e IA reais: NOT VALIDATED (real)). A tarefa do corte do
+lembrete é recusada pelo domínio (executor não-humano — decisão do
+proprietário, VARREDURA §B5/§C6) e a recusa fica gravada e auditada. A
+exceção configurável para resposta tardia (§7.6 T08) não existe: o desfecho é
+humano. O sandbox descartável foi derrubado ao fim.
+
 
 ## Estado vigente — F04 concluída em 11/09/2026; F05 parcial; construção pausada para troca de sessão
 
@@ -230,10 +277,10 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 | F00 | Auditoria, verificador, ADR-001…003 e baseline N0 | done(verify=2026-09-07 2a23537e) |
 | F01 | TenantContext, TenantConfiguration, Entitlement mínimo, seeds deka/demo2 e criação de tenant | done(verify=2026-09-07 6f7c56fc) — histórico; revalidação v1.17.0 com dívida em 08/09/2026 |
 | F02 | CRM mínimo e pedidos do dia: clientes/empresas, catálogo, pedidos/itens, histórico, tarefas/notas, lista por produto/entrega, impressão e conferência | done(verify=2026-09-10 03ec6a3b) — T01–T13 concluídas; construção pausada antes de F03 |
-| F03 | WhatsApp de entrada/saída via WAHA, adaptação do ChannelAdapter, Inbox e ciclo das conversas | pending |
-| F04 | Adaptar o motor de IA/RAG, Action Policy e nove ferramentas ao contrato CRM-OS | pending |
-| F05 | Adaptar handoff e notificações; criar regra de lembrete PJ sobre infraestrutura existente | pending |
-| F06 | Deploy de staging, mocks, segurança/observabilidade e smoke | pending |
+| F03 | WhatsApp de entrada/saída via WAHA, adaptação do ChannelAdapter, Inbox e ciclo das conversas | done(verify=2026-09-11 6d742a6b) |
+| F04 | Adaptar o motor de IA/RAG, Action Policy e nove ferramentas ao contrato CRM-OS | done(verify=2026-09-11 76c0b00b) |
+| F05 | Adaptar handoff e notificações; criar regra de lembrete PJ sobre infraestrutura existente | done(verify=2026-09-12 5aa5de54) — T01–T10 concluídas; pausada antes de F06 (D50 c) |
+| F06 | Deploy de staging, mocks, segurança/observabilidade e smoke | pending — hosting confirmado (D50/ADR-027); aguarda mensagem do proprietário |
 | F07 | Validação técnica do piloto, replicabilidade deka/demo2 e abertura de BLOCKER-PROD | pending |
 | F08 | Serviços reais e produção inicial: WAHA/IA, e-mail, domínio, orçamento, backup/retorno e onboarding configurável | pending |
 | F09 | Piloto Deka acompanhado, com baseline/metas, pedidos, separação, tempo e qualidade/custo da IA medidos | pending |
@@ -283,7 +330,7 @@ A [ADR-010](docs/decisions/ADR-010-rotulos-das-migrations-F01.md) resolve as col
 
 | Id | Tipo (D11) | O que precisa | Desde | Branch |
 |---|---|---|---|---|
-| (nenhum bloqueio de engenharia ativo) | | F02 concluída e pausada por D47; pendências abaixo continuam vinculadas às etapas dependentes, sem bloqueio pelos dados Deka (D48) | | |
+| (nenhum bloqueio de engenharia ativo) | | F05 concluída; hosting confirmado (D50); F06 aguarda mensagem do proprietário (D50 c). Pendências abaixo continuam vinculadas às etapas dependentes, sem bloqueio pelos dados Deka (D48) | | |
 
 Tipos: `credential_real`, `commercial`, `cost`, `production`, `real_message`, `restore_prod`, `real_data`, `contradiction_b`, `awaiting_owner`. `BLOCKER-PROD` será aberto na F07 e não muda `status` para BLOCKED; produção continua sem autorização nesta revisão.
 
@@ -305,7 +352,7 @@ Tipos: `credential_real`, `commercial`, `cost`, `production`, `real_message`, `r
 |---|---|---|---|
 | P-F02-01 | Data que organiza pedidos do dia | Pendente de configuração pela Deka após receber acesso. D48: a consulta exige critério explícito, sem assumir uma regra comercial | Uso operacional pela Deka; não bloqueia a construção |
 | P-F02-02…P-F02-08 | Unidades/embalagens, preço PJ, confirmação, corte/janelas, exceções, impressão, áudio e metas | Perguntas e cenários no desenho F02; configuração futura sem inventar conversões, preços, prazo ou liberação parcial | Operação dependente da configuração e avaliação real do piloto; não bloqueia a engenharia genérica |
-| D03 | Hosting/staging | Docker Compose nesta VPS é referência; Supabase local/self-hosted foi escolha de desenvolvimento. Capacidade e opção comercial precisam de decisão | F06/F08 |
+| D03 | Hosting/staging | **Decidido (D50, 11/09/2026)**: staging nesta VPS por Docker Compose com Supabase local, acesso só por Tailscale (ADR-027). Capacidade da VPS é limite declarado para a F06; produção continua decisão separada (D12/D13) | F08 (produção) |
 | Orçamento | Custos mensais e contratação | [Orçamento proposto](docs/product/ORCAMENTO-PROPOSTO.md) aberto para revisão: até R$300/mês adicionais no piloto, condicionado à capacidade da VPS e à ausência de nova assinatura de banco; R$600–1.200/mês na preparação comercial. Nenhum valor aprovado ou gasto autorizado | Contratação e serviços reais |
 | Prazo | Início e datas | Desejo de começar o quanto antes; nenhuma data calendário, duração de fase ou prazo final foi fixado | Compromissos de entrega |
 | D02/E5 | Credenciais/modelos de IA e dimensão do embedding | `AI_PROVIDER=mock`; ADR-002 provisório, seleção de modelo e orçamento real pendentes | F04 real/F08 |

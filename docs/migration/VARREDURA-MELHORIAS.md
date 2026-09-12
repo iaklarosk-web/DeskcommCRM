@@ -170,6 +170,23 @@ local. `gh auth refresh -h github.com -s workflow` destrava.
 **Enquanto não destravar:** o trabalho existe só localmente, e a CI não roda as
 specs novas.
 
+### B10. `POST /api/v1/messages` (herdado) não honra `Idempotency-Key`; o cliente repete o POST
+Medido no trace do Playwright do gate f05-gate-06 (12/09/2026): a jornada
+"responder" de `f03-inbox.spec.ts` fez DOIS POSTs a `/api/v1/messages` — o
+primeiro sem resposta em 10 s (`DEFAULT_TIMEOUT_MS` de `lib/api/client.ts:16`,
+que então repete com backoff), o segundo com 201. O `apiClient` manda
+`Idempotency-Key` em todo método mutante (`lib/api/client.ts:117`), mas o
+handler herdado `app/api/v1/messages/_handler.ts` não lê o cabeçalho: sob
+latência > 10 s a repetição grava uma SEGUNDA mensagem — e ela sai para o
+cliente duas vezes. Apareceu em 3 de 6 gates da F05, sempre com a VPS
+sobrecarregada (load average 12–21); nunca nos gates de F03/F04.
+**Proposta:** o handler honrar `Idempotency-Key` (recibo por
+`(organization_id, chave)` com o mesmo desenho dos recibos de comando da F02),
+ou a rota nova de envio (`execute(send_message)`, que já é idempotente por
+`idempotency_key`) substituir o caminho síncrono herdado — trabalho de
+consolidação já previsto na ADR-017. Custo: médio. Risco de não fazer: mensagem
+duplicada para cliente real em qualquer pico de latência.
+
 ---
 
 ## C. Portões do proprietário — o que a engenharia não pode abrir sozinha
@@ -178,7 +195,12 @@ D49 suspendeu a pausa por fase de D47, mas preservou D11–D13. Estes itens não
 são preferência técnica: são atos com efeito fora do repositório, ou dependem de
 credencial e dinheiro. Ficam aqui porque a entrega final tem de listá-los.
 
-### C1. `hosting_confirmed: no` bloqueia a F06 por texto explícito
+### C1. `hosting_confirmed: no` bloqueia a F06 por texto explícito — **RESOLVIDO por D50 (11/09/2026)**
+Decidido: staging nesta VPS por Docker Compose com Supabase local (self-hosted),
+acesso só por Tailscale. `hosting_confirmed: yes` no BUILD-STATE; ADR-027. A
+F06 continua esperando a mensagem do proprietário para começar (D50 c). O texto
+abaixo é o registro do portão como estava.
+
 §7.7 escreve a pré-condição da F06 assim: "`F05=done`, `hosting_confirmed=yes`
 (D03). **Sem isso, BLOCKER e fim da run (D11)**". O `BUILD-STATE.md` tem
 `hosting_confirmed: no`.
@@ -200,9 +222,9 @@ o sandbox local seria chamar de staging o que é a máquina de desenvolvimento.
 Supabase local, o que muda o critério e merece linha na DIRETRIZ) e, se for
 Supabase gerenciado, fornecer o projeto.
 
-### C2. Push bloqueado por escopo de token
-`gh auth refresh -h github.com -s workflow`. Sem isso a branch fica só local e a
-CI não roda as specs novas. Detalhe em B9.
+### C2. Push bloqueado por escopo de token — **RESOLVIDO por D50 (11/09/2026)**
+A branch sobe por SSH (`origin` é `git@github.com:…`); o escopo `workflow` do
+token do `gh` não bloqueia o push. PR em rascunho aberto após o READY da F05.
 
 ### C3. Itens de D12 que continuam pendentes para a produção
 Domínio, Supabase de produção, chave OpenAI com orçamento, número de WhatsApp
