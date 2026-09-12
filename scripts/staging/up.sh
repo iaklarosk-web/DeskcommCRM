@@ -121,9 +121,8 @@ if [ "$NO_SEED" = 0 ]; then
   marco "seeds: deka e demo2 (scripts/create-tenant.sh, idempotente)"
   SUPABASE_DB_URL="$DB_URL" bash scripts/create-tenant.sh docs/tenants/deka.seed.yaml
   # demo2 leva as fixtures FICTÍCIAS da F02 (contatos, empresas, produtos,
-  # pedidos): o create-tenant.ts pula os blocos customers/products do seed
-  # ("entra na fase que adapta a tabela"), e sem linha nenhuma o smoke não
-  # teria número a comparar. O marcador no banco é a guarda do escritor de
+  # pedidos) ALÉM dos blocos do seed, que o loader grava desde a F07
+  # (ADR-029 §3): o smoke compara com seed + fixture. O marcador no banco é a guarda do escritor de
   # fixtures (G-41: só escreve em banco marcado como sandbox de ficção) — o
   # staging É esse banco.
   # `postgres` não é superusuário na imagem do Supabase; quem altera parâmetro

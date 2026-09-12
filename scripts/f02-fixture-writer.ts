@@ -122,11 +122,16 @@ async function requireNoForeignCommercialRows(
     audits: readonly string[];
   },
 ): Promise<void> {
+  // Linhas que o SEED gravou (ADR-029 §3: `origem`/`source` = 'seed', e a
+  // empresa vinculada a um contato do seed) não são "dado comercial alheio":
+  // são do mesmo tenant provisionado, e o rerun idempotente do create-tenant
+  // com `--fictional-fixtures` as reencontra.
   const result = await db.query<Record<string, number>>(
     `select
-      (select count(*)::int from public.crm_companies where organization_id=$1 and not(id=any($2::uuid[]))) companies,
-      (select count(*)::int from public.contacts where organization_id=$1 and not(id=any($3::uuid[]))) contacts,
-      (select count(*)::int from public.catalog_products where organization_id=$1 and not(id=any($4::uuid[]))) products,
+      (select count(*)::int from public.crm_companies where organization_id=$1 and not(id=any($2::uuid[]))
+         and id not in (select company_id from public.contacts where organization_id=$1 and source='seed' and company_id is not null)) companies,
+      (select count(*)::int from public.contacts where organization_id=$1 and not(id=any($3::uuid[])) and source<>'seed') contacts,
+      (select count(*)::int from public.catalog_products where organization_id=$1 and not(id=any($4::uuid[])) and origem<>'seed') products,
       (select count(*)::int from public.crm_orders where organization_id=$1 and not(id=any($5::uuid[]))) crm_orders,
       (select count(*)::int from public.crm_order_items where organization_id=$1 and not(id=any($6::uuid[]))) items,
       (select count(*)::int from public.crm_order_command_receipts where organization_id=$1 and not(id=any($7::uuid[]))) receipts,

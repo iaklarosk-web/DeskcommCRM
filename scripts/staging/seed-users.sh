@@ -8,13 +8,23 @@
 # não tem usuário real (TODO-DEKA, D48/D11): ganha um admin fictício de
 # staging, `admin@deka.staging.test`, que NÃO existe no seed versionado.
 #
+# Uso: seed-users.sh [slug ...]  (padrão: deka demo2). A F07 (ADR-029 §3/§4)
+# passa o slug do tenant efêmero. Para cada slug: senha a todo membro do
+# tenant, `onboarded_at` preenchido onde estiver nulo (o loader antigo não o
+# gravava; sem ele o tenant cai em /onboarding), sessão de canal mock.
+#
 # Idempotente: rodar de novo só reatualiza a senha. Nenhum valor é impresso.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 : "${SUPABASE_DB_URL:?SUPABASE_DB_URL obrigatório}"
 : "${STAGING_SMOKE_PASSWORD:?STAGING_SMOKE_PASSWORD obrigatório}"
+SLUGS="${*:-deka demo2}"
+for slug in $SLUGS; do
+  [[ "$slug" =~ ^[a-z0-9-]+$ ]] || { echo "slug inválido: $slug" >&2; exit 2; }
+done
+SLUGS_SQL=$(printf "'%s'," $SLUGS); SLUGS_SQL="${SLUGS_SQL%,}"
 
-psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -q -v senha="$STAGING_SMOKE_PASSWORD" <<'SQL'
+psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -q -v senha="$STAGING_SMOKE_PASSWORD" -v slugs="$SLUGS_SQL" <<'SQL'
 -- admin fictício do deka (só staging)
 with org as (select id from public.organizations where slug = 'deka'),
      u as (
@@ -29,7 +39,14 @@ select coalesce((select id from u), (select id from auth.users where email = 'ad
   from org
 on conflict do nothing;
 
--- senha + campos do GoTrue para todo usuário dos dois tenants
+-- O seed é o onboarding de um tenant provisionado (ADR-029 §3): tenants
+-- criados pelo loader antigo ficaram com `onboarded_at` nulo e caíam em
+-- /onboarding no navegador (o smoke, só por API, não via).
+update public.organizations
+   set onboarded_at = now()
+ where slug in (:slugs) and onboarded_at is null;
+
+-- senha + campos do GoTrue para todo membro dos tenants pedidos
 update auth.users u
    set encrypted_password = extensions.crypt(:'senha', extensions.gen_salt('bf')),
        email_confirmed_at = coalesce(email_confirmed_at, now()),
@@ -50,10 +67,15 @@ update auth.users u
        reauthentication_token = coalesce(reauthentication_token, ''),
        created_at = coalesce(created_at, now()),
        updated_at = now()
- where u.email in ('admin@deka.staging.test', 'admin@demo2.test', 'atende@demo2.test');
+ where u.id in (select uo.user_id from public.user_organizations uo
+                  join public.organizations o on o.id = uo.organization_id
+                 where o.slug in (:slugs));
 
-select count(*) as usuarios_com_senha from auth.users
- where email in ('admin@deka.staging.test', 'admin@demo2.test', 'atende@demo2.test') and encrypted_password is not null;
+select count(*) as usuarios_com_senha from auth.users u
+ where u.id in (select uo.user_id from public.user_organizations uo
+                  join public.organizations o on o.id = uo.organization_id
+                 where o.slug in (:slugs))
+   and u.encrypted_password is not null;
 
 -- Sessão de canal FICTÍCIA por tenant, ligada à conta mock do seed: sem
 -- `channel_session_id` o webhook responde `sem_sessao_de_canal` (503) e o
@@ -62,7 +84,7 @@ select count(*) as usuarios_com_senha from auth.users
 insert into public.channel_sessions (id, organization_id, waha_session_name, webhook_secret_encrypted)
 select gen_random_uuid(), o.id, 'staging-' || o.slug, '\x00'::bytea
   from public.organizations o
- where o.slug in ('deka', 'demo2')
+ where o.slug in (:slugs)
    and not exists (select 1 from public.channel_sessions s where s.organization_id = o.id and s.waha_session_name = 'staging-' || o.slug);
 
 update public.channel_accounts ca
@@ -73,12 +95,25 @@ update public.channel_accounts ca
 
 select count(*) as contas_mock_com_sessao from public.channel_accounts where provider = 'mock' and channel_session_id is not null;
 
--- O contato fictício que o smoke usa como remetente do webhook: com telefone,
--- a mensagem de entrada se prende a ele em vez de criar contato novo a cada
--- rodada (e `customers[demo2]` continua igual à fixture). Número FICTÍCIO.
+-- O remetente do webhook do smoke é o CLIENTE DO SEED (ADR-029 §3: o loader
+-- grava `customers[]`, telefone incluído). Antes da F07 o contorno era dar o
+-- telefone do seed ao contato fictício "Alfa" da F02; o contorno é desfeito
+-- aqui para o telefone voltar a ser do cliente do seed (índice único por
+-- organização e telefone). A linha volta à forma da fixture (`updated_at` =
+-- `created_at`, sem o `waha_chat_id` que a mensagem do smoke da F06 gravou):
+-- o escritor de fixtures confere a linha byte a byte no rerun do up.sh.
 update public.contacts c
-   set phone_number = '+5500000000102', updated_at = now()
+   set phone_number = null, source_metadata = '{}'::jsonb, updated_at = c.created_at
   from public.organizations o
  where c.organization_id = o.id and o.slug = 'demo2'
-   and c.display_name = 'Contato Fictício Alfa' and c.phone_number is null;
+   and c.display_name = 'Contato Fictício Alfa'
+   and (c.phone_number = '+5500000000102' or c.source_metadata ? 'waha_chat_id' or c.updated_at <> c.created_at);
+
+-- Usuário-sentinela que o loader ANTIGO gravava a partir de `email: TODO-…`
+-- (ADR-029 §3: pendência não é usuário). Só existe em staging criado antes
+-- da F07; apagar a membership e o auth.users não toca pessoa nenhuma.
+delete from public.user_organizations uo
+ using auth.users u
+ where u.id = uo.user_id and u.email like 'TODO-%';
+delete from auth.users where email like 'TODO-%';
 SQL

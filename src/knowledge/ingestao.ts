@@ -30,7 +30,12 @@
  * já extraído. Quem converte bytes em texto é a rota (`app/api/v1/...`), que é
  * onde o limite de tamanho e o tipo de arquivo são política de borda.
  */
-import { withTenant, type TenantCtx, type TenantDb } from "@/src/tenant-context";
+// Importado do módulo, não do índice: o índice arrasta `fromSession` →
+// `lib/supabase` → `lib/env`, que valida o ambiente inteiro no load — e o
+// loader do seed (`scripts/create-tenant.ts`, ADR-029 §3) ingere o FAQ com só
+// `SUPABASE_DB_URL` no ambiente.
+import type { TenantCtx } from "@/src/tenant-context/types";
+import { withTenant, type TenantDb } from "@/src/tenant-context/with-tenant";
 import type { ServicePool } from "@/src/tenant-context/db";
 
 import {

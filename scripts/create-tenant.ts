@@ -6,8 +6,12 @@
  *
  * Escopo da F01: organização, usuários (papéis D15 mapeados pelo ADR-003:
  * tenant_admin→admin, attendant→agent), tenant_settings e channel_accounts
- * mock. Os blocos products/customers/faq do seed são das fases F02/F04 — o
- * script AVISA que os pulou (nunca silêncio, G-04).
+ * mock. Desde a F07 (ADR-029 §3, VARREDURA §B13) os blocos products/customers/
+ * faq do seed também entram — `catalog_products`, `contacts`/`crm_companies` e
+ * o acervo da organização (ADR-023) — com id determinístico (`fixtureUuid`),
+ * então a segunda execução continua criando ZERO linhas. `products[].size` não
+ * tem coluna no catálogo: o script DECLARA que não gravou (nunca silêncio,
+ * G-04) em vez de inventar destino.
  *
  * Settings com sentinela TODO- (§5.21) não viram linha: pendência não é valor.
  * Seed nunca sobrescreve nada existente (on conflict do nothing) — quem muda
@@ -26,9 +30,10 @@ import { entradaDoSchema, SCHEMA_VERSION } from "@/src/tenant-config/schema";
 import { validateSeed } from "@/src/tenant-config/validate-seed";
 import { LEGACY_SETTING_KEYS, prepareCanonicalSeed } from "@/src/tenant-config/canonical-seed";
 
-import { parseF02Fixtures } from "../src/tenant-config/f02-fixtures";
+import { fixtureUuid, parseF02Fixtures } from "../src/tenant-config/f02-fixtures";
 import { parseF02FixtureArgs } from "./f02-fixture-args";
 import { writeF02Fixtures } from "./f02-fixture-writer";
+import { escreverBlocosDoSeed, ingerirFaqDoSeed } from "./seed-blocks";
 
 interface SeedUser {
   email: string;
@@ -39,14 +44,34 @@ interface SeedChannel {
   provider: string;
   account_ref: string;
 }
+export interface SeedProduct {
+  sku: string;
+  name: string;
+  size?: string | number;
+  unit?: string;
+  price_cents: number;
+  active?: boolean;
+}
+export interface SeedCustomer {
+  name: string;
+  phone?: string;
+  company?: string;
+  recurring?: boolean;
+  recurring_weekday?: number;
+  notes?: string;
+}
+export interface SeedFaq {
+  q: string;
+  a: string;
+}
 interface Seed {
   tenant: { slug: string; name: string };
   users?: SeedUser[];
   channel_accounts?: SeedChannel[];
   settings?: Record<string, unknown>;
-  products?: unknown[];
-  customers?: unknown[];
-  faq?: unknown[];
+  products?: SeedProduct[];
+  customers?: SeedCustomer[];
+  faq?: SeedFaq[];
 }
 
 const PAPEL_ADR003: Record<string, string> = {
@@ -114,7 +139,8 @@ async function main(): Promise<void> {
   const f02Fixtures = fixtureOptions
     ? parseF02Fixtures(parseYaml(fs.readFileSync(fixtureOptions.fixturePath, "utf8")), {
         tenantSlug: seed.tenant.slug,
-        seedUserEmails: (seed.users ?? []).map((user) => user.email),
+        // Sentinela TODO- não é usuário (ADR-029 §3): não entra na lista.
+        seedUserEmails: (seed.users ?? []).filter((user) => !temTodoPendente(user.email)).map((user) => user.email),
       })
     : undefined;
 
@@ -131,8 +157,12 @@ async function main(): Promise<void> {
 
     // 1. Organização (slug é o unique herdado). Aliases canônicos só entram no
     // INSERT: reencontrar slug nunca edita timezone/marca de tenant vivo.
-    const columns = ["slug", "display_name", "legal_name"];
-    const values = ["$1", "$2", "$2"];
+    // `onboarded_at` no INSERT (ADR-029 §3): o seed É o onboarding de um
+    // tenant provisionado pelo operador; sem isso `app/app/layout.tsx`
+    // manda o tenant_admin para o assistente de /onboarding. Rerun de slug
+    // existente não toca a coluna (on conflict do nothing).
+    const columns = ["slug", "display_name", "legal_name", "onboarded_at"];
+    const values = ["$1", "$2", "$2", "now()"];
     const params: unknown[] = [seed.tenant.slug, seed.tenant.name];
     if (canonicalSeed.organization.timezone) {
       columns.push("timezone");
@@ -160,7 +190,14 @@ async function main(): Promise<void> {
     if (!org) throw new Error(`organização ${seed.tenant.slug} não encontrada após insert`);
 
     // 2. Usuários + membership (ADR-003).
+    let usuariosPendentes = 0;
     for (const u of seed.users ?? []) {
+      // Sentinela TODO- no e-mail é pendência, não usuário (mesma regra das
+      // settings): gravá-la criaria `auth.users` com e-mail `TODO-…`.
+      if (temTodoPendente(u.email)) {
+        usuariosPendentes += 1;
+        continue;
+      }
       const papel = PAPEL_ADR003[u.role];
       if (!papel) throw new Error(`papel desconhecido no seed: ${u.role} (D15/ADR-003)`);
       // Select-first: auth.users do GoTrue não tem unique simples em email
@@ -227,15 +264,33 @@ async function main(): Promise<void> {
     if (pulados > 0)
       console.log(`settings com sentinela TODO- puladas (pendência não é valor): ${pulados}`);
 
-    for (const bloco of ["products", "customers", "faq"] as const) {
-      const n = (seed[bloco] ?? []).length;
-      if (n > 0)
-        console.log(
-          `bloco ${bloco} (${n} itens) PULADO: entra na fase que adapta a tabela (F02/F04)`,
-        );
-    }
+    if (usuariosPendentes > 0)
+      console.log(`users com sentinela TODO- pulados (pendência não é usuário): ${usuariosPendentes}`);
+
+    // 5. Blocos products/customers (ADR-029 §3, §B13) — na MESMA transação.
+    const blocos = await escreverBlocosDoSeed(client, org, {
+      products: seed.products ?? [],
+      customers: seed.customers ?? [],
+    }, fixtureUuid);
+    criadas += blocos.rowsCreated;
+    console.log(
+      `products=${blocos.products} customers=${blocos.customers} companies=${blocos.companies}` +
+        (blocos.pendentes > 0 ? ` itens com sentinela TODO- pulados (pendência não é dado): ${blocos.pendentes}` : "") +
+        (blocos.sizeSemColuna > 0 ? ` products: size sem coluna (${blocos.sizeSemColuna} itens; declarado, não gravado)` : ""),
+    );
 
     await client.query("commit");
+
+    // 6. FAQ → acervo da organização (ADR-023), fora da transação do tenant:
+    // `ingerirDocumento` abre a própria (withTenant). Idempotente pelo nome
+    // do material; falha aqui deixa o tenant criado e o rerun completa.
+    const faq = await ingerirFaqDoSeed(pool, org, seed.faq ?? []);
+    criadas += faq.rowsCreated;
+    console.log(
+      `faq=${faq.itens} acervo_materiais=${faq.materiais} acervo_trechos=${faq.trechos}` +
+        (faq.pendentes > 0 ? ` faq com sentinela TODO- pulados: ${faq.pendentes}` : ""),
+    );
+
     console.log(`tenant=${seed.tenant.slug} organization_id=${org} rows_created=${criadas}`);
   } catch (erro) {
     await client.query("rollback").catch(() => undefined);
