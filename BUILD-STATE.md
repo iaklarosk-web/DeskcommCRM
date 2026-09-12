@@ -1,24 +1,24 @@
 ---
-updated_at: 2026-09-12T07:10:00Z
-head_commit: 5aa5de5446e14ec5f269e281966b572a5c5ace90   # código validado pelo gate f05-gate-07 (READY F05)
+updated_at: 2026-09-12T18:30:00Z
+head_commit: 270852a60abd2d6a7a8f02c3c02e34c0f7380d9e   # código validado pelo gate f06-gate-02 (READY (staging), dentro do staging)
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
-plan_version: "2.5 (2026-09-11); D38–D50; ADR-006…027"
+plan_version: "2.5 (2026-09-11); D38–D50; ADR-006…028"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
-current_phase: F05
-next_task: F06-T09             # F06 autorizada em 12/09/2026 (D50 c); T01–T08 fechadas, staging de pé
+current_phase: F06
+next_task: F07-T01             # F06 concluída; F07 só começa com nova mensagem do proprietário (D50 c / D47)
 status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
 hosting_confirmed: yes         # D50 (11/09/2026): staging nesta VPS, Docker Compose com Supabase local, acesso só por Tailscale — ADR-027
 build_env: "Claude Code na VPS, worktree DeskcommCRM-v1.17.0; validação em serviços/bancos descartáveis; WHATSAPP_MODE=mock AI_PROVIDER=mock"
-verify_summary_last_context: "f05-gate-07 aprovado em 12/09/2026 sobre 5aa5de54, 7616s, exit 0, sétima tentativa (01 e 03 interrompidas; 02 reprovou por dois defeitos reais consertados; 04–06 reprovaram só no navegador, sob VPS sobrecarregada — ver evidência). F05 concluída tecnicamente. Não é READY_STAGING nem aceite comercial."
+verify_summary_last_context: "f06-gate-02 aprovado em 12/09/2026 sobre 270852a6, 6094s, exit 0, DENTRO do staging (VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202), segunda tentativa (01 interrompida em unit por três réguas reais, consertadas). F06 concluída tecnicamente com STATUS: READY (staging) por D50/§7.7; não é READY_STAGING de §8.4 (F07) nem aceite comercial."
 verify_summary_last: |
   VERIFY SUMMARY
-  scope=phase phase=F05 current_phase=F05
+  scope=phase phase=F06 current_phase=F06 environment=staging
   build=ok lint=ok typecheck=ok shell=ok
-  unit=8472/8472 integration=148/148 db=1651/1651 e2e=41/41 baseline_n0=8997
-  baseline_comparable: scope=unit+db passed=10123 required=8738 full_n0=pending
-  e2e_scope: F05-required passed=41/41 specs=10/10
+  unit=8491/8491 integration=153/153 db=1651/1651 e2e=41/41 baseline_n0=8997
+  baseline_comparable: scope=unit+db passed=10142 required=8738 full_n0=pending
+  e2e_scope: F06-required passed=41/41 specs=10/10
   isolation: tables=135 ops=4 dirs=2 leaks=0 (material_cross_org=97/135)
   rls-coverage: tables_with_org_id=135 policies_found=116 missing=0 service_only_with_grant=0
   rbac: roles=3 denied_expected=19 denied_actual=19
@@ -27,14 +27,75 @@ verify_summary_last: |
   handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3 notify=3 notify_rows=6 msgs_after=3 provider_calls_after=0
   reminder: runs=2 sent=1 duplicates=0 tables_summed=3
   webhook: replay=2 stored=1 tables_checked=7
+  logs: routes=270 routes_logged=270 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
+  rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=270 routes_with_schema=270 routes_reading_input=143 validated=143
+  lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2
   replicability: e2e[fictitious_A_B]=41/41 specs=10/10 grep_deka_in_src=0
-  secrets: files_scanned=469 findings=0
-  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=49/49
+  secrets: files_scanned=487 findings=0
+  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=54/54
   debt_known=0 skip_only_occurrences=15 violations=0
-  STATUS: READY (F05)
+  STATUS: READY (staging)
+restore: tables=179 tables_restored=179 rows=342 rows_diff=0 dump=staging-20260912T155052Z.dump target=restore_20260912_155124 seconds=15 at=20260912T155124Z
+smoke: steps=6 pass=6/6 customers[deka]=0/0 customers[demo2]=2/2 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=3/3 webhook_accepted=1/1 reminder_listed=1/1
+p95_ms: endpoints=3/3 health=23 contacts=455 conversations=436 samples=20 url=http://127.0.0.1:3200
+staging: compose=crm-staging services_running=15/15 memory_mib=1185 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0
 ---
 
 # BUILD-STATE
+
+## Estado vigente — F06 concluída em 12/09/2026 (READY (staging), dentro do staging); construção PAUSADA antes da F07 (D50 c)
+
+`./scripts/verify.sh` com `VERIFY_ENVIRONMENT=staging` saiu 0 com
+`STATUS: READY (staging)` sobre `270852a6`, em 6094 s (101,6 min), com zero
+violações: unit 8491/8491, integração 153/153, banco 1651/1651, navegador
+41/41 em dez specs contra o Supabase do STAGING desta VPS (loopback
+56421/56422, app do gate em 3202), mutantes 54/54, nenhum teste apagado,
+pulado ou pendente. As três métricas de F06 (ADR-028) foram medidas: `logs:
+routes=270 routes_logged=270 workers=4 workers_logged=4 request_log_org_id=1/1
+sentry_mock_captured=1 pii_fields=4/7`, `rate-limit: requests=101 status_429=1
+auth_blocked=1 routes=270 routes_with_schema=270 routes_reading_input=143
+validated=143`, `lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2`. Os 3.522
+arquivos de entrada conservaram o SHA-256. Fora do bloco, como §7.7 manda:
+`restore: tables=179 rows_diff=0` (banco vazio criado para o teste, D36) e
+`smoke: steps=6 pass=6/6` contra o container do staging, com `p95_ms:
+endpoints=3/3`. [Evidência F06](docs/migration/evidence/construction-f06-20260912.txt).
+
+Segunda tentativa: a 01 foi interrompida em unit (8487/8490) por três réguas
+reais — o scanner de segredos casava as URLs de Postgres montadas por
+interpolação nos scripts novos, e o job `verify.yml::verify` não estava no
+mapa de jobs do CI — consertadas em `270852a6`; nenhuma falha foi de carga
+(load average 1 no lançamento, com o Supabase de desenvolvimento do checkout
+antigo parado).
+
+T01–T09 entregues: logs JSON com `organization_id` e `request_id` em toda rota
+(linha no guarda de papel + 30 rotas explícitas) e nos workers, captura de
+erro com allowlist de quatro campos (§5.17); rate limit no webhook SaaS por
+(provedor, IP) e schema em toda rota que lê entrada, mais o conserto do §B10
+(`Idempotency-Key` no `POST /api/v1/messages`); LGPD mínima por duas ações
+`high` só humanas do catálogo D17 sobre o grafo de FKs lido do catálogo;
+varredura de segredos e inventário do `.env.example` no CI (e a guarda G-51 do
+scanner, morta desde F01, consertada); `verify.yml` rodando o gate em todo PR;
+`backup.sh`/`restore.sh`; `compose.staging.yml` (15 serviços, Supabase local
+escrito serviço a serviço, portas só em loopback e Tailscale) com
+`scripts/staging/*` e runbook `docs/ops/staging.md`; `smoke.sh` com seis
+passos e p95. verify v1.4 (ADR-028): F06 no gate, três campos novos,
+`environment=` no bloco e `READY (staging)` a partir de F06 dentro do staging.
+
+**D50 (c)**: a F07 não começa antes da próxima mensagem do proprietário;
+`next_task: F07-T01` é retomada, não autorização. O staging fica de pé
+(`scripts/staging/status.sh`); o Supabase de desenvolvimento do checkout
+antigo ficou parado (`supabase start` em `~/projetos/DeskcommCRM` o devolve).
+
+Limites de F06: nenhum provedor real (WhatsApp adapter mock, IA mock, e-mail
+no mailpit, `SENTRY_DSN=off`); acesso do proprietário via Tailscale não
+exercido nesta sessão (URL e usuários fictícios no runbook); o run do
+`verify.yml` no GitHub e o link são do proprietário (§7.7 T08); regra de
+firewall para os outros stacks desta máquina (VARREDURA §B12) e persistência
+do swap (§B14) são portas 1-way do proprietário; `READY (staging)` aqui é a
+saída da F06 (D50/§7.7) — a F07 imprime o mesmo rótulo com os campos de §8.4.
+Decisões que continuam do proprietário: §B5/§C6, §C5, §B11 (DSN da comunidade
+por padrão), §B13 (seed `customers`/`products` não carregados).
+
 
 ## Estado vigente — F05 concluída em 12/09/2026; construção PAUSADA antes da F06 (D50)
 
@@ -280,7 +341,7 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 | F03 | WhatsApp de entrada/saída via WAHA, adaptação do ChannelAdapter, Inbox e ciclo das conversas | done(verify=2026-09-11 6d742a6b) |
 | F04 | Adaptar o motor de IA/RAG, Action Policy e nove ferramentas ao contrato CRM-OS | done(verify=2026-09-11 76c0b00b) |
 | F05 | Adaptar handoff e notificações; criar regra de lembrete PJ sobre infraestrutura existente | done(verify=2026-09-12 5aa5de54) — T01–T10 concluídas; pausada antes de F06 (D50 c) |
-| F06 | Deploy de staging, mocks, segurança/observabilidade e smoke | pending — hosting confirmado (D50/ADR-027); aguarda mensagem do proprietário |
+| F06 | Deploy de staging, mocks, segurança/observabilidade e smoke | done(verify=2026-09-12 270852a6) — READY (staging) dentro do staging; T01–T09 concluídas; pausada antes de F07 (D50 c) |
 | F07 | Validação técnica do piloto, replicabilidade deka/demo2 e abertura de BLOCKER-PROD | pending |
 | F08 | Serviços reais e produção inicial: WAHA/IA, e-mail, domínio, orçamento, backup/retorno e onboarding configurável | pending |
 | F09 | Piloto Deka acompanhado, com baseline/metas, pedidos, separação, tempo e qualidade/custo da IA medidos | pending |
@@ -330,7 +391,7 @@ A [ADR-010](docs/decisions/ADR-010-rotulos-das-migrations-F01.md) resolve as col
 
 | Id | Tipo (D11) | O que precisa | Desde | Branch |
 |---|---|---|---|---|
-| (nenhum bloqueio de engenharia ativo) | | F05 concluída; hosting confirmado (D50); F06 aguarda mensagem do proprietário (D50 c). Pendências abaixo continuam vinculadas às etapas dependentes, sem bloqueio pelos dados Deka (D48) | | |
+| (nenhum bloqueio de engenharia ativo) | | F06 concluída em staging; F07 aguarda mensagem do proprietário (D50 c). Pendências abaixo continuam vinculadas às etapas dependentes, sem bloqueio pelos dados Deka (D48) | | |
 
 Tipos: `credential_real`, `commercial`, `cost`, `production`, `real_message`, `restore_prod`, `real_data`, `contradiction_b`, `awaiting_owner`. `BLOCKER-PROD` será aberto na F07 e não muda `status` para BLOCKED; produção continua sem autorização nesta revisão.
 
@@ -384,7 +445,7 @@ A integração e as provas com mocks/bancos descartáveis não comprovam as jorn
 | Chat do site | Mensagens reais, identidade, isolamento e continuidade do atendimento | |
 | Agenda/Google Agenda | Criar/alterar/cancelar, disponibilidade/fuso, conflitos, reconexão e revogação reais | |
 | Produção | Aceite, deploy e smoke da versão com domínio, monitoração e operador definidos | |
-| Recuperação/capacidade | Backup/restauração em destino autorizado, retorno e carga medidos contra critérios acordados | |
+| Recuperação/capacidade | Backup/restauração em destino autorizado, retorno e carga medidos contra critérios acordados (F06: restore em banco vazio de staging tables=179 rows_diff=0; produção continua humana) | |
 | Teste visual/celular | Checklist da fase nos dispositivos previstos e registro do proprietário | |
 
 ## Histórico original F00/F01 — encerramentos de 07/09/2026

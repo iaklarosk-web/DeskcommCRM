@@ -1,0 +1,153 @@
+F06 — Hardening + staging. Evidência de construção.
+Fechamento: 2026-09-12T18:25Z (15:25 de Brasília). Branch feat/F03-conversation-inbox.
+Código validado: 270852a60abd2d6a7a8f02c3c02e34c0f7380d9e (T01–T09 + verify v1.4 + consertos do gate 01).
+Autorização: mensagem do proprietário de 12/09/2026 (D50 c). Hosting: D50 (a), ADR-027, ADR-028.
+
+== GATE INTEGRAL — DENTRO DO STAGING (ADR-028 §2) ==
+./scripts/verify.sh, WHATSAPP_MODE=mock AI_PROVIDER=mock CI=1, um worker, zero retries,
+VERIFY_ENVIRONMENT=staging F02_E2E_SANDBOX_ID=crm-staging E2E_PORT=3202: o navegador rodou contra
+o Supabase do STAGING desta VPS (loopback 56421/56422 — o mesmo banco, auth e storage do
+compose.staging.yml, com o app do gate em 3202); unit/db/integration no Postgres efêmero de
+scripts/test-db.sh (elas criam e destroem schema). Evidência do ambiente: sandbox.json
+{environment:"staging", sandbox:"crm-staging", api:"loopback:56421", database:"loopback:56422/postgres",
+app:"loopback:3202", providers mock/mock, credenciais presentes}.
+Execução f06-gate-02, 6094 s (101,6 min; 13:39:52 → 15:21:26 de Brasília), exit 0, STATUS: READY (staging),
+violations=0, SEGUNDA tentativa.
+
+VERIFY SUMMARY
+scope=phase phase=F06 current_phase=F06 environment=staging
+build=ok lint=ok typecheck=ok shell=ok
+unit=8491/8491 integration=153/153 db=1651/1651 e2e=41/41 baseline_n0=8997
+baseline_comparable: scope=unit+db passed=10142 required=8738 full_n0=pending
+e2e_scope: F06-required passed=41/41 specs=10/10
+isolation: tables=135 ops=4 dirs=2 leaks=0 (material_cross_org=97/135)
+rls-coverage: tables_with_org_id=135 policies_found=116 missing=0 service_only_with_grant=0
+rbac: roles=3 denied_expected=19 denied_actual=19
+entitlement: usage_events_written=23
+ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0
+handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3 notify=3 notify_rows=6 msgs_after=3 provider_calls_after=0
+reminder: runs=2 sent=1 duplicates=0 tables_summed=3
+webhook: replay=2 stored=1 tables_checked=7
+logs: routes=270 routes_logged=270 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
+rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=270 routes_with_schema=270 routes_reading_input=143 validated=143
+lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2
+replicability: e2e[fictitious_A_B]=41/41 specs=10/10 grep_deka_in_src=0
+secrets: files_scanned=487 findings=0
+tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=54/54
+debt_known=0 skip_only_occurrences=15 violations=0
+STATUS: READY (staging)
+
+Inputs: 3522 arquivos, SHA-256 59a76c3c…96df62 idêntico antes e depois.
+Etapas: typecheck 20 s · lint 105 s · build 127 s · shell 59 s · unit 1756 s · integration 98 s ·
+db 944 s · e2e 1738 s · mutantes 54/54. Logs em .verify-logs/f06-gate-02/ (não versionado).
+Máquina: load average 1,1 no lançamento; o Supabase de desenvolvimento do checkout antigo
+(deskcomm-crm, 1,1 GB) foi PARADO antes do gate (supabase stop, volumes preservados) e o staging
+(15 containers, 1,2 GB) ficou de pé durante o gate inteiro.
+
+== A TENTATIVA ANTERIOR (não reclassificada) ==
+gate-01 (16:00Z, interrompido em unit após 1767 s): 8487/8490 — três falhas REAIS, nenhuma de
+  carga: (1) scanner-de-segredos exit 1 com findings=4 — as URLs de Postgres montadas por
+  interpolação (`postgresql://postgres:${VAR}@…`) em backup.sh, restore.sh, smoke.mjs e
+  staging/up.sh casavam o padrão de senha em URL; (2) f06-t04-t08 (executa o mesmo script) idem;
+  (3) gatilho-dos-jobs-de-entrega: o job `verify.yml::verify` (T08) não estava no mapa que impede
+  job de CI nascer sem revisão. Conserto: commit 270852a6 (segunda exclusão NOMEADA no scanner —
+  interpolação de variável não é credencial; senha literal, inclusive `$ecreto…`, continua finding
+  — e o job no mapa com condição nula). Integração e banco do gate 01 foram encerrados ao ver a falha.
+
+== O STAGING (T06) — o que existe nesta VPS ==
+compose.staging.yml, projeto crm-staging, 15 serviços: db (supabase/postgres 15.8.1.085), auth
+(gotrue v2.196.0), rest (postgrest v16.1), storage (v1.70.3), realtime (v2.129.3), mailpit, kong 2.8.1
+(key-auth + acl, chaves PRÓPRIAS assinadas por JWT_SECRET gerado), app (imagem fina sobre o build
+do host), worker (agent-worker herdado), worker-saida, worker-lembrete (mesma imagem
+Dockerfile.worker), redis, srh, scheduler, waha-mock. Sem Supabase CLI (ADR-028 §3: o CLI publica
+em 0.0.0.0 e o Docker atravessa o ufw). Portas publicadas SÓ em 127.0.0.1 e no IP do Tailscale:
+3200 (app), 56421 (API), 56422 (Postgres), 56424 (mailpit) — ss -ltn conferido, nada na interface
+pública, sem depender de regra de firewall.
+Subida de clone limpo (scripts/staging/up.sh): build do app no host → camada Supabase → extensões +
+supabase/baseline.sql (146 tabelas em public) → seeds (deka rows_created=12; demo2 rows_created=17
++ fixtures fictícias da F02 rows_created=29 sob o marcador crm.fictional_fixture_sandbox no banco)
+→ usuários fictícios com senha (3/3, bcrypt no auth.users) + sessões de canal mock (2/2) → produto.
+docker compose ps: running=15/15 declarados (643 s incluindo o build). /api/v1/health = healthy
+(supabase 13 ms, redis 7 ms, waha-mock 6 ms). Três subidas na primeira vez: a 1ª parou no kong
+(kong.yml com 600 — o kong roda como usuário próprio; virou 644 dentro de pasta 700), a 2ª mostrou
+srh morto por OOM em 64m (→ 192m), workers de saída/lembrete sem as env obrigatórias de lib/env.ts
+(→ env completo) e o app sem alcançar o Supabase pelo IP do Tailscale de dentro da rede bridge
+(ts-input DROP para 100.64/10 fora de tailscale0 — medido; → servidor em http://kong:8000 e
+NEXT_PUBLIC_SUPABASE_URL_BROWSER para o navegador, ADR-028); a 3ª subiu 15/15.
+Memória medida (docker stats, staging ocioso): total 1185 MiB — realtime 205, worker 207, app 144,
+db 119, storage 112, kong 92, worker-lembrete 86, worker-saida 83, srh 76, rest 35, waha-mock 11,
+auth 9, mailpit 7, redis 5, scheduler 1. mem_limit por serviço no compose. Swap de 2 GB reativado
+(swapon /swapfile; sem fstab — VARREDURA §B14); durante o build do app chegou a 1,9 GB usados.
+Segredos: /srv/secrets/crm-staging.env (root:klarosk 640; 16 variáveis; scripts/staging/secrets.sh;
+nomes e tamanhos no log, valores nunca). Runbook: docs/ops/staging.md.
+Logs JSON (T01) observados no container: api.request com organization_id no webhook e nas rotas;
+worker.cycle nos dois workers SaaS; job.run por transição.
+
+== RESTORE (T05, D36) ==
+scripts/backup.sh → backups/staging-20260912T155052Z.dump (pg_dump custom de public+auth+storage,
+1.514.017 bytes, 177 tabelas na lista). scripts/restore.sh → banco VAZIO restore_20260912_155124
+no mesmo Postgres (nunca o em uso), lista de restauração sem os schemas que o template já traz
+(public/auth/storage), pg_restore --exit-on-error, contagem tabela a tabela:
+restore: tables=179 tables_restored=179 rows=342 rows_diff=0 dump=staging-20260912T155052Z.dump target=restore_20260912_155124 seconds=15 at=20260912T155124Z
+(docs/ops/restore-staging.log, versionado). Banco de teste apagado ao fim: 0 restantes. Duas
+tentativas anteriores reprovaram no `CREATE SCHEMA` (auth pré-criado; public do template) e
+foram consertadas no script — nenhuma tocou o banco em uso.
+
+== SMOKE E p95 (T07, T09) — contra o CONTAINER do staging ==
+bash scripts/smoke.sh http://127.0.0.1:3200 (seis passos, cada um compara número; G-76/G-12):
+smoke: steps=6 pass=6/6 customers[deka]=0/0 customers[demo2]=2/2 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=3/3 webhook_accepted=1/1 reminder_listed=1/1
+p95_ms: endpoints=3/3 health=23 contacts=455 conversations=436 samples=20 url=http://127.0.0.1:3200
+Repetível: segunda rodada 6/6 com os mesmos denominadores (o webhook usa o contato fictício Alfa
+com telefone fictício; a mensagem se prende a ele e não cria contato). Rodadas de p95 posteriores:
+health 26–41, contacts 447–460, conversations 436–513 ms (20 amostras cada; medição sem otimizar).
+Denominadores: `customers`/`products` comparam com a FIXTURE fictícia da F02 do demo2 (2 contatos,
+3 produtos), porque o create-tenant.ts pula os blocos customers/products/faq do seed (VARREDURA
+§B13); o deka tem zero por desenho (D11). `reminder_listed` lê `orders.recurring_reminder` ligado
+do tenant_settings do demo2 (não há rota que liste a configuração; lido do banco, declarado).
+Login: GoTrue password grant + cookie `sb-deskcomm-auth` montado como o @supabase/ssr o escreve;
+os usuários semeados por SQL precisaram das colunas de token do GoTrue vazias em vez de nulas
+(medido: "converting NULL to string is unsupported").
+
+== O QUE A FASE ENTREGOU ==
+T01 (c81f3687) logs JSON com organization_id e request_id: src/obs/log.ts (api.request, job.run),
+    linha no guarda (requireRole/resolveActiveOrg/requirePlatformAdmin) + 30 rotas explícitas;
+    workers de saída e lembrete em JSON; src/obs/erros.ts com allowlist de 4 campos (§5.17).
+    logs: routes=270 routes_logged=270 workers=4 workers_logged=4 request_log_org_id=1/1
+    sentry_mock_captured=1 pii_fields=4/7. Mutante 53.
+T02 (6bc564ad) rate limit no webhook SaaS por (provedor, IP) + login herdado; schema em toda rota
+    que lê entrada (9 rotas convertidas a zod; 10 validadores delegados nomeados); §B10 consertado
+    (Idempotency-Key no POST /messages: posts=2 messages=1 channel_sends=1/2).
+    rate-limit: requests=101 status_429=1 auth_blocked=1 routes=270 routes_with_schema=270
+    routes_reading_input=143 validated=143. Mutante 54.
+T03 (678c5922) LGPD mínima: grafo de FK lido do catálogo em tempo de execução, duas ações high só
+    humanas no catálogo D17 (export_customer_data, delete_customer_data), papel admin conferido,
+    rota POST /api/v1/contacts/[id]/lgpd. lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2;
+    vizinho e outro tenant intactos; agent/ai/outro tenant recusados e auditados. Mutante 55.
+T04/T08 (7d84ca81) ci.yml com scan-secrets (files_scanned=487 findings=0) e checagem do inventário
+    do .env.example; verify.yml roda o verify.sh em todo PR (240 min, artefato, sandbox down com
+    always()). Defeito real achado pelo mutante 56: a guarda G-51 do scanner estava morta desde F01.
+T05 (489e2cba) backup.sh/restore.sh — restore: tables=179 rows_diff=0 (acima).
+T06 (489e2cba) compose.staging.yml + scripts/staging + runbook — running=15/15 (acima). ADR-028.
+T07/T09 (489e2cba) smoke.mjs — smoke: steps=6 pass=6/6; p95_ms endpoints=3/3 (acima).
+verify v1.4 (88d5b25b): F06 no gate, logs/rate-limit/lgpd obrigatórios, environment=staging →
+    READY (staging). gate.cases 91/91. Mutante 57.
+Mutantes: 49 → 54 (53–57), todos mortos no gate.
+
+== LIMITES DECLARADOS ==
+- "Dentro do staging" = navegador do gate contra o Supabase do staging (banco/auth/storage) com o
+  app do gate em 3202 no host; unit/db/integration no Postgres efêmero; o CONTAINER do app é o que
+  o smoke exercita (ADR-028 §2). O staging acumula as fixtures fictícias das jornadas do gate.
+- Acesso do proprietário pelo navegador via Tailscale NÃO foi exercido (não há navegador humano
+  nesta sessão); URL e usuários fictícios estão no runbook. Teste visual/celular: humano (§8.6).
+- Nenhum provedor real: WhatsApp (adapter mock; waha-mock só responde ao health), IA mock, e-mail
+  no mailpit, SENTRY_DSN=off. NOT VALIDATED (real) continua para todos (D12).
+- T08: o workflow existe e foi lido campo a campo; o run no GitHub e o link são do proprietário.
+- Restore só em banco vazio criado para o teste (D36); restore em produção/dados reais é humano.
+- Firewall (regras da casa, 1-way): o staging não precisa de regra para não estar exposto; a regra
+  em docs/ops/staging.md é para os OUTROS stacks desta máquina (VARREDURA §B12) e é do proprietário.
+- Swap sem persistência (§B14); o Supabase de desenvolvimento do checkout antigo ficou PARADO
+  (volumes preservados; `supabase start` em ~/projetos/DeskcommCRM o devolve).
+- READY (staging) aqui é a saída da F06 por D50/§7.7; a F07 imprime o mesmo rótulo com os campos de
+  §8.4 (replicability deka/demo2, demo3, BLOCKER-PROD). Não é READY_STAGING no cabeçalho nem aceite.
+- Contagens de denominador do gate cresceram: unit 8472→8491 (+19), integração 148→153 (+5), rotas
+  269→270 (a rota LGPD), inputs 3492→3522.
