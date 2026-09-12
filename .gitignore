@@ -140,3 +140,8 @@ backups/
 
 # DIRETRIZ v2 (F00-T05, D08): lista das pastas varridas pelo inventario de env vars — versionada de proposito
 !.envscan-dirs
+
+# Staging (F06-T06): kong.yml gerado com chaves e a árvore do build do app
+.staging/
+# F06-T05: o log do restore em staging é EVIDÊNCIA (§7.7), versionado de propósito
+!docs/ops/restore-staging.log

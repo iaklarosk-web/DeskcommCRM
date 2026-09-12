@@ -1,0 +1,25 @@
+# Dockerfile.staging — imagem FINA do app para o staging (F06-T06).
+#
+# É o estágio `runner` do Dockerfile de produção, sem os estágios `deps` e
+# `build`: o `next build` roda no HOST (scripts/staging/up.sh), com os mesmos
+# placeholders de NEXT_PUBLIC_* da imagem genérica (os valores reais entram em
+# runtime pelo env — app/public-env-script.tsx e lib/env.ts). Buildar dentro do
+# Docker numa VPS de 2 núcleos e 7,9 GB dividida com outros projetos é o que
+# se evita aqui. O contexto é `.staging/app/`, montado pelo up.sh.
+FROM node:22-alpine
+WORKDIR /app
+ARG APP_VERSION=staging
+ENV NODE_ENV=production \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0 \
+    NEXT_TELEMETRY_DISABLED=1 \
+    APP_VERSION=$APP_VERSION
+# ffmpeg: a derivação de mídia herdada roda no processo do app (ver Dockerfile).
+RUN apk add --no-cache ffmpeg
+RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
+COPY --chown=nextjs:nodejs standalone/ ./
+COPY --chown=nextjs:nodejs static/ ./.next/static
+COPY --chown=nextjs:nodejs public/ ./public
+USER nextjs
+EXPOSE 3000
+CMD ["node", "server.js"]

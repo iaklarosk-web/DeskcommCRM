@@ -57,7 +57,9 @@ export async function PublicEnvScript({
   await headers();
 
   const payload = JSON.stringify({
-    NEXT_PUBLIC_SUPABASE_URL: env.NEXT_PUBLIC_SUPABASE_URL,
+    // F06-T06 (ADR-028): o navegador pode precisar de OUTRA URL para o mesmo
+    // Supabase (Compose: servidor → `http://kong:8000`; navegador → host).
+    NEXT_PUBLIC_SUPABASE_URL: env.NEXT_PUBLIC_SUPABASE_URL_BROWSER ?? env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     // Exposto pro Sentry do browser respeitar o opt-out (SENTRY_DSN=off) em runtime,
     // sem rebuild. DSN não é segredo. Ver lib/sentry/dsn.ts.
