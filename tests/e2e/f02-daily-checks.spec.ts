@@ -135,9 +135,21 @@ function textFromPdfItems(items: unknown[]) {
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+/**
+ * O pdf.js devolve o texto em itens e pode partir uma palavra entre dois
+ * glifos iguais ou apertados ("7 79c2395", "Sao_ Paulo" — medido no gate
+ * f07-gate-01 com o sufixo `779c2395`). O marcador já tolerava espaço dentro
+ * do NÚMERO; passa a tolerar também dentro do sufixo, e a comparação do nome
+ * da organização ignora espaços dos dois lados. O que se afirma continua o
+ * mesmo: o nome e os 1002 marcadores estão no PDF.
+ */
+function semEspacos(value: string) {
+  return value.replace(/\s+/g, "");
+}
 function dailyMarkers(text: string, suffix: string) {
+  const sufixoTolerante = [...suffix].map((c) => escapeRegExp(c)).join("\\s*");
   const pattern = new RegExp(
-    `${escapeRegExp(`Linha diária ${suffix} `)}(\\d(?:\\s*\\d)*)(?=\\s*·)`,
+    `${escapeRegExp("Linha diária")}\\s*${sufixoTolerante}\\s+(\\d(?:\\s*\\d)*)(?=\\s*·)`,
     "g",
   );
   return [...text.matchAll(pattern)].map((match) => Number(match[1]!.replace(/\s/g, "")));
@@ -236,7 +248,7 @@ for (const side of ["A", "B"] as const)
     const parsed = await pdfText(pdf);
     expect(parsed.pages).toBeGreaterThan(1);
     expect(report.criteria.organization.id).toBe(customer.orgId);
-    expect(parsed.text).toContain(report.criteria.organization.name);
+    expect(semEspacos(parsed.text)).toContain(semEspacos(report.criteria.organization.name));
     const markers = dailyMarkers(parsed.text, fixture.suffix);
     expect(markers).toHaveLength(1002);
     expect(markers.sort((a, b) => a - b)).toEqual(
