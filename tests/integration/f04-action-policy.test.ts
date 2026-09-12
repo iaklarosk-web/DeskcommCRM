@@ -4,7 +4,7 @@
  *
  * O que este arquivo mede, e por que precisa de banco: as nove tools de D18
  * executadas PELA IA deixam nove linhas em `audit_events` (invariante 2 de
- * §5.8), as seis células negadas da matriz N × 3 são negadas DE FATO e
+ * §5.8), as dez células negadas da matriz N × 3 são negadas DE FATO e
  * auditadas, e os três caminhos da confirmação (aprovar, recusar, vencer) levam
  * a conversa aos três destinos que D16 escreve.
  *
@@ -367,8 +367,9 @@ describe("F04-T01 — as nove tools de D18 pela IA, todas auditadas", () => {
 });
 
 describe("F04-T01 — executor fora do subset é negado e auditado", () => {
-  it("as seis células negadas da matriz N × 3 são negadas DE FATO", async () => {
-    // Arrange — as seis saem do catálogo, não de uma lista escrita à mão.
+  it("as dez células negadas da matriz N × 3 são negadas DE FATO", async () => {
+    // Arrange — as dez (seis de F04, quatro das duas ações LGPD de F06-T03,
+    // negadas a `ai` e `automation`) saem do catálogo, não de uma lista à mão.
     const cenario = CENARIOS.negado;
     const ctx = ctxDe("negado");
     const celulasNegadas = ACTION_CATALOG.flatMap((entrada) =>
@@ -376,7 +377,7 @@ describe("F04-T01 — executor fora do subset é negado e auditado", () => {
         (executor) => ({ entrada, executor }),
       ),
     );
-    expect(celulasNegadas.length, "a matriz deixou de ter seis células negadas").toBe(6);
+    expect(celulasNegadas.length, "a matriz deixou de ter dez células negadas").toBe(10);
 
     // Act — cada célula é TENTADA. Ler o catálogo provaria o catálogo; o que
     // se quer saber é se `execute()` obedece a ele.
@@ -428,8 +429,11 @@ describe("F04-T01 — executor fora do subset é negado e auditado", () => {
     const linha = `action-policy: actions=${catalogo} catalog_total=${catalogo} fields=8/8 executor_denied=${negadas}/${celulasNegadas.length} audit_rows=${auditoriaDaIaNoCatalogo}/9`;
     console.info(linha);
     gravarLinhaDoVerify("action-policy", linha);
+    // Doze desde a F06-T03 (dez de F04 + as duas ações LGPD, negadas a `ai` e
+    // `automation`: 6 + 4 células). A auditoria da IA no catálogo não muda —
+    // a IA nunca vê as duas novas.
     expect(linha).toBe(
-      "action-policy: actions=10 catalog_total=10 fields=8/8 executor_denied=6/6 audit_rows=9/9",
+      "action-policy: actions=12 catalog_total=12 fields=8/8 executor_denied=10/10 audit_rows=9/9",
     );
   });
 });

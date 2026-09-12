@@ -12,6 +12,7 @@ import { ACTION_CATALOG } from "../catalog";
 import { getCustomer, getOrders, searchProducts } from "./leitura";
 import { createOrder, createTask, updateOrderQuantity } from "./pedido";
 import { requestConfirmation, resumeAi, sendMessage, transferToHuman } from "./conversa";
+import { deleteCustomerData, exportCustomerData } from "./lgpd";
 import type { ToolRunner } from "./contrato";
 
 const HANDLERS: Readonly<Record<string, ToolRunner>> = {
@@ -25,6 +26,8 @@ const HANDLERS: Readonly<Record<string, ToolRunner>> = {
   request_confirmation: requestConfirmation,
   send_message: sendMessage,
   resume_ai: resumeAi,
+  export_customer_data: exportCustomerData,
+  delete_customer_data: deleteCustomerData,
 };
 
 const SEM_HANDLER = ACTION_CATALOG.filter((entrada) => !(entrada.name in HANDLERS));

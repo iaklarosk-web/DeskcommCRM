@@ -56,13 +56,16 @@ const ESPERADO_DA_DIRETRIZ: readonly {
   { name: "request_confirmation", risk: "low", executors: ["human", "ai"], confirmation: "none" },
   { name: "send_message", risk: "medium", executors: ["human", "ai", "automation"], confirmation: "none" },
   { name: "resume_ai", risk: "low", executors: ["human"], confirmation: "none" },
+  // F06-T03 (§5.18, §7.7): as duas ações `high` da LGPD mínima, só humanas.
+  { name: "export_customer_data", risk: "high", executors: ["human"], confirmation: "none" },
+  { name: "delete_customer_data", risk: "high", executors: ["human"], confirmation: "none" },
 ];
 
-/** As nove de D18. `resume_ai` (D34) é humana e NÃO está aqui. */
-const TOOLS_D18 = ESPERADO_DA_DIRETRIZ.filter((e) => e.name !== "resume_ai").map((e) => e.name);
+/** As nove de D18. `resume_ai` (D34) e as duas da LGPD (F06-T03) são humanas e NÃO estão aqui. */
+const TOOLS_D18 = ESPERADO_DA_DIRETRIZ.filter((e) => e.executors.includes("ai")).map((e) => e.name);
 
-describe("F04-T01 — as dez entradas, com os oito campos", () => {
-  it("o catálogo tem as dez de §5.8, com risco, executores e confirmação do documento", () => {
+describe("F04-T01 — as entradas do catálogo (dez de F04 + duas de F06-T03), com os oito campos", () => {
+  it("o catálogo tem as dez de §5.8 mais as duas de §7.7 T03, com risco, executores e confirmação do documento", () => {
     // Arrange — o documento.
     const esperado = ESPERADO_DA_DIRETRIZ;
 
@@ -76,7 +79,7 @@ describe("F04-T01 — as dez entradas, com os oito campos", () => {
 
     // Assert — linha a linha, com denominador nos dois lados.
     expect(observado).toEqual(esperado.map((e) => ({ ...e, executors: [...e.executors] })));
-    expect(ACTION_CATALOG.length, "o catálogo não tem dez entradas").toBe(esperado.length);
+    expect(ACTION_CATALOG.length, "o catálogo não tem doze entradas").toBe(esperado.length);
 
     console.info(`f04-t01-catalogo: catalog_total=${ACTION_CATALOG.length}/${esperado.length}`);
   });
@@ -129,7 +132,7 @@ describe("F04-T01 — as dez entradas, com os oito campos", () => {
 });
 
 describe("F04-T01 — a matriz N × 3 executores (§5.8, invariante 1)", () => {
-  it("30 células: 24 permitidas e 6 negadas, derivadas do catálogo", () => {
+  it("36 células: 26 permitidas e 10 negadas, derivadas do catálogo", () => {
     // Arrange — o esperado vem do DOCUMENTO, a observação vem do catálogo.
     const esperadoPorNome = new Map(ESPERADO_DA_DIRETRIZ.map((e) => [e.name, e.executors]));
 
@@ -152,9 +155,11 @@ describe("F04-T01 — a matriz N × 3 executores (§5.8, invariante 1)", () => {
     // Assert
     const celulas = ACTION_CATALOG.length * ACTION_EXECUTORS.length;
     expect(permitidas + negadas.length).toBe(celulas);
-    expect(negadas.length, `células negadas: ${negadas.join(", ")}`).toBe(6);
+    // Seis de F04 mais quatro de F06-T03: as duas ações LGPD são negadas a
+    // `ai` e a `automation`, cada uma.
+    expect(negadas.length, `células negadas: ${negadas.join(", ")}`).toBe(10);
     console.info(
-      `f04-t01-matriz: cells=${celulas} allowed=${permitidas} denied=${negadas.length}/6`,
+      `f04-t01-matriz: cells=${celulas} allowed=${permitidas} denied=${negadas.length}/10`,
     );
   });
 
@@ -180,12 +185,12 @@ describe("F04-T01 — a matriz N × 3 executores (§5.8, invariante 1)", () => {
     // As outras duas listas, para que o filtro por executor não seja acidente.
     const humanas = toolsFor({}, "human").length;
     const automacao = toolsFor({}, "automation").length;
-    expect(humanas, "toolsFor(human) devia devolver as dez").toBe(ACTION_CATALOG.length);
+    expect(humanas, "toolsFor(human) devia devolver as doze").toBe(ACTION_CATALOG.length);
     // Cinco: as três leituras, `create_task` e `send_message` — as mesmas que
     // §5.12 precisa para o Job de lembrete.
     expect(automacao, "toolsFor(automation) mudou de tamanho").toBe(5);
     console.info(
-      `f04-t01-toolsfor: ai=${doModelo.length}/9 human=${humanas}/10 automation=${automacao}/5`,
+      `f04-t01-toolsfor: ai=${doModelo.length}/9 human=${humanas}/12 automation=${automacao}/5`,
     );
   });
 

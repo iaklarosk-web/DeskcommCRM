@@ -26,6 +26,9 @@ import {
   createOrderOutputSchema,
   createTaskInputSchema,
   createTaskOutputSchema,
+  customerDataInputSchema,
+  deleteCustomerDataOutputSchema,
+  exportCustomerDataOutputSchema,
   getCustomerInputSchema,
   getCustomerOutputSchema,
   getOrdersInputSchema,
@@ -211,6 +214,32 @@ export const ACTION_CATALOG: readonly ActionCatalogEntry[] = [
     input_schema: resumeAiInputSchema,
     output_schema: transitionOutputSchema,
     resource_type: "conversations",
+  },
+  // F06-T03 — LGPD mínima (§5.18, §7.7). `high` e só humana: a IA e a
+  // automação nunca exportam nem apagam um cliente. O papel (tenant_admin)
+  // é conferido no handler, contra `user_organizations`, porque o catálogo
+  // não sabe de papéis — sabe de executores.
+  {
+    name: "export_customer_data",
+    risk: "high",
+    executors: ["human"],
+    confirmation: "none",
+    side_effect: "leitura de toda tabela ligada ao contato por FK (grafo lido do catálogo); nenhuma escrita",
+    audit: "always",
+    input_schema: customerDataInputSchema,
+    output_schema: exportCustomerDataOutputSchema,
+    resource_type: "contacts",
+  },
+  {
+    name: "delete_customer_data",
+    risk: "high",
+    executors: ["human"],
+    confirmation: "none",
+    side_effect: "delete em toda tabela ligada ao contato por FK, filhos antes dos pais, numa transação; audit_events sobrevive",
+    audit: "always",
+    input_schema: customerDataInputSchema,
+    output_schema: deleteCustomerDataOutputSchema,
+    resource_type: "contacts",
   },
 ];
 

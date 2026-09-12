@@ -5,7 +5,7 @@ f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskco
 plan_version: "2.5 (2026-09-11); D38–D50; ADR-006…027"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
 current_phase: F05
-next_task: F06-T03             # F06 autorizada em 12/09/2026 (D50 c); T01 e T02 fechadas
+next_task: F06-T04             # F06 autorizada em 12/09/2026 (D50 c); T01–T03 fechadas
 status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"

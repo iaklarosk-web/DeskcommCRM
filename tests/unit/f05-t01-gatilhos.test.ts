@@ -271,16 +271,19 @@ describe("F05-T01 — `tenant_rule`: a regra é do TENANT", () => {
 });
 
 describe("F05-T01 — `high_risk_action`: o risco sai do CATÁLOGO", () => {
-  it("nenhuma das dez entradas de hoje é high/blocked (e isso é DECLARADO)", () => {
+  it("as únicas entradas high são as duas da LGPD (F06-T03), humanas — nenhuma chega ao modelo (e isso é DECLARADO)", () => {
     // Arrange + Act — o número que faz o caminho de execução não disparar em
     // produção hoje. Declarar é o contrário de esconder: o dia em que uma
-    // Action subir de risco, este caso muda e a mudança fica visível.
+    // Action subir de risco, este caso muda e a mudança fica visível. Foi o
+    // que aconteceu na F06-T03: duas ações `high`, ambas só humanas, então o
+    // gatilho continua sem disparar para a IA — que nunca as vê.
     const arriscadas = ACTION_CATALOG.filter(
       (entrada) => entrada.risk === "high" || entrada.risk === "blocked",
     ).map((entrada) => entrada.name);
 
     // Assert
-    expect(arriscadas).toEqual([]);
+    expect(arriscadas).toEqual(["export_customer_data", "delete_customer_data"]);
+    expect(ACTION_CATALOG.filter((e) => arriscadas.includes(e.name)).every((e) => e.executors.length === 1 && e.executors[0] === "human")).toBe(true);
     expect(acoesDeRiscoAlto(toolsFor(null, "ai"), toolsFor(null, "ai"))).toEqual([]);
     console.info(
       `f05-t01-risco: catalogo=${ACTION_CATALOG.length} high_ou_blocked=${arriscadas.length} piso=${RISCO_QUE_EXIGE_HUMANO}`,

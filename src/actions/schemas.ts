@@ -267,6 +267,22 @@ export type SendMessageOutput = z.infer<typeof sendMessageOutputSchema>;
 
 export const resumeAiInputSchema = z.strictObject({ conversation_id: uuid });
 
+/** F06-T03 — LGPD mínima: as duas ações `high` do tenant_admin sobre um cliente. */
+export const customerDataInputSchema = z.strictObject({ contact_id: uuid });
+export const exportCustomerDataOutputSchema = z.strictObject({
+  contact_id: uuid,
+  tables: z.number().int().nonnegative(),
+  rows: z.number().int().nonnegative(),
+  data: z.record(z.string(), z.array(z.record(z.string(), z.unknown()))),
+});
+export const deleteCustomerDataOutputSchema = z.strictObject({
+  contact_id: uuid,
+  tables: z.number().int().nonnegative(),
+  rows_deleted: z.number().int().nonnegative(),
+  rows_remaining: z.number().int().nonnegative(),
+  per_table: z.record(z.string(), z.strictObject({ found: z.number().int().nonnegative(), deleted: z.number().int().nonnegative() })),
+});
+
 /** `from`/`to` porque `transition()` devolve o par — e o par é a prova. */
 export const transitionOutputSchema = z.strictObject({
   from: z.string(),
