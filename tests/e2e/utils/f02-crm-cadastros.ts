@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { isLoopbackHttpUrl } from "../../lib/loopback-url";
 
+import { criarOrganizacaoDaFixture } from "./tenant-do-seed";
+
 /**
  * Esta prova não usa `.env.local`: só aceita o ambiente que o Playwright
  * publicou e falha antes de criar dados se o host não for loopback.
@@ -63,21 +65,15 @@ export async function seedF02Fixture(): Promise<F02Fixture> {
       if (error || !data.user) throw error ?? new Error("usuário de fixture não criado");
       user.id = data.user.id;
     }
-    for (const name of ["A", "B"]) {
-      const { data, error } = await db
-        .from("organizations")
-        .insert({
-          slug: `f02-${name.toLowerCase()}-${suffix}`,
-          display_name: `F02 ${name} ${suffix}`,
-          legal_name: `F02 ${name} ${suffix} Ltda.`,
-          status: "active",
-          onboarded_at: new Date().toISOString(),
-        })
-        .select("id")
-        .single();
-      if (error || !data) throw error ?? new Error("organização de fixture não criada");
-      if (name === "A") fixture.orgA = data.id;
-      else fixture.orgB = data.id;
+    for (const name of ["A", "B"] as const) {
+      // A pelo seed quando E2E_TENANT está posto (ADR-029 §2); B sempre fictícia.
+      const id = await criarOrganizacaoDaFixture(db, name, suffix, {
+        slug: `f02-${name.toLowerCase()}-${suffix}`,
+        display_name: `F02 ${name} ${suffix}`,
+        legal_name: `F02 ${name} ${suffix} Ltda.`,
+      });
+      if (name === "A") fixture.orgA = id;
+      else fixture.orgB = id;
     }
     const memberships = [
       {

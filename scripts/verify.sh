@@ -26,8 +26,12 @@ case "$PHASE" in
   F04) CLOSED_E2E=1; EXPECTED_SPECS=9 ;;
   F05) CLOSED_E2E=1; EXPECTED_SPECS=10 ;;
   F06) CLOSED_E2E=1; EXPECTED_SPECS=10 ;;   # ADR-028: sem tela nova, inventário de F05
+  # ADR-029: F07 roda o navegador DUAS vezes na mesma árvore, uma por tenant do
+  # seed (`E2E_TENANT`), e mede `src_diff_lines` entre elas (§8.3).
+  F07) CLOSED_E2E=1; EXPECTED_SPECS=10; REPLICABILITY_TENANTS="deka,demo2" ;;
   *)   CLOSED_E2E=0; EXPECTED_SPECS=0 ;;
 esac
+REPLICABILITY_TENANTS="${REPLICABILITY_TENANTS:-}"
 export WHATSAPP_MODE=mock AI_PROVIDER=mock CI=1
 export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=3072}"
 export VITEST_MAX_THREADS=1 VITEST_MAX_FORKS=1
@@ -115,7 +119,18 @@ if [ "$CLOSED_E2E" = 1 ]; then
     skip_step e2e-plan "manifesto F02 inválido"
     skip_step e2e "inventário E2E indisponível"
   elif e2e_suite e2e-plan "${F02_SPECS[@]}" --list; then
-    e2e_suite e2e "${F02_SPECS[@]}"
+    if [ -n "$REPLICABILITY_TENANTS" ]; then
+      # Uma execução por tenant, sem commit entre elas; a árvore de src/ é
+      # medida antes da primeira e depois da última (ADR-029 §1).
+      SRC_TREE_BEFORE=$(node scripts/verify/replicability.mjs tree "$ROOT") || SRC_TREE_BEFORE=invalid
+      for tenant in ${REPLICABILITY_TENANTS//,/ }; do
+        E2E_TENANT="$tenant" e2e_suite "e2e-$tenant" "${F02_SPECS[@]}"
+      done
+      SRC_TREE_AFTER=$(node scripts/verify/replicability.mjs tree "$ROOT") || SRC_TREE_AFTER=invalid
+      step replicability node scripts/verify/replicability.mjs report "$ROOT" "$LOG_DIR/replicability.json"         "$REPLICABILITY_TENANTS" "$SRC_TREE_BEFORE" "$SRC_TREE_AFTER"
+    else
+      e2e_suite e2e "${F02_SPECS[@]}"
+    fi
   else
     skip_step e2e "inventário E2E falhou"
   fi

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { f02E2eSandbox } from "./f02-crm-cadastros";
+import { criarOrganizacaoDaFixture } from "./tenant-do-seed";
 
 /**
  * A FIXTURE DAS DUAS ORGANIZAÇÕES FICTÍCIAS DO INBOX (F03-T09).
@@ -130,19 +131,12 @@ export async function seedF03Inbox(): Promise<F03InboxFixture> {
 
     for (const lado of ["A", "B"] as const) {
       const tenant = fixture.tenants[lado];
-      const org = await db
-        .from("organizations")
-        .insert({
-          slug: `f03-${lado.toLowerCase()}-${suffix}`,
-          display_name: `F03 ${lado} ${suffix}`,
-          legal_name: `F03 ${lado} ${suffix} Ltda.`,
-          status: "active",
-          onboarded_at: new Date().toISOString(),
-        })
-        .select("id")
-        .single();
-      if (org.error || !org.data) throw org.error ?? new Error("organização não criada");
-      tenant.orgId = (org.data as { id: string }).id;
+      // A pelo seed quando E2E_TENANT está posto (ADR-029 §2); B sempre fictícia.
+      tenant.orgId = await criarOrganizacaoDaFixture(db, lado, suffix, {
+        slug: `f03-${lado.toLowerCase()}-${suffix}`,
+        display_name: `F03 ${lado} ${suffix}`,
+        legal_name: `F03 ${lado} ${suffix} Ltda.`,
+      });
 
       // Os dois são `manager`: `fn_conversation_assign` recusa destino que não
       // seja agent+ ativo da org, e a transferência da jornada 5 precisa de um

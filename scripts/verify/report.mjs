@@ -14,7 +14,7 @@ const integer = (n) => Number.isSafeInteger(n) && n >= 0;
  * herda TODOS os controles de F02 (sandbox descartável, snapshot SHA-256 dos
  * inputs, E2E fechado) e acrescenta o campo `webhook` medido.
  */
-const GATED_PHASES = ["F00", "F01", "F02", "F03", "F04", "F05", "F06"];
+const GATED_PHASES = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07"];
 
 /** §8.3: cada campo passa a ser obrigatório a partir da fase que o cria. */
 const phaseNumber = (phase) => Number(phase.slice(1));
@@ -24,6 +24,9 @@ const requiresHandoff = (phase) => phaseNumber(phase) >= phaseNumber("F05");
 // ADR-028: hardening (F06) — `logs`, `rate-limit` e `lgpd` gravados pelas
 // próprias suítes; `restore:` e `smoke:` ficam no BUILD-STATE, fora do bloco.
 const requiresHardening = (phase) => phaseNumber(phase) >= phaseNumber("F06");
+// ADR-029: a partir de F07 o navegador roda uma vez por tenant do seed e
+// `replicability` deixa de ser `fictitious_A_B` para ser medido (§8.3).
+const requiresReplicability = (phase) => phaseNumber(phase) >= phaseNumber("F07"); // MUTANT: replicability-required
 
 export function phaseContext(state, requestedPhase) {
   const active = /^current_phase:\s*(F\d{2})\b/m.exec(state)?.[1];
@@ -129,6 +132,31 @@ export function evaluate(input) {
       suites.e2e = parsed;
     } catch (error) {
       errors.push(error instanceof Error ? error.message : "e2e: relatório inválido");
+    }
+  }
+  // ADR-029 §1: cada tenant do seed tem a própria execução do inventário
+  // inteiro, conferida contra o MESMO plano; src/ não pode ter mudado entre
+  // a primeira e a última. Sem a evidência, a fase é NOT READY.
+  const tenantRuns = {};
+  if (requiresReplicability(context.phase)) {
+    const rep = input.replicability;
+    const plan = hasClosedE2E(context.phase) ? closedE2EPlan(context.phase) : null;
+    const expectedTenants = plan?.tenants ?? [];
+    const tenants = Array.isArray(rep?.tenants) ? rep.tenants.map((t) => t?.slug) : [];
+    if (input.exits.replicability !== 0) errors.push("replicability: comando falhou ou não executou");
+    if (!rep || rep.ok !== true || !integer(rep.src_diff_lines) || rep.src_diff_lines !== 0 ||
+        typeof rep.src_tree_before !== "string" || !/^[a-f0-9]{40}$/.test(rep.src_tree_before) ||
+        rep.src_tree_after !== rep.src_tree_before ||
+        JSON.stringify(tenants) !== JSON.stringify([...expectedTenants])) {
+      errors.push(`replicability: evidência ausente ou fora do contrato (exige e2e em ${expectedTenants.join(" e ")} sem mudança em src/)`);
+    }
+    for (const slug of expectedTenants) {
+      if (input.exits[`e2e-${slug}`] !== 0) errors.push(`e2e-${slug}: comando falhou ou não executou`);
+      try {
+        tenantRuns[slug] = parseF02E2E(input.reports["e2e-plan"], input.reports[`e2e-${slug}`], input.root, context.phase);
+      } catch (error) {
+        errors.push(`e2e[${slug}]: ${error instanceof Error ? error.message : "relatório inválido"}`);
+      }
     }
   }
   const unknownDebt = debt.filter((entry) => !KNOWN_DEBT.some((known) => Object.keys(known).every((key) => known[key] === entry[key])));
@@ -243,7 +271,7 @@ export function evaluate(input) {
   const status = !clean ? "NOT READY" : context.revalidation
     ? `${debt.length ? "REVALIDATED WITH DEBT" : "REVALIDATED"} (${context.phase})`
     : staging ? "READY (staging)" : `READY (${context.phase})`;
-  return { status, exitCode: clean ? 0 : 1, errors, debt, suites, corePassed, baselineCore, environment };
+  return { status, exitCode: clean ? 0 : 1, errors, debt, suites, corePassed, baselineCore, environment, tenantRuns };
 }
 
 function read(file) {
@@ -262,6 +290,25 @@ export function collect(root, directory, context) {
   }
   for (const name of ["e2e-plan", "e2e"]) {
     try { reports[name] = JSON.parse(readFileSync(path.join(directory, `${name}.json`), "utf8")); } catch { reports[name] = null; }
+  }
+  // ADR-029: na F07 o navegador tem uma execução por tenant (`e2e-<slug>`);
+  // `e2e` do bloco é a PRIMEIRA delas, e as demais entram em `replicability`.
+  let replicability = null;
+  try { replicability = JSON.parse(readFileSync(path.join(directory, "replicability.json"), "utf8")); } catch { replicability = null; }
+  {
+    const raw = read(path.join(directory, "replicability.exit"));
+    exits.replicability = raw !== null && /^\d+$/.test(raw) ? Number(raw) : null;
+  }
+  const tenantSlugs = Array.isArray(replicability?.tenants) ? replicability.tenants.map((t) => t?.slug).filter((s) => typeof s === "string") : [];
+  for (const slug of tenantSlugs) {
+    const name = `e2e-${slug}`;
+    const raw = read(path.join(directory, `${name}.exit`));
+    exits[name] = raw !== null && /^\d+$/.test(raw) ? Number(raw) : null;
+    try { reports[name] = JSON.parse(readFileSync(path.join(directory, `${name}.json`), "utf8")); } catch { reports[name] = null; }
+  }
+  if (tenantSlugs.length > 0 && exits.e2e === null && reports.e2e === null) {
+    exits.e2e = exits[`e2e-${tenantSlugs[0]}`];
+    reports.e2e = reports[`e2e-${tenantSlugs[0]}`];
   }
   let sandbox = null;
   try { sandbox = JSON.parse(readFileSync(path.join(directory, "sandbox.json"), "utf8")); } catch { sandbox = null; }
@@ -292,7 +339,7 @@ export function collect(root, directory, context) {
     testsDeleted = null; tenantReferences = null; skipOnlyOccurrences = null;
   }
   const mutantCounts = (read(path.join(directory, "mutants.count")) ?? "").split("/").map(Number);
-  return { root, context, exits, reports, sandbox, inputs, metrics, testsDeleted, tenantReferences, skipOnlyOccurrences,
+  return { root, context, exits, reports, sandbox, inputs, replicability, metrics, testsDeleted, tenantReferences, skipOnlyOccurrences,
     mutants: { killed: mutantCounts[0], total: mutantCounts[1] } };
 }
 
@@ -306,9 +353,20 @@ export function render(input, result) {
   const e2e = result.suites.e2e;
   const requiredSpecs = closed ? closedE2EPlan(input.context.phase).specs.length : null;
   const specFraction = e2e ? `${e2e.specs}/${e2e.requiredSpecs}` : requiredSpecs ? `pending/${requiredSpecs}` : "pending";
-  const replicability = closed
-    ? `replicability: e2e[fictitious_A_B]=${fraction("e2e")} specs=${specFraction} grep_deka_in_src=${input.tenantReferences ?? "pending"}`
-    : `replicability: e2e[deka]=pending e2e[demo2]=pending src_diff_lines=pending grep_deka_in_src=${input.tenantReferences ?? "pending"}`;
+  let replicability;
+  if (requiresReplicability(input.context.phase)) {
+    // ADR-029 §1: `ok` só com o inventário inteiro passado limpo naquele tenant.
+    const tenants = closed ? closedE2EPlan(input.context.phase).tenants ?? [] : [];
+    const runs = result.tenantRuns ?? {};
+    const ok = (slug) => (runs[slug] ? "ok" : input.reports?.[`e2e-${slug}`] ? "fail" : "pending");
+    const detail = tenants.map((slug) => `${slug}=${runs[slug] ? `${runs[slug].passed}/${runs[slug].total}` : "pending"}`).join(" ");
+    const diff = integer(input.replicability?.src_diff_lines) ? input.replicability.src_diff_lines : "pending";
+    replicability = `replicability: ${tenants.map((slug) => `e2e[${slug}]=${ok(slug)}`).join(" ")} src_diff_lines=${diff} grep_deka_in_src=${input.tenantReferences ?? "pending"} (${detail} specs=${specFraction} org_a=${input.replicability?.org_a ?? "pending"})`;
+  } else {
+    replicability = closed
+      ? `replicability: e2e[fictitious_A_B]=${fraction("e2e")} specs=${specFraction} grep_deka_in_src=${input.tenantReferences ?? "pending"}`
+      : `replicability: e2e[deka]=pending e2e[demo2]=pending src_diff_lines=pending grep_deka_in_src=${input.tenantReferences ?? "pending"}`;
+  }
   return [
     "VERIFY SUMMARY",
     `scope=${input.context.revalidation ? "revalidation" : "phase"} phase=${input.context.phase} current_phase=${input.context.active} environment=${result.environment ?? "sandbox"}`,

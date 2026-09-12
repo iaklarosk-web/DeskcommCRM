@@ -843,3 +843,110 @@ test("F05 keeps logs, rate-limit and lgpd pending without failing", () => {
   assert.match(render(data, result), /rate-limit: requests=pending/);
   assert.match(render(data, result), /lgpd: tables=pending/);
 });
+
+// ─── ADR-029 — verify.sh v1.5: F07 mede `replicability` por tenant do seed ──
+
+const stateF07 = `current_phase: F07
+baseline_n0: 7
+f00_commit: c85f7d72
+baseline_detail: "unit=2/2 db=2/2 e2e=3/3"
+| F05 | Handoff | done(verify=2026-09-12 5aa5de54) |
+| F06 | Hardening | done(verify=2026-09-12 270852a6) |
+| F07 | Validação | pending |
+`;
+const TREE_A = "b".repeat(40);
+
+function replicabilityEvidence() {
+  return {
+    ok: true,
+    tenants: [{ slug: "deka", run: "e2e-deka" }, { slug: "demo2", run: "e2e-demo2" }],
+    src_tree_before: TREE_A,
+    src_tree_after: TREE_A,
+    src_diff_lines: 0,
+    org_a: "seed-replica",
+  };
+}
+
+function f07Input() {
+  const data = f06Input();
+  data.context = phaseContext(stateF07);
+  const parametros = { specs: REQUIRED_F05_E2E_SPECS, counts: F05_SPEC_COUNTS, total: EXPECTED_F05_E2E_TESTS };
+  data.reports["e2e-deka"] = playwrightReport({ ...parametros, actual: true });
+  data.reports["e2e-demo2"] = playwrightReport({ ...parametros, actual: true });
+  data.reports.e2e = data.reports["e2e-deka"];
+  Object.assign(data.exits, { "e2e-deka": 0, "e2e-demo2": 0, replicability: 0 });
+  data.replicability = replicabilityEvidence();
+  return data;
+}
+
+test("F07 is gated: two tenant runs of the whole inventory with src_diff_lines=0 reach READY, and the block prints the measured replicability line", () => {
+  const data = f07Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F07)");
+  const bloco = render(data, result);
+  assert.match(bloco, /replicability: e2e\[deka\]=ok e2e\[demo2\]=ok src_diff_lines=0 grep_deka_in_src=0 \(deka=41\/41 demo2=41\/41 specs=10\/10 org_a=seed-replica\)/);
+  assert.match(bloco, /e2e=41\/41/);
+  assert.doesNotMatch(bloco, /fictitious_A_B/);
+
+  const staging = f07Input();
+  staging.sandbox = stagingEvidence();
+  const emStaging = evaluate(staging);
+  assert.deepEqual(emStaging.errors, []);
+  assert.equal(emStaging.status, "READY (staging)");
+});
+
+test("missing replicability evidence makes otherwise green F07 fail", () => {
+  const data = f07Input();
+  delete data.replicability;
+  data.exits.replicability = null;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.some((e) => /^replicability: /.test(e)), result.errors.join("\n"));
+  assert.match(render(data, result), /replicability: e2e\[deka\]=ok e2e\[demo2\]=ok src_diff_lines=pending/);
+});
+
+for (const [rotulo, sabotar] of [
+  ["src/ mudou entre as execuções", (d) => { d.replicability.src_diff_lines = 3; d.replicability.src_tree_after = "c".repeat(40); d.replicability.ok = false; }],
+  ["árvore de src diferente com diff zero declarado", (d) => { d.replicability.src_tree_after = "c".repeat(40); }],
+  ["um tenant só", (d) => { d.replicability.tenants = [{ slug: "deka", run: "e2e-deka" }]; }],
+  ["tenant trocado", (d) => { d.replicability.tenants = [{ slug: "deka", run: "e2e-deka" }, { slug: "demo3", run: "e2e-demo3" }]; }],
+  ["execução do demo2 ausente", (d) => { d.reports["e2e-demo2"] = null; d.exits["e2e-demo2"] = null; }],
+  ["execução do demo2 parcial", (d) => { d.reports["e2e-demo2"] = playwrightReport({ specs: REQUIRED_F04_E2E_SPECS, counts: F04_SPEC_COUNTS, total: EXPECTED_F04_E2E_TESTS, actual: true }); }],
+  ["comando de replicabilidade falhou", (d) => { d.exits.replicability = 1; }],
+]) test(`F07 rejects replicability out of contract: ${rotulo}`, () => {
+  const data = f07Input();
+  sabotar(data);
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, rotulo);
+  assert.ok(result.errors.some((e) => /replicability|e2e-demo2|e2e\[demo2\]/.test(e)), result.errors.join("\n"));
+});
+
+test("F06 keeps the fictitious replicability line and never requires the tenant runs", () => {
+  const data = f06Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.match(render(data, result), /replicability: e2e\[fictitious_A_B\]=41\/41 specs=10\/10 grep_deka_in_src=0/);
+});
+
+test("collect derives the block's e2e from the first tenant run and reads every tenant listed in replicability.json", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "verify-collect-"));
+  try {
+    mkdirSync(path.join(dir, "metrics"), { recursive: true });
+    const parametros = { specs: REQUIRED_F05_E2E_SPECS, counts: F05_SPEC_COUNTS, total: EXPECTED_F05_E2E_TESTS };
+    writeFileSync(path.join(dir, "e2e-plan.json"), JSON.stringify(playwrightReport(parametros)));
+    writeFileSync(path.join(dir, "e2e-plan.exit"), "0\n");
+    for (const slug of ["deka", "demo2"]) {
+      writeFileSync(path.join(dir, `e2e-${slug}.json`), JSON.stringify(playwrightReport({ ...parametros, actual: true })));
+      writeFileSync(path.join(dir, `e2e-${slug}.exit`), "0\n");
+    }
+    writeFileSync(path.join(dir, "replicability.json"), JSON.stringify(replicabilityEvidence()));
+    writeFileSync(path.join(dir, "replicability.exit"), "0\n");
+    writeFileSync(path.join(dir, "mutants.count"), "1/1\n");
+    const collected = collect(ROOT, dir, phaseContext(stateF07));
+    assert.equal(collected.exits.e2e, 0);
+    assert.equal(collected.exits["e2e-demo2"], 0);
+    assert.ok(collected.reports.e2e && collected.reports["e2e-demo2"]);
+    assert.equal(collected.replicability.src_diff_lines, 0);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

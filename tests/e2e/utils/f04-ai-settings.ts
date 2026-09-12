@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { f02E2eSandbox } from "./f02-crm-cadastros";
+import { criarOrganizacaoDaFixture } from "./tenant-do-seed";
 
 /**
  * A FIXTURE DAS DUAS ORGANIZAÇÕES FICTÍCIAS DA TELA DE IA (F04-T10).
@@ -76,19 +77,12 @@ export async function seedF04AiSettings(): Promise<F04AiSettingsFixture> {
     fixture.admin.id = usuario.data.user.id;
 
     for (const lado of ["A", "B"] as const) {
-      const org = await db
-        .from("organizations")
-        .insert({
-          slug: `f04-${lado.toLowerCase()}-${suffix}`,
-          display_name: `F04 ${lado} ${suffix}`,
-          legal_name: `F04 ${lado} ${suffix} Ltda.`,
-          status: "active",
-          onboarded_at: new Date().toISOString(),
-        })
-        .select("id")
-        .single();
-      if (org.error || !org.data) throw org.error ?? new Error("organização não criada");
-      fixture.orgs[lado] = (org.data as { id: string }).id;
+      // A pelo seed quando E2E_TENANT está posto (ADR-029 §2); B sempre fictícia.
+      fixture.orgs[lado] = await criarOrganizacaoDaFixture(db, lado, suffix, {
+        slug: `f04-${lado.toLowerCase()}-${suffix}`,
+        display_name: `F04 ${lado} ${suffix}`,
+        legal_name: `F04 ${lado} ${suffix} Ltda.`,
+      });
 
       const membro = await db.from("user_organizations").insert({
         organization_id: fixture.orgs[lado],

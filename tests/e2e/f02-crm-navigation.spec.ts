@@ -185,6 +185,14 @@ for (const side of ["A", "B"] as const) {
 
     await test.step("busca literal e paginação alcançam além das primeiras 500 posições", async () => {
       const db = f02E2eSandbox();
+      // O catálogo que a organização JÁ tem antes desta prova (zero na
+      // organização fictícia; os produtos do seed quando A é provisionada
+      // pelo seed, ADR-029 §2). O total esperado é o que havia mais o que se
+      // insere aqui — a prova não pressupõe organização vazia (D32).
+      const baseline = await page.request.get("/api/v1/products?limit=1");
+      expect(baseline.status()).toBe(200);
+      const baselineTotal: number = (await baseline.json()).meta.total;
+      expect(Number.isInteger(baselineTotal) && baselineTotal >= 0).toBe(true);
       const standard = {
         organization_id: customer.orgId,
         preco_cents: 100,
@@ -241,7 +249,7 @@ for (const side of ["A", "B"] as const) {
       expect(defaultPage.status()).toBe(200);
       const defaultBody = await defaultPage.json();
       expect(defaultBody.meta).toMatchObject({
-        total: filler.length + literalRows.length + decoys.length + 2,
+        total: baselineTotal + filler.length + literalRows.length + decoys.length + 1,
         has_more: true,
       });
       expect(defaultBody.data).toHaveLength(500);

@@ -67,6 +67,16 @@ export const EXPECTED_F05_E2E_TESTS = EXPECTED_F04_E2E_TESTS + 4;
 export const REQUIRED_F06_E2E_SPECS = REQUIRED_F05_E2E_SPECS;
 export const EXPECTED_F06_E2E_TESTS = EXPECTED_F05_E2E_TESTS;
 
+/**
+ * F07 (ADR-029) não cria tela: validação final. O inventário é o de F05/F06,
+ * inteiro — executado DUAS vezes, uma por tenant do seed (`replicability`).
+ */
+export const REQUIRED_F07_E2E_SPECS = REQUIRED_F06_E2E_SPECS;
+export const EXPECTED_F07_E2E_TESTS = EXPECTED_F06_E2E_TESTS;
+
+/** Tenants do seed que a F07 percorre, na ordem (§7.8 T02: deka, depois demo2). */
+export const REPLICABILITY_TENANTS = Object.freeze(["deka", "demo2"]);
+
 /** Fases com gate fechado de navegador. O nome deste arquivo é histórico. */
 const CLOSED_E2E_PHASES = Object.freeze({
   F02: { specs: REQUIRED_F02_E2E_SPECS, tests: EXPECTED_F02_E2E_TESTS },
@@ -74,6 +84,7 @@ const CLOSED_E2E_PHASES = Object.freeze({
   F04: { specs: REQUIRED_F04_E2E_SPECS, tests: EXPECTED_F04_E2E_TESTS },
   F05: { specs: REQUIRED_F05_E2E_SPECS, tests: EXPECTED_F05_E2E_TESTS },
   F06: { specs: REQUIRED_F06_E2E_SPECS, tests: EXPECTED_F06_E2E_TESTS },
+  F07: { specs: REQUIRED_F07_E2E_SPECS, tests: EXPECTED_F07_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
 });
 
 /**
