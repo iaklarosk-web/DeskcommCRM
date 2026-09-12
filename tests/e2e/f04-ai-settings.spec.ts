@@ -180,30 +180,33 @@ for (const lado of ["A", "B"] as LadoDoTeste[]) {
     // Arrange
     await abrirTela(page, fixture, lado);
     const chave = page.getByTestId("ia-ligada");
-    // Organização recém-criada não tem linha de `ai.enabled`, e a guarda que
-    // decide se a IA atende lê por PRESENÇA (`src/conversation/guards.ts`):
-    // "não configurado" é DESLIGADO, e é isso que a tela tem de mostrar.
-    await expect(chave).not.toBeChecked();
-    expect((await configuracaoNoBanco(page))["ai.enabled"]).toBe(false);
+    // A tela mostra o que o banco tem. Organização fictícia recém-criada não
+    // tem linha de `ai.enabled`, e a guarda que decide se a IA atende lê por
+    // PRESENÇA (`src/conversation/guards.ts`): "não configurado" é DESLIGADO.
+    // Organização provisionada do seed (ADR-029 §2) pode nascer ligada — o
+    // estado inicial vem do banco, e a prova é a ida e a volta a partir dele.
+    const inicial = (await configuracaoNoBanco(page))["ai.enabled"] === true;
+    await expect(chave).toBeChecked({ checked: inicial });
+    expect((await configuracaoNoBanco(page))["ai.enabled"]).toBe(inicial);
 
-    // Act 1 — ligar.
-    await chave.check();
+    // Act 1 — inverter.
+    await chave.setChecked(!inicial);
     expect(await salvar(page)).toBe(200);
 
     // Assert 1
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.getByTestId("ia-ligada")).toBeChecked();
-    expect((await configuracaoNoBanco(page))["ai.enabled"]).toBe(true);
+    await expect(page.getByTestId("ia-ligada")).toBeChecked({ checked: !inicial });
+    expect((await configuracaoNoBanco(page))["ai.enabled"]).toBe(!inicial);
 
-    // Act 2 — desligar de volta: ligar que não tem volta seria um botão de
-    // mão única numa tela de configuração.
-    await page.getByTestId("ia-ligada").uncheck();
+    // Act 2 — voltar: mudança que não tem volta seria um botão de mão única
+    // numa tela de configuração.
+    await page.getByTestId("ia-ligada").setChecked(inicial);
     expect(await salvar(page)).toBe(200);
 
     // Assert 2
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.getByTestId("ia-ligada")).not.toBeChecked();
-    expect((await configuracaoNoBanco(page))["ai.enabled"]).toBe(false);
+    await expect(page.getByTestId("ia-ligada")).toBeChecked({ checked: inicial });
+    expect((await configuracaoNoBanco(page))["ai.enabled"]).toBe(inicial);
   });
 
   test(`documento subido em ${lado} entra no acervo deste tenant e não no do outro`, async ({
