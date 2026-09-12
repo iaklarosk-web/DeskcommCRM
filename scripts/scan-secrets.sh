@@ -32,9 +32,14 @@ F=$(echo "$FILES" | wc -l | tr -d ' ')
 # padrão afrouxado): `postgres:postgres@127.0.0.1|localhost` é a convenção do
 # Postgres efêmero/local de dev — a mesma dos testes de invariante — e não é
 # credencial de nada. Qualquer outra senha em URL continua sendo finding.
+# Segunda exclusão NOMEADA (F06-T05/T06): URL de Postgres cuja "senha" é uma
+# INTERPOLAÇÃO de variável (`${VAR}`, `$VAR`, `${func(...)}`) — é como os
+# scripts do staging montam a conexão a partir de /srv/secrets; não há
+# credencial no texto. Senha literal em URL continua sendo finding.
 ACHADOS=$(echo "$FILES" | xargs grep -nE "$PADRAO" 2>/dev/null \
   | grep -vE '^[^:]+:[0-9]+:\s*(//|#|\*|--)' \
-  | grep -vE 'postgres(ql)?://postgres:postgres@(127\.0\.0\.1|localhost)' || true)
+  | grep -vE 'postgres(ql)?://postgres:postgres@(127\.0\.0\.1|localhost)' \
+  | grep -vE 'postgres(ql)?://[A-Za-z0-9_]+:\$(\{[A-Za-z_][^}@]*\}|[A-Z_][A-Z0-9_]*)@' || true)
 N=$(if [ -z "$ACHADOS" ]; then echo 0; else echo "$ACHADOS" | wc -l | tr -d ' '; fi)
 
 # G-51: a fixture negativa PRECISA ser pega pelo mesmo padrão.

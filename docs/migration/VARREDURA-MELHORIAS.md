@@ -1,6 +1,6 @@
 # Varredura de melhorias e correções — achados desta construção
 
-Lista viva, montada enquanto F03 e F04 eram construídas. **Nada aqui é aplicado
+Lista viva, montada enquanto F03, F04, F05 e F06 eram construídas. **Nada aqui é aplicado
 sem pedido** (ADR-020, decisão 6): achado novo aplicado junto com a entrega é
 escopo crescendo depois do "pronto".
 
@@ -53,6 +53,20 @@ seguia em `exclude_finished` e escapava do varredor de silêncio. Commit
 `mock_outbox` e `job_runs` tinham prova de CATÁLOGO (policies, grants), não de
 comportamento. O gate 01 da F03 as pegou. Prova real escrita em dois tenants,
 com anti-vácuo medido nas duas. Commit `3072959a`.
+
+### A9. `POST /api/v1/messages` herdado não honrava `Idempotency-Key` (era o §B10)
+Consertado na F06-T02: com a chave, a mensagem nasce com id determinístico por
+(organização, atendente, chave) e a repetição do `apiClient` devolve a linha
+existente sem chamar o canal de novo (`lib/api/idempotency.ts`,
+`idempotentReplay` no handler). Prova: posts=2 messages=1 channel_sends=1/2;
+sem a chave o comportamento herdado continua (guarda de vacuidade). Commit
+`6bc564ad`. O texto original do achado fica em §B10, marcado.
+
+### A10. A guarda G-51 do scanner de segredos estava MORTA desde a F01
+`grep -c … || echo 0` em `scripts/scan-secrets.sh` produzia "0\n0" quando a
+fixture negativa não era pega; o `[ -lt 2 ]` reclamava de inteiro e o script
+saía 0 — um scanner com padrão quebrado passava no gate e no CI. Achado pelo
+mutante 56 (F06-T04), que VIVIA antes do conserto. Commit `7d84ca81`.
 
 ### A8. Sandbox do gate não era reproduzível
 A receita do ambiente de navegador só existia como cópia de `config.toml` na
@@ -170,7 +184,7 @@ local. `gh auth refresh -h github.com -s workflow` destrava.
 **Enquanto não destravar:** o trabalho existe só localmente, e a CI não roda as
 specs novas.
 
-### B10. `POST /api/v1/messages` (herdado) não honra `Idempotency-Key`; o cliente repete o POST
+### B10. `POST /api/v1/messages` (herdado) não honra `Idempotency-Key`; o cliente repete o POST — **CONSERTADO na F06-T02 (ver A9)**
 Medido no trace do Playwright do gate f05-gate-06 (12/09/2026): a jornada
 "responder" de `f03-inbox.spec.ts` fez DOIS POSTs a `/api/v1/messages` — o
 primeiro sem resposta em 10 s (`DEFAULT_TIMEOUT_MS` de `lib/api/client.ts:16`,
@@ -186,6 +200,48 @@ ou a rota nova de envio (`execute(send_message)`, que já é idempotente por
 `idempotency_key`) substituir o caminho síncrono herdado — trabalho de
 consolidação já previsto na ADR-017. Custo: médio. Risco de não fazer: mensagem
 duplicada para cliente real em qualquer pico de latência.
+
+### B11. O Sentry herdado manda erros para um Sentry de TERCEIRO por padrão
+`lib/sentry/dsn.ts`: sem `SENTRY_DSN`, `resolveSentryDsn()` cai em
+`DEFAULT_SENTRY_DSN` — o projeto Sentry "da comunidade" do autor do Deskcomm.
+Num SaaS com dados de tenant, erro de produção sairia da máquina para uma
+conta que não é do proprietário (o scrub de PII é denylist, `lib/sentry/scrub.ts`).
+O staging da F06 roda com `SENTRY_DSN=off` explícito; a F06-T01 acrescentou a
+allowlist de contexto (`src/obs/erros.ts`) para o que o código SaaS anexa,
+mas não mudou o padrão herdado.
+**Proposta:** inverter o padrão — sem DSN, telemetria DESLIGADA — e deixar a
+comunidade como opt-in. Custo: uma linha e o README do kit. Risco de não
+fazer: uma instalação sem `SENTRY_DSN` no `.env` exporta erros para fora.
+Decisão do proprietário: muda comportamento herdado do kit self-host.
+
+### B12. Portas publicadas pelo Docker atravessam o `ufw` nesta VPS (não é o staging)
+Medido em 12/09/2026: `DOCKER-USER` vazia; o Docker faz DNAT em PREROUTING
+antes do `ufw`. Todo container com porta publicada em `0.0.0.0` responde na
+interface pública — entre eles o Supabase de desenvolvimento do checkout
+antigo (`54321` API, `54322` Postgres com a senha padrão do CLI; parado em
+12/09 durante o gate da F06, `supabase stop` com volumes preservados) e os
+Postgres/Evolution de outros projetos. O staging da F06 publica só em
+`127.0.0.1` e no IP do Tailscale e NÃO está nessa lista. A regra que fecha a
+interface pública para containers (mantendo 80/443 do que deve ser público)
+está em `docs/ops/staging.md` §Firewall. **Porta 1-way: quem aplica é o
+proprietário.**
+
+### B13. `create-tenant.ts` pula os blocos `customers`, `products` e `faq` do seed
+"entra na fase que adapta a tabela (F02/F04)" — a fase passou e o loader não
+foi adaptado: o seed do demo2 declara 1 cliente, 1 produto e 7 FAQs que nunca
+chegam ao banco. O staging da F06 contorna com as fixtures FICTÍCIAS da F02
+(`demo2.f02-fixtures.yaml`, sob o marcador de sandbox no banco), e o smoke
+compara contra ELAS, não contra o seed — declarado no `smoke.mjs`.
+**Proposta:** o loader gravar os três blocos nas tabelas que a F02/F04
+criaram (`contacts`/`crm_companies`, `catalog_products`, acervo), com prova
+de contagem `seed=N banco=N`. Custo: baixo. Risco de não fazer: "criar um
+tenant novo" (F07-T03) entrega um tenant sem clientes nem produtos.
+
+### B14. Reserva de swap sem persistência
+`/swapfile` (2 GB) existe, foi reativado na F02 e de novo na F06
+(`swapon /swapfile`), e não está no `/etc/fstab`: some a cada reboot. Durante
+o build do app a máquina chegou a 1,9 GB de swap usado. **Porta 1-way**
+(mexe em fstab): `echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab`.
 
 ---
 
