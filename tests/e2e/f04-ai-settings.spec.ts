@@ -248,12 +248,16 @@ for (const lado of ["A", "B"] as LadoDoTeste[]) {
     expect(daqui.find((m) => m.nome === nomeDoArquivo)?.nome).toBe(nomeDoArquivo);
 
     // Assert 2 — o OUTRO tenant não enxerga nada disso: nem na tela, nem na API.
+    // A tela do outro lado mostra o acervo DELE, tela contra banco: vazio na
+    // organização fictícia; o "FAQ do seed" quando A veio do seed (ADR-029 §2/§3).
     await trocarPara(page, fixture.orgs[outroLado]);
     await page.goto(TELA, { waitUntil: "domcontentloaded" });
     await expect(
       page.locator(`[data-testid="acervo-item"][data-nome="${nomeDoArquivo}"]`),
     ).toHaveCount(0);
-    await expect(page.getByTestId("acervo-vazio")).toBeVisible();
-    expect((await acervoNoBanco(page)).map((m) => m.nome)).not.toContain(nomeDoArquivo);
+    const doOutro = await acervoNoBanco(page);
+    expect(doOutro.map((m) => m.nome)).not.toContain(nomeDoArquivo);
+    await expect(page.locator('[data-testid="acervo-item"]')).toHaveCount(doOutro.length);
+    if (doOutro.length === 0) await expect(page.getByTestId("acervo-vazio")).toBeVisible();
   });
 }
