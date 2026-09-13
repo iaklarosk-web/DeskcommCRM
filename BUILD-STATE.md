@@ -1,11 +1,11 @@
 ---
-updated_at: 2026-09-13T13:15:00Z
+updated_at: 2026-09-13T15:40:00Z
 head_commit: d7543c1463242b0fdc0b9fd5f8b0722ed9cb4532   # código validado pelo gate f07-gate-07 (READY (staging), dentro do staging, campos de §8.4; bloco idêntico ao f07-gate-06 sobre 7632a058)
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
 plan_version: "2.5 (2026-09-11); D38–D50; ADR-006…029"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
 current_phase: F07
-next_task: F08-T01             # F07 concluída (marco técnico de §8.4); F08+ só começa com nova mensagem do proprietário (D50 c) e depende de D12/D13
+next_task: F11-T00             # D51 (a): F11+F12 autorizadas em 13/09/2026; tasks e critérios em ADR-030; F08 fica para quando houver os itens de D12
 status: READY_STAGING          # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26)
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
@@ -417,8 +417,8 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 | F08 | Serviços reais e produção inicial: WAHA/IA, e-mail, domínio, orçamento, backup/retorno e onboarding configurável | pending |
 | F09 | Piloto Deka acompanhado, com baseline/metas, pedidos, separação, tempo e qualidade/custo da IA medidos | pending |
 | F10 | Segunda empresa real operando por configuração, com preço aceito; gate da expansão comercial | pending |
-| F11 | Administração da plataforma, empresas/equipes, suporte limitado e auditado, cadastro e entrada guiada | pending — ativação paga depende da F12 |
-| F12 | Planos/assinatura/cobrança, confirmação de pagamento, acesso, limites/uso, inadimplência e conciliação | pending — conclusão conjunta com F11 |
+| F11 | Administração da plataforma, empresas/equipes, suporte limitado e auditado, cadastro e entrada guiada | in_progress — D51 (a), 13/09/2026; tasks T00–T06 em ADR-030 §1; branch `feat/F11-F12-admin-e-assinatura` a partir de `cfb3c34a`; fecha junto com a F12 |
+| F12 | Planos/assinatura/cobrança, confirmação de pagamento, acesso, limites/uso, inadimplência e conciliação | in_progress — tasks T01–T08 em ADR-030 §2; gateway mock, planos placeholder (D14); fecha junto com a F11 |
 | F13 | CRM comercial: funis/oportunidades, campos, papéis/filas, histórico, tarefas, pedidos e relatórios | pending |
 | F14 | WhatsApp, chat do site e agenda de clientes/equipe sincronizada com Google Agenda | pending |
 | F15 | Automações e autonomia de IA por empresa/ação, aprovação/handoff, limites, auditoria e conhecimento | pending |
