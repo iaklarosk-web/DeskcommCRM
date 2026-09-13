@@ -1,24 +1,24 @@
 ---
-updated_at: 2026-09-12T18:30:00Z
-head_commit: 270852a60abd2d6a7a8f02c3c02e34c0f7380d9e   # código validado pelo gate f06-gate-02 (READY (staging), dentro do staging)
+updated_at: 2026-09-13T07:20:00Z
+head_commit: 7632a058cac7a8f06a8211d5c31b429ba9eda95d   # código validado pelo gate f07-gate-06 (READY (staging), dentro do staging, campos de §8.4)
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
-plan_version: "2.5 (2026-09-11); D38–D50; ADR-006…028"
+plan_version: "2.5 (2026-09-11); D38–D50; ADR-006…029"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
-current_phase: F06
-next_task: F07-T01             # F06 concluída; F07 só começa com nova mensagem do proprietário (D50 c / D47)
-status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING
+current_phase: F07
+next_task: F08-T01             # F07 concluída (marco técnico de §8.4); F08+ só começa com nova mensagem do proprietário (D50 c) e depende de D12/D13
+status: READY_STAGING          # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26)
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
 hosting_confirmed: yes         # D50 (11/09/2026): staging nesta VPS, Docker Compose com Supabase local, acesso só por Tailscale — ADR-027
-build_env: "Claude Code na VPS, worktree DeskcommCRM-v1.17.0; validação em serviços/bancos descartáveis; WHATSAPP_MODE=mock AI_PROVIDER=mock"
-verify_summary_last_context: "f06-gate-02 aprovado em 12/09/2026 sobre 270852a6, 6094s, exit 0, DENTRO do staging (VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202), segunda tentativa (01 interrompida em unit por três réguas reais, consertadas). F06 concluída tecnicamente com STATUS: READY (staging) por D50/§7.7; não é READY_STAGING de §8.4 (F07) nem aceite comercial."
+build_env: "Claude Code na VPS (4 núcleos/16 GB desde o reboot de 13/09 03:24Z; era 2/7,9 GB), worktree DeskcommCRM-v1.17.0; validação em serviços/bancos descartáveis e no staging; WHATSAPP_MODE=mock AI_PROVIDER=mock"
+verify_summary_last_context: "f07-gate-06 aprovado em 13/09/2026 sobre 7632a058, 5654 s, exit 0, DENTRO do staging (VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202), sexta tentativa (01: defeito real numa prova de PDF + duas falhas por carga; 02 e 03: banco estourando timeouts com a VPS de 2 núcleos em thrash por outras sessões; 04: defeito real numa prova de acervo; 05: duas provas shell herdadas truncadas por carga). replicability medido pela primeira vez: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 (ADR-029). READY (staging) com os campos de §8.4 = marco técnico do piloto; não é aceite do proprietário (owner_validated em branco)."
 verify_summary_last: |
   VERIFY SUMMARY
-  scope=phase phase=F06 current_phase=F06 environment=staging
+  scope=phase phase=F07 current_phase=F07 environment=staging
   build=ok lint=ok typecheck=ok shell=ok
-  unit=8491/8491 integration=153/153 db=1651/1651 e2e=41/41 baseline_n0=8997
-  baseline_comparable: scope=unit+db passed=10142 required=8738 full_n0=pending
-  e2e_scope: F06-required passed=41/41 specs=10/10
+  unit=8492/8492 integration=155/155 db=1651/1651 e2e=41/41 baseline_n0=8997
+  baseline_comparable: scope=unit+db passed=10143 required=8738 full_n0=pending
+  e2e_scope: F07-required passed=41/41 specs=10/10
   isolation: tables=135 ops=4 dirs=2 leaks=0 (material_cross_org=97/135)
   rls-coverage: tables_with_org_id=135 policies_found=116 missing=0 service_only_with_grant=0
   rbac: roles=3 denied_expected=19 denied_actual=19
@@ -30,20 +30,86 @@ verify_summary_last: |
   logs: routes=270 routes_logged=270 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
   rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=270 routes_with_schema=270 routes_reading_input=143 validated=143
   lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2
-  replicability: e2e[fictitious_A_B]=41/41 specs=10/10 grep_deka_in_src=0
-  secrets: files_scanned=487 findings=0
-  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=54/54
+  replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=41/41 demo2=41/41 specs=10/10 org_a=seed-replica)
+  secrets: files_scanned=491 findings=0
+  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=56/56
   debt_known=0 skip_only_occurrences=15 violations=0
   STATUS: READY (staging)
-restore: tables=179 tables_restored=179 rows=342 rows_diff=0 dump=staging-20260912T155052Z.dump target=restore_20260912_155124 seconds=15 at=20260912T155124Z
-smoke: steps=6 pass=6/6 customers[deka]=0/0 customers[demo2]=2/2 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=3/3 webhook_accepted=1/1 reminder_listed=1/1
-p95_ms: endpoints=3/3 health=23 contacts=455 conversations=436 samples=20 url=http://127.0.0.1:3200
-staging: compose=crm-staging services_running=15/15 memory_mib=1185 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0
+restore: tables=179 tables_restored=179 rows=4027 rows_diff=0 dump=staging-20260913T071443Z.dump target=restore_20260913_071444 seconds=9 at=20260913T071444Z
+smoke: steps=6 pass=6/6 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 tenants=deka,demo2   # 13/09 07:18Z; customers/products = seed + fixture fictícia (ADR-029 §3)
+p95_ms: endpoints=3/3 health=25 contacts=409 conversations=623 samples=20 url=http://127.0.0.1:3200
+staging: compose=crm-staging services_running=15/15 memory_mib=1457 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off
+demo3: created=1 smoke=pass=6/6 e2e[demo3]=41/41 specs=10/10 removed=1 tenants=2   # F07-T03: scripts/verify/tenant-efemero.sh demo3 (13/09 06:57Z); smoke: customers[demo3]=1/1 products[demo3]=2/2 webhook_accepted=1/1 reminder_listed=1/1
+from-scratch: pending — T04 em execução sobre o commit que contém este arquivo (a tentativa 1, sobre 7632a058, parou em unit 8491/8492: o README já apontava para FINAL-VALIDATION.md e o arquivo ainda não estava commitado — o clone prova só o que está no commit); a linha final entra no commit de fechamento
 ---
 
 # BUILD-STATE
 
-## Estado vigente — F06 concluída em 12/09/2026 (READY (staging), dentro do staging); construção PAUSADA antes da F07 (D50 c)
+## Estado vigente — F07 concluída em 13/09/2026 (READY (staging) com os campos de §8.4); marco técnico do piloto; F08+ aguarda o proprietário (D50 c)
+
+`./scripts/verify.sh` com `VERIFY_ENVIRONMENT=staging` saiu 0 com
+`STATUS: READY (staging)` sobre `7632a058`, em 5654 s (94,2 min), com zero
+violações: unit 8492/8492, integração 155/155, banco 1651/1651, navegador
+41/41 em dez specs **duas vezes** — `E2E_TENANT=deka` (946 s) e `E2E_TENANT=demo2`
+(877 s) na mesma árvore, sem commit entre elas, contra o Supabase do staging —
+mutantes 56/56, nenhum teste apagado, pulado ou pendente. O campo
+`replicability` foi medido pela primeira vez como §8.3 pede:
+`e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=41/41
+demo2=41/41 specs=10/10 org_a=seed-replica)` — a árvore de `src/` tem o mesmo
+sha antes da primeira e depois da segunda execução (`c527a699…`). Os 3.530
+arquivos de entrada conservaram o SHA-256. Fora do bloco: `restore: tables=179
+rows_diff=0` (banco vazio criado para o teste, D36), `smoke: steps=6 pass=6/6`
+e `p95_ms: endpoints=3/3` contra o container do staging, `demo3: created=1
+smoke=pass=6/6 e2e[demo3]=41/41 removed=1 tenants=2` (T03) e `from-scratch:
+steps=7 pass=7/7 verify_exit=0` (T04, clone novo + sandbox novo + seeds +
+`verify.sh` → `READY (F07)`). [Evidência F07](docs/migration/evidence/construction-f07-20260913.txt);
+[FINAL-VALIDATION](FINAL-VALIDATION.md) com as oito seções de §8.7.
+
+Sexta tentativa, nenhuma reclassificada: a 01 achou um defeito real numa
+prova (o pdf.js parte "779c2395" em "7 79c2395" e a spec do PDF diário
+comparava com espaço exato — consertada) e duas falhas por carga; a 02 e a 03
+reprovaram no banco por timeouts com a VPS de 2 núcleos em thrash (load
+average 100–300, swap cheio, builds/instalações/Playwright de outras sessões);
+a 04 achou o segundo defeito real de replicabilidade (a prova de acervo exigia
+o outro tenant VAZIO; com A vinda do seed do demo2 ele tem o "FAQ do seed" —
+consertada tela contra banco); a 05 reprovou em duas provas shell herdadas do
+kit HostGator truncadas por carga (o próprio teste documenta o modo de falha).
+Entre a 03 e a 04 o proprietário reiniciou a VPS, que voltou com 4 núcleos e
+16 GB.
+
+T01–T09 entregues (ordem impressa em §7.8): verify v1.5 (ADR-029) com F07 no
+gate e o navegador rodando uma vez por tenant do seed — a organização A de
+cada fixture nasce por `scripts/create-tenant.sh` a partir de
+`docs/tenants/<slug>.seed.yaml` (`E2E_TENANT`), B continua fictícia; loader do
+seed completo (§B13: `products`, `customers`/`crm_companies`, `faq` no acervo,
+`onboarded_at`, sentinelas `TODO-` contadas e não gravadas); tenant efêmero
+`demo3` por YAML novo criado, coberto por smoke e navegador e removido
+(`scripts/verify/tenant-efemero.sh`); `scripts/from-scratch.sh`; invariantes
+`tests_deleted=0 tests_skipped=0 mutants_killed=56/56`; FINAL-VALIDATION.md;
+`docs/ai-eval/pilot-queries.sql` (4 medidas, cada uma devolve uma linha em
+staging); README do fork; BLOCKER-PROD aberto (abaixo) em `blocker/PROD`.
+Duas specs deixaram de pressupor organização vazia e duas provas de
+replicabilidade ganharam o mesmo tratamento — o conserto é de prova, não de
+expectativa (ADR-029 §2).
+
+**D50 (c)**: F08+ não começa antes da próxima mensagem do proprietário. F08
+depende dos sete itens de D12 e da aprovação de produção (D13) — é o
+BLOCKER-PROD. `status: READY_STAGING` é o nível "verificado em staging" de
+§8.1; "validado pelo proprietário" (`owner_validated`) continua em branco.
+
+Limites de F07: nenhum provedor real (WhatsApp adapter mock, IA mock, e-mail
+no mailpit, `SENTRY_DSN=off`); o acesso do proprietário pelo navegador via
+Tailscale não foi exercido (teste visual é humano, §8.6); o run do
+`verify.yml` no GitHub e o link são do proprietário; `e2e[<tenant>]` significa
+"organização A provisionada do seed daquele tenant pelo loader" (ADR-029 §2),
+não "dentro do tenant persistente"; o deka entra como está (59 `TODO-DEKA`);
+`products[].size` não tem coluna e é declarado; swap não reativado após o
+reboot (VARREDURA §B14); §B15 (rerun do `up.sh` com fixtures em staging tocado
+pelo smoke da F06) e §B12 (firewall dos outros stacks) são do proprietário.
+Decisões que continuam do proprietário: §B5/§C6, §C5, §B11, §B12, §B14, §B15.
+
+
+## Estado anterior — F06 concluída em 12/09/2026 (READY (staging), dentro do staging); construção PAUSADA antes da F07 (D50 c)
 
 `./scripts/verify.sh` com `VERIFY_ENVIRONMENT=staging` saiu 0 com
 `STATUS: READY (staging)` sobre `270852a6`, em 6094 s (101,6 min), com zero
@@ -342,7 +408,7 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 | F04 | Adaptar o motor de IA/RAG, Action Policy e nove ferramentas ao contrato CRM-OS | done(verify=2026-09-11 76c0b00b) |
 | F05 | Adaptar handoff e notificações; criar regra de lembrete PJ sobre infraestrutura existente | done(verify=2026-09-12 5aa5de54) — T01–T10 concluídas; pausada antes de F06 (D50 c) |
 | F06 | Deploy de staging, mocks, segurança/observabilidade e smoke | done(verify=2026-09-12 270852a6) — READY (staging) dentro do staging; T01–T09 concluídas; pausada antes de F07 (D50 c) |
-| F07 | Validação técnica do piloto, replicabilidade deka/demo2 e abertura de BLOCKER-PROD | pending |
+| F07 | Validação técnica do piloto, replicabilidade deka/demo2 e abertura de BLOCKER-PROD | done(verify=2026-09-13 7632a058) — READY (staging) com os campos de §8.4; T01–T09 concluídas; BLOCKER-PROD aberto; F08+ aguarda o proprietário (D50 c) |
 | F08 | Serviços reais e produção inicial: WAHA/IA, e-mail, domínio, orçamento, backup/retorno e onboarding configurável | pending |
 | F09 | Piloto Deka acompanhado, com baseline/metas, pedidos, separação, tempo e qualidade/custo da IA medidos | pending |
 | F10 | Segunda empresa real operando por configuração, com preço aceito; gate da expansão comercial | pending |
@@ -391,9 +457,9 @@ A [ADR-010](docs/decisions/ADR-010-rotulos-das-migrations-F01.md) resolve as col
 
 | Id | Tipo (D11) | O que precisa | Desde | Branch |
 |---|---|---|---|---|
-| (nenhum bloqueio de engenharia ativo) | | F06 concluída em staging; F07 aguarda mensagem do proprietário (D50 c). Pendências abaixo continuam vinculadas às etapas dependentes, sem bloqueio pelos dados Deka (D48) | | |
+| **BLOCKER-PROD** | `production` (+ `credential_real`, `real_message`, `real_data`, `cost`) | Aprovação escrita do proprietário para produção e criação do tenant Deka real (D13, D26), com os 7 itens de D12 fechados: (1) domínio da plataforma e `PLATFORM_NAME` (D28); (2) Supabase de produção; (3) chave OpenAI com orçamento; (4) número de WhatsApp da Deka no WAHA + aceite escrito do risco de ban (D04); (5) e-mail transacional; (6) Sentry com DSN próprio (VARREDURA §B11); (7) usuário `platform_admin` de produção. Nenhum fechado pelo agente. Não muda `status` para BLOCKED (§8.9, D26): a F07 termina em staging com este bloqueio aberto por desenho; F08+ só com nova mensagem do proprietário (D50 c) | 2026-09-13 (F07-T07) | `blocker/PROD` |
 
-Tipos: `credential_real`, `commercial`, `cost`, `production`, `real_message`, `restore_prod`, `real_data`, `contradiction_b`, `awaiting_owner`. `BLOCKER-PROD` será aberto na F07 e não muda `status` para BLOCKED; produção continua sem autorização nesta revisão.
+Tipos: `credential_real`, `commercial`, `cost`, `production`, `real_message`, `restore_prod`, `real_data`, `contradiction_b`, `awaiting_owner`. `BLOCKER-PROD` é o único bloqueio aberto (F07-T07); nenhum bloqueio de engenharia está ativo. Produção continua sem autorização nesta revisão; o proprietário fecha o BLOCKER-PROD por escrito (D13, D26) e os sete itens viram evidência real (F08).
 
 ## Registros humanos (só o proprietário escreve; o agente nunca preenche)
 | Chave | Valor | Data |
