@@ -112,7 +112,7 @@ for (const lado of ["A", "B"] as LadoDoTeste[]) {
     if (!corpo) throw new Error("resposta do impersonate não capturada");
     expect(corpo).toMatchObject({ access_mode: "support_readonly", reason: motivo, scope: "inbox" });
     expect(new Date(corpo.expires_at).getTime() - Date.now()).toBeLessThanOrEqual(30 * 60_000 + 5_000);
-    await page.waitForURL("**/app/inbox", { timeout: HTTP_TIMEOUT });
+    await page.waitForURL("**/app/inbox", { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" });
 
     // Assert — banner com os três campos; escrita e escopo negados.
     const banner = page.getByTestId("suporte-banner");
@@ -133,7 +133,7 @@ for (const lado of ["A", "B"] as LadoDoTeste[]) {
       page.waitForResponse((r) => r.request().method() === "POST" && new URL(r.url()).pathname === "/api/v1/admin/impersonate/end", { timeout: HTTP_TIMEOUT }),
       page.getByRole("button", { name: "Sair do acompanhamento" }).click(),
     ]);
-    await page.waitForURL("**/app/**", { timeout: HTTP_TIMEOUT });
+    await page.waitForURL("**/app/**", { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" });
 
     // Assert 2 — a linha tem motivo, escopo, modo e fim.
     const sessao = await f02E2eSandbox()
@@ -164,7 +164,7 @@ test("o cadastro nasce pending_payment: /onboarding e /app caem em /app/billing 
 
     // Act — provisionar pela tela.
     await page.getByRole("button", { name: /Continuar para o onboarding/i }).click();
-    await page.waitForURL("**/app/billing", { timeout: 40_000 });
+    await page.waitForURL("**/app/billing", { timeout: 40_000, waitUntil: "domcontentloaded" });
     const vinculo = await db.from("user_organizations").select("organization_id").eq("user_id", novo.data.user.id).maybeSingle();
     if (vinculo.error || !vinculo.data) throw vinculo.error ?? new Error("organização do cadastro não provisionada");
     const orgId = vinculo.data.organization_id as string;
@@ -175,9 +175,9 @@ test("o cadastro nasce pending_payment: /onboarding e /app caem em /app/billing 
     expect(await page.getByTestId("billing-status").getAttribute("data-status")).toBe("pending_payment");
     expect(await page.getByTestId("billing-acesso").getAttribute("data-mode")).toBe("billing_only");
     await page.goto("/onboarding", { waitUntil: "domcontentloaded" });
-    await page.waitForURL("**/app/billing", { timeout: HTTP_TIMEOUT });
+    await page.waitForURL("**/app/billing", { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" });
     await page.goto("/app/inbox", { waitUntil: "domcontentloaded" });
-    await page.waitForURL("**/app/billing", { timeout: HTTP_TIMEOUT });
+    await page.waitForURL("**/app/billing", { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" });
     const escrita = await page.request.post("/api/v1/contacts", { data: { display_name: "x" }, timeout: HTTP_TIMEOUT });
     expect(escrita.status()).toBe(402);
     expect((await escrita.json()).error.code).toBe("subscription_required");
@@ -198,13 +198,13 @@ test("depois do pagamento mock o wizard conclui só pela UI: telefone de teste, 
     await login(page, email, fixture.password);
     await page.goto("/get-started", { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: /Continuar para o onboarding/i }).click();
-    await page.waitForURL("**/app/billing", { timeout: 40_000 });
+    await page.waitForURL("**/app/billing", { timeout: 40_000, waitUntil: "domcontentloaded" });
     const vinculo = await db.from("user_organizations").select("organization_id").eq("user_id", novo.data.user.id).maybeSingle();
     if (vinculo.error || !vinculo.data) throw vinculo.error ?? new Error("organização do wizard não provisionada");
     const orgId = vinculo.data.organization_id as string;
     orgsCriadas.push(orgId);
     await Promise.all([
-      page.waitForURL("**/app/billing/mock-checkout/**", { timeout: HTTP_TIMEOUT }),
+      page.waitForURL("**/app/billing/mock-checkout/**", { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" }),
       page.getByTestId("billing-checkout-PLAN_A").click(),
     ]);
     await Promise.all([
@@ -216,37 +216,37 @@ test("depois do pagamento mock o wizard conclui só pela UI: telefone de teste, 
     // Act — o wizard, passo a passo, pela UI.
     let passos = 0;
     await page.goto("/app/inbox", { waitUntil: "domcontentloaded" });
-    await page.waitForURL("**/onboarding/welcome", { timeout: HTTP_TIMEOUT });
+    await page.waitForURL("**/onboarding/welcome", { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" });
     // 1. welcome: nome do negócio, o que faz, aceite dos termos, seguir.
     await page.locator("#display_name").fill(`Wizard ${fixture.suffix}`);
     await page.locator("#o_que_faz").fill("Padaria de bairro que vende pelo WhatsApp");
     await page.locator('input[type="checkbox"]').first().check();
     await page.locator("form button[type=submit]").first().click();
-    await page.waitForURL("**/onboarding/connect-whatsapp", { timeout: HTTP_TIMEOUT });
+    await page.waitForURL("**/onboarding/connect-whatsapp", { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" });
     passos += 1;
     // 2. telefone: canal de TESTE (modo mock).
     await expect(page.getByTestId("whatsapp-modo-mock")).toBeVisible();
     await page.getByTestId("whatsapp-conectar-mock").click();
-    await page.waitForURL("**/onboarding/setup-ai", { timeout: HTTP_TIMEOUT });
+    await page.waitForURL("**/onboarding/setup-ai", { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" });
     passos += 1;
     // 3. treinar: pular (IA em mock).
     await page.getByRole("button", { name: /^Pular$/ }).click();
-    await page.waitForURL("**/onboarding/funil", { timeout: HTTP_TIMEOUT });
+    await page.waitForURL("**/onboarding/funil", { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" });
     passos += 1;
     // 4. quadro: pular.
     await page.getByRole("button", { name: /Pular por enquanto/ }).click();
-    await page.waitForURL("**/onboarding/testar", { timeout: HTTP_TIMEOUT });
+    await page.waitForURL("**/onboarding/testar", { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" });
     passos += 1;
     // 5. ver ele atender: pular.
     await page.getByRole("button", { name: /^Pular$/ }).click();
-    await page.waitForURL("**/onboarding/invite-team", { timeout: HTTP_TIMEOUT });
+    await page.waitForURL("**/onboarding/invite-team", { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" });
     passos += 1;
     // 6. equipe: pular → done.
     await page.getByRole("button", { name: /Pular por enquanto/ }).click();
-    await page.waitForURL("**/onboarding/done", { timeout: HTTP_TIMEOUT });
+    await page.waitForURL("**/onboarding/done", { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" });
     passos += 1;
     await page.getByRole("button", { name: /Começar a usar/ }).click();
-    await page.waitForURL("**/app/**", { timeout: HTTP_TIMEOUT });
+    await page.waitForURL("**/app/**", { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" });
 
     // Assert — onboarded_at gravado, canal mock existe, o produto abre.
     const org = await db.from("organizations").select("onboarded_at").eq("id", orgId).single();

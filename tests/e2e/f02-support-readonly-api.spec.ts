@@ -147,7 +147,7 @@ async function startReadonly(page: Page, fixture: SupportFixture) {
   const response = await pending;
   expect(response.status()).toBe(200);
   expect(sessionId).toEqual(expect.any(String));
-  await page.waitForURL("**/app/inbox", { timeout: HTTP_TIMEOUT });
+  await page.waitForURL("**/app/inbox", { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" });
   await expect(page.getByRole("button", { name: "Sair do acompanhamento" })).toBeVisible();
   expect(await activeOrg(page)).toBe(fixture.orgB);
   return sessionId!;
@@ -175,7 +175,7 @@ async function endSupport(page: Page, fixture: SupportFixture, sessionId: string
   const response = await pending;
   expect(response.status()).toBe(200);
   expect(body).toMatchObject({ data: { ended: true } });
-  await page.waitForURL("**/app/inbox", { timeout: HTTP_TIMEOUT });
+  await page.waitForURL("**/app/inbox", { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" });
   await expect(page.getByRole("button", { name: "Sair do acompanhamento" })).toHaveCount(0);
   expect(await activeOrg(page)).toBe(fixture.orgA);
 

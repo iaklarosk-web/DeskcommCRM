@@ -150,7 +150,7 @@ for (const lado of ["A", "B"] as LadoDoTeste[]) {
 
     // Assert 1 — o produto fecha, a cobrança fica, os dados ficam.
     await page.goto("/app/inbox", { waitUntil: "domcontentloaded" });
-    await page.waitForURL("**/app/billing", { timeout: HTTP_TIMEOUT });
+    await page.waitForURL("**/app/billing", { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" });
     expect(await page.getByTestId("billing-status").getAttribute("data-status")).toBe("cancelled");
     const escrita = await page.request.post("/api/v1/contacts", { data: { display_name: "Não deve nascer" }, timeout: HTTP_TIMEOUT });
     expect(escrita.status()).toBe(402);
@@ -161,7 +161,7 @@ for (const lado of ["A", "B"] as LadoDoTeste[]) {
     // Act 2 — contratar de novo → página do gateway mock → pagamento confirmado.
     await page.goto(TELA, { waitUntil: "domcontentloaded" });
     await Promise.all([
-      page.waitForURL("**/app/billing/mock-checkout/**", { timeout: HTTP_TIMEOUT }),
+      page.waitForURL("**/app/billing/mock-checkout/**", { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" }),
       page.getByTestId("billing-checkout-PLAN_A").click(),
     ]);
     await expect(page.getByTestId("mock-checkout")).toBeVisible();
@@ -171,7 +171,7 @@ for (const lado of ["A", "B"] as LadoDoTeste[]) {
       page.waitForResponse((r) => r.request().method() === "POST" && new URL(r.url()).pathname === "/api/v1/billing/mock-checkout", { timeout: HTTP_TIMEOUT }),
       page.getByTestId("mock-checkout-pagar").click(),
     ]);
-    await page.waitForURL("**/app/billing", { timeout: HTTP_TIMEOUT });
+    await page.waitForURL("**/app/billing", { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" });
 
     // Assert 2 — ativou UMA vez: estado, fatura paga, evento aplicado, uso liberado.
     await expect.poll(async () => (await assinaturaNoBanco(fixture.orgs[lado])).status, { timeout: HTTP_TIMEOUT }).toBe("active");
