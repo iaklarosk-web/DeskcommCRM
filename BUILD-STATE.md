@@ -1,6 +1,6 @@
 ---
-updated_at: 2026-09-13T07:20:00Z
-head_commit: 7632a058cac7a8f06a8211d5c31b429ba9eda95d   # código validado pelo gate f07-gate-06 (READY (staging), dentro do staging, campos de §8.4)
+updated_at: 2026-09-13T13:15:00Z
+head_commit: d7543c1463242b0fdc0b9fd5f8b0722ed9cb4532   # código validado pelo gate f07-gate-07 (READY (staging), dentro do staging, campos de §8.4; bloco idêntico ao f07-gate-06 sobre 7632a058)
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
 plan_version: "2.5 (2026-09-11); D38–D50; ADR-006…029"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
@@ -11,7 +11,7 @@ baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
 hosting_confirmed: yes         # D50 (11/09/2026): staging nesta VPS, Docker Compose com Supabase local, acesso só por Tailscale — ADR-027
 build_env: "Claude Code na VPS (4 núcleos/16 GB desde o reboot de 13/09 03:24Z; era 2/7,9 GB), worktree DeskcommCRM-v1.17.0; validação em serviços/bancos descartáveis e no staging; WHATSAPP_MODE=mock AI_PROVIDER=mock"
-verify_summary_last_context: "f07-gate-06 aprovado em 13/09/2026 sobre 7632a058, 5654 s, exit 0, DENTRO do staging (VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202), sexta tentativa (01: defeito real numa prova de PDF + duas falhas por carga; 02 e 03: banco estourando timeouts com a VPS de 2 núcleos em thrash por outras sessões; 04: defeito real numa prova de acervo; 05: duas provas shell herdadas truncadas por carga). replicability medido pela primeira vez: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 (ADR-029). READY (staging) com os campos de §8.4 = marco técnico do piloto; não é aceite do proprietário (owner_validated em branco)."
+verify_summary_last_context: "f07-gate-07 aprovado em 13/09/2026 sobre d7543c14, 6196 s, exit 0, DENTRO do staging (VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202); bloco idêntico ao f07-gate-06 (13/09, 5654 s, sobre 7632a058), rodado de novo porque a ADR-029 §5 tirou next-env.d.ts do snapshot de inputs (achado do from-scratch). Sete tentativas ao todo: 01 defeito real numa prova de PDF + duas falhas por carga; 02 e 03 banco estourando timeouts com a VPS de 2 núcleos em thrash por outras sessões; 04 defeito real numa prova de acervo; 05 duas provas shell herdadas truncadas por carga; 06 e 07 READY. replicability medido: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 (ADR-029). READY (staging) com os campos de §8.4 = marco técnico do piloto; não é aceite do proprietário (owner_validated em branco)."
 verify_summary_last: |
   VERIFY SUMMARY
   scope=phase phase=F07 current_phase=F07 environment=staging
@@ -40,7 +40,7 @@ smoke: steps=6 pass=6/6 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 log
 p95_ms: endpoints=3/3 health=25 contacts=409 conversations=623 samples=20 url=http://127.0.0.1:3200
 staging: compose=crm-staging services_running=15/15 memory_mib=1457 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off
 demo3: created=1 smoke=pass=6/6 e2e[demo3]=41/41 specs=10/10 removed=1 tenants=2   # F07-T03: scripts/verify/tenant-efemero.sh demo3 (13/09 06:57Z); smoke: customers[demo3]=1/1 products[demo3]=2/2 webhook_accepted=1/1 reminder_listed=1/1
-from-scratch: pending — T04 em execução sobre o commit que contém este arquivo (a tentativa 1, sobre 7632a058, parou em unit 8491/8492: o README já apontava para FINAL-VALIDATION.md e o arquivo ainda não estava commitado — o clone prova só o que está no commit); a linha final entra no commit de fechamento
+from-scratch: steps=7 pass=7/7 verify_exit=0 status="READY (F07)" clone=~/projetos/.from-scratch-mPYH commit=d7543c14   # F07-T04, tentativa 4 (13/09 11:22Z→13:04Z): clone 1 s · install 6 s · sandbox 43 s · env 3 s · seeds 5 s (deka 10, demo2 52, rerun 0/0) · verify 6033 s no clone (unit 8492/8492 integration 155/155 db 1651/1651 e2e[deka]=41/41 e2e[demo2]=41/41 mutantes 56/56 inputs 3529/3529) · down 3 s; clone removido
 ---
 
 # BUILD-STATE
@@ -48,16 +48,18 @@ from-scratch: pending — T04 em execução sobre o commit que contém este arqu
 ## Estado vigente — F07 concluída em 13/09/2026 (READY (staging) com os campos de §8.4); marco técnico do piloto; F08+ aguarda o proprietário (D50 c)
 
 `./scripts/verify.sh` com `VERIFY_ENVIRONMENT=staging` saiu 0 com
-`STATUS: READY (staging)` sobre `7632a058`, em 5654 s (94,2 min), com zero
+`STATUS: READY (staging)` sobre `d7543c14` (gate f07-gate-07, 6196 s; o mesmo
+bloco saíra no f07-gate-06 sobre `7632a058`, 5654 s — a diferença entre os dois
+commits é a ADR-029 §5, que tira `next-env.d.ts` do snapshot de inputs), com zero
 violações: unit 8492/8492, integração 155/155, banco 1651/1651, navegador
-41/41 em dez specs **duas vezes** — `E2E_TENANT=deka` (946 s) e `E2E_TENANT=demo2`
-(877 s) na mesma árvore, sem commit entre elas, contra o Supabase do staging —
+41/41 em dez specs **duas vezes** — `E2E_TENANT=deka` (1108 s) e `E2E_TENANT=demo2`
+(1138 s) na mesma árvore, sem commit entre elas, contra o Supabase do staging —
 mutantes 56/56, nenhum teste apagado, pulado ou pendente. O campo
 `replicability` foi medido pela primeira vez como §8.3 pede:
 `e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=41/41
 demo2=41/41 specs=10/10 org_a=seed-replica)` — a árvore de `src/` tem o mesmo
-sha antes da primeira e depois da segunda execução (`c527a699…`). Os 3.530
-arquivos de entrada conservaram o SHA-256. Fora do bloco: `restore: tables=179
+sha antes da primeira e depois da segunda execução (`c527a699…`). Os 3.529
+arquivos de entrada conservaram o SHA-256 (`65f0bfe6…`). Fora do bloco: `restore: tables=179
 rows_diff=0` (banco vazio criado para o teste, D36), `smoke: steps=6 pass=6/6`
 e `p95_ms: endpoints=3/3` contra o container do staging, `demo3: created=1
 smoke=pass=6/6 e2e[demo3]=41/41 removed=1 tenants=2` (T03) e `from-scratch:
@@ -65,7 +67,8 @@ steps=7 pass=7/7 verify_exit=0` (T04, clone novo + sandbox novo + seeds +
 `verify.sh` → `READY (F07)`). [Evidência F07](docs/migration/evidence/construction-f07-20260913.txt);
 [FINAL-VALIDATION](FINAL-VALIDATION.md) com as oito seções de §8.7.
 
-Sexta tentativa, nenhuma reclassificada: a 01 achou um defeito real numa
+Sétima tentativa (a sexta já era READY; a sétima revalidou o commit final),
+nenhuma reclassificada: a 01 achou um defeito real numa
 prova (o pdf.js parte "779c2395" em "7 79c2395" e a spec do PDF diário
 comparava com espaço exato — consertada) e duas falhas por carga; a 02 e a 03
 reprovaram no banco por timeouts com a VPS de 2 núcleos em thrash (load
@@ -73,9 +76,11 @@ average 100–300, swap cheio, builds/instalações/Playwright de outras sessõe
 a 04 achou o segundo defeito real de replicabilidade (a prova de acervo exigia
 o outro tenant VAZIO; com A vinda do seed do demo2 ele tem o "FAQ do seed" —
 consertada tela contra banco); a 05 reprovou em duas provas shell herdadas do
-kit HostGator truncadas por carga (o próprio teste documenta o modo de falha).
-Entre a 03 e a 04 o proprietário reiniciou a VPS, que voltou com 4 núcleos e
-16 GB.
+kit HostGator truncadas por carga (o próprio teste documenta o modo de falha);
+a 06 saiu READY sobre `7632a058`; o from-scratch sobre esse commit achou que
+`next-env.d.ts` (gerado pelo `next build`) estava na lista de inputs e reprovava
+um clone limpo — a 07 revalidou o commit com o conserto (ADR-029 §5). Entre a
+03 e a 04 o proprietário reiniciou a VPS, que voltou com 4 núcleos e 16 GB.
 
 T01–T09 entregues (ordem impressa em §7.8): verify v1.5 (ADR-029) com F07 no
 gate e o navegador rodando uma vez por tenant do seed — a organização A de
@@ -408,7 +413,7 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 | F04 | Adaptar o motor de IA/RAG, Action Policy e nove ferramentas ao contrato CRM-OS | done(verify=2026-09-11 76c0b00b) |
 | F05 | Adaptar handoff e notificações; criar regra de lembrete PJ sobre infraestrutura existente | done(verify=2026-09-12 5aa5de54) — T01–T10 concluídas; pausada antes de F06 (D50 c) |
 | F06 | Deploy de staging, mocks, segurança/observabilidade e smoke | done(verify=2026-09-12 270852a6) — READY (staging) dentro do staging; T01–T09 concluídas; pausada antes de F07 (D50 c) |
-| F07 | Validação técnica do piloto, replicabilidade deka/demo2 e abertura de BLOCKER-PROD | done(verify=2026-09-13 7632a058) — READY (staging) com os campos de §8.4; T01–T09 concluídas; BLOCKER-PROD aberto; F08+ aguarda o proprietário (D50 c) |
+| F07 | Validação técnica do piloto, replicabilidade deka/demo2 e abertura de BLOCKER-PROD | done(verify=2026-09-13 d7543c14) — READY (staging) com os campos de §8.4; T01–T09 concluídas; BLOCKER-PROD aberto; F08+ aguarda o proprietário (D50 c) |
 | F08 | Serviços reais e produção inicial: WAHA/IA, e-mail, domínio, orçamento, backup/retorno e onboarding configurável | pending |
 | F09 | Piloto Deka acompanhado, com baseline/metas, pedidos, separação, tempo e qualidade/custo da IA medidos | pending |
 | F10 | Segunda empresa real operando por configuração, com preço aceito; gate da expansão comercial | pending |

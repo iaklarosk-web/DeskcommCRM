@@ -6,8 +6,8 @@ no staging desta VPS (D50, ADR-027/028). O agente não escreve "projeto
 concluído": escreve o bloco, as oito seções e a lista do que NÃO foi verificado;
 o proprietário decide o resto (D26). Histórico por fase: [BUILD-STATE.md](BUILD-STATE.md).
 
-- Código validado: `7632a058cac7a8f06a8211d5c31b429ba9eda95d` (branch `feat/F03-conversation-inbox`).
-- Gate: `f07-gate-06`, `2026-09-13 05:22Z → 06:56Z (02:22 → 03:56 de Brasília)`, `5654` s, exit 0, dentro do staging (`environment=staging`).
+- Código validado: `d7543c1463242b0fdc0b9fd5f8b0722ed9cb4532` (branch `feat/F03-conversation-inbox`); o mesmo bloco saiu antes sobre `7632a058` (gate 06) — a diferença é a ADR-029 §5.
+- Gate: `f07-gate-07`, `2026-09-13 09:27Z → 11:10Z (06:27 → 08:10 de Brasília)`, `6196` s, exit 0, dentro do staging (`environment=staging`); inputs 3529/3529 com SHA-256 igual.
 - Ambiente: `compose.staging.yml`, projeto `crm-staging`, 15 serviços, Supabase local (56421/56422), app do gate em 3202, acesso só por loopback e Tailscale.
 
 ## 1. O que foi reutilizado, adaptado, refeito e criado do Deskcomm
@@ -55,8 +55,8 @@ sem correspondente na Fase 1.
 
 Bloco colado na íntegra, rodado DENTRO do staging (ADR-028 §2: navegador
 contra o Supabase do staging, unit/db/integration no Postgres efêmero), sobre
-`7632a058cac7a8f06a8211d5c31b429ba9eda95d`, em `2026-09-13 05:22Z → 06:56Z (02:22 → 03:56 de Brasília)`, exit `0`, `5654` s. Log em
-`.verify-logs/f07-gate-06/` (não versionado); evidência versionada em
+`d7543c1463242b0fdc0b9fd5f8b0722ed9cb4532`, em `2026-09-13 09:27Z → 11:10Z (06:27 → 08:10 de Brasília)`, exit `0`, `6196` s. Log em
+`.verify-logs/f07-gate-07/` (não versionado; o gate 06, idêntico, em `.verify-logs/f07-gate-06/`); evidência versionada em
 [docs/migration/evidence/construction-f07-20260913.txt](docs/migration/evidence/construction-f07-20260913.txt).
 
 ```text
@@ -91,7 +91,7 @@ restore: tables=179 tables_restored=179 rows=4027 rows_diff=0 dump=staging-20260
 smoke: steps=6 pass=6/6 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 tenants=deka,demo2
 p95_ms: endpoints=3/3 health=25 contacts=409 conversations=623 samples=20 url=http://127.0.0.1:3200
 demo3: created=1 smoke=pass=6/6 e2e[demo3]=41/41 specs=10/10 removed=1 tenants=2
-from-scratch: pending — T04 em execução sobre o commit que contém este arquivo (a tentativa 1, sobre 7632a058, parou em unit 8491/8492: o README já apontava para FINAL-VALIDATION.md e o arquivo ainda não estava commitado — o clone prova só o que está no commit); a linha final entra no commit de fechamento
+from-scratch: steps=7 pass=7/7 verify_exit=0 status="READY (F07)" clone=~/projetos/.from-scratch-mPYH commit=d7543c14
 ```
 
 Link do run de CI: o workflow `.github/workflows/verify.yml` (F06-T08) roda o
@@ -214,7 +214,7 @@ Executado na F07-T03 com o tenant efêmero `demo3` (linha em §2:
 ## 7. Como rodar tudo do zero
 
 Executado na F07-T04 por `scripts/from-scratch.sh` (linha em §2:
-a linha `from-scratch:` de §2). Os sete passos, na ordem:
+a linha `from-scratch:` de §2: `steps=7 pass=7/7 verify_exit=0 status="READY (F07)" commit=d7543c14` — quarta tentativa (a 1ª parou porque o README apontava para este relatório ainda não commitado; a 2ª ficou verde em tudo e reprovou só pelo `next-env.d.ts` gerado pelo build, ADR-029 §5; a 3ª estourou um `waitForResponse` de 30 s por rodar em paralelo ao gate 07)). Os sete passos, na ordem:
 
 1. `git clone --branch feat/F03-conversation-inbox <origem> <dir>` — o commit, não a árvore de trabalho.
 2. `pnpm install --frozen-lockfile` (Node ≥ 22, pnpm 9.15.9).
