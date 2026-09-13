@@ -1051,6 +1051,8 @@ test("Radar recorta demandas pela RLS real, além do pool frio, e preserva gest�
   await login(page, home.email);
   await page.goto(`/admin/tenants/${f.org}`);
   await page.getByRole("button", { name: /Acompanhar/ }).click();
+  // F11-T02 (ADR-030 §4): motivo obrigatório; só leitura sempre.
+  await page.getByTestId("suporte-motivo").fill("Spec herdada do radar (E2E), leitura");
   await page.getByRole("button", { name: "Confirmar e entrar" }).click();
   await page.waitForURL("**/app/inbox");
   await page.goto("/app/radar");
@@ -1060,7 +1062,7 @@ test("Radar recorta demandas pela RLS real, além do pool frio, e preserva gest�
   await page.waitForURL("**/app/inbox");
   await page.goto(`/admin/tenants/${f.org}`);
   await page.getByRole("button", { name: /Acompanhar/ }).click();
-  await page.getByLabel("Somente leitura", { exact: true }).check();
+  await page.getByTestId("suporte-motivo").fill("Spec herdada do radar (E2E), leitura de novo");
   await page.getByRole("button", { name: "Confirmar e entrar" }).click();
   await page.waitForURL("**/app/inbox");
   expect((await page.request.get("/api/v1/leads/at-risk")).status()).toBe(403);

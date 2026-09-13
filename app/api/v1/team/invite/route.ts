@@ -21,6 +21,10 @@ import { ApiError } from "@/lib/api/types";
 import { requireRole } from "@/lib/auth/require-role";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inviteMemberSchema, validateRequest } from "@/lib/schemas";
+import { audit } from "@/lib/audit";
+import { entitlement } from "@/src/entitlement";
+import { incrementCounter } from "@/src/obs/counters";
+import type { TenantCtx } from "@/src/tenant-context";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +64,30 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const sent: SentItem[] = [];
   const failed: FailedItem[] = [];
+
+  // F11-T03 (ADR-030 §3, D14): convite passa pelo Entitlement — `users.invite`
+  // é limitada pelo plano (membros ativos ≤ limite). Cada convite consome uma
+  // vaga do `remaining`; acima dele, 402 `limit_reached`, contado e auditado.
+  // Organização sem assinatura (herdada) continua sem limite.
+  const ctx: TenantCtx = { organization_id: activeOrg.orgId, user_id: authUser.id, role: activeOrg.role, source: "session" };
+  const vaga = await entitlement(ctx, "users.invite");
+  if (!vaga.allowed || (vaga.remaining !== null && vaga.remaining < input.invitations.length)) {
+    incrementCounter("entitlement_denied", { capability: "users.invite" });
+    void audit({
+      action: "authz.denied",
+      actorUserId: authUser.id,
+      organizationId: activeOrg.orgId,
+      resourceType: "team",
+      requestId,
+      metadata: { reason: vaga.allowed ? "limit_reached" : vaga.reason, remaining: vaga.remaining, requested: input.invitations.length },
+    });
+    return fail(
+      "limit_reached",
+      `O plano desta empresa não comporta ${input.invitations.length} convite(s): vagas restantes = ${vaga.remaining ?? 0}.`,
+      402,
+      { requestId, details: { reason: vaga.allowed ? "limit_reached" : vaga.reason, remaining: vaga.remaining } },
+    );
+  }
 
   const admin = isServiceRoleConfigured() ? createAdminClient() : null;
   const inviterName = authUser.full_name ?? authUser.email ?? "Um colega";

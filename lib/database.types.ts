@@ -7585,6 +7585,8 @@ export type Database = {
           id: string
           organization_id: string
           previous_organization_id: string | null
+          reason: string | null
+          scope: string
         }
         Insert: {
           access_mode: string
@@ -7596,6 +7598,8 @@ export type Database = {
           id?: string
           organization_id: string
           previous_organization_id?: string | null
+          reason?: string | null
+          scope?: string
         }
         Update: {
           access_mode?: string
@@ -7607,6 +7611,8 @@ export type Database = {
           id?: string
           organization_id?: string
           previous_organization_id?: string | null
+          reason?: string | null
+          scope?: string
         }
         Relationships: [
           {
@@ -9981,6 +9987,18 @@ export type Database = {
           p_mode?: string
           p_org: string
           p_previous: string
+          p_session: string
+          p_ttl?: number
+        }
+        Returns: string
+      }
+      fn_start_support_saas: {
+        Args: {
+          p_actor: string
+          p_org: string
+          p_previous: string | null
+          p_reason: string
+          p_scope: string
           p_session: string
           p_ttl?: number
         }

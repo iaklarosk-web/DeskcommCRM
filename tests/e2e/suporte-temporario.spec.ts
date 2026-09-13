@@ -14,7 +14,12 @@ async function login(page:Page,email:string){await page.goto("/login");await pag
 async function start(page:Page,org:string,readonly=false){
  await page.goto(`/admin/tenants/${org}`);
  await page.getByRole("button",{name:/Acompanhar/}).click();
- if(readonly)await page.getByLabel("Somente leitura",{exact:true}).check();
+ // F11-T02 (ADR-030 §4): motivo obrigatório; o acompanhamento nesta base é
+ // sempre só leitura — `readonly=false` já não abre modo de edição (ver
+ // VARREDURA §B16: as asserções de edição desta spec herdada ficaram para o
+ // proprietário decidir).
+ await page.getByTestId("suporte-motivo").fill("Spec herdada de suporte temporário (E2E)");
+ void readonly;
  await page.getByRole("button",{name:"Confirmar e entrar"}).click();
  await page.waitForURL("**/app/inbox");
 }

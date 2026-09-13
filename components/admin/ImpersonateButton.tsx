@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
+import { ESCOPOS_DO_SUPORTE, type EscopoDoSuporte } from "@/lib/impersonate/support";
 
 interface ImpersonateButtonProps {
   organizationId: string;
@@ -43,16 +44,25 @@ export function ImpersonateButton({
 }: ImpersonateButtonProps) {
   const t = useT();
   const transition = useOrganizationTransition();
-  const [readonly, setReadonly] = useState(false);
+  // F11-T02 (D39/D51, ADR-030 §4): o acompanhamento é SÓ LEITURA, com
+  // motivo obrigatório, escopo e vencimento escolhido (até 60 min).
+  const [reason, setReason] = useState("");
+  const [scope, setScope] = useState<EscopoDoSuporte>("all");
+  const [minutes, setMinutes] = useState(60);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const motivoValido = reason.trim().length >= 10 && reason.trim().length <= 500;
 
   async function handleConfirm() {
     flushSync(() => { setBusy(true); transition.begin("Carregando acompanhamento…"); });
     try {
       const res = await fetch(
         `/api/v1/admin/tenants/${organizationId}/impersonate`,
-        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_mode: readonly ? "support_readonly" : "full" }) },
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ access_mode: "support_readonly", reason: reason.trim(), scope, expires_in_minutes: minutes }),
+        },
       );
       const json: unknown = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -102,13 +112,40 @@ export function ImpersonateButton({
         <AlertDialogHeader>
           <AlertDialogTitle>{t("Iniciar acompanhamento?")}</AlertDialogTitle>
           <AlertDialogDescription>
-            {t("Acompanhe")} <span className="font-semibold text-foreground">{displayName}</span> {t("com sua identidade de administrador. As ações pelo aplicativo serão registradas em seu nome. O acesso dura até uma hora.")}
+            {t("Acompanhe")} <span className="font-semibold text-foreground">{displayName}</span> {t("com sua identidade de administrador, somente leitura. Motivo, escopo e vencimento ficam registrados na auditoria.")}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={readonly} onChange={e => setReadonly(e.target.checked)} />{t("Somente leitura")}</label>
+        <div className="flex flex-col gap-3 text-sm">
+          <label className="flex flex-col gap-1">
+            <span>{t("Motivo do acompanhamento")}</span>
+            <textarea
+              className="rounded-md border px-2 py-1"
+              aria-label={t("Motivo do acompanhamento")}
+              data-testid="suporte-motivo"
+              minLength={10}
+              maxLength={500}
+              rows={2}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span>{t("Escopo")}</span>
+            <select className="rounded-md border px-2 py-1" aria-label={t("Escopo")} data-testid="suporte-escopo" value={scope} onChange={(e) => setScope(e.target.value as EscopoDoSuporte)}>
+              {ESCOPOS_DO_SUPORTE.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span>{t("Vencimento (minutos, até 60)")}</span>
+            <input className="rounded-md border px-2 py-1" type="number" min={1} max={60} aria-label={t("Vencimento (minutos, até 60)")} data-testid="suporte-minutos" value={minutes} onChange={(e) => setMinutes(Math.min(60, Math.max(1, Number(e.target.value) || 1)))} />
+          </label>
+          <p className="text-xs text-muted-foreground">{t("Somente leitura")}: {t("nenhuma escrita é permitida durante o acompanhamento.")}</p>
+        </div>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={busy}>{t("Cancelar")}</AlertDialogCancel>
-          <AlertDialogAction onClick={handleConfirm} disabled={busy}>
+          <AlertDialogAction onClick={handleConfirm} disabled={busy || !motivoValido}>
             {busy ? t("Entrando…") : t("Confirmar e entrar")}
           </AlertDialogAction>
         </AlertDialogFooter>

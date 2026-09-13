@@ -8546,6 +8546,13 @@ export const DICIONARIO: Traducoes = {
   "A assinatura desta organização não permite esta operação. Regularize em /app/billing.": {"es":"La suscripción de esta organización no permite esta operación. Regularice en /app/billing."},
   "Plano da assinatura": {"es":"Plan de la suscripción"},
   "A empresa nasce com assinatura ativa neste plano (origem: operador).": {"es":"La empresa nace con suscripción activa en este plan (origen: operador)."},
+  // F11-T02 (ADR-030 §4): acompanhamento com motivo, escopo e vencimento.
+  "Vence às": {"es":"Vence a las"},
+  "com sua identidade de administrador, somente leitura. Motivo, escopo e vencimento ficam registrados na auditoria.": {"es":"con su identidad de administrador, solo lectura. Motivo, alcance y vencimiento quedan registrados en la auditoría."},
+  "Motivo do acompanhamento": {"es":"Motivo del acompañamiento"},
+  "Vencimento (minutos, até 60)": {"es":"Vencimiento (minutos, hasta 60)"},
+  "nenhuma escrita é permitida durante o acompanhamento.": {"es":"no se permite ninguna escritura durante el acompañamiento."},
+  "Este acompanhamento não alcança esta área. Escopo: ": {"es":"Este acompañamiento no alcanza esta área. Alcance: "},
 };
 
 /**

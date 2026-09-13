@@ -121,7 +121,8 @@ async function activeOrg(page: Page) {
 async function startReadonly(page: Page, fixture: SupportFixture) {
   await page.goto(`/admin/tenants/${fixture.orgB}`, { timeout: HTTP_TIMEOUT });
   await page.getByRole("button", { name: /Acompanhar/ }).click();
-  await page.getByLabel("Somente leitura", { exact: true }).check();
+  // F11-T02 (ADR-030 §4): o diálogo exige MOTIVO; só leitura é o único modo.
+  await page.getByTestId("suporte-motivo").fill("F02-T04 E2E: conferir leitura de pedidos e notas");
   // O app navega assim que recebe a resposta. Capture o corpo real antes de
   // entregá-lo ao navegador, que pode descartá-lo durante essa navegação.
   const endpoint = `/api/v1/admin/tenants/${fixture.orgB}/impersonate`;
@@ -189,6 +190,14 @@ async function endSupport(page: Page, fixture: SupportFixture, sessionId: string
     actor_user_id: fixture.manager.id,
     access_mode: "support_readonly",
   });
+  // F11-T02: motivo e escopo gravados na sessão (9024).
+  const comMotivo = await f02E2eSandbox()
+    .from("platform_support_sessions")
+    .select("reason, scope")
+    .eq("id", sessionId)
+    .single();
+  if (comMotivo.error) throw comMotivo.error;
+  expect(comMotivo.data).toEqual({ reason: "F02-T04 E2E: conferir leitura de pedidos e notas", scope: "all" });
   expect(ended.data.ended_at).toBeTruthy();
 }
 

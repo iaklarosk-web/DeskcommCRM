@@ -26,6 +26,7 @@ import { loadAuthUser, mfaEmDivida, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK, type ActiveOrg, type AuthUser, type Role } from "@/lib/auth/types";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
+import { rotaNoEscopo } from "@/lib/impersonate/support";
 import { escritaPermitida, type EstadoDeAcesso } from "@/src/billing/acesso";
 import { incrementCounter } from "@/src/obs/counters";
 import { registrarRequisicao, type DesfechoDaRequisicao } from "@/src/obs/log";
@@ -97,6 +98,25 @@ export async function requireRole(min: Role, opts: RequireRoleOpts = {}): Promis
   if (user.support && user.support.status !== "active") {
     logar("support_ended", user.support.organization_id ?? null, user.id, 403);
     return { ok: false, response: fail("forbidden", "O acompanhamento terminou. Saia para continuar.", 403, { requestId }) };
+  }
+  // F11-T02 (ADR-030 §4): o acompanhamento tem ESCOPO; rota fora dele é 403
+  // `support_scope`, contada. Vem antes do papel de propósito — o escopo é uma
+  // restrição da SESSÃO de suporte, não um papel na organização.
+  if (user.support && !rotaNoEscopo(user.support.scope, rota.path)) {
+    incrementCounter("support_scope_denied", { scope: user.support.scope });
+    void audit({
+      action: "authz.denied",
+      actorUserId: user.id,
+      organizationId: user.support.organization_id,
+      resourceType: resource ?? null,
+      requestId,
+      metadata: { reason: "support_scope", scope: user.support.scope, path: rota.path, support_session_id: user.support.id },
+    });
+    logar("support_scope", user.support.organization_id, user.id, 403);
+    return {
+      ok: false,
+      response: fail("support_scope", t("Este acompanhamento não alcança esta área. Escopo: ") + user.support.scope, 403, { requestId }),
+    };
   }
   let org: ActiveOrg | null;
   if (organizationId) {

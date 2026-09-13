@@ -11,6 +11,9 @@ export interface ImpersonatingInfo {
   tenantName: string;
   expiresAt: string;
   accessMode?: "full" | "support_readonly";
+  /** F11-T02 (D39): motivo e escopo do acompanhamento, visíveis no banner. */
+  reason?: string | null;
+  scope?: string;
 }
 export function notifySupportTransition() {
   localStorage.setItem("support-context-transition", String(Date.now()));
@@ -43,8 +46,13 @@ export function ImpersonateBanner({ impersonating, ended = false }: {
     }
   }
   return <div role="alert" className="sticky top-0 z-50 flex items-center justify-between gap-4 border-b border-amber-300 bg-amber-100 px-4 py-2 text-sm text-amber-950">
-    <span>{ended ? t("Acompanhamento encerrado") : t("Suporte à organização")} <strong>{impersonating.tenantName}</strong>
-      {!ended && (impersonating.accessMode === "support_readonly" ? ` — ${t("Somente leitura")}` : ` — ${t("Edição permitida")}`)}</span>
+    <span data-testid="suporte-banner" data-scope={impersonating.scope ?? ""} data-expires-at={impersonating.expiresAt}>
+      {ended ? t("Acompanhamento encerrado") : t("Suporte à organização")} <strong>{impersonating.tenantName}</strong>
+      {!ended && (impersonating.accessMode === "support_readonly" ? ` — ${t("Somente leitura")}` : ` — ${t("Edição permitida")}`)}
+      {!ended && impersonating.reason ? <> · {t("Motivo")}: <span data-testid="suporte-banner-motivo">{impersonating.reason}</span></> : null}
+      {!ended && impersonating.scope ? <> · {t("Escopo")}: <span data-testid="suporte-banner-escopo">{impersonating.scope}</span></> : null}
+      {!ended ? <> · {t("Vence às")} <span data-testid="suporte-banner-vencimento">{new Date(impersonating.expiresAt).toLocaleTimeString()}</span></> : null}
+    </span>
     <Button size="sm" variant="outline" onClick={handleEnd} disabled={busy}>{t("Sair do acompanhamento")}</Button>
   </div>;
 }

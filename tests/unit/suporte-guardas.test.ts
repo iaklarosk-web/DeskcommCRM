@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { supportWriteError, requireSupportWrite, type SupportContext } from "@/lib/impersonate/support";
 const { loadAuthUser } = vi.hoisted(()=>({loadAuthUser:vi.fn()}));
 vi.mock("@/lib/auth/server",()=>({loadAuthUser}));
-const support:SupportContext = {id:"f2200000-0000-4000-8000-000000000001",organization_id:"f2200000-0000-4000-8000-000000000002",actor_user_id:"f2200000-0000-4000-8000-000000000003",auth_session_id:"f2200000-0000-4000-8000-000000000004",previous_organization_id:null,expires_at:"2026-09-06T00:00:00Z",name:"B",locale:null,status:"active",access_mode:"support_readonly"};
+const support:SupportContext = {id:"f2200000-0000-4000-8000-000000000001",organization_id:"f2200000-0000-4000-8000-000000000002",actor_user_id:"f2200000-0000-4000-8000-000000000003",auth_session_id:"f2200000-0000-4000-8000-000000000004",previous_organization_id:null,expires_at:"2026-09-06T00:00:00Z",name:"B",locale:null,status:"active",access_mode:"support_readonly",reason:"Fixture de teste das guardas de suporte",scope:"all"};
 beforeEach(()=>vi.clearAllMocks());
 describe("cerca de efeito antes de service role",()=>{
  it("readonly vence identidade plataforma e membership física admin",async()=>{

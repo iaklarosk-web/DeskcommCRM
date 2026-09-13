@@ -132,6 +132,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const impersonating = user.support ? {
     tenantId: user.support.organization_id, tenantName: user.support.name,
     expiresAt: user.support.expires_at, accessMode: user.support.access_mode,
+    reason: user.support.reason, scope: user.support.scope,
   } : null;
 
   const enrolled = await isMfaEnrolled();

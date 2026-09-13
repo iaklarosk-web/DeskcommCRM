@@ -2,11 +2,18 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { fail } from "@/lib/api/wrappers";
 
+/** Escopos do acompanhamento (F11-T02, ADR-030 §4) — espelho do CHECK de 9024. */
+export const ESCOPOS_DO_SUPORTE = ["all", "inbox", "crm", "settings", "billing"] as const;
+export type EscopoDoSuporte = (typeof ESCOPOS_DO_SUPORTE)[number];
+
 export const supportSchema = z.object({
   id: z.string().uuid(), organization_id: z.string().uuid(), actor_user_id: z.string().uuid(),
   auth_session_id: z.string().uuid(), previous_organization_id: z.string().uuid().nullable(),
   expires_at: z.string(), name: z.string(), locale: z.string().nullable(),
   access_mode: z.enum(["full", "support_readonly"]), status: z.enum(["active", "expired", "revoked"]),
+  // F11-T02: motivo e escopo (9024). `reason` nulo só em sessão anterior à migration.
+  reason: z.string().nullable().optional().default(null),
+  scope: z.enum(ESCOPOS_DO_SUPORTE).optional().default("all"),
 });
 export type SupportContext = z.infer<typeof supportSchema>;
 
@@ -15,6 +22,26 @@ export async function readSupportContext(db: Awaited<ReturnType<typeof createCli
   const { data, error } = await db.rpc("fn_support_context");
   if (error) throw new Error("Não foi possível confirmar o acompanhamento administrativo.");
   return data === null ? null : supportSchema.parse(data);
+}
+
+/**
+ * Prefixos de rota que cada escopo alcança (ADR-030 §4). `all` alcança tudo
+ * (só leitura); rota fora do escopo é 403 `support_scope`. Rotas de sessão e
+ * de saída do acompanhamento ficam sempre abertas — a pessoa precisa conseguir
+ * sair.
+ */
+const ROTAS_POR_ESCOPO: Readonly<Record<Exclude<EscopoDoSuporte, "all">, readonly string[]>> = {
+  inbox: ["/api/v1/inbox/", "/api/v1/conversations/", "/api/v1/messages/", "/api/v1/realtime/"],
+  crm: ["/api/v1/contacts/", "/api/v1/contacts", "/api/v1/crm/", "/api/v1/catalog/", "/api/v1/companies/"],
+  settings: ["/api/v1/settings/", "/api/v1/team", "/api/v1/team/"],
+  billing: ["/api/v1/billing/"],
+};
+const SEMPRE_NO_ESCOPO = ["/api/v1/auth/", "/api/v1/admin/impersonate/end", "/api/v1/organizations/switch"];
+
+export function rotaNoEscopo(scope: EscopoDoSuporte, caminho: string | null): boolean {
+  if (scope === "all" || caminho === null) return true;
+  if (SEMPRE_NO_ESCOPO.some((p) => caminho.startsWith(p))) return true;
+  return ROTAS_POR_ESCOPO[scope].some((p) => caminho === p || caminho.startsWith(p));
 }
 
 export function supportWriteError(support: SupportContext | null | undefined, organizationId?: string): string | null {

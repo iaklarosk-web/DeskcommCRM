@@ -20,6 +20,8 @@ const support: NonNullable<AuthUser["support"]> = {
   id: "support", organization_id: "org", actor_user_id: "actor", auth_session_id: "session",
   previous_organization_id: null, expires_at: "2030-01-01T00:00:00Z", name: "Organização",
   locale: "pt-BR", access_mode: "support_readonly", status: "active",
+  // F11-T02 (9024): motivo e escopo fazem parte do contexto do suporte.
+  reason: "Fixture de teste do banner de conexão", scope: "all",
 };
 function view(role: Role, locale: "pt-BR" | "es", who = baseUser, caidas: ConexaoCaida[] = [{ id: "channel", apelido: "Vendas", status: "SCAN_QR_CODE" }]) {
   return <AuthProvider user={who} activeOrg={{ orgId: "org", name: "Organização", role }}>

@@ -158,6 +158,8 @@ describe("TenantContext", () => {
           locale: "pt-BR",
           access_mode,
           status,
+          reason: "Fixture de teste do TenantContext",
+          scope: "all",
         },
       });
       // O upstream pode resolver uma organização por suporte sem membership.
