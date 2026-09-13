@@ -69,12 +69,20 @@ deixa de ser um `insert` solto em `organizations` e passa a ser criada por
 **`scripts/create-tenant.sh`** — o mesmo caminho de §8.7 §6 — a partir de
 `docs/tenants/<slug>.seed.yaml`, com três diferenças mecânicas gravadas num
 YAML temporário fora da árvore: `tenant.slug` vira `<slug>-e2e-<sufixo>`
-(a organização é apagável ao fim, como hoje), `users` com sentinela `TODO-`
-saem (pendência não é valor) e os demais têm o e-mail sufixado, e
-`channel_accounts[].account_ref` ganha o sufixo (o índice único é global). O
-resto do seed — nome, fuso, marca, `settings`, `products`, `customers`, `faq`
-— entra como está, pelo loader. A organização **B** continua fictícia: é o
-outro lado da prova de isolamento, não um tenant.
+(a organização é apagável ao fim, como hoje), `users` saem (a spec traz os
+próprios humanos com senha pela API de auth; o seed não tem senha e o do deka
+só tem `TODO-`), e `channel_accounts[].account_ref` ganha o sufixo (o índice
+único é global). O resto do seed — nome, fuso, marca, `settings`, `products`,
+`customers`, `faq` — entra como está, pelo loader. A organização **B** continua
+fictícia: é o outro lado da prova de isolamento, não um tenant.
+
+Duas specs pressupunham organização vazia e reprovaram com A vinda do seed —
+o total do catálogo na paginação (`f02-crm-navigation`) e "recém-criada =
+IA desligada" (`f04-ai-settings`). As duas passaram a partir do estado que o
+banco tem (baseline lido antes de inserir; ida e volta a partir do valor
+inicial). Isso é conserto de replicabilidade, não afrouxamento: a asserção
+continua a mesma para a organização fictícia, e passa a valer para qualquer
+seed.
 
 Assim `e2e[deka]` e `e2e[demo2]` medem o que D32 quer: a mesma suíte, sem
 `if tenant ==`, sobre a configuração de cada tenant vinda só de
@@ -158,9 +166,11 @@ slugs pelo mesmo motivo.
   denominadores do smoke sobem de `2/2`/`3/3` para `3/3`/`4/4` e passam a ser
   seed + fixture, declarados.
 - `deka` e `demo2` do staging deixam de cair em `/onboarding`.
-- Mutantes novos: replicabilidade obrigatória na F07 e `src_diff_lines`
-  diferente de zero reprovando; loader sem os blocos do seed reprovando o
-  teste de integração.
+- Mutantes novos: 58 (loader volta a pular os blocos do seed → o teste de
+  integração fica vermelho) e 59 (`requiresReplicability` desligado → o caso
+  do gate fica vermelho). `mutants_killed` sobe de 54 para 56.
+- Usuários com e-mail `TODO-` deixam de virar `auth.users` (o staging tinha um
+  `TODO-DEKA`, apagado por `seed-users.sh`).
 - Produção continua atrás de D12/D13: nada aqui a autoriza.
 
 ## Data

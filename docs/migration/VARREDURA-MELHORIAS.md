@@ -237,6 +237,33 @@ criaram (`contacts`/`crm_companies`, `catalog_products`, acervo), com prova
 de contagem `seed=N banco=N`. Custo: baixo. Risco de não fazer: "criar um
 tenant novo" (F07-T03) entrega um tenant sem clientes nem produtos.
 
+### B13 — **CONSERTADO na F07-T03 (ADR-029 §3)**: o loader grava `products`/`customers`/`faq`
+`create-tenant.ts` passa a gravar os três blocos (`catalog_products`,
+`contacts`/`crm_companies`, acervo da organização) com id determinístico;
+itens com `TODO-` são contados e não viram linha; `products[].size` não tem
+coluna e é declarado (lacuna §5.21 × catálogo, do proprietário). O loader
+também grava `onboarded_at` no INSERT — sem isso o tenant semeado caía em
+`/onboarding` (achado da F07). Detalhe em ADR-029 §3.
+
+### B15. `up.sh` do staging não é re-executável depois do primeiro smoke
+Achado na F07-T03. O escritor de fixtures fictícias da F02
+(`scripts/f02-fixture-writer.ts`) confere cada linha BYTE A BYTE no rerun
+(`expectOne`: `updated_at = created_at`, `source_metadata = '{}'`). O smoke da
+F06 mandava a mensagem do webhook como o contato fictício "Alfa": o pipeline
+gravou `waha_chat_id` em `source_metadata` e `trg_contacts_updated_at` moveu
+`updated_at`. Resultado: `create-tenant.sh demo2 --fictional-fixtures` reprova
+com `fixture_existing_row_mismatch` neste staging, e `up.sh` (que reaplica
+seeds) para aí. A F07 desviou: o remetente do smoke passou a ser o cliente do
+SEED (`seed-users.sh` desfaz o telefone e o metadado do Alfa, mas o gatilho
+impede repor `updated_at`), e o loader do demo2 foi rodado SEM `--fictional-fixtures`
+(rows_created=6, depois 0). Instalação nova (from-scratch) não é afetada: a
+prova de integração cobre seed + fixtures + rerun.
+**Proposta:** o escritor tolerar, no rerun, linha já existente com o MESMO id
+e `organization_id` (idempotência por id, como o loader faz), reservando a
+comparação byte a byte para a primeira gravação; ou `up.sh --no-seed` como
+padrão em staging já semeado. Custo: baixo. Decisão do proprietário: muda o
+contrato de "fixture imutável" da F02-T07.
+
 ### B14. Reserva de swap sem persistência
 `/swapfile` (2 GB) existe, foi reativado na F02 e de novo na F06
 (`swapon /swapfile`), e não está no `/etc/fstab`: some a cada reboot. Durante
