@@ -1,18 +1,21 @@
 /**
  * entitlement / recordUsage / withEntitlement (§5.3, D14).
  *
- * Fase 1: todo tenant pode tudo — {allowed: true, remaining: null,
- * reason: "phase1_unlimited"} para as 6 capabilities. O módulo existe MESMO
- * ASSIM para que a pergunta tenha um dono: a Fase 2 troca o resolver por
- * planos (PLAN_A/B/C) sem mudar nenhuma assinatura. Esconde planos, flags,
- * limites e saldo — `grep -rniE "plan|quota|credit|allowance" src/` fora
- * daqui = 0 (invariante 1).
+ * Fase 1 respondia sempre sim (`phase1_unlimited`). Desde a F12-T02 (ADR-030
+ * §3) o resolver PADRÃO é o por plano (`./plano.ts`): lê a assinatura, o plano
+ * e o uso do período e devolve `{allowed, remaining, reason}` com `reason`
+ * enum. A ASSINATURA das funções não mudou — só passou a ser assíncrona, que
+ * `withEntitlement` já era. O seam `deps.resolver` continua: os testes o usam
+ * para provar o caminho negado sem banco (o dublê de saldo zero do `ai:eval`).
+ * Esconde planos, flags, limites e saldo — `grep -rniE "plan|quota|credit|allowance"
+ * src/` fora daqui e de `src/billing/` = 0 (invariante 1, ampliado em ADR-030).
  */
 import { incrementCounter } from "@/src/obs/counters";
 import type { ServicePool } from "@/src/tenant-context/db";
 import { withTenant, type TenantCtx } from "@/src/tenant-context";
 
 import { CAPABILITIES, type Capability, type EntitlementResposta } from "./capability";
+import { resolverPorPlano } from "./plano";
 import { estimatedCostCents } from "./pricing";
 
 export class EntitlementDenied extends Error {
@@ -25,25 +28,27 @@ export class EntitlementDenied extends Error {
   }
 }
 
+export type Resolver = (
+  ctx: TenantCtx,
+  capability: Capability,
+  deps: { pool?: ServicePool },
+) => EntitlementResposta | Promise<EntitlementResposta>;
+
 interface Deps {
   pool?: ServicePool;
-  /** Seam da Fase 2 (planos); os testes o usam para provar o caminho negado. */
-  resolver?: (ctx: TenantCtx, capability: Capability) => EntitlementResposta;
+  /** Seam de resolver; os testes o usam para provar o caminho negado sem banco. */
+  resolver?: Resolver;
 }
 
-function resolverFase1(): EntitlementResposta {
-  return { allowed: true, remaining: null, reason: "phase1_unlimited" };
-}
-
-export function entitlement(
+export async function entitlement(
   ctx: TenantCtx,
   capability: Capability,
   deps: Deps = {},
-): EntitlementResposta {
+): Promise<EntitlementResposta> {
   if (!CAPABILITIES.includes(capability)) {
     throw new Error(`capability desconhecida: ${String(capability)}`);
   }
-  return (deps.resolver ?? resolverFase1)(ctx, capability);
+  return (deps.resolver ?? resolverPorPlano)(ctx, capability, { pool: deps.pool });
 }
 
 export interface Usage {
@@ -95,7 +100,7 @@ export async function withEntitlement<T>(
   fn: () => Promise<{ result: T; usage?: Usage | Usage[] }>,
   deps: Deps = {},
 ): Promise<T> {
-  const resposta = entitlement(ctx, capability, deps);
+  const resposta = await entitlement(ctx, capability, deps);
   if (!resposta.allowed) {
     incrementCounter("entitlement_denied", { capability });
     throw new EntitlementDenied(capability, resposta.reason);

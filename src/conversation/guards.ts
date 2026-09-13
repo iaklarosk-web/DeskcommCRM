@@ -72,7 +72,11 @@ export interface GuardDeps {
    * `ai_available` que a Fase 1 não consegue observar: com `allowed=false` a
    * guarda tem de ser falsa mesmo com `ai.enabled` gravado como `true`.
    */
-  entitlementResolver?: (ctx: TenantCtx, capability: Capability) => EntitlementResposta;
+  entitlementResolver?: (
+    ctx: TenantCtx,
+    capability: Capability,
+    deps?: { pool?: ServicePool },
+  ) => EntitlementResposta | Promise<EntitlementResposta>;
 }
 
 function comoDate(valor: Date | string | null): Date | null {
@@ -105,7 +109,10 @@ export function resolverDeGuardasF03(deps: GuardDeps = {}): GuardResolver {
           pool: deps.pool,
         });
         if (!present || value !== true) return false;
-        return (deps.entitlementResolver ?? entitlement)(ctx, "ai.reply").allowed;
+        // F12-T02: o resolver por plano lê a assinatura — a negação é o que
+        // §5.6 previu ("plano negar `ai.reply` → `waiting_human`").
+        const resposta = await (deps.entitlementResolver ?? entitlement)(ctx, "ai.reply", { pool: deps.pool });
+        return resposta.allowed;
       }
 
       case "ai_enabled": {

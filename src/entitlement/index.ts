@@ -8,8 +8,10 @@ export {
   EntitlementDenied,
   recordUsage,
   withEntitlement,
+  type Resolver,
   type Usage,
 } from "./entitlement";
+export { resolverPorPlano, type MotivoDoEntitlement } from "./plano";
 export { estimatedCostCents, modeloTemPreco } from "./pricing";
 export {
   mesAnteriorA,

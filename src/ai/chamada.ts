@@ -33,7 +33,7 @@ import {
 } from "@/lib/agent-engine/edge/llm/run-model-call";
 import type { ProviderRegistry } from "@/lib/agent-engine/edge/llm/providers";
 import type { Logger } from "@/lib/agent-engine/obs/logger";
-import { withEntitlement, type Capability, type EntitlementResposta } from "@/src/entitlement";
+import { withEntitlement, type Capability, type Resolver } from "@/src/entitlement";
 import type { TenantCtx } from "@/src/tenant-context";
 
 export interface EntradaDaChamada {
@@ -55,8 +55,8 @@ export interface DepsDaChamada {
   cfg: LlmEdgeConfig;
   registry?: ProviderRegistry;
   log?: Logger;
-  /** Seam da Fase 2 (D14). A prova de D36 injeta o dublê que nega. */
-  resolver?: (ctx: TenantCtx, capability: Capability) => EntitlementResposta;
+  /** Seam do resolver (D14). A prova de D36 injeta o dublê que nega. */
+  resolver?: Resolver;
 }
 
 export type SaidaDaChamada = Awaited<ReturnType<typeof runModelCall>>;
