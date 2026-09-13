@@ -12,7 +12,7 @@
  * Mais: p95_ms de GET /api/v1/health, /api/v1/contacts, /api/v1/conversations (N amostras cada).
  *
  * Saída (a linha que o BUILD-STATE cita):
- *   smoke: steps=6 pass=6/6 customers[deka]=0 customers[demo2]=1 inbox_new=1 logins=2/2 ...
+ *   smoke: steps=7 pass=7/7 customers[deka]=0 customers[demo2]=1 inbox_new=1 logins=2/2 ... owner_login=1/1 subscriptions[deka]=active/full ...
  *   p95_ms: endpoints=3/3 health=… contacts=… conversations=… samples=20
  *
  * Só chama o que o mock devolve: nada sai para pessoa (WHATSAPP_MODE=mock).
@@ -222,6 +222,39 @@ try {
 medidas.reminder_listed = `${lembretes}/1`;
 passo("lembrete listado", lembretes === 1, `reminder_listed=${lembretes}/1 (orders.recurring_reminder ligado no ${ALVO})`);
 
+// ─── 7. cobrança (F12-T08, ADR-031 §3) ──────────────────────────────────────
+// O dono fictício do staging loga e lê a conciliação; cada tenant tem uma
+// assinatura que permite uso (`GET /api/v1/billing/subscription` pelo próprio
+// tenant_admin); nenhuma organização do staging ficou sem assinatura (D38).
+const cookieDoDono = await login("owner@platform.staging.test");
+const donoLogou = cookieDoDono ? 1 : 0;
+let assinaturasOk = 0;
+for (const slug of SLUGS) {
+  const r = cookies[slug] ? await api("/api/v1/billing/subscription", cookies[slug]) : { status: 0, corpo: null };
+  const acesso = r.corpo?.data?.access?.mode ?? "fail";
+  const status = r.corpo?.data?.subscription?.status ?? "none";
+  medidas[`subscriptions[${slug}]`] = `${status}/${acesso}`;
+  if (r.status === 200 && acesso === "full") assinaturasOk += 1;
+}
+let semAssinatura = -1;
+let organizacoes = -1;
+try {
+  const [sem, total] = execFileSync("psql", [DB_URL, "-Atc",
+    `select (select count(*) from public.organizations o where not exists (select 1 from public.subscriptions s where s.organization_id = o.id)) || '/' || (select count(*) from public.organizations)`],
+    { encoding: "utf8" }).trim().split("/").map(Number);
+  semAssinatura = sem;
+  organizacoes = total;
+} catch {
+  semAssinatura = -1;
+}
+medidas.owner_login = `${donoLogou}/1`;
+medidas.orgs_without_subscription = `${semAssinatura}/${organizacoes}`;
+passo(
+  "cobrança: dono loga, assinaturas permitem uso, ninguém sem assinatura",
+  donoLogou === 1 && assinaturasOk === SLUGS.length && semAssinatura === 0,
+  `owner_login=${medidas.owner_login} ${SLUGS.map((s) => `subscriptions[${s}]=${medidas[`subscriptions[${s}]`]}`).join(" ")} orgs_without_subscription=${medidas.orgs_without_subscription}`,
+);
+
 // ─── p95 (F06-T09): medição sem otimizar ────────────────────────────────────
 const alvos = [
   ["health", "/api/v1/health", null],
@@ -241,7 +274,7 @@ const medidos = Object.values(p95s).filter((v) => v !== null).length;
 
 const passou = passos.filter((p) => p.ok).length;
 const porTenant = (prefixo) => SLUGS.map((slug) => `${prefixo}[${slug}]=${medidas[`${prefixo}[${slug}]`]}`).join(" ");
-const linha = `smoke: steps=${passos.length} pass=${passou}/${passos.length} ${porTenant("customers")} inbox_new=${medidas.inbox_new} logins=${medidas.logins} ${porTenant("products")} webhook_accepted=${medidas.webhook_accepted} reminder_listed=${medidas.reminder_listed} tenants=${SLUGS.join(",")}`;
+const linha = `smoke: steps=${passos.length} pass=${passou}/${passos.length} ${porTenant("customers")} inbox_new=${medidas.inbox_new} logins=${medidas.logins} ${porTenant("products")} webhook_accepted=${medidas.webhook_accepted} reminder_listed=${medidas.reminder_listed} owner_login=${medidas.owner_login} ${porTenant("subscriptions")} orgs_without_subscription=${medidas.orgs_without_subscription} tenants=${SLUGS.join(",")}`;
 const linhaP95 = `p95_ms: endpoints=${medidos}/3 health=${p95s.health ?? "fail"} contacts=${p95s.contacts ?? "fail"} conversations=${p95s.conversations ?? "fail"} samples=${AMOSTRAS} url=${URL_APP}`;
 process.stdout.write(`${linha}\n${linhaP95}\n`);
 process.exit(passou === passos.length && medidos === 3 ? 0 : 1);

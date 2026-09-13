@@ -136,7 +136,7 @@ bash scripts/smoke.sh http://127.0.0.1:3200
 Seis passos, cada um comparando NÚMERO (não HTTP 200): login por tenant
 (2/2), clientes = seed, produtos = seed, POST de webhook mock, mensagem no
 inbox, lembrete listado; mais `p95_ms` de 3 endpoints. A linha
-`smoke: steps=6 pass=6/6 …` vai para o BUILD-STATE.
+`smoke: steps=7 pass=7/7 …` vai para o BUILD-STATE.
 
 ## O gate dentro do staging (ADR-028 §2)
 

@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
-import { ESCOPOS_DO_SUPORTE, type EscopoDoSuporte } from "@/lib/impersonate/support";
+import { ESCOPOS_DO_SUPORTE, type EscopoDoSuporte } from "@/lib/impersonate/escopo";
 
 interface ImpersonateButtonProps {
   organizationId: string;

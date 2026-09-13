@@ -26,7 +26,7 @@ import { loadAuthUser, mfaEmDivida, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK, type ActiveOrg, type AuthUser, type Role } from "@/lib/auth/types";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
-import { rotaNoEscopo } from "@/lib/impersonate/support";
+import { rotaNoEscopo } from "@/lib/impersonate/escopo";
 import { escritaPermitida, type EstadoDeAcesso } from "@/src/billing/acesso";
 import { incrementCounter } from "@/src/obs/counters";
 import { registrarRequisicao, type DesfechoDaRequisicao } from "@/src/obs/log";
