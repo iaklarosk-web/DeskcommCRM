@@ -7,6 +7,7 @@ import { useT } from "@/hooks/i18n/useT";
 
 import { Button } from "@/components/ui/button";
 import { skipWhatsapp, markWhatsappConfigured } from "@/app/actions/onboarding/skipWhatsapp";
+import { conectarCanalMock } from "@/app/actions/onboarding/conectarCanalMock";
 import { CanalOficialClient } from "@/components/connections/CanalOficialClient";
 import { CanalParceiroClient } from "@/components/connections/CanalParceiroClient";
 
@@ -20,6 +21,8 @@ interface Props {
    * isso é ANTES de a pessoa buscar três credenciais no painel, não depois.
    */
   oficialPodeReceber: boolean;
+  /** F11-T05: `WHATSAPP_MODE=mock` — oferece a conexão de teste. */
+  modoMock?: boolean;
 }
 
 /**
@@ -215,10 +218,47 @@ function Saidas({ status, sessionName }: { status: Status; sessionName: string }
   );
 }
 
+/**
+ * F11-T05 (D12, ADR-030 §1): em `WHATSAPP_MODE=mock` o passo pode ser
+ * CONCLUÍDO sem WAHA — a organização ganha a sessão e a conta mock que o
+ * adapter mock atende (ADR-017), e o wizard segue. Só aparece no modo mock; a
+ * action recusa fora dele.
+ */
+function ConexaoDeTeste() {
+  const t = useT();
+  const [pending, startTransition] = useTransition();
+  return (
+    <div className="rounded-md border border-dashed p-3 text-sm" data-testid="whatsapp-modo-mock">
+      <p className="text-muted-foreground">
+        {t("Esta instalação está em modo de teste: o WhatsApp é simulado. Conecte o canal de teste para concluir o passo.")}
+      </p>
+      <Button
+        type="button"
+        className="mt-2"
+        disabled={pending}
+        data-testid="whatsapp-conectar-mock"
+        onClick={() =>
+          startTransition(async () => {
+            try {
+              await conectarCanalMock();
+            } catch (err) {
+              if (isRedirectError(err)) throw err;
+              toast.error(`${t("Falha ao conectar o canal de teste:")} ${String(err)}`);
+            }
+          })
+        }
+      >
+        {pending ? t("Conectando…") : t("Conectar canal de teste")}
+      </Button>
+    </div>
+  );
+}
+
 export function ConnectWhatsappClient({
   wahaConfigured,
   sessionName,
   oficialPodeReceber,
+  modoMock = false,
 }: Props) {
   const t = useT();
   const [pending, startTransition] = useTransition();
@@ -382,6 +422,7 @@ export function ConnectWhatsappClient({
             />
           </div>
         </fieldset>
+        {modoMock ? <ConexaoDeTeste /> : null}
         <Saidas status={status} sessionName={info.session ?? ""} />
       </div>
     );

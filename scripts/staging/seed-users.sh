@@ -39,6 +39,24 @@ select coalesce((select id from u), (select id from auth.users where email = 'ad
   from org
 on conflict do nothing;
 
+-- F11-T01 (ADR-030 §1): o DONO da plataforma no staging — `platform_admin`
+-- FICTÍCIO `owner@platform.staging.test`, sem MFA, com a senha do smoke. Não é
+-- o item 7 de D12 (o `platform_admin` de produção é do proprietário); existe
+-- para o painel /admin, o acompanhamento e a cobrança serem percorridos no
+-- staging. Idempotente: segunda execução não cria nada.
+with u as (
+  insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, raw_app_meta_data)
+  select gen_random_uuid(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+         'owner@platform.staging.test', '{"full_name":"Dono da plataforma (staging)"}'::jsonb, '{"provider":"email","providers":["email"]}'::jsonb
+  where not exists (select 1 from auth.users where email = 'owner@platform.staging.test')
+  returning id
+)
+insert into public.platform_admins (user_id, granted_by, scope, mfa_required, reason)
+select coalesce((select id from u), (select id from auth.users where email = 'owner@platform.staging.test')),
+       coalesce((select id from u), (select id from auth.users where email = 'owner@platform.staging.test')),
+       'full', false, 'F11-T01: dono fictício do staging (não é o platform_admin de produção, D12 item 7)'
+where not exists (select 1 from public.platform_admins p join auth.users a on a.id = p.user_id where a.email = 'owner@platform.staging.test');
+
 -- O seed é o onboarding de um tenant provisionado (ADR-029 §3): tenants
 -- criados pelo loader antigo ficaram com `onboarded_at` nulo e caíam em
 -- /onboarding no navegador (o smoke, só por API, não via).
@@ -69,7 +87,8 @@ update auth.users u
        updated_at = now()
  where u.id in (select uo.user_id from public.user_organizations uo
                   join public.organizations o on o.id = uo.organization_id
-                 where o.slug in (:slugs));
+                 where o.slug in (:slugs))
+    or u.email = 'owner@platform.staging.test';
 
 select count(*) as usuarios_com_senha from auth.users u
  where u.id in (select uo.user_id from public.user_organizations uo

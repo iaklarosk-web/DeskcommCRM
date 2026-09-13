@@ -15,6 +15,7 @@
 #   CPF_ENCRYPTION_KEY, WAHA_BYO_ENCRYPTION_KEY, AI_CRED_AES_KEY   (32 bytes, base64)
 #   REALTIME_DB_ENC_KEY (16 chars), REALTIME_SECRET_KEY_BASE (64 hex)
 #   STAGING_SMOKE_PASSWORD    senha dos usuários fictícios que o smoke usa para logar
+#   BILLING_MOCK_WEBHOOK_SECRET HMAC do webhook do gateway mock (F12)
 #   WHATSAPP_MOCK_HMAC_SECRET assinatura do webhook do canal mock (smoke)
 set -euo pipefail
 
@@ -80,6 +81,10 @@ garantir STAGING_SMOKE_PASSWORD "$(hex 12)"
 # Assinatura HMAC do webhook do canal mock (src/channels/mock.ts:94): sem ela o
 # adapter responde 503 `sem_credencial` — é o que o smoke exercita.
 garantir WHATSAPP_MOCK_HMAC_SECRET "$(hex 24)"
+# F12-T03: assinatura HMAC do webhook do gateway MOCK (lib/env.ts
+# BILLING_MOCK_WEBHOOK_SECRET; src/billing/webhook-mock.ts). Sem ela o webhook
+# responde 503 (fail closed) e o checkout mock não ativa nada.
+garantir BILLING_MOCK_WEBHOOK_SECRET "$(hex 24)"
 
 sudo install -o root -g klarosk -m 640 "$TMP" "$ARQUIVO"
 rm -f "$TMP"

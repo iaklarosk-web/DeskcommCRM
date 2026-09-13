@@ -10,6 +10,20 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { createHash, randomUUID } from "node:crypto";
+import { getServicePool } from "@/src/tenant-context/db";
+
+/** `organization_id → {status, plan_code, grace_until}` para as organizações pedidas. */
+async function assinaturasDasOrganizacoes(ids: string[]): Promise<Map<string, { status: string; plan_code: string; grace_until: string | null }>> {
+  const mapa = new Map<string, { status: string; plan_code: string; grace_until: string | null }>();
+  if (ids.length === 0) return mapa;
+  const pool = await getServicePool();
+  const { rows } = await pool.query<{ organization_id: string; status: string; plan_code: string; grace_until: Date | null }>(
+    `select organization_id, status, plan_code, grace_until from public.subscriptions where organization_id = any($1::uuid[])`,
+    [ids],
+  );
+  for (const r of rows) mapa.set(r.organization_id, { status: r.status, plan_code: r.plan_code, grace_until: r.grace_until ? r.grace_until.toISOString() : null });
+  return mapa;
+}
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -118,7 +132,13 @@ export async function GET(req: NextRequest) {
 
   const rows = data ?? [];
   const has_more = rows.length > limit;
-  const page = has_more ? rows.slice(0, limit) : rows;
+  const pagina = has_more ? rows.slice(0, limit) : rows;
+
+  // F11-T01 (ADR-030 §1): o estado da ASSINATURA por empresa, lido de
+  // `subscriptions` (service_only, D35) para a página — uma consulta, pelo
+  // pool de serviço. Organização sem linha aparece como `null` (herdada).
+  const assinaturas = await assinaturasDasOrganizacoes(pagina.map((r) => r.id));
+  const page = pagina.map((r) => ({ ...r, subscription: assinaturas.get(r.id) ?? null }));
 
   const lastRow = page.at(-1);
   const nextCursor =

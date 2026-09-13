@@ -134,6 +134,9 @@ WAHA_API_KEY=e2e-placeholder-nao-e-segredo
 WAHA_WEBHOOK_BASE_URL=http://127.0.0.1:3001
 UPSTASH_REDIS_REST_URL=http://127.0.0.1:3998
 UPSTASH_REDIS_REST_TOKEN=e2e-placeholder-nao-e-segredo
+# F12-T03: HMAC do webhook do gateway MOCK — a spec de cobrança paga pelo
+# checkout mock, que assina e entrega o evento ao webhook. Valor de teste.
+BILLING_MOCK_WEBHOOK_SECRET=e2e-billing-mock-webhook-placeholder-nao-e-segredo
 NEXT_TELEMETRY_DISABLED=1
 # Telemetria DESLIGADA na suíte, explicitamente. Até §B11 (F11-T00) o vazio
 # fazia o SDK do browser assumir o DSN da comunidade (\`lib/sentry/dsn.ts\`) e a

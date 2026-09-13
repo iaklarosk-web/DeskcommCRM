@@ -8553,6 +8553,32 @@ export const DICIONARIO: Traducoes = {
   "Vencimento (minutos, até 60)": {"es":"Vencimiento (minutos, hasta 60)"},
   "nenhuma escrita é permitida durante o acompanhamento.": {"es":"no se permite ninguna escritura durante el acompañamiento."},
   "Este acompanhamento não alcança esta área. Escopo: ": {"es":"Este acompañamiento no alcanza esta área. Alcance: "},
+  // F12-T07 (ADR-030): cobrança do dono (/admin/billing) e coluna de assinatura na lista de empresas.
+  "sem assinatura (herdada)": {"es":"sin suscripción (heredada)"},
+  "Cobrança da plataforma": {"es":"Facturación de la plataforma"},
+  "Assinaturas por empresa, planos, eventos do gateway e conciliação. Gateway em modo de teste: nenhuma cobrança real acontece.": {"es":"Suscripciones por empresa, planes, eventos de la pasarela y conciliación. Pasarela en modo de prueba: no ocurre ningún cobro real."},
+  "Conciliação": {"es":"Conciliación"},
+  "Faturas pagas": {"es":"Facturas pagadas"},
+  "Eventos aplicados": {"es":"Eventos aplicados"},
+  "Conferidas": {"es":"Conferidas"},
+  "Divergências": {"es":"Divergencias"},
+  "Empresas sem assinatura (herdadas)": {"es":"Empresas sin suscripción (heredadas)"},
+  "Ciclo": {"es":"Ciclo"},
+  "Limites": {"es":"Límites"},
+  "Assinaturas por empresa": {"es":"Suscripciones por empresa"},
+  "Fim do período": {"es":"Fin del período"},
+  "Eventos": {"es":"Eventos"},
+  "Últimos eventos do gateway": {"es":"Últimos eventos de la pasarela"},
+  "Nenhum evento recebido ainda.": {"es":"Ningún evento recibido todavía."},
+  "Referência": {"es":"Referencia"},
+  "Ocorrido em": {"es":"Ocurrido el"},
+  "Aplicado": {"es":"Aplicado"},
+  "sim": {"es":"sí"},
+  "não": {"es":"no"},
+  // F11-T05 (ADR-030): conexão de teste do WhatsApp no wizard (modo mock).
+  "Esta instalação está em modo de teste: o WhatsApp é simulado. Conecte o canal de teste para concluir o passo.": {"es":"Esta instalación está en modo de prueba: el WhatsApp es simulado. Conecte el canal de prueba para concluir el paso."},
+  "Falha ao conectar o canal de teste:": {"es":"Falla al conectar el canal de prueba:"},
+  "Conectar canal de teste": {"es":"Conectar canal de prueba"},
 };
 
 /**

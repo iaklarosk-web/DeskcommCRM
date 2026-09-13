@@ -57,6 +57,16 @@ gerou, nunca é impressa):
 | deka | `admin@deka.staging.test` | tenant_admin | só staging (`seed-users.sh`); o seed versionado tem `TODO-DEKA` (D48) |
 | demo2 | `admin@demo2.test` | tenant_admin | `docs/tenants/demo2.seed.yaml` |
 | demo2 | `atende@demo2.test` | attendant | `docs/tenants/demo2.seed.yaml` |
+| — (plataforma) | `owner@platform.staging.test` | platform_admin (F11-T01) | só staging (`seed-users.sh`); painel `/admin`, acompanhamento só leitura e `/admin/billing`. NÃO é o `platform_admin` de produção (D12 item 7) |
+
+Cobrança no staging (F12): gateway `mock` — `/app/billing` do `tenant_admin`
+mostra plano/estado/uso/faturas; "Contratar/Pagar" abre
+`/app/billing/mock-checkout/<fatura>`, onde "Simular pagamento confirmado"
+entrega ao webhook (`BILLING_MOCK_WEBHOOK_SECRET` no env de segredos) o evento
+que um gateway real entregaria. `deka` e `demo2` têm assinatura `active` de
+origem `backfill`/`seed` em `PLAN_A` (placeholder, D14). Carência:
+`BILLING_GRACE_DAYS` (default 7, declarado); a varredura roda no worker do
+lembrete, de hora em hora.
 
 Nenhum é pessoa. Nada aqui manda mensagem a ninguém: `WHATSAPP_MODE=mock`,
 `AI_PROVIDER=mock`, e-mail no mailpit, `SENTRY_DSN=off`.
