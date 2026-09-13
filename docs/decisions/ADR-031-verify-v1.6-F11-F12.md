@@ -88,7 +88,7 @@ trata qualquer `pending` na linha como campo não medido.
 | # | Sabotagem | O que fica vermelho |
 |---|---|---|
 | 60 | `requiresAdmin = () => false` em `report.mjs` | `missing admin line makes otherwise green F11 fail` |
-| 61 | `rotaNoEscopo` responde sim para tudo (`lib/impersonate/support.ts`) | "escopo: rota fora do escopo é negada…" (`f11-entrada-e-suporte`) |
+| 61 | `rotaNoEscopo` responde sim para tudo (`lib/impersonate/escopo.ts`) | "escopo: rota fora do escopo é negada…" (`f11-entrada-e-suporte`) |
 | 62 | `requiresBilling = () => false` | `missing billing line makes otherwise green F12 fail` |
 | 63 | `on conflict … do update` no insert de `billing_events` (duplicata vira linha e reaplica) | "a segunda entrega do mesmo evento é duplicate…" (`f12-eventos-e-bloqueio`) |
 | 64 | `blocked: "full"` em `MODO_POR_ESTADO` | "bloqueada por atraso é read_only…" (`f12-eventos-e-bloqueio`) |

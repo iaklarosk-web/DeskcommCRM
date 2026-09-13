@@ -16,7 +16,9 @@ import { spawnSync } from "node:child_process";
 
 const root = process.cwd();
 const file = "src/conversation/guards.ts";
-const from = 'return (deps.entitlementResolver ?? entitlement)(ctx, "ai.reply").allowed;';
+// F12-T02 (ADR-030): o entitlement virou assíncrono; a guarda lê `resposta.allowed`.
+// A sabotagem continua a mesma — a metade do entitlement deixa de ser consultada.
+const from = 'return resposta.allowed;';
 const title = "com o dublê negando ai.reply, só a guarda de entrada vira falsa";
 const scratch = mkdtempSync(path.join(os.tmpdir(), "f03-guarda-entitlement-mutant-"));
 

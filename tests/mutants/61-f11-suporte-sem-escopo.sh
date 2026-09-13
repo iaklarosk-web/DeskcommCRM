@@ -7,7 +7,7 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 exec node tests/mutants/f04-turno-mutante.mjs \
-  --arquivo "lib/impersonate/support.ts" \
+  --arquivo "lib/impersonate/escopo.ts" \
   --de 'if (scope === "all" || caminho === null) return true;' \
   --para 'return true; /* MUTANTE: todo escopo alcança tudo */ if (scope === "all" || caminho === null) return true;' \
   --suite "tests/integration/f11-entrada-e-suporte.test.ts" \
