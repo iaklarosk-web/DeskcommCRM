@@ -1,6 +1,6 @@
 import { InterfaceRefresh } from "@/hooks/auth/InterfaceRefresh";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { isMfaEnrolled, loadAuthUser, requiresMfa, resolveActiveOrg } from "@/lib/auth/server";
 import { DEFAULT_VISIBILITY_MODE, type VisibilityMode } from "@/lib/auth/types";
 import { AuthProvider } from "@/hooks/auth/AuthProvider";
@@ -18,6 +18,8 @@ import {
 import { ConexaoCaidaBanner } from "@/components/app/ConexaoCaidaBanner";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import { listarConexoesCaidas, type ConexaoCaida } from "@/lib/channels/health";
+import { AvisoDaAssinatura } from "@/components/app/AvisoDaAssinatura";
+import { estadoDeAcesso, type EstadoDeAcesso } from "@/src/billing/acesso";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await loadAuthUser();
@@ -34,6 +36,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
    * e não aqui: a precedência é regra do produto, não detalhe deste layout.
    */
   let cssDaOrganizacao: string | null = null;
+  let acesso: EstadoDeAcesso | null = null;
 
   // EPIC-02: gate /app/* on completed onboarding.
   // EPIC-11: gate /app/* on org not being suspended (S-11.08).
@@ -44,8 +47,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       .select("onboarded_at, status, settings")
       .eq("id", activeOrg.orgId)
       .maybeSingle();
-    if (orgRow && !orgRow.onboarded_at && !user.support) redirect("/onboarding");
     if (orgRow?.status === "suspended") redirect("/account-suspended");
+    // F11-T04/F12-T04 (D38, ADR-030 §3): a ORDEM é assinatura → onboarding →
+    // produto. `billing_only` (pendente de pagamento, cancelada) só alcança
+    // `/app/billing`; `read_only` (bloqueada por atraso, D44) continua lendo o
+    // produto — a escrita é negada pelo guarda de rota — e vê o aviso da
+    // casca. O acompanhamento (suporte) não é gateado: já é só leitura.
+    const pathname = (await headers()).get("x-pathname") ?? "";
+    const naCobranca = pathname.startsWith("/app/billing");
+    acesso = await estadoDeAcesso(activeOrg.orgId);
+    if (acesso.mode === "billing_only" && !naCobranca && !user.support) redirect("/app/billing");
+    if (orgRow && !orgRow.onboarded_at && !user.support && !naCobranca) redirect("/onboarding");
     // G4-02: expõe visibility_mode ao client (inbox decide visões visíveis).
     // Fonte confiável (admin client, org do cookie validado) — nunca do body.
     const mode = (orgRow?.settings as { visibility_mode?: VisibilityMode } | null)
@@ -159,6 +171,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <EstiloDaMarcaDaOrganizacao css={cssDaOrganizacao} />
         <ImpersonateBanner impersonating={impersonating} />
         <ConexaoCaidaBanner caidas={conexoesCaidas} />
+        <AvisoDaAssinatura acesso={acesso} />
         {needsMfaGate ? (
           // Gate always mounted for MFA-required roles; it latches the blocking
           // decision client-side so the enroll Server Action's revalidation

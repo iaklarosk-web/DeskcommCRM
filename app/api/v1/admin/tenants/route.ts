@@ -1,5 +1,6 @@
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { createTenantSchema } from "@/lib/schemas/tenant-creation";
+import { provisionarAssinatura } from "@/lib/auth/assinatura-provisionada";
 import { issueInvite } from "@/lib/auth/issue-invite";
 import { mfaEmDivida } from "@/lib/auth/server";
 import { type NextRequest } from "next/server";
@@ -207,6 +208,16 @@ export async function POST(req: NextRequest) {
     return fail("internal_error", "Não foi possível criar a organização", 500, { requestId });
   }
   if (org.created) {
+    // F11-T03 (ADR-030 §3): empresa criada pelo dono nasce com assinatura ATIVA
+    // de origem `operator` — é ele quem decide dar acesso; o plano vem do
+    // pedido (`plan_code`, default declarado) e o campo herdado `plan` continua
+    // sendo o rótulo comercial livre de `settings.plan`.
+    try {
+      await provisionarAssinatura(org.id, { plan_code: request.plan_code, origin: "operator", status: "active" });
+    } catch (erro) {
+      await admin.from("organizations").delete().eq("id", org.id);
+      return fail("internal_error", `Organização não criada: a assinatura não pôde ser gravada (${erro instanceof Error ? erro.message : "erro"}).`, 500, { requestId });
+    }
     await audit({
       action: "tenant.created_by_platform_admin",
       actorUserId: adminCtx.user.id,
@@ -220,6 +231,7 @@ export async function POST(req: NextRequest) {
         slug: org.slug,
         display_name: org.display_name,
         plan: request.plan,
+        plan_code: request.plan_code,
         creator_role: "admin",
       },
     });

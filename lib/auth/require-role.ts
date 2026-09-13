@@ -21,10 +21,13 @@ import type { NextResponse } from "next/server";
 
 import { fail, type ApiError } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
+import { acessoDaOrganizacao } from "@/lib/auth/acesso-da-assinatura";
 import { loadAuthUser, mfaEmDivida, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK, type ActiveOrg, type AuthUser, type Role } from "@/lib/auth/types";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
+import { escritaPermitida, type EstadoDeAcesso } from "@/src/billing/acesso";
+import { incrementCounter } from "@/src/obs/counters";
 import { registrarRequisicao, type DesfechoDaRequisicao } from "@/src/obs/log";
 
 export type RoleCheck =
@@ -188,6 +191,46 @@ export async function requireRole(min: Role, opts: RequireRoleOpts = {}): Promis
       response: fail("forbidden_role", `Permissão insuficiente. Requer role >= ${min}.`, 403, {
         requestId,
       }),
+    };
+  }
+
+  // F12-T04 (D38/D44): o que a ASSINATURA permite nesta rota. `read_only`
+  // (bloqueada por atraso) nega método que escreve; `billing_only` (pendente
+  // de pagamento, cancelada) nega tudo fora de `/api/v1/billing/*` e
+  // `/api/v1/auth/*`. Depois do papel e do MFA, de propósito: quem não tem
+  // papel continua levando 403 sem que a resposta revele o estado da conta.
+  let acesso: EstadoDeAcesso;
+  try {
+    acesso = await acessoDaOrganizacao(org.orgId);
+  } catch (erro) {
+    logar("internal_error", org.orgId, user.id, 503);
+    return {
+      ok: false,
+      response: fail("upstream_unavailable", "Não foi possível confirmar a assinatura desta organização.", 503, {
+        requestId,
+        details: { message: erro instanceof Error ? erro.message : String(erro) },
+      }),
+    };
+  }
+  if (!escritaPermitida(acesso, rota.method, rota.path)) {
+    incrementCounter("subscription_write_denied", { reason: acesso.reason });
+    void audit({
+      action: "authz.denied",
+      actorUserId: user.id,
+      organizationId: org.orgId,
+      resourceType: resource ?? null,
+      requestId,
+      metadata: { reason: acesso.reason, mode: acesso.mode, path: rota.path, method: rota.method },
+    });
+    logar("subscription_denied", org.orgId, user.id, 402);
+    return {
+      ok: false,
+      response: fail(
+        acesso.mode === "read_only" ? "subscription_blocked" : "subscription_required",
+        t("A assinatura desta organização não permite esta operação. Regularize em /app/billing."),
+        402,
+        { requestId, details: { reason: acesso.reason, mode: acesso.mode } },
+      ),
     };
   }
 

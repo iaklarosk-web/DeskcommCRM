@@ -33,7 +33,7 @@ import { copyToClipboard } from "@/lib/clipboard";
 // Schema (mirrors server Zod; client keeps it in sync)
 // ---------------------------------------------------------------------------
 
-const formSchema = z.object(tenantCreationFields);
+const formSchema = z.object({ ...tenantCreationFields, plan_code: z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/) });
 
 type FormValues = z.infer<typeof formSchema>;
 
@@ -86,6 +86,7 @@ export function NewTenantForm() {
       legal_name: "",
       cnpj: "",
       plan: "standard",
+      plan_code: "PLAN_A",
       owner_email: "",
     },
   });
@@ -123,6 +124,7 @@ export function NewTenantForm() {
         legal_name: values.legal_name || undefined,
         cnpj: values.cnpj || undefined,
         plan: values.plan,
+        plan_code: values.plan_code,
         owner_email: values.owner_email,
         owner_interface_settings: ownerInterface,
       });
@@ -143,6 +145,7 @@ export function NewTenantForm() {
   });
 
   const planValue = useWatch({ control: form.control, name: "plan" });
+  const planCodeValue = useWatch({ control: form.control, name: "plan_code" });
 
   if (created)
     return (
@@ -297,6 +300,22 @@ export function NewTenantForm() {
               {errors.plan && (
                 <p className="text-xs text-error-fg">{t(errors.plan.message ?? "")}</p>
               )}
+            </div>
+
+            {/* plan_code — F11-T03: o plano da ASSINATURA (catálogo `plans`, placeholder até o proprietário decidir) */}
+            <div className="space-y-1.5">
+              <Label htmlFor="plan_code">{t("Plano da assinatura")}</Label>
+              <Select value={planCodeValue} onValueChange={(v) => setValue("plan_code", v)}>
+                <SelectTrigger id="plan_code" aria-label={t("Plano da assinatura")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PLAN_A">PLAN_A (placeholder)</SelectItem>
+                  <SelectItem value="PLAN_B">PLAN_B (placeholder)</SelectItem>
+                  <SelectItem value="PLAN_C">PLAN_C (placeholder)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">{t("A empresa nasce com assinatura ativa neste plano (origem: operador).")}</p>
             </div>
 
             {/* owner_email */}

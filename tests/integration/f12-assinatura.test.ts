@@ -28,6 +28,7 @@ import {
   lerAssinatura,
   listarPlanos,
   mudarPlano,
+  rodarVarreduraDaCarencia,
   TransicaoIlegal,
   varrerCarencia,
   TOTAL_DE_TRANSICOES,
@@ -227,17 +228,21 @@ describe("F12-T06 — inadimplência (D44): aviso, carência, bloqueio preservan
     console.info(`f12-past-due: past_due=1/1 grace_days=${GRACE_DAYS} notified=1/1 acesso_full_na_carencia=1/1`);
   });
 
-  it("a varredura ANTES do prazo bloqueia 0; DEPOIS bloqueia 1 e avisa; rodar de novo bloqueia 0", async () => {
-    const antesDoPrazo = await varrerCarencia(ctx, { ...deps, agora: () => mais(T0, 3) });
-    const depoisDoPrazo = await varrerCarencia(ctx, { ...deps, agora: () => new Date(mais(T0, 2).getTime() + (GRACE_DAYS + 1) * 86_400_000) });
-    const deNovo = await varrerCarencia(ctx, { ...deps, agora: () => new Date(mais(T0, 2).getTime() + (GRACE_DAYS + 2) * 86_400_000) });
+  it("a varredura por tenant (cron, D20) ANTES do prazo lista 0; DEPOIS bloqueia 1 e avisa; rodar de novo bloqueia 0", async () => {
+    // O cron lista os tenants ELEGÍVEIS (past_due com grace_until vencido) e
+    // roda um TenantCtx por tenant — B (ativa) nunca entra na lista.
+    const antesDoPrazo = await rodarVarreduraDaCarencia({ ...deps, agora: () => mais(T0, 3) });
+    const depoisDoPrazo = await rodarVarreduraDaCarencia({ ...deps, agora: () => new Date(mais(T0, 2).getTime() + (GRACE_DAYS + 1) * 86_400_000) });
+    const deNovo = await rodarVarreduraDaCarencia({ ...deps, agora: () => new Date(mais(T0, 2).getTime() + (GRACE_DAYS + 2) * 86_400_000) });
 
-    expect(antesDoPrazo).toEqual({ blocked: 0, notified: 0 });
-    expect(depoisDoPrazo).toEqual({ blocked: 1, notified: 1 });
-    expect(deNovo).toEqual({ blocked: 0, notified: 0 });
+    expect(antesDoPrazo).toEqual({ tenants_eligible: 0, tenants_failed: 0, blocked: 0, notified: 0 });
+    expect(depoisDoPrazo).toEqual({ tenants_eligible: 1, tenants_failed: 0, blocked: 1, notified: 1 });
+    expect(deNovo).toEqual({ tenants_eligible: 0, tenants_failed: 0, blocked: 0, notified: 0 });
     expect((await lerAssinatura(ctx, deps))?.status).toBe("blocked");
     expect(await notificacoes("subscription.blocked")).toBe(1);
-    console.info("f12-carencia: antes_do_prazo=0/0 blocked_after_grace=1/1 notified=1/1 rerun=0/0");
+    // A função por tenant, chamada direto numa assinatura já bloqueada, também é 0.
+    expect(await varrerCarencia(ctx, deps)).toEqual({ blocked: 0, notified: 0 });
+    console.info("f12-carencia: tenants_eligible_antes=0/0 blocked_after_grace=1/1 notified=1/1 rerun=0/0");
   });
 
   it("bloqueada: escrita negada, leitura e cobrança permitidas, capability negada SEM chamar o provedor, dados preservados", async () => {

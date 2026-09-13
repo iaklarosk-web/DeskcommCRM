@@ -40,6 +40,8 @@ export {
 export { acessoDe, escritaPermitida, estadoDeAcesso, motivoDe, type EstadoDeAcesso, type MotivoDoAcesso } from "./acesso";
 export { mesCivil, usoDaCapabilityEm, usoPorCapabilityEm, type Periodo, type UsoDeCapability } from "./uso";
 export { conciliar, type Conciliacao, type Divergencia } from "./conciliacao";
+export { receberEventoMock, type RespostaDoReceptor } from "./webhook-mock";
+export { CRON_KEY_DA_CARENCIA, listarTenantsComCarenciaVencida, rodarVarreduraDaCarencia, type ResultadoDaVarredura } from "./carencia";
 export {
   CABECALHO_DA_ASSINATURA,
   GATEWAY_MOCK,

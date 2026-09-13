@@ -45,6 +45,10 @@ const VALIDADORES_DELEGADOS: ReadonlyArray<{ chamada: RegExp; onde: string }> = 
   { chamada: /\bparseSkillPackage\(/, onde: "lib/ai/skills/package.ts (manifesto do pacote por schema)" },
   { chamada: /\bvalidateOutboundMedia\(/, onde: "lib/messaging/media/upload-validation.ts (tipo e tamanho fechados)" },
   { chamada: /\bresolve\(\s*new Request/, onde: "app/api/v1/agenda/agendamentos/[id]/resolver/route.ts (zod na rota delegada)" },
+  // F12-T03: o webhook do gateway mock entrega o corpo cru ao receptor, que
+  // confere a assinatura HMAC ANTES de ler qualquer campo e só então o valida
+  // por zod (`lerCorpoDoEventoMock`, allowlist de campos — G-42).
+  { chamada: /\breceberEventoMock\(/, onde: "src/billing/webhook-mock.ts (HMAC → src/billing/gateway/mock.ts corpoDoEventoSchema, zod)" },
 ];
 
 /**

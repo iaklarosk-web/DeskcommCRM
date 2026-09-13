@@ -469,6 +469,11 @@ export const AUDIT_ACTIONS = [
   "crm_task.deleted",
   "crm_note.created",
   "organization.switched",
+  // F12 (ADR-030 §3): o que o tenant_admin faz com a assinatura. O que o
+  // GATEWAY faz fica em `billing_events`, que é o livro-razão dele.
+  "billing.checkout_started",
+  "billing.plan_changed",
+  "billing.subscription_cancelled",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

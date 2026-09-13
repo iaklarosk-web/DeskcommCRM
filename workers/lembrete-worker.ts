@@ -22,6 +22,7 @@ import path from "node:path";
 
 import { logger } from "@/lib/logger";
 import { capturarErro } from "@/src/obs/erros";
+import { rodarVarreduraDaCarencia } from "@/src/billing/carencia";
 import { rodarCortes } from "@/src/reminder/corte";
 import { rodarLembretes } from "@/src/reminder/envio";
 
@@ -59,6 +60,18 @@ async function umCiclo(): Promise<void> {
     notified: corte.notified,
     tasks_created: corte.tasks_created,
     tasks_denied: corte.tasks_denied,
+  });
+  // F12-T06 (D44): a carência da assinatura vence de hora em hora, no mesmo
+  // relógio do lembrete — um processo, um intervalo, um `--once` para provar.
+  const carencia = await rodarVarreduraDaCarencia();
+  logger.info("worker.cycle", {
+    worker: "billing-grace",
+    request_id: `cycle-${process.pid}-${Date.now()}`,
+    organization_id: null,
+    tenants_eligible: carencia.tenants_eligible,
+    failed: carencia.tenants_failed,
+    blocked: carencia.blocked,
+    notified: carencia.notified,
   });
 }
 

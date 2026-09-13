@@ -27,6 +27,8 @@ export type DesfechoDaRequisicao =
   | "forbidden_role"
   | "mfa_required"
   | "support_ended"
+  | "support_scope"
+  | "subscription_denied"
   | "internal_error"
   | "accepted"
   | "rejected"

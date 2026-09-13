@@ -121,5 +121,20 @@ export async function criarOrganizacaoDaFixture(
     .select("id")
     .single();
   if (error || !data) throw error ?? new Error("organização de fixture não criada");
-  return (data as { id: string }).id;
+  const id = (data as { id: string }).id;
+  // F12-T01 (ADR-030 §3): a organização fictícia nasce com assinatura ATIVA de
+  // origem `fixture` — sem isto ela seria `legacy_without_subscription`, e a
+  // prova de F12 mede uma assinatura real, não a ausência dela. `plans` é
+  // `service_only`: o cliente service-role do sandbox escreve; o loader faz
+  // o mesmo para a organização A vinda do seed.
+  const assinatura = await db.from("subscriptions" as never).insert({
+    organization_id: id,
+    plan_code: "PLAN_A",
+    status: "active",
+    origin: "fixture",
+    current_period_start: new Date().toISOString(),
+    current_period_end: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+  } as never);
+  if (assinatura.error) throw assinatura.error;
+  return id;
 }

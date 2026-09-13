@@ -16,6 +16,8 @@ export interface CreateTenantPayload {
   legal_name?: string;
   cnpj?: string;
   plan?: "standard" | "pro" | "enterprise";
+  /** F11-T03: plano da assinatura (catálogo `plans`); default PLAN_A no schema. */
+  plan_code?: string;
   owner_email: string;
   owner_interface_settings?: InterfaceSettings;
 }

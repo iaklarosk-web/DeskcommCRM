@@ -14,7 +14,9 @@
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-import { ehTipoDeEventoDoGateway, type TipoDeEventoDoGateway } from "../estados";
+import { z } from "zod";
+
+import { TIPOS_DE_EVENTO_DO_GATEWAY, type TipoDeEventoDoGateway } from "../estados";
 
 export const CABECALHO_DA_ASSINATURA = "x-mock-gateway-signature";
 export const GATEWAY_MOCK = "mock" as const;
@@ -66,26 +68,26 @@ export function emitirEventoMock(corpo: CorpoDoEventoMock, secret: string): Even
   return { body, signature: assinar(body, secret) };
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const corpoDoEventoSchema = z.object({
+  organization_id: z.string().uuid(),
+  event_ref: z.string().min(1).max(128),
+  event_type: z.enum(TIPOS_DE_EVENTO_DO_GATEWAY),
+  occurred_at: z.string().refine((v) => !Number.isNaN(new Date(v).getTime()), "occurred_at inválido"),
+  amount_cents: z.number().int().min(0).nullable().optional(),
+  checkout_ref: z.string().uuid().optional(),
+});
 
-/** Lê o corpo do webhook: allowlist de campos (G-42), nada mais entra. */
+/** Lê o corpo do webhook por schema (allowlist de campos, G-42): nada mais entra. */
 export function lerCorpoDoEventoMock(bruto: unknown): CorpoDoEventoMock | null {
-  if (typeof bruto !== "object" || bruto === null) return null;
-  const o = bruto as Record<string, unknown>;
-  if (typeof o.organization_id !== "string" || !UUID.test(o.organization_id)) return null;
-  if (typeof o.event_ref !== "string" || o.event_ref.length < 1 || o.event_ref.length > 128) return null;
-  if (!ehTipoDeEventoDoGateway(o.event_type)) return null;
-  if (typeof o.occurred_at !== "string" || Number.isNaN(new Date(o.occurred_at).getTime())) return null;
-  const amount = o.amount_cents;
-  if (amount !== undefined && amount !== null && !(typeof amount === "number" && Number.isSafeInteger(amount) && amount >= 0)) return null;
-  const checkout = o.checkout_ref;
-  if (checkout !== undefined && (typeof checkout !== "string" || !UUID.test(checkout))) return null;
+  const lido = corpoDoEventoSchema.safeParse(bruto);
+  if (!lido.success) return null;
+  const { organization_id, event_ref, event_type, occurred_at, amount_cents, checkout_ref } = lido.data;
   return {
-    organization_id: o.organization_id,
-    event_ref: o.event_ref,
-    event_type: o.event_type,
-    occurred_at: o.occurred_at,
-    amount_cents: amount === undefined ? null : (amount as number | null),
-    ...(typeof checkout === "string" ? { checkout_ref: checkout } : {}),
+    organization_id,
+    event_ref,
+    event_type,
+    occurred_at,
+    amount_cents: amount_cents ?? null,
+    ...(checkout_ref !== undefined ? { checkout_ref } : {}),
   };
 }

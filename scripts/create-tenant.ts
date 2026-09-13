@@ -64,7 +64,8 @@ export interface SeedFaq {
   a: string;
 }
 interface Seed {
-  tenant: { slug: string; name: string };
+  /** `plan` (F12, D14): código do catálogo `plans`; ausente = PLAN_A (placeholder declarado). */
+  tenant: { slug: string; name: string; plan?: string };
   users?: SeedUser[];
   channel_accounts?: SeedChannel[];
   settings?: Record<string, unknown>;
@@ -187,6 +188,28 @@ async function main(): Promise<void> {
         ])
       ).rows[0]?.id;
     if (!org) throw new Error(`organização ${seed.tenant.slug} não encontrada após insert`);
+
+    // 1b. Assinatura (F12-T01/ADR-030 §3): o tenant provisionado pelo operador
+    // nasce ATIVO no plano do seed (`tenant.plan`, default PLAN_A — placeholder
+    // declarado, D14), origem `seed`. Idempotente pelo índice único por
+    // organização: rerun cria 0. Sem esta linha o tenant cairia em
+    // `legacy_without_subscription` (permitido, mas declarado como legado).
+    const planoDoSeed = seed.tenant.plan ?? "PLAN_A";
+    if (!/^[A-Z][A-Z0-9_]{1,31}$/.test(planoDoSeed)) throw new Error(`seed: tenant.plan inválido: ${planoDoSeed}`);
+    const periodoDoPlano = await client.query<{ period_days: number }>(
+      `select period_days from public.plans where code = $1 and active`,
+      [planoDoSeed],
+    );
+    if (!periodoDoPlano.rows[0]) throw new Error(`seed: tenant.plan ${planoDoSeed} não existe no catálogo plans`);
+    const assinatura = await client.query(
+      `insert into public.subscriptions
+         (organization_id, plan_code, status, origin, current_period_start, current_period_end)
+       values ($1, $2, 'active', 'seed', now(), now() + make_interval(days => $3::int))
+       on conflict (organization_id) do nothing`,
+      [org, planoDoSeed, Number(periodoDoPlano.rows[0].period_days)],
+    );
+    criadas += assinatura.rowCount ?? 0;
+    console.log(`subscription=${assinatura.rowCount === 1 ? "created" : "existing"} plan=${planoDoSeed} origin=seed`);
 
     // 2. Usuários + membership (ADR-003).
     let usuariosPendentes = 0;

@@ -659,6 +659,18 @@ export const NAV_CATALOG = [
     minRole: "admin",
   },
   {
+    // F12-T04 (ADR-030 §3): a assinatura da empresa — plano, estado, uso do
+    // período, faturas e o gateway (mock nesta fase). É a única tela de /app
+    // alcançável com assinatura pendente ou cancelada.
+    href: "/app/billing",
+    label: "Assinatura",
+    description: "Plano, estado da assinatura, uso do período e faturas desta empresa.",
+    icon: "Receipt",
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "admin",
+  },
+  {
     // Mora em Organização e não em Canais de propósito: o que se configura aqui
     // é a CONTA DE ANÚNCIOS da empresa — dinheiro e identidade comercial, ao lado
     // de billing e API tokens. Canais é por onde se FALA com o cliente, e os dois

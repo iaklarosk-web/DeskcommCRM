@@ -12,6 +12,8 @@ export const tenantCreationFields = {
   legal_name: z.string().max(255).optional(),
   cnpj: z.string().max(18).optional(),
   plan: z.enum(["standard", "pro", "enterprise"]),
+  /** F11-T03: o plano da ASSINATURA (catálogo `plans`, D14). `plan` acima é o rótulo herdado de `settings.plan`. */
+  plan_code: z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/).default("PLAN_A"),
   owner_interface_settings: interfaceSettingsSchema.optional(),
   owner_email: z.string().trim().email(),
 };
