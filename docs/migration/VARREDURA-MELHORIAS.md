@@ -201,7 +201,13 @@ ou a rota nova de envio (`execute(send_message)`, que já é idempotente por
 consolidação já previsto na ADR-017. Custo: médio. Risco de não fazer: mensagem
 duplicada para cliente real em qualquer pico de latência.
 
-### B11. O Sentry herdado manda erros para um Sentry de TERCEIRO por padrão
+### B11. O Sentry herdado manda erros para um Sentry de TERCEIRO por padrão — **CONSERTADO na F11-T00 (D51 d, ADR-030 §5)**
+`resolveSentryDsn("")` passou a devolver `undefined` (desligado); a comunidade
+só entra por `SENTRY_DSN=community`. README do kit, `.env.example`, `install.sh`
+(resposta "sim" grava `community`) e as mensagens de boot dizem o novo padrão.
+Prova: `tests/unit/sentry-comunidade-so-erro.test.ts` (`desligado_sem_dsn=3/3
+comunidade_opt_in=2/2 dsn_proprio=1/1`). Texto original abaixo, como registro.
+
 `lib/sentry/dsn.ts`: sem `SENTRY_DSN`, `resolveSentryDsn()` cai em
 `DEFAULT_SENTRY_DSN` — o projeto Sentry "da comunidade" do autor do Deskcomm.
 Num SaaS com dados de tenant, erro de produção sairia da máquina para uma
@@ -240,12 +246,20 @@ tenant novo" (F07-T03) entrega um tenant sem clientes nem produtos.
 ### B13 — **CONSERTADO na F07-T03 (ADR-029 §3)**: o loader grava `products`/`customers`/`faq`
 `create-tenant.ts` passa a gravar os três blocos (`catalog_products`,
 `contacts`/`crm_companies`, acervo da organização) com id determinístico;
-itens com `TODO-` são contados e não viram linha; `products[].size` não tem
-coluna e é declarado (lacuna §5.21 × catálogo, do proprietário). O loader
+itens com `TODO-` são contados e não viram linha; `products[].size` saiu do
+schema do seed em D51 (13/09/2026; F11-T00 o tirou dos seeds, do loader e do teste). O loader
 também grava `onboarded_at` no INSERT — sem isso o tenant semeado caía em
 `/onboarding` (achado da F07). Detalhe em ADR-029 §3.
 
-### B15. `up.sh` do staging não é re-executável depois do primeiro smoke
+### B15. `up.sh` do staging não é re-executável depois do primeiro smoke — **CONSERTADO na F11-T00 (D51 d, ADR-030 §5)**
+`scripts/f02-fixture-writer.ts`: a conferência byte a byte vale só para a linha
+que a inserção acabou de criar; no rerun (insert criou 0), a conferência é
+"existe linha com este id nesta organização". Prova: caso "§B15 (F11-T00): rerun
+tolera linha já existente tocada por gatilho ou pipeline" em
+`tests/integration/create-tenant-f02-seed.test.ts` (`tocadas=N/N
+rerun_rows_created=0/0 erro=0/1`). `up.sh` volta a reaplicar seeds em staging
+tocado pelo smoke. Texto original abaixo, como registro.
+
 Achado na F07-T03. O escritor de fixtures fictícias da F02
 (`scripts/f02-fixture-writer.ts`) confere cada linha BYTE A BYTE no rerun
 (`expectOne`: `updated_at = created_at`, `source_metadata = '{}'`). O smoke da

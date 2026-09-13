@@ -1417,7 +1417,9 @@ if [ -z "${SENTRY_DSN+x}" ]; then
     printf '\n%s\n' "Você pode mudar depois no .env, a qualquer momento."
     read -r -p "  Enviar relatórios de erro anonimizados? (s/N) " _tel
     if resposta_sim "${_tel:-}"; then
-      SENTRY_DSN=""
+      # §B11 (F11-T00): o vazio passou a significar DESLIGADO; a comunidade é
+      # opt-in pela palavra `community` (lib/sentry/dsn.ts).
+      SENTRY_DSN="community"
       c_grn "✓ Telemetria de erros ligada — obrigado, isso ajuda o projeto."
     else
       SENTRY_DSN="off"

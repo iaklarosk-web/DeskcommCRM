@@ -255,6 +255,48 @@ describe("F02-T07 — seed comercial fictício", () => {
     });
   });
 
+  it("§B15 (F11-T00): rerun tolera linha já existente tocada por gatilho ou pipeline — idempotente por id, sem recriar", async () => {
+    await inRollback(async (client) => {
+      // Arrange — primeira gravação byte a byte; depois o staging "vive": o
+      // smoke da F06 gravou `waha_chat_id` em `source_metadata` do contato e o
+      // gatilho `trg_contacts_updated_at` moveu `updated_at` (VARREDURA §B15).
+      const fixture = fixtureFor("fixture-a", "actor-a@fixtures.test");
+      await expect(
+        writeF02Fixtures(client, ORG_A, fixture, { sandboxMarker: MARKER }),
+      ).resolves.toEqual({ rowsCreated: 29 });
+      const tocadas = await client.query(
+        `update public.contacts
+            set source_metadata = source_metadata || '{"waha_chat_id":"5511999990000@c.us"}'::jsonb,
+                updated_at = now() + interval '1 minute'
+          where organization_id=$1 and source<>'seed'`,
+        [ORG_A],
+      );
+      expect(tocadas.rowCount).toBeGreaterThan(0);
+      const antes = await client.query(SNAPSHOT_SQL, [ORG_A]);
+
+      // Act — o rerun que antes reprovava com `fixture_existing_row_mismatch`.
+      const rerun = await writeF02Fixtures(client, ORG_A, fixture, { sandboxMarker: MARKER });
+
+      // Assert — nada criado, nada sobrescrito: a linha tocada continua tocada.
+      expect(rerun).toEqual({ rowsCreated: 0 });
+      const depois = await client.query(SNAPSHOT_SQL, [ORG_A]);
+      expect(depois.rows[0]?.snapshot).toEqual(antes.rows[0]?.snapshot);
+      const metadados = await client.query(
+        `select count(*)::int n from public.contacts
+          where organization_id=$1 and source_metadata->>'waha_chat_id' is not null`,
+        [ORG_A],
+      );
+      expect(metadados.rows[0]?.n).toBe(tocadas.rowCount);
+
+      // Controle: linha que existe com o mesmo id em OUTRA organização continua
+      // barrada antes do insert (colisão global), e a primeira gravação segue
+      // byte a byte — o teste "cria uma vez, cria zero na segunda" acima.
+      console.info(
+        `f02-fixtures-rerun-tolerante: tocadas=${tocadas.rowCount}/${tocadas.rowCount} rerun_rows_created=0/0 erro=0/1`,
+      );
+    });
+  });
+
   it("semeia dois tenants SaaS isolados e namespacing produz IDs diferentes", async () => {
     await inRollback(async (client) => {
       const fixtureA = fixtureFor("fixture-a", "actor-a@fixtures.test");

@@ -177,9 +177,37 @@ async function countInsert(db: Db, sql: string, values: readonly unknown[]): Pro
   return (await db.query(sql, [...values])).rowCount ?? 0;
 }
 
-async function expectOne(db: Db, sql: string, values: readonly unknown[]): Promise<void> {
-  const result = await db.query(sql, [...values]);
-  if (result.rowCount !== 1) throw new F02FixtureError("fixture_existing_row_mismatch");
+/**
+ * Conferência da linha depois do `insert … on conflict do nothing` (§B15,
+ * F11-T00, D51 d). Quando a inserção CRIOU a linha (`criadas === 1`), a
+ * conferência é byte a byte — a fixture nasceu exatamente como foi declarada.
+ * Quando a inserção não criou nada, a linha JÁ EXISTIA de uma execução
+ * anterior: a conferência passa a ser "existe linha com este id nesta
+ * organização" (idempotência por id, como o loader do seed faz). Antes, o rerun
+ * também exigia byte a byte e reprovava com `fixture_existing_row_mismatch`
+ * assim que um gatilho (`updated_at`) ou o pipeline (`source_metadata`) tocasse
+ * a linha — foi o que deixou `up.sh` não re-executável no staging tocado pelo
+ * smoke (VARREDURA §B15). O `select` estrito de cada chamador começa por
+ * `where id=$1 and organization_id=$2`; é o que a conferência tolerante lê.
+ */
+async function expectOne(
+  db: Db,
+  criadas: number,
+  sql: string,
+  values: readonly unknown[],
+): Promise<void> {
+  if (criadas === 1) {
+    const result = await db.query(sql, [...values]);
+    if (result.rowCount !== 1) throw new F02FixtureError("fixture_existing_row_mismatch");
+    return;
+  }
+  const tabela = /from public\.([a-z_]+)/.exec(sql)?.[1];
+  if (!tabela) throw new F02FixtureError("fixture_existing_row_mismatch");
+  const existente = await db.query(
+    `select 1 from public.${tabela} where id=$1 and organization_id=$2`,
+    [values[0], values[1]],
+  );
+  if (existente.rowCount !== 1) throw new F02FixtureError("fixture_existing_row_mismatch");
 }
 
 /**
@@ -223,20 +251,26 @@ export async function writeF02Fixtures(
   }
 
   let rowsCreated = 0;
+  // §B15: a conferência sabe se a inserção imediatamente anterior criou a linha.
+  let criadasNaUltimaInsercao = 0;
+  const inserir = async (sql: string, values: readonly unknown[]): Promise<number> => {
+    criadasNaUltimaInsercao = await countInsert(db, sql, values);
+    return criadasNaUltimaInsercao;
+  };
+  const conferir = (sql: string, values: readonly unknown[]): Promise<void> =>
+    expectOne(db, criadasNaUltimaInsercao, sql, values);
   const fixtureTime = Math.min(
     ...fixture.orders.map((order) => new Date(order.created_at).getTime()),
   );
   const createdAt = new Date(fixtureTime).toISOString();
   for (const company of data.companies) {
-    rowsCreated += await countInsert(
-      db,
+    rowsCreated += await inserir(
       `insert into public.crm_companies
         (id,organization_id,legal_name,trade_name,cnpj,created_at,updated_at)
        values ($1,$2,$3,$4,null,$5,$5) on conflict do nothing`,
       [company.id, organizationId, company.legal_name, company.trade_name, createdAt],
     );
-    await expectOne(
-      db,
+    await conferir(
       `select 1 from public.crm_companies where id=$1 and organization_id=$2
         and legal_name=$3 and trade_name is not distinct from $4 and cnpj is null
         and created_at=$5 and updated_at=$5`,
@@ -244,8 +278,7 @@ export async function writeF02Fixtures(
     );
   }
   for (const contact of data.contacts) {
-    rowsCreated += await countInsert(
-      db,
+    rowsCreated += await inserir(
       `insert into public.contacts
         (id,organization_id,display_name,phone_number,email,company_id,recurring,source,created_at,updated_at)
        values ($1,$2,$3,null,null,$4,$5,'manual',$6,$6) on conflict do nothing`,
@@ -258,8 +291,7 @@ export async function writeF02Fixtures(
         createdAt,
       ],
     );
-    await expectOne(
-      db,
+    await conferir(
       `select 1 from public.contacts where id=$1 and organization_id=$2
         and display_name=$3 and company_id=$4 and recurring=$5
         and name is null and phone_number is null and email is null and birthdate is null
@@ -278,8 +310,7 @@ export async function writeF02Fixtures(
     );
   }
   for (const product of data.products) {
-    rowsCreated += await countInsert(
-      db,
+    rowsCreated += await inserir(
       `insert into public.catalog_products
         (id,organization_id,codigo,nome,preco_cents,moeda,ativo,origem,sale_unit,created_at,updated_at)
        values ($1,$2,$3,$4,$5,$6,$7,'manual',$8,$9,$9) on conflict do nothing`,
@@ -295,8 +326,7 @@ export async function writeF02Fixtures(
         createdAt,
       ],
     );
-    await expectOne(
-      db,
+    await conferir(
       `select 1 from public.catalog_products where id=$1 and organization_id=$2
         and codigo=$3 and nome=$4 and preco_cents=$5 and moeda=$6 and ativo=$7
         and origem='manual' and sale_unit=$8 and descricao is null and marca is null
@@ -319,8 +349,7 @@ export async function writeF02Fixtures(
   for (const order of data.orders) {
     const final = order.final;
     const finalTransition = order.transitions.at(-1)!;
-    rowsCreated += await countInsert(
-      db,
+    rowsCreated += await inserir(
       `insert into public.crm_orders
         (id,organization_id,contact_id,company_id,company_name_snapshot,source,channel,
          delivery_date,status,revision,currency,total_cents,created_by_actor_type,
@@ -349,8 +378,7 @@ export async function writeF02Fixtures(
         final.updated_at,
       ],
     );
-    await expectOne(
-      db,
+    await conferir(
       `select 1 from public.crm_orders where id=$1 and organization_id=$2
         and contact_id=$3 and company_id=$4 and company_name_snapshot=$5
         and source='ui' and channel is not distinct from $6 and delivery_date is not distinct from $7::date
@@ -382,8 +410,7 @@ export async function writeF02Fixtures(
       ],
     );
     for (const item of final.items) {
-      rowsCreated += await countInsert(
-        db,
+      rowsCreated += await inserir(
         `insert into public.crm_order_items
           (id,organization_id,order_id,position,requested_text,product_id,product_name_snapshot,
            sale_unit_snapshot,quantity,unit_price_cents,currency_snapshot,line_total_cents,
@@ -406,8 +433,7 @@ export async function writeF02Fixtures(
           final.updated_at,
         ],
       );
-      await expectOne(
-        db,
+      await conferir(
         `select 1 from public.crm_order_items where id=$1 and organization_id=$2 and order_id=$3
           and position=$4 and requested_text=$5 and product_id is not distinct from $6
           and product_name_snapshot is not distinct from $7 and sale_unit_snapshot is not distinct from $8
@@ -436,8 +462,7 @@ export async function writeF02Fixtures(
       const command = commandFor(order, transition);
       const hash = fixtureOrderCommandHash(command, actorUserId);
       const happenedAt = transition.after.updated_at;
-      rowsCreated += await countInsert(
-        db,
+      rowsCreated += await inserir(
         `insert into public.crm_order_command_receipts
           (id,organization_id,operation,idempotency_key,request_hash,actor_type,actor_id,
            order_id,response_body,completed_at,created_at)
@@ -454,8 +479,7 @@ export async function writeF02Fixtures(
           happenedAt,
         ],
       );
-      await expectOne(
-        db,
+      await conferir(
         `select 1 from public.crm_order_command_receipts where id=$1 and organization_id=$2
           and operation=$3 and idempotency_key=$4 and request_hash=$5 and actor_type='user'
           and actor_id=$6 and order_id=$7 and response_body=$8::jsonb
@@ -477,8 +501,7 @@ export async function writeF02Fixtures(
         after: transition.after,
         ...(transition.operation === "cancel_order" ? { reason: order.cancellationReason } : {}),
       };
-      rowsCreated += await countInsert(
-        db,
+      rowsCreated += await inserir(
         `insert into public.crm_order_events
           (id,organization_id,receipt_id,order_id,contact_id,order_revision,event_type,
            changes,actor_type,actor_id,created_at)
@@ -496,8 +519,7 @@ export async function writeF02Fixtures(
           happenedAt,
         ],
       );
-      await expectOne(
-        db,
+      await conferir(
         `select 1 from public.crm_order_events where id=$1 and organization_id=$2
           and receipt_id=$3 and order_id=$4 and contact_id=$5 and order_revision=$6
           and event_type=$7 and changes=$8::jsonb and actor_type='user' and actor_id=$9
@@ -515,8 +537,7 @@ export async function writeF02Fixtures(
           happenedAt,
         ],
       );
-      rowsCreated += await countInsert(
-        db,
+      rowsCreated += await inserir(
         `insert into public.api_audit_log
           (id,organization_id,actor_user_id,action,resource_type,resource_id,request_id,
            bypassed_rls,metadata,created_at)
@@ -537,8 +558,7 @@ export async function writeF02Fixtures(
           happenedAt,
         ],
       );
-      await expectOne(
-        db,
+      await conferir(
         `select 1 from public.api_audit_log where id=$1 and organization_id=$2
           and actor_user_id=$3 and action=$4 and resource_type='crm_orders'
           and resource_id=$5 and request_id=$6 and bypassed_rls

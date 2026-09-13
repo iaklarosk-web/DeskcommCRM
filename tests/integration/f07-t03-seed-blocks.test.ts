@@ -102,7 +102,7 @@ describe("F07-T03 — loader do seed grava products/customers/faq", () => {
       const env = ambienteDoCli();
 
       const primeira = await run("bash", args, { env, timeout: 60_000 });
-      expect(primeira.stdout).toMatch(/^products=1 customers=1 companies=1 products: size sem coluna \(1 itens/m);
+      expect(primeira.stdout).toMatch(/^products=1 customers=1 companies=1$/m);
       expect(primeira.stdout).toMatch(/^faq=7 acervo_materiais=1 acervo_trechos=[1-9]\d*$/m);
       expect(primeira.stdout).toMatch(/^users com sentinela TODO- pulados \(pendência não é usuário\): 1$/m);
       const criadas = Number(/rows_created=(\d+)/.exec(primeira.stdout)?.[1]);
@@ -166,7 +166,7 @@ describe("F07-T03 — loader do seed grava products/customers/faq", () => {
         )
       ).rows[0]!.id;
       // Um produto inteiro em sentinela, como o deka de hoje: pendência, não linha.
-      const pendente = { sku: "TODO-F07", name: "TODO-F07", size: "TODO-F07", unit: "TODO-F07", price_cents: "TODO-F07", active: true };
+      const pendente = { sku: "TODO-F07", name: "TODO-F07", unit: "TODO-F07", price_cents: "TODO-F07", active: true };
       const primeira = await escreverBlocosDoSeed(
         client,
         org,
@@ -184,7 +184,7 @@ describe("F07-T03 — loader do seed grava products/customers/faq", () => {
       expect(`products: seed=${seedBase.products.length} banco=${lido.products}`).toBe("products: seed=1 banco=1");
       expect(`customers: seed=${seedBase.customers.length} banco=${lido.customers}`).toBe("customers: seed=1 banco=1");
       expect(`companies: seed=1 banco=${lido.companies}`).toBe("companies: seed=1 banco=1");
-      expect(primeira).toMatchObject({ products: 1, customers: 1, companies: 1, sizeSemColuna: 1, pendentes: 1, rowsCreated: 3 });
+      expect(primeira).toMatchObject({ products: 1, customers: 1, companies: 1, pendentes: 1, rowsCreated: 3 });
 
       const segunda = await escreverBlocosDoSeed(
         client,

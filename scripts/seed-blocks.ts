@@ -42,8 +42,6 @@ export interface BlocosGravados {
   products: number;
   customers: number;
   companies: number;
-  /** Itens de `products[]` com `size` — campo sem coluna no catálogo. */
-  sizeSemColuna: number;
   /** Itens de products/customers com sentinela TODO- (pendência, não linha). */
   pendentes: number;
 }
@@ -73,7 +71,7 @@ export async function escreverBlocosDoSeed(
   seed: { products: SeedProduct[]; customers: SeedCustomer[] },
   idDoSeed: IdDoSeed,
 ): Promise<BlocosGravados> {
-  const gravado: BlocosGravados = { rowsCreated: 0, products: 0, customers: 0, companies: 0, sizeSemColuna: 0, pendentes: 0 };
+  const gravado: BlocosGravados = { rowsCreated: 0, products: 0, customers: 0, companies: 0, pendentes: 0 };
 
   for (const p of seed.products) {
     if (itemPendente(p)) {
@@ -81,7 +79,6 @@ export async function escreverBlocosDoSeed(
       continue;
     }
     const sku = textoOuErro(p.sku, "products[].sku");
-    if (p.size !== undefined && p.size !== null && String(p.size).length > 0) gravado.sizeSemColuna += 1;
     if (!Number.isSafeInteger(p.price_cents) || p.price_cents < 0) {
       throw new Error(`seed: products[${sku}].price_cents inválido`);
     }

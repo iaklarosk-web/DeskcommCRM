@@ -74,19 +74,16 @@ channel_accounts:
 products:
   - name: TODO-DEKA
     sku: TODO-DEKA
-    size: TODO-DEKA
     unit: TODO-DEKA
     price_cents: TODO-DEKA
     active: true
   - name: TODO-DEKA
     sku: TODO-DEKA
-    size: TODO-DEKA
     unit: TODO-DEKA
     price_cents: TODO-DEKA
     active: true
   - name: TODO-DEKA
     sku: TODO-DEKA
-    size: TODO-DEKA
     unit: TODO-DEKA
     price_cents: TODO-DEKA
     active: true

@@ -11,8 +11,8 @@ users:
 channel_accounts:
   - {provider: mock, account_ref: demo3-mock, test_number: "+5500000000003"}
 products:
-  - {sku: PAO-01, name: "Pão francês", size: "50", unit: "g", price_cents: 90, active: true}
-  - {sku: BOLO-01, name: "Bolo de fubá", size: "1", unit: "un", price_cents: 2800, active: true}
+  - {sku: PAO-01, name: "Pão francês", unit: "g", price_cents: 90, active: true}
+  - {sku: BOLO-01, name: "Bolo de fubá", unit: "un", price_cents: 2800, active: true}
 customers:
   - {name: "Café da Esquina", phone: "+5500000000103", company: "Esquina Cafés ME", recurring: true, recurring_weekday: 1, notes: "retira às 7h"}
 settings:

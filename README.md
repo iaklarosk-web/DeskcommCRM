@@ -552,13 +552,15 @@ Este é um projeto **self-host**: cada pessoa roda o CRM na **própria infraestr
   mantenedores do projeto **não são** controladores nem operadores da sua instância, e não
   têm acesso ao seu banco, ao seu WhatsApp nem ao seu storage. A única coisa que pode sair
   da sua máquina para nós é o relatório de erro descrito abaixo — e só se você deixar.
-- **Telemetria (Sentry):** o `install.sh` **pergunta** durante a instalação e respeita a
-  sua resposta; em modo não-interativo, sem `SENTRY_DSN` definido, a telemetria fica
-  **desligada**. Se você aceitar o Sentry da comunidade, o que é enviado são **relatórios
-  de erro** (stack trace) com CPF, telefone e e-mail substituídos, cabeçalhos sensíveis
-  removidos, e token de webhook/convite redigido da URL — **sem** rastreamento de
-  performance e **sem** replay de sessão, que ficam em 0 nesse caminho. Para desligar a
-  qualquer momento: `SENTRY_DSN=off` no `.env`. Para mandar ao **seu** Sentry (aí sim com
+- **Telemetria (Sentry):** **sem `SENTRY_DSN` no `.env`, nada é enviado** — o padrão é
+  desligado (desde a F11-T00/§B11: antes, o vazio caía no Sentry da comunidade). O
+  `install.sh` **pergunta** durante a instalação e respeita a sua resposta; em modo
+  não-interativo fica desligado. Se você aceitar o Sentry da comunidade
+  (`SENTRY_DSN=community`, opt-in explícito), o que é enviado são **relatórios de erro**
+  (stack trace) com CPF, telefone e e-mail substituídos, cabeçalhos sensíveis removidos, e
+  token de webhook/convite redigido da URL — **sem** rastreamento de performance e **sem**
+  replay de sessão, que ficam em 0 nesse caminho. Para desligar a qualquer momento:
+  `SENTRY_DSN=off` (ou vazio) no `.env`. Para mandar ao **seu** Sentry (aí sim com
   performance e replay): `SENTRY_DSN=<seu-dsn>`. O que é redigido, e por quê, está em
   [`lib/sentry/scrub.ts`](lib/sentry/scrub.ts); a resolução do DSN em
   [`lib/sentry/dsn.ts`](lib/sentry/dsn.ts).

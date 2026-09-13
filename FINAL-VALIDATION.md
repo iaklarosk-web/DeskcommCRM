@@ -250,7 +250,7 @@ P2 = degrada operação; P3 = melhoria. **P0 = 0, P1 = 0.**
 | 4 | P2 | Swap de 2 GB sem persistência a reboot | VARREDURA §B14 | `swapon /swapfile` manual; fstab é 1-way |
 | 5 | P2 | `create_task` pela IA: o catálogo promete e o domínio nega (executor não-humano) | VARREDURA §B5/§C6 | recusa gravada e auditada; decisão do proprietário sobre D18 |
 | 6 | P2 | Conversa nova a partir de `archived` (D34) não entregue | ADR-019, §C5 | a fronteira herdada reabre a conversa; decisão do proprietário |
-| 7 | P3 | `products[].size` do seed não tem coluna no catálogo | ADR-029 §3 | declarado na saída do loader; lacuna §5.21 × catálogo |
+| 7 | P3 | `products[].size` do seed não tem coluna no catálogo | ADR-029 §3 | **resolvido em D51/F11-T00**: `size` saiu de §5.21, dos seeds e do loader |
 | 8 | P3 | Capacidade: VPS de 2 núcleos/7,9 GB dividida; gate leva 100–150 min e falha por carga acima de load 12 | ADR-027 §5, evidências F05 | gate com a máquina ociosa; staging medido em ~1,2 GB |
 | 9 | P3 | `deka.seed.yaml` com 59 `TODO-DEKA` | D48 | a Deka preenche ao receber acesso; o loader não grava sentinela |
 | — | [DEFAULT] ainda não confirmados | D27 (meta do piloto), D28 (nome/domínio), D03 para produção (hosting de produção — o staging está decidido por D50) | §2.2 | pendências declaradas; nenhuma assumida |

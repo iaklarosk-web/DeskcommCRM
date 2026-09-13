@@ -9,9 +9,9 @@
  * mock. Desde a F07 (ADR-029 §3, VARREDURA §B13) os blocos products/customers/
  * faq do seed também entram — `catalog_products`, `contacts`/`crm_companies` e
  * o acervo da organização (ADR-023) — com id determinístico (`fixtureUuid`),
- * então a segunda execução continua criando ZERO linhas. `products[].size` não
- * tem coluna no catálogo: o script DECLARA que não gravou (nunca silêncio,
- * G-04) em vez de inventar destino.
+ * então a segunda execução continua criando ZERO linhas. `products[].size`
+ * saiu do schema do seed em D51 (13/09/2026): o catálogo não tem coluna de
+ * tamanho; embalagem vai no `name`.
  *
  * Settings com sentinela TODO- (§5.21) não viram linha: pendência não é valor.
  * Seed nunca sobrescreve nada existente (on conflict do nothing) — quem muda
@@ -47,7 +47,6 @@ interface SeedChannel {
 export interface SeedProduct {
   sku: string;
   name: string;
-  size?: string | number;
   unit?: string;
   price_cents: number;
   active?: boolean;
@@ -275,8 +274,7 @@ async function main(): Promise<void> {
     criadas += blocos.rowsCreated;
     console.log(
       `products=${blocos.products} customers=${blocos.customers} companies=${blocos.companies}` +
-        (blocos.pendentes > 0 ? ` itens com sentinela TODO- pulados (pendência não é dado): ${blocos.pendentes}` : "") +
-        (blocos.sizeSemColuna > 0 ? ` products: size sem coluna (${blocos.sizeSemColuna} itens; declarado, não gravado)` : ""),
+        (blocos.pendentes > 0 ? ` itens com sentinela TODO- pulados (pendência não é dado): ${blocos.pendentes}` : ""),
     );
 
     await client.query("commit");

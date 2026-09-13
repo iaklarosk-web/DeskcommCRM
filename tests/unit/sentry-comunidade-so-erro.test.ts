@@ -33,6 +33,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  DEFAULT_SENTRY_DSN,
   INTEGRACAO_DE_SESSAO,
   integracoesDoCliente,
   isCommunityDsn,
@@ -160,8 +161,11 @@ describe("o init do cliente honra a política", () => {
  *
  * Mesma família do e2e que escrevia no banco de produção: o default é a coisa
  * mais perigosa quando o default é "manda para o nosso servidor de verdade".
- * `resolveSentryDsn("")` cai no DSN da comunidade — então a AUSÊNCIA da chave no
- * ambiente da suíte é o que mandava dado de teste para lá.
+ * Até a F11-T00 `resolveSentryDsn("")` caía no DSN da comunidade — a AUSÊNCIA
+ * da chave no ambiente da suíte mandava dado de teste para lá. Desde §B11
+ * (D51 d) o vazio DESLIGA e a comunidade é opt-in (`community`); o `off`
+ * explícito do gerador continua, porque "desligado por escolha" é o que um
+ * arquivo de ambiente de suíte deve dizer.
  */
 describe("o ambiente da suíte desliga a telemetria", () => {
   it("o gerador do .env.e2e escreve SENTRY_DSN=off", () => {
@@ -180,7 +184,26 @@ describe("o ambiente da suíte desliga a telemetria", () => {
 
   it("e `off` de fato desliga — a guarda acima não vale nada se o valor não desligasse", () => {
     expect(resolveSentryDsn("off")).toBeUndefined();
-    // Controle: o vazio NÃO desliga, e é por isso que a linha acima é obrigatória.
-    expect(isCommunityDsn(resolveSentryDsn(""))).toBe(true);
+  });
+
+  it("§B11 (F11-T00): sem DSN = desligado; a comunidade só por `community` (opt-in)", () => {
+    // Arrange — os quatro valores do contrato de `lib/sentry/dsn.ts`.
+    const casos = [
+      { valor: "", esperado: undefined },
+      { valor: "   ", esperado: undefined },
+      { valor: "off", esperado: undefined },
+      { valor: "community", esperado: DEFAULT_SENTRY_DSN },
+      { valor: "COMMUNITY", esperado: DEFAULT_SENTRY_DSN },
+      { valor: "https://k@o1.ingest.sentry.io/1", esperado: "https://k@o1.ingest.sentry.io/1" },
+    ];
+
+    // Act
+    const observados = casos.map((c) => ({ ...c, obtido: resolveSentryDsn(c.valor) }));
+
+    // Assert — o vazio NÃO é mais a comunidade; a comunidade exige a palavra.
+    for (const c of observados) expect(c.obtido, JSON.stringify(c.valor)).toBe(c.esperado);
+    expect(isCommunityDsn(resolveSentryDsn(""))).toBe(false);
+    expect(isCommunityDsn(resolveSentryDsn("community"))).toBe(true);
+    console.info(`sentry-dsn: desligado_sem_dsn=3/3 comunidade_opt_in=2/2 dsn_proprio=1/1`);
   });
 });
