@@ -397,6 +397,37 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "`service_role` que escreve e lê a linha de volta. Catálogo, índice único " +
       "do período, FK composta cruzada e as CHECKs de coerência conferidos à parte.",
   },
+  // F12-T01 (D38/D44, ADR-030 §3, migration 9023). Assinatura, eventos do
+  // gateway e faturas são servidos pelo SERVIDOR (`src/billing`, via
+  // `withTenant`); o estado da assinatura decide o acesso operacional, e
+  // nenhum cliente pode escrevê-lo. A prova mede a RECUSA, como nas irmãs.
+  {
+    tabela: "subscriptions",
+    razao:
+      "tests/invariants/f12-t01-billing-schema.test.ts — duas organizações e " +
+      "dois usuários reais; `permission denied` medido sob `set local role " +
+      "authenticated` + JWT nas quatro operações para os DOIS usuários (8/8 por " +
+      "tabela), as mesmas quatro negadas para `anon` (4/4) e controle positivo de " +
+      "`service_role` que escreve e lê a linha de volta. Catálogo (RLS ligada, " +
+      "zero policies, relacl sem anon/authenticated/PUBLIC), índice único por " +
+      "organização, enum de estado/origem e as CHECKs de coerência conferidos à parte.",
+  },
+  {
+    tabela: "billing_events",
+    razao:
+      "tests/invariants/f12-t01-billing-schema.test.ts — mesma prova da irmã " +
+      "`subscriptions`, na mesma corrida: 8/8 recusas para authenticated em dois " +
+      "tenants, 4/4 para anon, service_role escreve e lê de volta; unicidade de " +
+      "(gateway, event_ref) e a coerência applied ⇔ ignored_reason conferidas à parte.",
+  },
+  {
+    tabela: "invoices",
+    razao:
+      "tests/invariants/f12-t01-billing-schema.test.ts — mesma prova das irmãs, " +
+      "na mesma corrida: 8/8 recusas para authenticated em dois tenants, 4/4 para " +
+      "anon, service_role escreve e lê de volta; `paid` exige `paid_at` e o " +
+      "período não se inverte (CHECKs conferidos à parte).",
+  },
 ];
 
 /**

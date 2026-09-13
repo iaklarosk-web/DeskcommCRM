@@ -14,3 +14,6 @@ system_version
 user_recovery_codes
 watchdog_cursors
 webhook_quarantine
+# F12-T01 (9023, ADR-030 §3): catálogo GLOBAL de planos (D14) — placeholder PLAN_A/B/C;
+# service_only (D35), lido pelo servidor; nenhuma linha pertence a um tenant.
+plans

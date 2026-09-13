@@ -124,9 +124,10 @@ describe("F05-T05 — notifications e email_outbox são service_only (D35)", () 
     );
   });
 
-  it("o evento é ENUM de seis valores no CHECK, nas duas tabelas (G-78)", () => {
+  it("o evento é ENUM fechado no CHECK, nas duas tabelas (G-78): os seis de §5.16 mais os três da cobrança (9023)", () => {
     // Arrange — a lista do TypeScript é a afirmação; o CHECK tem de casar com ela.
-    expect(EVENTOS_DE_NOTIFICACAO.length, "§5.16 tem seis eventos").toBe(6);
+    // Seis eventos da Fase 1 (§5.16) + três da assinatura (F12-T01, D44, ADR-030).
+    expect(EVENTOS_DE_NOTIFICACAO.length, "§5.16 (6) + cobrança (3)").toBe(9);
 
     let aceitos = 0;
     let recusados = 0;

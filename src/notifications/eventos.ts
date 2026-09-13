@@ -1,6 +1,7 @@
 /**
- * Os SEIS eventos de notificação da Fase 1 (§5.16, "lista única") — e o texto
- * determinístico de cada um.
+ * Os SEIS eventos de notificação da Fase 1 (§5.16, "lista única") mais os
+ * TRÊS da assinatura (F12-T01, D44, ADR-030 §3) — e o texto determinístico de
+ * cada um.
  *
  * Enum e nunca frase (G-78): o valor é etiqueta de contador, filtro da lista
  * in-app e CHECK no banco (`notifications_event_check`, migration 9021). Evento
@@ -21,6 +22,11 @@ export const EVENTOS_DE_NOTIFICACAO = [
   "customer.replied_while_human",
   "reminder.no_reply",
   "job.blocked",
+  // F12 (D44): aviso, bloqueio e reativação da assinatura. Vão ao
+  // `tenant_admin`; nunca carregam valor de fatura — só o estado e o prazo.
+  "subscription.payment_failed",
+  "subscription.blocked",
+  "subscription.activated",
 ] as const;
 
 export type EventoDeNotificacao = (typeof EVENTOS_DE_NOTIFICACAO)[number];
@@ -64,6 +70,21 @@ export const TEXTO_DO_EMAIL: Record<
     assunto: "Um envio ficou bloqueado",
     corpo:
       "O job {{job_id}} falhou {{attempts}} vezes e foi bloqueado ({{error}}). Nada mais roda sozinho até alguém olhar.",
+  },
+  "subscription.payment_failed": {
+    assunto: "Pagamento da assinatura não confirmado",
+    corpo:
+      "O pagamento da assinatura não foi confirmado. Você tem até {{grace_until}} para regularizar; depois disso novas operações ficam bloqueadas e seus dados continuam preservados. Regularize em /app/billing.",
+  },
+  "subscription.blocked": {
+    assunto: "Assinatura bloqueada por atraso",
+    corpo:
+      "O prazo de regularização terminou e novas operações estão bloqueadas. Seus dados e o acesso à cobrança continuam disponíveis em /app/billing; o pagamento confirmado reativa a conta.",
+  },
+  "subscription.activated": {
+    assunto: "Assinatura ativa",
+    corpo:
+      "O pagamento foi confirmado e a assinatura ({{plan_code}}) está ativa até {{current_period_end}}.",
   },
 };
 
