@@ -47,12 +47,12 @@ const test = base.extend<{ fixture: F11F12Fixture }>({
 });
 test.describe.configure({ timeout: 300_000 });
 
-async function login(page: Page, email: string, password: string, destino = "**/app/**"): Promise<void> {
+async function login(page: Page, email: string, password: string): Promise<void> {
   await page.goto("/login");
   await page.locator("#email").fill(email);
   await page.locator("#password").fill(password);
   await page.getByRole("button", { name: /entrar/i }).click();
-  await page.waitForURL(destino, { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" });
+  await page.waitForURL("**/app/**", { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" });
 }
 
 async function assinaturaNoBanco(orgId: string) {
@@ -93,14 +93,23 @@ for (const lado of ["A", "B"] as LadoDoTeste[]) {
     await page.getByTestId("suporte-escopo").selectOption("inbox");
     await page.getByTestId("suporte-minutos").fill("30");
 
-    // Act — iniciar.
+    // Act — iniciar. O app navega assim que recebe a resposta; o corpo é
+    // capturado pela rota interceptada ANTES de o navegador descartá-lo
+    // (mesma mecânica de f02-support-readonly-api).
     const endpoint = `/api/v1/admin/tenants/${fixture.orgs[lado]}/impersonate`;
-    const [resposta] = await Promise.all([
-      page.waitForResponse((r) => r.request().method() === "POST" && new URL(r.url()).pathname === endpoint, { timeout: HTTP_TIMEOUT }),
-      page.getByRole("button", { name: "Confirmar e entrar" }).click(),
-    ]);
-    expect(resposta.status()).toBe(200);
-    const corpo = (await resposta.json()).data as { support_session_id: string; access_mode: string; reason: string; scope: string; expires_at: string };
+    let corpo: { support_session_id: string; access_mode: string; reason: string; scope: string; expires_at: string } | undefined;
+    let statusDaResposta = 0;
+    await page.route(`**${endpoint}`, async (route) => {
+      const r = await route.fetch();
+      statusDaResposta = r.status();
+      if (r.status() === 200) corpo = (await r.json()).data;
+      await route.fulfill({ response: r });
+    }, { times: 1 });
+    const pendente = page.waitForResponse((r) => r.request().method() === "POST" && new URL(r.url()).pathname === endpoint, { timeout: HTTP_TIMEOUT });
+    await page.getByRole("button", { name: "Confirmar e entrar" }).click();
+    await pendente;
+    expect(statusDaResposta).toBe(200);
+    if (!corpo) throw new Error("resposta do impersonate não capturada");
     expect(corpo).toMatchObject({ access_mode: "support_readonly", reason: motivo, scope: "inbox" });
     expect(new Date(corpo.expires_at).getTime() - Date.now()).toBeLessThanOrEqual(30 * 60_000 + 5_000);
     await page.waitForURL("**/app/inbox", { timeout: HTTP_TIMEOUT });
@@ -147,7 +156,10 @@ test("o cadastro nasce pending_payment: /onboarding e /app caem em /app/billing 
   if (novo.error || !novo.data.user) throw novo.error ?? new Error("usuário novo não criado");
   const orgsCriadas: string[] = [];
   try {
-    await login(page, email, fixture.password, "**/get-started");
+    // Quem entra sem organização cai no estado vazio do produto; a tela que
+    // CRIA a organização é `/get-started` (ver `app/get-started/page.tsx`).
+    await login(page, email, fixture.password);
+    await page.goto("/get-started", { waitUntil: "domcontentloaded" });
     await expect(page.getByLabel(/Nome da empresa/i)).toBeVisible();
 
     // Act — provisionar pela tela.
@@ -183,7 +195,8 @@ test("depois do pagamento mock o wizard conclui só pela UI: telefone de teste, 
   const orgsCriadas: string[] = [];
   try {
     // Arrange — cadastro → cobrança → pagamento mock.
-    await login(page, email, fixture.password, "**/get-started");
+    await login(page, email, fixture.password);
+    await page.goto("/get-started", { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: /Continuar para o onboarding/i }).click();
     await page.waitForURL("**/app/billing", { timeout: 40_000 });
     const vinculo = await db.from("user_organizations").select("organization_id").eq("user_id", novo.data.user.id).maybeSingle();
