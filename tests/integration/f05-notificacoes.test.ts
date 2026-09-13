@@ -218,7 +218,7 @@ async function clienteEscreve(telefoneE164: string, corpo: string, idExterno: st
   });
 }
 
-/** Um destinatário por evento — é o que faz `rows=6/6` e `email_outbox=6/6` serem 1:1. */
+/** Um destinatário por evento — é o que faz `rows=N/N` e `email_outbox=N/N` serem 1:1 (N = 6 de §5.16 + 3 da assinatura). */
 const ROTEIRO: readonly { readonly evento: EventoDeNotificacao; readonly para: string; readonly payload: Record<string, unknown> }[] = [
   { evento: "handoff.created", para: ATENDENTE_A, payload: { handoff_id: "h-1", conversation_id: conversa(1), reason: "customer_request" } },
   { evento: "task.assigned", para: ATENDENTE_B, payload: { task_id: "t-1", order_id: PEDIDO.id } },
@@ -226,10 +226,15 @@ const ROTEIRO: readonly { readonly evento: EventoDeNotificacao; readonly para: s
   { evento: "customer.replied_while_human", para: ATENDENTE_A, payload: { conversation_id: conversa(3), inbound_message_id: "m-1" } },
   { evento: "reminder.no_reply", para: ATENDENTE_A, payload: { customer_id: contato(1), period_key: "2026-W37", reminder_run_id: "r-1" } },
   { evento: "job.blocked", para: ADMIN, payload: { job_id: "j-1", attempts: 3, error: "provider_unreachable" } },
+  // F12-T01/T06 (D44, ADR-030): os três eventos da assinatura, sempre ao
+  // `tenant_admin`; o payload carrega estado e prazo, nunca valor de fatura.
+  { evento: "subscription.payment_failed", para: ADMIN, payload: { grace_until: "2026-09-20T12:00:00.000Z", grace_days: 7 } },
+  { evento: "subscription.blocked", para: ADMIN, payload: { blocked_at: "2026-09-21T12:00:00.000Z" } },
+  { evento: "subscription.activated", para: ADMIN, payload: { plan_code: "PLAN_A", current_period_end: "2026-10-13T12:00:00.000Z" } },
 ];
 
-describe("F05-T05 — os seis eventos, um aviso por destinatário, e-mail mock por aviso", () => {
-  it("notifications: events=6 rows=6/6 email_outbox=6/6", async () => {
+describe("F05-T05 — os seis eventos de §5.16 (mais os três da assinatura, F12), um aviso por destinatário, e-mail mock por aviso", () => {
+  it("notifications: events=9 rows=9/9 email_outbox=9/9", async () => {
     // Arrange — o roteiro cobre o enum inteiro; se um evento entrar em §5.16
     // sem linha aqui, reprova.
     expect([...ROTEIRO].map((r) => r.evento).sort()).toEqual([...EVENTOS_DE_NOTIFICACAO].sort());

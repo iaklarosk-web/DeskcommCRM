@@ -12,7 +12,7 @@
 # "ajuste" no laço, sem erro, sem tela mudando, e o handoff de um cliente
 # ficando em silêncio para a pessoa que o assumiria.
 #
-# Tem de deixar `rows=6/6` vermelho na prova de F05-T05.
+# Tem de deixar `rows=9/9` (6 de §5.16 + 3 da assinatura, F12) vermelho na prova de F05-T05.
 #
 # Mecânica: mutação em MEMÓRIA (plugin de transform), sobre a suíte de
 # INTEGRAÇÃO, que precisa do Postgres efêmero. Nenhum arquivo do repositório é
@@ -25,6 +25,6 @@ exec node tests/mutants/f04-turno-mutante.mjs \
   --de 'for (const userId of destinatarios) {' \
   --para 'for (const userId of destinatarios.slice(1)) {' \
   --suite "tests/integration/f05-notificacoes.test.ts" \
-  --titulo "notifications: events=6 rows=6/6 email_outbox=6/6" \
+  --titulo "notifications: events=9 rows=9/9 email_outbox=9/9" \
   --espera "não gravou o aviso" \
   --nome "f05-notificacao-sem-aviso"
