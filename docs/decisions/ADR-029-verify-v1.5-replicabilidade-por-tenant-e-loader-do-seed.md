@@ -141,6 +141,20 @@ slugs pelo mesmo motivo.
   imprimindo `steps=N pass=N/N verify_exit=E`. Roda no sandbox (`READY (F07)`),
   não no staging: "do zero" inclui o banco.
 
+### 5. `next-env.d.ts` sai do snapshot de inputs (achado do from-scratch)
+
+A segunda execução de `scripts/from-scratch.sh` (clone limpo de `15585bd2`)
+terminou com todas as suítes verdes — unit 8492/8492, integração 155/155, banco
+1651/1651, navegador 41/41 em deka e em demo2, mutantes 56/56 — e
+`STATUS: NOT READY` por `inputs: files_before=3529 files_after=3530`. O arquivo
+que apareceu foi `next-env.d.ts`: gitignorado, gerado pelo `next build` que o
+próprio gate roda, e listado explicitamente em `snapshotF02Inputs`. Na árvore
+de trabalho ele existe desde 08/09 e por isso nenhum gate anterior o viu
+nascer. Arquivo gerado pelo gate não pode ser input do gate: sai da lista. O
+caso "F02 input snapshot stays equal when only excluded artifacts change"
+passa a criar `next-env.d.ts` depois do snapshot e exigir igualdade. Nenhum
+outro input muda; a contagem de arquivos do bloco cai de 3530 para 3529.
+
 ## Alternativas rejeitadas
 
 - **Imprimir `e2e[deka]=ok` a partir da execução fictícia de hoje**, só

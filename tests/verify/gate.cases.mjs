@@ -253,6 +253,10 @@ test("F02 input snapshot stays equal when only excluded artifacts change", () =>
     assert.equal(compareF02Inputs(dir, before).ok, true);
     writeFileSync(path.join(dir, ".verify-logs/run.log"), "changed artifact\n");
     assert.equal(compareF02Inputs(dir, before).ok, true);
+    // ADR-029 §5: o `next build` do gate gera `next-env.d.ts` num clone limpo;
+    // um arquivo gerado pelo próprio gate não pode ser input do gate.
+    writeFileSync(path.join(dir, "next-env.d.ts"), "/// <reference types=\"next\" />\n");
+    assert.equal(compareF02Inputs(dir, before).ok, true);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 test("F02 input snapshot detects a source change", () => {

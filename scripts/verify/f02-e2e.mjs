@@ -245,7 +245,10 @@ function inputFiles(root) {
     } else if (stat.isFile()) files.add(relative);
   };
   for (const directory of INPUT_DIRECTORIES) add(directory);
-  add("next-env.d.ts");
+  // `next-env.d.ts` NÃO é input: é gitignorado e GERADO pelo `next build` do
+  // próprio gate. Num clone limpo ele não existe no snapshot inicial e aparece
+  // durante a execução — foi assim que o `from-scratch.sh` da F07 (ADR-029 §5)
+  // reprovou com todas as suítes verdes: files_before=3529, files_after=3530.
   add("supabase/baseline.sql");
   add("supabase/migrations");
   for (const entry of readdirSync(root).sort()) {
