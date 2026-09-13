@@ -7,10 +7,12 @@
 import { z } from "zod";
 
 import { getRequestId } from "@/lib/api/request-id";
+import { requireSupportWrite } from "@/lib/impersonate/support";
 import { requireRole } from "@/lib/auth/require-role";
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { criarCheckoutMock, iniciarCheckout, PlanoDesconhecido, TransicaoIlegal } from "@/src/billing";
+import { iniciarCheckout, PlanoDesconhecido, TransicaoIlegal } from "@/src/billing";
+import { criarCheckoutMock } from "@/src/billing/gateway/mock";
 
 import { contextoDeCobranca } from "../_ctx";
 
@@ -19,6 +21,10 @@ export const dynamic = "force-dynamic";
 const corpoSchema = z.object({ plan_code: z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/) });
 
 export async function POST(req: Request): Promise<Response> {
+  // Acompanhamento (suporte) é só leitura: quem assina, paga, troca ou cancela
+  // é a própria empresa, nunca o dono da plataforma acompanhando.
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
   const requestId = getRequestId(req);
   const authz = await requireRole("admin", { requestId, resource: "billing_checkout", allowPlatformAdmin: false });
   if (!authz.ok) return authz.response;

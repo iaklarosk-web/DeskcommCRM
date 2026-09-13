@@ -40,16 +40,9 @@ export {
 export { acessoDe, escritaPermitida, estadoDeAcesso, motivoDe, type EstadoDeAcesso, type MotivoDoAcesso } from "./acesso";
 export { mesCivil, usoDaCapabilityEm, usoPorCapabilityEm, type Periodo, type UsoDeCapability } from "./uso";
 export { conciliar, type Conciliacao, type Divergencia } from "./conciliacao";
-export { receberEventoMock, type RespostaDoReceptor } from "./webhook-mock";
 export { CRON_KEY_DA_CARENCIA, listarTenantsComCarenciaVencida, rodarVarreduraDaCarencia, type ResultadoDaVarredura } from "./carencia";
-export {
-  CABECALHO_DA_ASSINATURA,
-  GATEWAY_MOCK,
-  assinar,
-  assinaturaConfere,
-  criarCheckoutMock,
-  emitirEventoMock,
-  lerCorpoDoEventoMock,
-  type CheckoutMock,
-  type CorpoDoEventoMock,
-} from "./gateway/mock";
+// O gateway MOCK e o receptor do webhook NÃO são reexportados daqui de
+// propósito: as telas do tenant importam `@/src/billing`, e a régua
+// `telas-sem-dado-de-mentira` (corretamente) recusa tela que alcance módulo
+// `mock`. Quem precisa deles — as rotas de checkout e o webhook — importa
+// `./gateway/mock` e `./webhook-mock` diretamente.

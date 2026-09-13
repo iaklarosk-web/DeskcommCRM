@@ -1,6 +1,6 @@
 /**
  * O RECEPTOR do webhook do gateway mock (F12-T03) — a função que a rota
- * `POST /api/v1/billing/webhooks/mock` chama e que a página de checkout mock
+ * `POST /api/v1/webhooks/billing-mock` chama e que a página de checkout mock
  * também chama, pelo servidor, para "entregar" o evento. Um receptor só: o
  * caminho que o gateway real percorreria é o mesmo que o mock percorre.
  *

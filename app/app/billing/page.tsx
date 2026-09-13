@@ -130,7 +130,7 @@ export default async function BillingPage() {
               <div className="flex items-center justify-between">
                 <span className="font-medium">{p.name}</span>
                 {p.source === "placeholder" ? (
-                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide" data-testid={`billing-plano-placeholder-${p.code}`}>placeholder</span>
+                  <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide" data-testid={`billing-plano-placeholder-${p.code}`}>placeholder</span>
                 ) : null}
               </div>
               <p className="mt-1 text-muted-foreground" data-testid={`billing-plano-preco-${p.code}`}>{preco(p)} / {p.period_days} {t("dias")}</p>
