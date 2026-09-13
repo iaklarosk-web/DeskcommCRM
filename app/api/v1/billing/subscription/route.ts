@@ -4,6 +4,7 @@
  * a página `/app/billing` faz: a prova de F12-T08 compara tela e rota.
  */
 import { getRequestId } from "@/lib/api/request-id";
+import { requireRole } from "@/lib/auth/require-role";
 import { fail, ok } from "@/lib/api/wrappers";
 import { acessoDe, lerAssinaturaEm, listarFaturasEm, obterPlano, PlanoDesconhecido } from "@/src/billing";
 import { withTenant } from "@/src/tenant-context";
@@ -14,8 +15,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: Request): Promise<Response> {
   const requestId = getRequestId(req);
-  const auth = await contextoDeCobranca(requestId, "billing");
-  if (!auth.ok) return auth.response;
+  const authz = await requireRole("admin", { requestId, resource: "billing", allowPlatformAdmin: false });
+  if (!authz.ok) return authz.response;
+  const auth = { ctx: contextoDeCobranca(authz), user: authz.user };
   try {
     const dados = await withTenant(auth.ctx, async (db) => {
       const assinatura = await lerAssinaturaEm(db, auth.ctx);

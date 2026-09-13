@@ -14,7 +14,7 @@ const integer = (n) => Number.isSafeInteger(n) && n >= 0;
  * herda TODOS os controles de F02 (sandbox descartável, snapshot SHA-256 dos
  * inputs, E2E fechado) e acrescenta o campo `webhook` medido.
  */
-const GATED_PHASES = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07"];
+const GATED_PHASES = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F11", "F12"];
 
 /** §8.3: cada campo passa a ser obrigatório a partir da fase que o cria. */
 const phaseNumber = (phase) => Number(phase.slice(1));
@@ -27,6 +27,10 @@ const requiresHardening = (phase) => phaseNumber(phase) >= phaseNumber("F06");
 // ADR-029: a partir de F07 o navegador roda uma vez por tenant do seed e
 // `replicability` deixa de ser `fictitious_A_B` para ser medido (§8.3).
 const requiresReplicability = (phase) => phaseNumber(phase) >= phaseNumber("F07"); // MUTANT: replicability-required
+// ADR-031: administração/entrada (F11) e assinatura/cobrança (F12), gravadas
+// pelas suítes de integração via `gravarLinhaDoVerify`; `pending` antes.
+const requiresAdmin = (phase) => phaseNumber(phase) >= phaseNumber("F11"); // MUTANT: admin-required
+const requiresBilling = (phase) => phaseNumber(phase) >= phaseNumber("F12"); // MUTANT: billing-required
 
 export function phaseContext(state, requestedPhase) {
   const active = /^current_phase:\s*(F\d{2})\b/m.exec(state)?.[1];
@@ -263,6 +267,28 @@ export function evaluate(input) {
       errors.push("lgpd fora do contrato: exige tables>=5, rows>=5, rows_remaining=0, audit_rows=2");
     }
   }
+  // ADR-031 §1: a administração e a entrada guiada (F11). `support_reason` e
+  // `full_mode_rejected` são o que D39/D51 pedem ("motivo", "só leitura");
+  // `orgs_without_subscription=0` é a garantia de D38 sobre as fixtures.
+  if (requiresAdmin(context.phase)) {
+    const adm = metric("admin", ["tenants_listed", "support_sessions", "support_reason", "support_scope_denied", "support_writes_denied", "full_mode_rejected", "signup_awaiting_payment", "orgs_without_subscription"]);
+    if (adm && (adm.tenants_listed < 2 || adm.support_sessions < 2 || adm.support_reason !== adm.support_sessions ||
+        adm.support_scope_denied < 2 || adm.support_writes_denied < 4 || adm.full_mode_rejected !== 1 ||
+        adm.signup_awaiting_payment !== 1 || adm.orgs_without_subscription !== 0)) {
+      errors.push("admin fora do contrato: exige tenants_listed>=2, support_sessions>=2 com support_reason=support_sessions, support_scope_denied>=2, support_writes_denied>=4, full_mode_rejected=1, signup_awaiting_payment=1, orgs_without_subscription=0");
+    }
+  }
+  // ADR-031 §2: a assinatura (F12). `duplicates=1` e `out_of_order=1` são as
+  // duas entregas que NÃO podem ativar de novo; `activations=1` é o
+  // denominador; `reconciliation_mismatch=0` e `data_preserved` são D44.
+  if (requiresBilling(context.phase)) {
+    const bil = metric("billing", ["plans", "events", "duplicates", "out_of_order", "activations", "blocked_writes_denied", "grace_days", "reconciliation_mismatch", "cancellations", "data_preserved"]);
+    if (bil && (bil.plans < 3 || bil.events < 4 || bil.duplicates < 1 || bil.out_of_order < 1 || bil.activations !== 1 ||
+        bil.blocked_writes_denied < 4 || bil.grace_days < 1 || bil.reconciliation_mismatch !== 0 || bil.cancellations !== 1 ||
+        bil.data_preserved < 1)) {
+      errors.push("billing fora do contrato: exige plans>=3, events>=4, duplicates>=1, out_of_order>=1, activations=1, blocked_writes_denied>=4, grace_days>=1, reconciliation_mismatch=0, cancellations=1, data_preserved>=1");
+    }
+  }
   const clean = errors.length === 0;
   // ADR-028 §2: a partir de F06, o gate limpo rodado no ambiente `staging`
   // sai `READY (staging)`; no sandbox sai `READY (Fnn)` — prova de código.
@@ -319,7 +345,7 @@ export function collect(root, directory, context) {
   // reprova), enquanto §8.3 fixa o rótulo do campo com underscore. O mapa é o
   // único lugar onde essa diferença existe.
   const ARQUIVO_DA_METRICA = { ai_eval: "ai-eval" };
-  for (const name of ["isolation", "rls-coverage", "rbac", "entitlement", "webhook", "ai_eval", "handoff", "reminder", "logs", "rate-limit", "lgpd"]) {
+  for (const name of ["isolation", "rls-coverage", "rbac", "entitlement", "webhook", "ai_eval", "handoff", "reminder", "logs", "rate-limit", "lgpd", "admin", "billing"]) {
     metrics[name] = read(path.join(directory, "metrics", `${ARQUIVO_DA_METRICA[name] ?? name}.line`));
   }
   metrics.secrets = read(path.join(directory, "secrets.log"));
@@ -382,6 +408,8 @@ export function render(input, result) {
     input.metrics.logs ?? "logs: routes=pending routes_logged=pending workers=pending workers_logged=pending request_log_org_id=pending sentry_mock_captured=pending pii_fields=pending",
     input.metrics["rate-limit"] ?? "rate-limit: requests=pending status_429=pending auth_requests=pending auth_blocked=pending routes=pending routes_with_schema=pending routes_reading_input=pending validated=pending",
     input.metrics.lgpd ?? "lgpd: tables=pending rows=pending rows_remaining=pending audit_rows=pending",
+    input.metrics.admin ?? "admin: tenants_listed=pending support_sessions=pending support_reason=pending support_scope_denied=pending support_writes_denied=pending full_mode_rejected=pending signup_awaiting_payment=pending orgs_without_subscription=pending",
+    input.metrics.billing ?? "billing: plans=pending events=pending duplicates=pending out_of_order=pending activations=pending blocked_writes_denied=pending grace_days=pending reconciliation_mismatch=pending cancellations=pending data_preserved=pending",
     replicability,
     input.metrics.secrets ?? "secrets: pending",
     `tests_deleted=${input.testsDeleted ?? "pending"} tests_skipped=${count("skipped")} expected_failures=${count("expectedFailures")} tests_failed=${count("failed")} tests_pending=${count("pending")} mutants_killed=${input.mutants.killed ?? "pending"}/${input.mutants.total ?? "pending"}`,

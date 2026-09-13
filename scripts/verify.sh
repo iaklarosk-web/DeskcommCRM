@@ -29,6 +29,10 @@ case "$PHASE" in
   # ADR-029: F07 roda o navegador DUAS vezes na mesma árvore, uma por tenant do
   # seed (`E2E_TENANT`), e mede `src_diff_lines` entre elas (§8.3).
   F07) CLOSED_E2E=1; EXPECTED_SPECS=10; REPLICABILITY_TENANTS="deka,demo2" ;;
+  # ADR-031: F11 (+1 spec) e F12 (+1 spec) fecham juntas; cada uma roda o
+  # navegador por tenant do seed como a F07 e mede `admin`/`billing`.
+  F11) CLOSED_E2E=1; EXPECTED_SPECS=11; REPLICABILITY_TENANTS="deka,demo2" ;;
+  F12) CLOSED_E2E=1; EXPECTED_SPECS=12; REPLICABILITY_TENANTS="deka,demo2" ;;
   *)   CLOSED_E2E=0; EXPECTED_SPECS=0 ;;
 esac
 REPLICABILITY_TENANTS="${REPLICABILITY_TENANTS:-}"

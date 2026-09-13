@@ -7,6 +7,7 @@
 import { z } from "zod";
 
 import { getRequestId } from "@/lib/api/request-id";
+import { requireRole } from "@/lib/auth/require-role";
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { criarCheckoutMock, iniciarCheckout, PlanoDesconhecido, TransicaoIlegal } from "@/src/billing";
@@ -19,8 +20,9 @@ const corpoSchema = z.object({ plan_code: z.string().regex(/^[A-Z][A-Z0-9_]{1,31
 
 export async function POST(req: Request): Promise<Response> {
   const requestId = getRequestId(req);
-  const auth = await contextoDeCobranca(requestId, "billing_checkout");
-  if (!auth.ok) return auth.response;
+  const authz = await requireRole("admin", { requestId, resource: "billing_checkout", allowPlatformAdmin: false });
+  if (!authz.ok) return authz.response;
+  const auth = { ctx: contextoDeCobranca(authz), user: authz.user };
   const corpo = corpoSchema.safeParse(await req.json().catch(() => null));
   if (!corpo.success) return fail("validation_failed", "Informe plan_code.", 422, { requestId });
   try {

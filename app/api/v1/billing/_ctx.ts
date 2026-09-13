@@ -1,20 +1,20 @@
 /**
- * O que toda rota de cobrança do `tenant_admin` faz antes de ler ou escrever
- * (F12-T04): `requireRole("admin")` — o gate que carrega o MFA de sessão e,
- * desde a F12-T04, o acesso da assinatura (`/api/v1/billing/*` fica sempre
- * aberto para que a pessoa possa pagar) — e o `TenantCtx` de sessão.
+ * O `TenantCtx` de sessão de uma rota de cobrança (F12-T04). O GATE fica na
+ * própria rota — `requireRole("admin", …)`, visível ao AST de
+ * `tests/unit/rotas-api-tem-gate-de-papel` — e este helper só traduz o que o
+ * guarda devolveu. `/api/v1/billing/*` fica sempre aberto pelo acesso da
+ * assinatura (a pessoa precisa poder pagar; `src/billing/acesso.ts`).
  */
-import { requireRole } from "@/lib/auth/require-role";
+import type { requireRole } from "@/lib/auth/require-role";
 import type { TenantCtx } from "@/src/tenant-context";
 
-export async function contextoDeCobranca(requestId: string, resource: string) {
-  const authz = await requireRole("admin", { requestId, resource, allowPlatformAdmin: false });
-  if (!authz.ok) return { ok: false as const, response: authz.response };
-  const ctx: TenantCtx = {
+type Autorizado = Extract<Awaited<ReturnType<typeof requireRole>>, { ok: true }>;
+
+export function contextoDeCobranca(authz: Autorizado): TenantCtx {
+  return {
     organization_id: authz.org.orgId,
     user_id: authz.user.id,
     role: authz.org.role,
     source: "session",
   };
-  return { ok: true as const, ctx, user: authz.user };
 }

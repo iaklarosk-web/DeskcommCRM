@@ -5,7 +5,7 @@
  * É a suíte que grava a linha `admin:` do VERIFY SUMMARY (ADR-031):
  *   admin: tenants_listed=T/T support_sessions=S support_reason=S/S
  *          support_scope_denied=D/D support_writes_denied=W/W
- *          full_mode_rejected=1/1 signup_pending=1/1 orgs_without_subscription=0/N
+ *          full_mode_rejected=1/1 signup_awaiting_payment=1/1 orgs_without_subscription=0/N
  *
  * Suporte: `fn_start_support_saas` (9024) exige motivo e escopo e nasce SÓ
  * LEITURA — a mesma função que a rota `POST /api/v1/admin/tenants/[id]/impersonate`
@@ -127,7 +127,7 @@ describe("F11-T02 — suporte limitado e auditado: motivo, escopo, vencimento, s
     console.info("f11-suporte: sem_motivo_recusado=1/1 escopo_livre_recusado=1/1 full_mode_rejected=1/1");
   });
 
-  it("escopo: rota fora do escopo é negada (rotaNoEscopo, a função do guarda); `all` alcança tudo; sair e auth ficam sempre abertos", () => {
+  it("escopo: rota fora do escopo é negada por rotaNoEscopo, a função do guarda; all alcança tudo; sair e auth ficam sempre abertos", () => {
     const rotas = [
       "/api/v1/inbox/conversations", "/api/v1/messages/1", "/api/v1/contacts", "/api/v1/crm/orders",
       "/api/v1/settings/ai", "/api/v1/team", "/api/v1/billing/subscription", "/api/v1/knowledge/materials",
@@ -221,7 +221,7 @@ describe("F11-T04 — a entrada: cadastro nasce pending_payment, sem uso operaci
     const linha =
       `admin: tenants_listed=${orgs}/${orgs} support_sessions=${contadores.support_sessions} support_reason=${contadores.support_reason}/${contadores.support_sessions} ` +
       `support_scope_denied=${contadores.scope_denied}/${contadores.scope_total} support_writes_denied=${contadores.writes_denied}/${contadores.writes_total} ` +
-      `full_mode_rejected=${contadores.full_rejected}/1 signup_pending=1/1 orgs_without_subscription=${semLinha}/${orgs}`;
+      `full_mode_rejected=${contadores.full_rejected}/1 signup_awaiting_payment=1/1 orgs_without_subscription=${semLinha}/${orgs}`;
     console.info(linha);
     gravarLinhaDoVerify("admin", linha);
   });

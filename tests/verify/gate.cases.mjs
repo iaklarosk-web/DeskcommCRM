@@ -15,10 +15,14 @@ const {
   EXPECTED_F03_E2E_TESTS,
   EXPECTED_F04_E2E_TESTS,
   EXPECTED_F05_E2E_TESTS,
+  EXPECTED_F11_E2E_TESTS,
+  EXPECTED_F12_E2E_TESTS,
   REQUIRED_F02_E2E_SPECS,
   REQUIRED_F03_E2E_SPECS,
   REQUIRED_F04_E2E_SPECS,
   REQUIRED_F05_E2E_SPECS,
+  REQUIRED_F11_E2E_SPECS,
+  REQUIRED_F12_E2E_SPECS,
   compareF02Inputs,
   snapshotF02Inputs,
   verifyF02Sandbox,
@@ -953,4 +957,118 @@ test("collect derives the block's e2e from the first tenant run and reads every 
     assert.ok(collected.reports.e2e && collected.reports["e2e-demo2"]);
     assert.equal(collected.replicability.src_diff_lines, 0);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// ─── ADR-031 — verify.sh v1.6: F11 mede `admin`, F12 mede `billing`; as duas fecham juntas ──
+
+const stateF12 = `current_phase: F12
+baseline_n0: 7
+f00_commit: c85f7d72
+baseline_detail: "unit=2/2 db=2/2 e2e=3/3"
+| F06 | Hardening | done(verify=2026-09-12 270852a6) |
+| F07 | Validação | done(verify=2026-09-13 d7543c14) |
+| F11 | Administração | in_progress |
+| F12 | Assinatura | in_progress |
+`;
+const stateF11 = stateF12.replace("current_phase: F12", "current_phase: F11");
+const F11_SPEC_COUNTS = [...F05_SPEC_COUNTS, 6];
+const F12_SPEC_COUNTS = [...F11_SPEC_COUNTS, 4];
+const ADMIN_OK = "admin: tenants_listed=3/3 support_sessions=2 support_reason=2/2 support_scope_denied=25/32 support_writes_denied=5/5 full_mode_rejected=1/1 signup_awaiting_payment=1/1 orgs_without_subscription=0/3";
+const BILLING_OK = "billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1/1 blocked_writes_denied=5/5 grace_days=7 reconciliation_mismatch=0/3 cancellations=1/1 data_preserved=7/7";
+
+function fasePorTenant(base, state, specs, counts, total) {
+  const data = f06Input();
+  data.context = phaseContext(state);
+  const parametros = { specs, counts, total };
+  data.reports["e2e-plan"] = playwrightReport(parametros);
+  data.reports["e2e-deka"] = playwrightReport({ ...parametros, actual: true });
+  data.reports["e2e-demo2"] = playwrightReport({ ...parametros, actual: true });
+  data.reports.e2e = data.reports["e2e-deka"];
+  Object.assign(data.exits, { "e2e-deka": 0, "e2e-demo2": 0, replicability: 0 });
+  data.replicability = replicabilityEvidence();
+  data.metrics.admin = ADMIN_OK;
+  if (base === "F12") data.metrics.billing = BILLING_OK;
+  return data;
+}
+const f11Input = () => fasePorTenant("F11", stateF11, REQUIRED_F11_E2E_SPECS, F11_SPEC_COUNTS, EXPECTED_F11_E2E_TESTS);
+const f12Input = () => fasePorTenant("F12", stateF12, REQUIRED_F12_E2E_SPECS, F12_SPEC_COUNTS, EXPECTED_F12_E2E_TESTS);
+
+test("F11 is gated: inventory of 11 specs (47 tests) per tenant, admin line measured; billing stays pending and is not required", () => {
+  const data = f11Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F11)");
+  const bloco = render(data, result);
+  assert.match(bloco, /e2e_scope: F11-required passed=47\/47 specs=11\/11/);
+  assert.match(bloco, /admin: tenants_listed=3\/3 support_sessions=2 support_reason=2\/2/);
+  assert.match(bloco, /billing: plans=pending/);
+});
+
+test("F12 is gated: inventory of 12 specs (51 tests) per tenant, admin and billing measured; in staging it prints READY (staging)", () => {
+  const data = f12Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F12)");
+  const bloco = render(data, result);
+  assert.match(bloco, /e2e_scope: F12-required passed=51\/51 specs=12\/12/);
+  assert.match(bloco, /billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1\/1/);
+  assert.match(bloco, /replicability: e2e\[deka\]=ok e2e\[demo2\]=ok src_diff_lines=0 grep_deka_in_src=0 \(deka=51\/51 demo2=51\/51 specs=12\/12 org_a=seed-replica\)/);
+  const staging = f12Input();
+  staging.sandbox = stagingEvidence();
+  const emStaging = evaluate(staging);
+  assert.deepEqual(emStaging.errors, []);
+  assert.equal(emStaging.status, "READY (staging)");
+});
+
+test("missing admin line makes otherwise green F11 fail", () => {
+  const data = f11Input();
+  delete data.metrics.admin;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.some((e) => /Métrica obrigatória ausente: admin/.test(e)), result.errors.join("\n"));
+});
+
+test("missing billing line makes otherwise green F12 fail", () => {
+  const data = f12Input();
+  delete data.metrics.billing;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.some((e) => /Métrica obrigatória ausente: billing/.test(e)), result.errors.join("\n"));
+});
+
+for (const [rotulo, linha] of [
+  ["motivo faltando numa sessão", ADMIN_OK.replace("support_reason=2/2", "support_reason=1/2")],
+  ["modo full aceito", ADMIN_OK.replace("full_mode_rejected=1/1", "full_mode_rejected=0/1")],
+  ["organização sem assinatura", ADMIN_OK.replace("orgs_without_subscription=0/3", "orgs_without_subscription=1/3")],
+  ["escrita permitida no suporte", ADMIN_OK.replace("support_writes_denied=5/5", "support_writes_denied=3/5")],
+]) test(`F11 rejects an admin line out of contract: ${rotulo}`, () => {
+  const data = f11Input();
+  data.metrics.admin = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, rotulo);
+  assert.ok(result.errors.some((e) => /^admin fora do contrato/.test(e)), result.errors.join("\n"));
+});
+
+for (const [rotulo, linha] of [
+  ["duplicata ativou de novo", BILLING_OK.replace("activations=1/1", "activations=2/1")],
+  ["sem evento duplicado medido", BILLING_OK.replace("duplicates=1", "duplicates=0")],
+  ["sem evento fora de ordem medido", BILLING_OK.replace("out_of_order=1", "out_of_order=0")],
+  ["conciliação divergente", BILLING_OK.replace("reconciliation_mismatch=0/3", "reconciliation_mismatch=1/3")],
+  ["bloqueada escreveu", BILLING_OK.replace("blocked_writes_denied=5/5", "blocked_writes_denied=2/5")],
+  ["cancelamento apagou dados", BILLING_OK.replace("data_preserved=7/7", "data_preserved=0/7")],
+]) test(`F12 rejects a billing line out of contract: ${rotulo}`, () => {
+  const data = f12Input();
+  data.metrics.billing = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, rotulo);
+  assert.ok(result.errors.some((e) => /^billing fora do contrato/.test(e)), result.errors.join("\n"));
+});
+
+test("F07 keeps its own inventory (10 specs, 41 tests) and never requires admin or billing", () => {
+  const data = f07Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  const bloco = render(data, result);
+  assert.match(bloco, /admin: tenants_listed=pending/);
+  assert.match(bloco, /billing: plans=pending/);
 });

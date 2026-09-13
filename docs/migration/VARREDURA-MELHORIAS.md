@@ -278,6 +278,19 @@ comparação byte a byte para a primeira gravação; ou `up.sh --no-seed` como
 padrão em staging já semeado. Custo: baixo. Decisão do proprietário: muda o
 contrato de "fixture imutável" da F02-T07.
 
+### B16. Specs herdadas do modo de EDIÇÃO do suporte ficaram sem produto (F11-T02, D51)
+`tests/e2e/suporte-temporario.spec.ts` e o trecho de acompanhamento de
+`tests/e2e/agenda-presenca-recuperacao.spec.ts` (fora do inventário do gate,
+listadas em `.github/workflows/e2e.yml`) abrem o diálogo de acompanhamento e,
+em parte, afirmam EDIÇÃO dentro da organização acompanhada (`access_mode=full`).
+Desde a F11-T02 (ADR-030 §4) a rota SaaS só emite `support_readonly`, com
+motivo e escopo obrigatórios; as duas specs passaram a preencher o motivo para
+o diálogo abrir, mas as asserções de escrita descrevem um modo que não existe
+mais nesta base (o invariante de banco `tests/invariants/suporte-temporario.test.ts`
+continua verde: `fn_start_support` herdada segue no kit). **Decisão do
+proprietário:** reescrever as asserções para só leitura, ou retirar as specs
+do `e2e.yml` do fork. Nenhuma foi apagada nem pulada (D30).
+
 ### B14. Reserva de swap sem persistência
 `/swapfile` (2 GB) existe, foi reativado na F02 e de novo na F06
 (`swapon /swapfile`), e não está no `/etc/fstab`: some a cada reboot. Durante

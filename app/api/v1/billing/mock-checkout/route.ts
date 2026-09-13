@@ -11,6 +11,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import { getRequestId } from "@/lib/api/request-id";
+import { requireRole } from "@/lib/auth/require-role";
 import { fail, ok } from "@/lib/api/wrappers";
 import { emitirEventoMock, listarFaturasEm, receberEventoMock } from "@/src/billing";
 import { withTenant } from "@/src/tenant-context";
@@ -26,8 +27,9 @@ const corpoSchema = z.object({
 
 export async function POST(req: Request): Promise<Response> {
   const requestId = getRequestId(req);
-  const auth = await contextoDeCobranca(requestId, "billing_mock_checkout");
-  if (!auth.ok) return auth.response;
+  const authz = await requireRole("admin", { requestId, resource: "billing_mock_checkout", allowPlatformAdmin: false });
+  if (!authz.ok) return authz.response;
+  const auth = { ctx: contextoDeCobranca(authz), user: authz.user };
   const corpo = corpoSchema.safeParse(await req.json().catch(() => null));
   if (!corpo.success) return fail("validation_failed", "Informe checkout_ref (uuid) e outcome (paid|failed).", 422, { requestId });
 

@@ -74,6 +74,25 @@ export const EXPECTED_F06_E2E_TESTS = EXPECTED_F05_E2E_TESTS;
 export const REQUIRED_F07_E2E_SPECS = REQUIRED_F06_E2E_SPECS;
 export const EXPECTED_F07_E2E_TESTS = EXPECTED_F06_E2E_TESTS;
 
+/**
+ * F11 (ADR-031) acrescenta a spec da administração e da entrada guiada
+ * (§7.9 F11, F11-T06): duas jornadas × dois tenants + duas únicas = 6 testes.
+ * F12 acrescenta a spec da assinatura (F12-T08): duas jornadas × dois tenants
+ * = 4 testes. As duas fases fecham juntas (D51 a); o inventário de F12 contém
+ * o de F11 inteiro, e os dois rodam por tenant do seed como a F07.
+ */
+export const REQUIRED_F11_E2E_SPECS = Object.freeze([
+  ...REQUIRED_F07_E2E_SPECS,
+  "tests/e2e/f11-admin-e-entrada.spec.ts",
+]);
+export const EXPECTED_F11_E2E_TESTS = EXPECTED_F07_E2E_TESTS + 6;
+
+export const REQUIRED_F12_E2E_SPECS = Object.freeze([
+  ...REQUIRED_F11_E2E_SPECS,
+  "tests/e2e/f12-assinatura.spec.ts",
+]);
+export const EXPECTED_F12_E2E_TESTS = EXPECTED_F11_E2E_TESTS + 4;
+
 /** Tenants do seed que a F07 percorre, na ordem (§7.8 T02: deka, depois demo2). */
 export const REPLICABILITY_TENANTS = Object.freeze(["deka", "demo2"]);
 
@@ -85,6 +104,8 @@ const CLOSED_E2E_PHASES = Object.freeze({
   F05: { specs: REQUIRED_F05_E2E_SPECS, tests: EXPECTED_F05_E2E_TESTS },
   F06: { specs: REQUIRED_F06_E2E_SPECS, tests: EXPECTED_F06_E2E_TESTS },
   F07: { specs: REQUIRED_F07_E2E_SPECS, tests: EXPECTED_F07_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
+  F11: { specs: REQUIRED_F11_E2E_SPECS, tests: EXPECTED_F11_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
+  F12: { specs: REQUIRED_F12_E2E_SPECS, tests: EXPECTED_F12_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
 });
 
 /**

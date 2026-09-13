@@ -6,6 +6,7 @@
 import { z } from "zod";
 
 import { getRequestId } from "@/lib/api/request-id";
+import { requireRole } from "@/lib/auth/require-role";
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { cancelar, TransicaoIlegal } from "@/src/billing";
@@ -18,8 +19,9 @@ const corpoSchema = z.object({ reason: z.string().trim().min(3).max(500) });
 
 export async function POST(req: Request): Promise<Response> {
   const requestId = getRequestId(req);
-  const auth = await contextoDeCobranca(requestId, "billing_cancel");
-  if (!auth.ok) return auth.response;
+  const authz = await requireRole("admin", { requestId, resource: "billing_cancel", allowPlatformAdmin: false });
+  if (!authz.ok) return authz.response;
+  const auth = { ctx: contextoDeCobranca(authz), user: authz.user };
   const corpo = corpoSchema.safeParse(await req.json().catch(() => null));
   if (!corpo.success) return fail("validation_failed", "Informe o motivo (3 a 500 caracteres).", 422, { requestId });
   try {

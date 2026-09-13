@@ -608,6 +608,8 @@ jobs:
         f03-inbox.spec.ts
         f04-ai-settings.spec.ts
         f05-ai-usage.spec.ts
+        f11-admin-e-entrada.spec.ts
+        f12-assinatura.spec.ts
 
       FORA_DO_CI: >-
         vps-fresh-onboarding.spec.ts

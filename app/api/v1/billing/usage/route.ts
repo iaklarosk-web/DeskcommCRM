@@ -3,6 +3,7 @@
  * ciclo (ou mês civil), com limite e restante do plano. Tela contra banco.
  */
 import { getRequestId } from "@/lib/api/request-id";
+import { requireRole } from "@/lib/auth/require-role";
 import { fail, ok } from "@/lib/api/wrappers";
 import { lerAssinaturaEm, mesCivil, obterPlano, usoPorCapabilityEm, type Periodo } from "@/src/billing";
 import { withTenant } from "@/src/tenant-context";
@@ -13,8 +14,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: Request): Promise<Response> {
   const requestId = getRequestId(req);
-  const auth = await contextoDeCobranca(requestId, "billing_usage");
-  if (!auth.ok) return auth.response;
+  const authz = await requireRole("admin", { requestId, resource: "billing_usage", allowPlatformAdmin: false });
+  if (!authz.ok) return authz.response;
+  const auth = { ctx: contextoDeCobranca(authz), user: authz.user };
   try {
     const dados = await withTenant(auth.ctx, async (db) => {
       const assinatura = await lerAssinaturaEm(db, auth.ctx);

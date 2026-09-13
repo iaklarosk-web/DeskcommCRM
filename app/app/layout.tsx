@@ -19,7 +19,8 @@ import { ConexaoCaidaBanner } from "@/components/app/ConexaoCaidaBanner";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import { listarConexoesCaidas, type ConexaoCaida } from "@/lib/channels/health";
 import { AvisoDaAssinatura } from "@/components/app/AvisoDaAssinatura";
-import { estadoDeAcesso, type EstadoDeAcesso } from "@/src/billing/acesso";
+import { acessoDaOrganizacao } from "@/lib/auth/acesso-da-assinatura";
+import type { EstadoDeAcesso } from "@/src/billing/acesso";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await loadAuthUser();
@@ -55,7 +56,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     // casca. O acompanhamento (suporte) não é gateado: já é só leitura.
     const pathname = (await headers()).get("x-pathname") ?? "";
     const naCobranca = pathname.startsWith("/app/billing");
-    acesso = await estadoDeAcesso(activeOrg.orgId);
+    acesso = await acessoDaOrganizacao(activeOrg.orgId);
     if (acesso.mode === "billing_only" && !naCobranca && !user.support) redirect("/app/billing");
     if (orgRow && !orgRow.onboarded_at && !user.support && !naCobranca) redirect("/onboarding");
     // G4-02: expõe visibility_mode ao client (inbox decide visões visíveis).

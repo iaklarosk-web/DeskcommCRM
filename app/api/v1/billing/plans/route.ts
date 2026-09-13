@@ -3,6 +3,7 @@
  * `source` para a tela dizer "placeholder" onde é placeholder (D14).
  */
 import { getRequestId } from "@/lib/api/request-id";
+import { requireRole } from "@/lib/auth/require-role";
 import { fail, ok } from "@/lib/api/wrappers";
 import { listarPlanos } from "@/src/billing";
 
@@ -12,8 +13,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: Request): Promise<Response> {
   const requestId = getRequestId(req);
-  const auth = await contextoDeCobranca(requestId, "billing_plans");
-  if (!auth.ok) return auth.response;
+  const authz = await requireRole("admin", { requestId, resource: "billing_plans", allowPlatformAdmin: false });
+  if (!authz.ok) return authz.response;
+  const auth = { ctx: contextoDeCobranca(authz), user: authz.user };
   try {
     return ok({ plans: await listarPlanos() }, { requestId });
   } catch {
