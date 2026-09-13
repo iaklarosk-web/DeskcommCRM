@@ -23,6 +23,7 @@ import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createLgpdRequest, findContactByExternalId } from "@/lib/lgpd/repository";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -110,6 +111,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const orgId: string = integration.organization_id;
+  registrarRequisicaoDe(req, { outcome: "accepted", organization_id: orgId }); // F06-T01
 
   // 4. Decrypt webhook secret and verify HMAC
   const dec = await admin.rpc("fn_decrypt_oauth", {

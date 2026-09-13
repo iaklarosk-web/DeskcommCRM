@@ -29,6 +29,7 @@ const COLUNAS: Record<string, readonly string[]> = {
   marca: ["marca", "fabricante"],
   categoria: ["categoria", "tipo", "departamento"],
   quantidade: ["quantidade", "estoque", "qtd", "qtde", "qty"],
+  sale_unit: ["unidade de venda", "unidade", "un", "unit"],
 };
 
 function normalizarCabecalho(texto: string): string {
@@ -60,6 +61,8 @@ export interface LinhaImportada {
   categoria?: string;
   quantidade: number;
   controla_estoque: boolean;
+  /** Ausente quando a planilha não traz a coluna; null é limpeza explícita da célula vazia. */
+  sale_unit?: string | null;
 }
 
 export interface ErroDaLinha {
@@ -184,6 +187,7 @@ export function lerPlanilha(
       ...(valor("categoria") ? { categoria: valor("categoria") } : {}),
       quantidade,
       controla_estoque: temColunaEstoque,
+      ...(campos.has("sale_unit") ? { sale_unit: valor("sale_unit") || null } : {}),
     });
   }
 

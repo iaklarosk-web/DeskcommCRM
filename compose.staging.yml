@@ -1,0 +1,538 @@
+# compose.staging.yml — o STAGING do CRM SaaS nesta VPS (F06-T06, D50, ADR-027, ADR-028).
+#
+# ═══ O QUE É ═══
+#
+# Um segundo Compose, separado do sandbox descartável do verificador
+# (`scripts/verify/sandbox.sh`, portas 5542x/3102) e do Supabase de
+# desenvolvimento de outro checkout (5432x). Tem identidade, volumes, segredos
+# e portas PRÓPRIOS: projeto `crm-staging`, portas 564xx e 3200.
+#
+# Supabase LOCAL self-hosted, escrito serviço a serviço: db (imagem oficial
+# `supabase/postgres`), auth (GoTrue), rest (PostgREST), storage, realtime,
+# mailpit e o kong na frente — a MESMA lista de imagens e a mesma inicialização
+# do banco que o Supabase CLI usa (derivadas de `docker inspect` do stack de
+# dev, 12/09/2026), sem o CLI. O motivo de não usar o CLI aqui é de
+# EXPOSIÇÃO: o CLI publica as portas em 0.0.0.0, e o Docker as entrega na
+# interface pública por baixo do ufw (cadeia DOCKER-USER vazia nesta máquina).
+# Aqui cada porta é publicada SÓ em `127.0.0.1` e no IP do Tailscale
+# (`STAGING_BIND_IP`): nada do staging escuta na interface pública, e isso não
+# depende de regra de firewall que só o proprietário aplica.
+#
+# ═══ O QUE NÃO É ═══
+#
+# Não é produção (D13): sem domínio, sem TLS, sem provedor real. WhatsApp e IA
+# em MOCK (`WHATSAPP_MODE=mock`, `AI_PROVIDER=mock`): o `waha-mock` abaixo só
+# existe para o health check herdado e nunca entrega nada a ninguém. E-mail
+# fica no mailpit. Sentry desligado (`SENTRY_DSN=off`).
+#
+# ═══ COMO SOBE ═══
+#
+#   scripts/staging/up.sh        # build do app no host, sobe tudo, aplica o
+#                                # baseline, semeia os dois tenants, confere
+#   scripts/staging/status.sh    # o que está de pé, memória por container
+#   scripts/staging/down.sh      # derruba SÓ o staging; volumes ficam
+#
+# Segredos: `/srv/secrets/crm-staging.env` (root:klarosk 640), lido por
+# `--env-file`. Nunca em chat, commit ou log. `scripts/staging/secrets.sh`
+# gera os valores uma vez. `docs/ops/staging.md` é o runbook.
+#
+# Memória: cada serviço tem `mem_limit` — a VPS tem 7,9 GB dividida com outros
+# projetos. Os tetos abaixo são o pico MEDIDO na primeira subida mais folga;
+# `status.sh` imprime o uso real por container.
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-supabase-db-url: &supabase-db-url postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
+
+services:
+  # ─── Supabase local ────────────────────────────────────────────────────────
+  db:
+    image: public.ecr.aws/supabase/postgres:15.8.1.085
+    container_name: crm-staging-db
+    restart: unless-stopped
+    mem_limit: 768m
+    ports:
+      - "127.0.0.1:56422:5432"
+      - "${STAGING_BIND_IP}:56422:5432"
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      POSTGRES_USER: supabase_admin
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXP: "3600"
+    # A mesma inicialização que o Supabase CLI escreve para a imagem (senhas
+    # dos papéis, jwt_secret no banco, schema `_realtime`), sem a parte de
+    # edge functions/analytics que este produto não usa. Roda só no PRIMEIRO
+    # boot do volume (docker-entrypoint-initdb.d).
+    entrypoint: ["sh"]
+    command:
+      - "-c"
+      - |
+        cat <<'EOF' > /etc/postgresql.schema.sql && \
+        exec docker-entrypoint.sh postgres -D /etc/postgresql
+        \set pgpass `echo "$$PGPASSWORD"`
+        \set jwt_secret `echo "$$JWT_SECRET"`
+        \set jwt_exp `echo "$$JWT_EXP"`
+
+        ALTER DATABASE postgres SET "app.settings.jwt_secret" TO :'jwt_secret';
+        ALTER DATABASE postgres SET "app.settings.jwt_exp" TO :'jwt_exp';
+
+        ALTER USER postgres WITH PASSWORD :'pgpass';
+        ALTER USER authenticator WITH PASSWORD :'pgpass';
+        ALTER USER pgbouncer WITH PASSWORD :'pgpass';
+        ALTER USER supabase_auth_admin WITH PASSWORD :'pgpass';
+        ALTER USER supabase_storage_admin WITH PASSWORD :'pgpass';
+        ALTER USER supabase_replication_admin WITH PASSWORD :'pgpass';
+        ALTER USER supabase_read_only_user WITH PASSWORD :'pgpass';
+
+        create schema if not exists _realtime;
+        alter schema _realtime owner to postgres;
+        EOF
+    volumes:
+      - staging-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -h 127.0.0.1 -p 5432"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging: *default-logging
+    networks: [staging]
+
+  auth:
+    image: public.ecr.aws/supabase/gotrue:v2.196.0
+    container_name: crm-staging-auth
+    restart: unless-stopped
+    mem_limit: 128m
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: "9999"
+      API_EXTERNAL_URL: http://${STAGING_BIND_IP}:56421/auth/v1
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgresql://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      GOTRUE_SITE_URL: http://${STAGING_BIND_IP}:3200
+      GOTRUE_URI_ALLOW_LIST: http://${STAGING_BIND_IP}:3200/auth/confirm,http://${STAGING_BIND_IP}:3200/auth/callback,http://127.0.0.1:3200/auth/confirm,http://localhost:3202/auth/confirm
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_EXP: "3600"
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_ISSUER: http://${STAGING_BIND_IP}:56421/auth/v1
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_EXTERNAL_PHONE_ENABLED: "false"
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false"
+      GOTRUE_MAILER_AUTOCONFIRM: "false"
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: http://${STAGING_BIND_IP}:56421/auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_INVITE: http://${STAGING_BIND_IP}:56421/auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_RECOVERY: http://${STAGING_BIND_IP}:56421/auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: http://${STAGING_BIND_IP}:56421/auth/v1/verify
+      GOTRUE_MAILER_SUBJECTS_RECOVERY: "Redefinir senha"
+      GOTRUE_SMTP_HOST: mailpit
+      GOTRUE_SMTP_PORT: "1025"
+      GOTRUE_SMTP_ADMIN_EMAIL: admin@staging.test
+      GOTRUE_SMTP_SENDER_NAME: Staging
+      GOTRUE_SMTP_MAX_FREQUENCY: 1s
+      GOTRUE_RATE_LIMIT_EMAIL_SENT: "360000"
+      GOTRUE_MFA_TOTP_ENROLL_ENABLED: "true"
+      GOTRUE_MFA_TOTP_VERIFY_ENABLED: "true"
+      GOTRUE_MFA_MAX_ENROLLED_FACTORS: "10"
+      GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED: "true"
+      GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL: "10"
+      GOTRUE_PASSWORD_MIN_LENGTH: "6"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:9999/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    logging: *default-logging
+    networks: [staging]
+
+  rest:
+    image: public.ecr.aws/supabase/postgrest:v16.1
+    container_name: crm-staging-rest
+    restart: unless-stopped
+    mem_limit: 128m
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgresql://authenticator:${POSTGRES_PASSWORD}@db:5432/postgres
+      PGRST_DB_SCHEMAS: public,storage,graphql_public
+      PGRST_DB_EXTRA_SEARCH_PATH: public,extensions
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_MAX_ROWS: "1000"
+      PGRST_ADMIN_SERVER_PORT: "3001"
+    logging: *default-logging
+    networks: [staging]
+
+  storage:
+    image: public.ecr.aws/supabase/storage-api:v1.70.3
+    container_name: crm-staging-storage
+    restart: unless-stopped
+    mem_limit: 320m
+    depends_on:
+      db:
+        condition: service_healthy
+      rest:
+        condition: service_started
+    environment:
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      AUTH_JWT_SECRET: ${JWT_SECRET}
+      POSTGREST_URL: http://rest:3000
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgresql://supabase_storage_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      FILE_SIZE_LIMIT: "52428800"
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /mnt
+      TENANT_ID: stub
+      REGION: local
+      GLOBAL_S3_BUCKET: stub
+      ENABLE_IMAGE_TRANSFORMATION: "false"
+      TUS_URL_PATH: /storage/v1/upload/resumable
+    volumes:
+      - staging-storage:/mnt
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5000/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    logging: *default-logging
+    networks: [staging]
+
+  realtime:
+    image: public.ecr.aws/supabase/realtime:v2.129.3
+    container_name: crm-staging-realtime
+    restart: unless-stopped
+    mem_limit: 384m
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: "4000"
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: supabase_admin
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: postgres
+      DB_AFTER_CONNECT_QUERY: "SET search_path TO _realtime"
+      DB_ENC_KEY: ${REALTIME_DB_ENC_KEY}
+      API_JWT_SECRET: ${JWT_SECRET}
+      METRICS_JWT_SECRET: ${JWT_SECRET}
+      SECRET_KEY_BASE: ${REALTIME_SECRET_KEY_BASE}
+      APP_NAME: realtime
+      ERL_AFLAGS: -proto_dist inet_tcp
+      DNS_NODES: "''"
+      RLIMIT_NOFILE: "10000"
+      MAX_HEADER_LENGTH: "4096"
+      RUN_JANITOR: "true"
+      SEED_SELF_HOST: "true"
+      MIX_ENV: prod
+    logging: *default-logging
+    networks: [staging]
+
+  mailpit:
+    image: public.ecr.aws/supabase/mailpit:v1.30.2
+    container_name: crm-staging-mailpit
+    restart: unless-stopped
+    mem_limit: 64m
+    environment:
+      MP_SMTP_DISABLE_RDNS: "true"
+    ports:
+      - "127.0.0.1:56424:8025"
+      - "${STAGING_BIND_IP}:56424:8025"
+    logging: *default-logging
+    networks: [staging]
+
+  kong:
+    image: public.ecr.aws/supabase/kong:2.8.1
+    container_name: crm-staging-kong
+    restart: unless-stopped
+    mem_limit: 256m
+    depends_on:
+      auth:
+        condition: service_healthy
+      rest:
+        condition: service_started
+      storage:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:56421:8000"
+      - "${STAGING_BIND_IP}:56421:8000"
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+      KONG_NGINX_WORKER_PROCESSES: "1"
+    volumes:
+      # Gerado por scripts/staging/up.sh a partir de scripts/staging/kong.template.yml
+      # com as chaves do env de segredos. Não versionado (.staging/ no .gitignore).
+      - ./.staging/kong.yml:/home/kong/kong.yml:ro
+    logging: *default-logging
+    networks: [staging]
+
+  # ─── O produto ─────────────────────────────────────────────────────────────
+  app:
+    # Imagem FINA sobre o build do host (`pnpm build` → `.next/standalone`),
+    # pelo `Dockerfile.staging`: o mesmo `next build` que o gate valida, sem
+    # repetir install+build dentro do Docker numa VPS de 2 núcleos.
+    build:
+      # `.staging/app/` é montado por scripts/staging/up.sh com o
+      # `.next/standalone`, o `.next/static` e o `public/` do build do host
+      # (o `.dockerignore` da raiz exclui `.next` de propósito).
+      context: ./.staging/app
+      dockerfile: Dockerfile.staging
+      args:
+        APP_VERSION: ${APP_VERSION:-staging}
+    image: crm-app:staging
+    pull_policy: never
+    container_name: crm-staging-app
+    restart: unless-stopped
+    mem_limit: 768m
+    depends_on:
+      kong:
+        condition: service_started
+      srh:
+        condition: service_started
+      waha-mock:
+        condition: service_started
+    env_file: /srv/secrets/crm-staging.env
+    environment:
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      SENTRY_DSN: "off"
+      WHATSAPP_MODE: mock
+      AI_PROVIDER: mock
+      # Servidor → kong pelo nome do serviço; navegador → host pelo Tailscale
+      # (ADR-028; `NEXT_PUBLIC_SUPABASE_URL_BROWSER` só vai ao PublicEnvScript).
+      NEXT_PUBLIC_SUPABASE_URL: http://kong:8000
+      NEXT_PUBLIC_SUPABASE_URL_BROWSER: http://${STAGING_BIND_IP}:56421
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      SUPABASE_DB_URL: *supabase-db-url
+      NEXT_PUBLIC_APP_URL: http://${STAGING_BIND_IP}:3200
+      WAHA_API_BASE_URL: http://waha-mock:3000
+      WAHA_API_KEY: staging-mock-nao-e-segredo
+      WAHA_WEBHOOK_BASE_URL: http://app:3000
+      UPSTASH_REDIS_REST_URL: http://srh:80
+      UPSTASH_REDIS_REST_TOKEN: ${SRH_TOKEN}
+      WEBHOOK_RATE_LIMIT_PER_MIN: "300"
+    ports:
+      - "127.0.0.1:3200:3000"
+      - "${STAGING_BIND_IP}:3200:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('net').connect(3000,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    logging: *default-logging
+    networks: [staging]
+
+  # Os três workers do produto numa imagem só (Dockerfile.worker), um processo
+  # por serviço — o do agente herdado (fila, cron, drain) e os dois do SaaS
+  # (saída pelo catálogo e lembrete recorrente).
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+      args:
+        APP_VERSION: ${APP_VERSION:-staging}
+    image: crm-worker:staging
+    pull_policy: never
+    container_name: crm-staging-worker
+    restart: unless-stopped
+    mem_limit: 512m
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: /srv/secrets/crm-staging.env
+    environment:
+      NODE_ENV: production
+      SENTRY_DSN: "off"
+      WHATSAPP_MODE: mock
+      AI_PROVIDER: mock
+      NEXT_PUBLIC_SUPABASE_URL: http://kong:8000
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      SUPABASE_DB_URL: *supabase-db-url
+      NEXT_PUBLIC_APP_URL: http://${STAGING_BIND_IP}:3200
+      WAHA_API_BASE_URL: http://waha-mock:3000
+      WAHA_API_KEY: staging-mock-nao-e-segredo
+      WAHA_WEBHOOK_BASE_URL: http://app:3000
+      UPSTASH_REDIS_REST_URL: http://srh:80
+      UPSTASH_REDIS_REST_TOKEN: ${SRH_TOKEN}
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8787/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+    networks: [staging]
+
+  worker-saida:
+    image: crm-worker:staging
+    pull_policy: never
+    container_name: crm-staging-worker-saida
+    restart: unless-stopped
+    mem_limit: 384m
+    depends_on:
+      worker:
+        condition: service_started
+    env_file: /srv/secrets/crm-staging.env
+    environment:
+      NODE_ENV: production
+      SENTRY_DSN: "off"
+      WHATSAPP_MODE: mock
+      AI_PROVIDER: mock
+      SUPABASE_DB_URL: *supabase-db-url
+      NEXT_PUBLIC_SUPABASE_URL: http://kong:8000
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      NEXT_PUBLIC_APP_URL: http://${STAGING_BIND_IP}:3200
+      WAHA_API_BASE_URL: http://waha-mock:3000
+      WAHA_API_KEY: staging-mock-nao-e-segredo
+      WAHA_WEBHOOK_BASE_URL: http://app:3000
+      UPSTASH_REDIS_REST_URL: http://srh:80
+      UPSTASH_REDIS_REST_TOKEN: ${SRH_TOKEN}
+      OUTBOUND_WORKER_INTERVAL_MS: "5000"
+    # G-71: caminho absoluto, de fora da raiz — é a forma que o cron chama.
+    working_dir: /tmp
+    command: ["sh", "-c", "TSX_TSCONFIG_PATH=/app/tsconfig.json node --import /app/node_modules/tsx/dist/loader.mjs /app/workers/saida-worker.ts"]
+    logging: *default-logging
+    networks: [staging]
+
+  worker-lembrete:
+    image: crm-worker:staging
+    pull_policy: never
+    container_name: crm-staging-worker-lembrete
+    restart: unless-stopped
+    mem_limit: 384m
+    depends_on:
+      worker:
+        condition: service_started
+    env_file: /srv/secrets/crm-staging.env
+    environment:
+      NODE_ENV: production
+      SENTRY_DSN: "off"
+      WHATSAPP_MODE: mock
+      AI_PROVIDER: mock
+      SUPABASE_DB_URL: *supabase-db-url
+      NEXT_PUBLIC_SUPABASE_URL: http://kong:8000
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      NEXT_PUBLIC_APP_URL: http://${STAGING_BIND_IP}:3200
+      WAHA_API_BASE_URL: http://waha-mock:3000
+      WAHA_API_KEY: staging-mock-nao-e-segredo
+      WAHA_WEBHOOK_BASE_URL: http://app:3000
+      UPSTASH_REDIS_REST_URL: http://srh:80
+      UPSTASH_REDIS_REST_TOKEN: ${SRH_TOKEN}
+      REMINDER_WORKER_INTERVAL_MS: "60000"
+    working_dir: /tmp
+    command: ["sh", "-c", "TSX_TSCONFIG_PATH=/app/tsconfig.json node --import /app/node_modules/tsx/dist/loader.mjs /app/workers/lembrete-worker.ts"]
+    logging: *default-logging
+    networks: [staging]
+
+  redis:
+    image: redis:7-alpine
+    container_name: crm-staging-redis
+    restart: unless-stopped
+    mem_limit: 64m
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    logging: *default-logging
+    networks: [staging]
+
+  srh:
+    image: hiett/serverless-redis-http@sha256:5b0bb9239fce53abf87b2018a7a0deb9ec7bd900c5360738fe5fbeeb426f9150
+    container_name: crm-staging-srh
+    restart: unless-stopped
+    # 64m matou o container com 137 (OOM) na primeira subida: é Elixir/BEAM.
+    mem_limit: 192m
+    environment:
+      SRH_MODE: env
+      SRH_TOKEN: ${SRH_TOKEN}
+      SRH_CONNECTION_STRING: "redis://redis:6379"
+    depends_on:
+      redis:
+        condition: service_healthy
+    logging: *default-logging
+    networks: [staging]
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.scheduler
+    image: crm-scheduler:staging
+    pull_policy: never
+    container_name: crm-staging-scheduler
+    restart: unless-stopped
+    mem_limit: 32m
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      TZ: UTC
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+    logging: *default-logging
+    networks: [staging]
+
+  # O dublê do WAHA: responde 200 ao que o health check herdado e o cliente
+  # herdado perguntam, e NÃO entrega nada a ninguém. O canal do SaaS nem passa
+  # por aqui (adapter mock, ADR-017); isto existe para que `/api/v1/health`
+  # não marque o WhatsApp como caído num ambiente em que ele é dublado.
+  waha-mock:
+    image: node:22-alpine
+    container_name: crm-staging-waha-mock
+    restart: unless-stopped
+    mem_limit: 48m
+    command:
+      - node
+      - -e
+      - |
+        const http = require("node:http");
+        http.createServer((req, res) => {
+          let corpo = "";
+          req.on("data", (c) => (corpo += c));
+          req.on("end", () => {
+            const id = "mock-" + Date.now().toString(36);
+            res.setHeader("content-type", "application/json");
+            if (req.url === "/ping") return res.end(JSON.stringify({ message: "pong" }));
+            if (req.url.startsWith("/api/sessions")) return res.end("[]");
+            if (req.method === "POST") return res.end(JSON.stringify({ id: { id }, mock: true }));
+            res.end("{}");
+          });
+        }).listen(3000, "0.0.0.0");
+    logging: *default-logging
+    networks: [staging]
+
+volumes:
+  staging-db:
+  staging-storage:
+
+networks:
+  staging:
+    name: crm-staging
+    driver: bridge

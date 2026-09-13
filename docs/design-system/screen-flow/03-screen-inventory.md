@@ -83,8 +83,8 @@ date: 2026-04-28
 
 | # | Path | Persona | Estados | Componentes | RT | Prio |
 |---|---|---|---|---|---|---|
-| 30 | `/app/orders` | P1, P3, P4 | default, empty, sync-pending | `<OrdersTable>`, `<NuvemshopBadge>` | — | P1 |
-| 31 | `/app/orders/[id]` | idem | default, loading, payload-stale | `<OrderDetail>`, `<OrderTimeline>` | — | P1 |
+| 30 | `/app/orders` | P1, P3, P4 | default, empty, loading, error, saving | lista operacional, rascunho manual | — | P1 |
+| 31 | `/app/orders/[id]` | idem | default, loading, error, revision-conflict, terminal | detalhe operacional, edição, histórico paginado | — | P1 |
 
 ## G. App tenant — IA (11 telas)
 
@@ -247,8 +247,6 @@ não.
 - `/app/contacts/[id]/consent` (#27)
 - `/app/contacts/merge-queue` (#28)
 - `/app/contacts/merge-queue/[mergeId]` (#29)
-- `/app/orders` (#30)
-- `/app/orders/[id]` (#31)
 - `/app/ai/knowledge` (#35) — só a lista de fontes existe (`/app/ai/knowledge/sources`)
 - `/app/ai/knowledge/sources/faq` (#37)
 - `/app/ai/knowledge/sources/policies` (#38)

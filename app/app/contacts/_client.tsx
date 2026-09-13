@@ -1,7 +1,12 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useT } from "@/hooks/i18n/useT";
-import { Plus, MagnifyingGlass, UploadSimple, UsersThree } from "@/lib/ui/icons";
+import {
+  Plus,
+  MagnifyingGlass,
+  UploadSimple,
+  UsersThree,
+} from "@/lib/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,6 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useContactPermissions } from "@/hooks/contacts/useContactPermissions";
 import { useContactList } from "@/hooks/contacts/useContactList";
 import { ContactsTable } from "@/components/contacts/ContactsTable";
 import { NewContactDialog } from "@/components/contacts/NewContactDialog";
@@ -34,6 +40,7 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 
 export function ContactsListClient() {
   const t = useT();
+  const { canWrite, canMerge } = useContactPermissions();
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [tag, setTag] = useState<string | undefined>(undefined);
@@ -51,7 +58,14 @@ export function ContactsListClient() {
   }, [searchInput]);
 
   const filters = useMemo(
-    () => ({ search, tag, source, order_by: orderBy, order_dir: orderDir, limit }),
+    () => ({
+      search,
+      tag,
+      source,
+      order_by: orderBy,
+      order_dir: orderDir,
+      limit,
+    }),
     [search, tag, source, orderBy, orderDir, limit],
   );
   const q = useContactList(filters);
@@ -83,7 +97,9 @@ export function ContactsListClient() {
     <div className="space-y-4 p-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight">{t("Contatos")}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {t("Contatos")}
+          </h1>
           <p className="text-sm text-muted-foreground">
             {t("Customer 360 — busque, filtre e gerencie contatos.")}
           </p>
@@ -104,14 +120,18 @@ export function ContactsListClient() {
             <UsersThree size={16} weight="bold" aria-hidden />
             <span>{t("Duplicados")}</span>
           </Button>
-          <Button variant="outline" onClick={() => setImportOpen(true)}>
-            <UploadSimple size={16} weight="bold" aria-hidden />
-            <span>{t("Importar CSV")}</span>
-          </Button>
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus size={16} weight="bold" aria-hidden />
-            <span>{t("Novo contato")}</span>
-          </Button>
+          {canWrite && (
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <UploadSimple size={16} weight="bold" aria-hidden />
+              <span>{t("Importar CSV")}</span>
+            </Button>
+          )}
+          {canWrite && (
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus size={16} weight="bold" aria-hidden />
+              <span>{t("Novo contato")}</span>
+            </Button>
+          )}
         </div>
       </header>
 
@@ -133,16 +153,25 @@ export function ContactsListClient() {
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" disabled={tagOptions.length === 0}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={tagOptions.length === 0}
+            >
               {tag ? `${t("Tag")}: ${tag}` : `${t("Tag")}: ${t("todas")}`}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
             <DropdownMenuLabel>{t("Tag")}</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setTag(undefined)}>{t("Todas")}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setTag(undefined)}>
+              {t("Todas")}
+            </DropdownMenuItem>
             {tagOptions.map((tagOption) => (
-              <DropdownMenuItem key={tagOption} onClick={() => setTag(tagOption)}>
+              <DropdownMenuItem
+                key={tagOption}
+                onClick={() => setTag(tagOption)}
+              >
                 {tagOption}
               </DropdownMenuItem>
             ))}
@@ -152,12 +181,18 @@ export function ContactsListClient() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm">
-              {t(SOURCE_OPTIONS.find((s) => s.value === source)?.label ?? "Origem")}
+              {t(
+                SOURCE_OPTIONS.find((s) => s.value === source)?.label ??
+                  "Origem",
+              )}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
             {SOURCE_OPTIONS.map((s) => (
-              <DropdownMenuItem key={s.label} onClick={() => setSource(s.value)}>
+              <DropdownMenuItem
+                key={s.label}
+                onClick={() => setSource(s.value)}
+              >
                 {t(s.label)}
               </DropdownMenuItem>
             ))}
@@ -205,7 +240,9 @@ export function ContactsListClient() {
         </div>
       ) : q.isError ? (
         <Card className="p-6 text-center">
-          <p className="text-sm text-error-fg">{t("Erro ao carregar contatos.")}</p>
+          <p className="text-sm text-error-fg">
+            {t("Erro ao carregar contatos.")}
+          </p>
           <Button
             size="sm"
             variant="outline"
@@ -217,13 +254,21 @@ export function ContactsListClient() {
         </Card>
       ) : allContacts.length === 0 ? (
         <Card className="p-2">
-          <EmptyContacts />
+          {search || tag || source ? (
+            <p className="p-4 text-center text-sm">
+              {t("Nenhum contato encontrado.")}{" "}
+              {t("Ajuste ou limpe os filtros para buscar novamente.")}
+            </p>
+          ) : (
+            <EmptyContacts />
+          )}
         </Card>
       ) : (
         <>
           <Card className="overflow-hidden">
             <ContactsTable
               contacts={allContacts}
+              canWrite={canWrite}
               orderBy={orderBy}
               orderDir={orderDir}
               onSort={handleSort}
@@ -231,7 +276,8 @@ export function ContactsListClient() {
           </Card>
           <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-between">
             <p className="text-sm text-muted-foreground">
-              {allContacts.length} {allContacts.length === 1 ? t("contato") : t("contatos")}
+              {allContacts.length}{" "}
+              {allContacts.length === 1 ? t("contato") : t("contatos")}
               {q.hasNextPage ? ` ${t("carregados — há mais resultados")}` : ""}
             </p>
             {q.hasNextPage && (
@@ -248,9 +294,19 @@ export function ContactsListClient() {
         </>
       )}
 
-      <NewContactDialog open={createOpen} onOpenChange={setCreateOpen} />
-      <ImportContactsDialog open={importOpen} onOpenChange={setImportOpen} />
-      <MergeDialog open={duplicadosOpen} onOpenChange={setDuplicadosOpen} />
+      <NewContactDialog
+        open={createOpen && canWrite}
+        onOpenChange={setCreateOpen}
+      />
+      <ImportContactsDialog
+        open={importOpen && canWrite}
+        onOpenChange={setImportOpen}
+      />
+      <MergeDialog
+        canMerge={canMerge}
+        open={duplicadosOpen}
+        onOpenChange={setDuplicadosOpen}
+      />
     </div>
   );
 }

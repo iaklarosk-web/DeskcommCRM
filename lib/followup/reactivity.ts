@@ -60,11 +60,13 @@ import { idsDoContatoEGemeos } from "@/lib/channels/contato-por-telefone";
 /** Grace pós-resume (spec §4: "grace configurável, default 30min, knob"). */
 export const RESUME_GRACE_MS = 30 * 60_000;
 
-export const LIVE_STATUSES: readonly EnrollmentStatus[] = ["active", "waiting_reply", "paused_handoff"];
+// A reatividade também encerra pausas manuais por STOP; o motor não as reclama.
+type ReactivityStatus = EnrollmentStatus | "paused_manual";
+export const LIVE_STATUSES: readonly ReactivityStatus[] = ["active", "waiting_reply", "paused_handoff", "paused_manual"];
 
 export interface LiveEnrollmentRef {
   id: string;
-  status: EnrollmentStatus;
+  status: ReactivityStatus;
   current_node_id: string;
   steps_taken: number;
   pointer_id: string;
@@ -272,6 +274,9 @@ async function reactToHandoffOpen(
   const live = await db.loadLiveEnrollmentsForContact(row.organization_id, contactId);
   let reacted = 0;
   for (const e of live) {
+    // Só uma retomada manual pode desfazer a pausa pedida por uma pessoa.
+    // Convertê-la em paused_handoff faria o fechamento retomar sozinho.
+    if (e.status === "paused_manual") continue;
     if (e.handoff_policy === "allow") continue;
 
     if (e.handoff_policy === "cancel") {
@@ -416,7 +421,7 @@ export function createSupabaseReactivityClient(admin: SupabaseClient): Reactivit
         const p = byPointer.get(e.pointer_id);
         return {
           id: e.id,
-          status: e.status as EnrollmentStatus,
+          status: e.status as ReactivityStatus,
           current_node_id: e.current_node_id,
           steps_taken: e.steps_taken,
           pointer_id: e.pointer_id,

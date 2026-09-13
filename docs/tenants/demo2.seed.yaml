@@ -1,0 +1,23 @@
+tenant: {slug: demo2, name: "Demo Manutenção"}
+users:
+  - {email: admin@demo2.test, name: "Ana", role: tenant_admin}
+  - {email: atende@demo2.test, name: "Bruno", role: attendant}
+channel_accounts:
+  - {provider: mock, account_ref: demo2-mock, test_number: "+5500000000002"}
+products:
+  - {sku: VIS-01, name: "Visita técnica", size: "1", unit: "un", price_cents: 15000, active: true}
+customers:
+  - {name: "Condomínio Sol", phone: "+5500000000102", company: "Sol Ltda", recurring: true, recurring_weekday: 2, notes: ""}
+settings:
+  branding: {name: "Demo Manutenção", logo_url: "", primary_color: "#2A6F4E"}
+  business: {timezone: America/Sao_Paulo, phone: "+5500000000002", address: "Rua Demo, 1", hours: "08-18", delivery_days: [1,3,5], delivery_regions: ["centro"], cancellation_policy: "até 24h antes"}
+  orders.recurring_reminder: {enabled: true, weekday: 4, hour: 15, cutoff_hours: 20, period: weekly, message_template: "Olá {{customer.name}}, qual a quantidade desta semana?"}
+  ai: {enabled: true, system_prompt: "Você atende a Demo Manutenção...", unknown_answer: "Não tenho essa informação; vou chamar alguém da equipe.", confidence_threshold: 0.6}
+faq:
+  - {q: "Vocês atendem sábado?", a: "Não, só de segunda a sexta."}
+  - {q: "Quanto custa a visita técnica?", a: "R$ 150,00, abatidos do serviço se você fechar o orçamento."}
+  - {q: "Vocês atendem emergência de vazamento?", a: "Sim, em horário comercial, com encaixe no mesmo dia."}
+  - {q: "Qual a garantia do serviço?", a: "90 dias para mão de obra, contados da conclusão."}
+  - {q: "Em quais bairros vocês atendem?", a: "Só no centro; fora dele há taxa de deslocamento."}
+  - {q: "Como posso pagar?", a: "Pix, dinheiro ou cartão em até 3x sem juros."}
+  - {q: "Preciso remarcar a visita, dá?", a: "Dá, sem custo se avisar até 24h antes."}

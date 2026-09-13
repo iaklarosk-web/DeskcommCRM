@@ -76,6 +76,57 @@ interface Excecao {
  */
 const PROVA_PROPRIA: readonly Excecao[] = [
   {
+    tabela: "crm_order_check_command_receipts",
+    razao:
+      "tests/invariants/f02-t12-order-checks-schema.test.ts prova zero policies, " +
+      "nenhum privilégio anon/authenticated, quatro operações negadas em dois " +
+      "tenants e somente SELECT+INSERT+UPDATE para service_role.",
+  },
+  {
+    tabela: "crm_task_command_receipts",
+    razao:
+      "tests/invariants/f02-t03-work-schema.test.ts prova zero policies, " +
+      "nenhum privilégio anon/authenticated, permission denied real nas quatro " +
+      "operações nos dois tenants e somente SELECT+INSERT para service_role.",
+  },
+  {
+    tabela: "crm_order_command_receipts",
+    razao:
+      "tests/invariants/f02-t02-order-schema.test.ts prova zero policies, " +
+      "nenhum privilégio anon/authenticated e permission denied real nas " +
+      "quatro operações em ambos os tenants; o acesso service_role continua cercado por FK composta.",
+  },
+  {
+    tabela: "channel_routing_policies",
+    razao:
+      "tests/invariants/channel-routing.test.ts — dois tenants reais, leitura positiva local e negativa cruzada por JWT; FK composta rejeita canal de outra org",
+  },
+  {
+    tabela: "channel_routing_responsibles",
+    razao:
+      "tests/invariants/channel-routing.test.ts — JWT do tenant B não lê responsáveis de A; revogação remove vínculo e claim revalida membro ativo",
+  },
+  {
+    tabela: "channel_connection_requests",
+    razao:
+      "tests/invariants/channel-routing.test.ts — recibo privado sem SELECT authenticated; reserva admin com MFA e finalização service-only cercada por org e lease",
+  },
+  {
+    tabela: "appointment_recovery_receipts",
+    razao:
+      "tests/invariants/agenda-presenca-acl.test.ts — leitura/escrita direta anon/authenticated negadas, escrita service_role negada e RPC service-only valida a tupla org/evento nos dois sentidos A/B",
+  },
+  {
+    tabela: "event_service_origins",
+    razao:
+      "tests/invariants/service-event-origin.test.ts — recibo server-only, authenticated sem leitura/escrita, RPC rejeita tenant B real",
+  },
+  {
+    tabela: "platform_support_sessions",
+    razao:
+      "tests/invariants/suporte-temporario.test.ts — grant por sessão, readonly e nenhuma escrita direta authenticated",
+  },
+  {
     tabela: "webhook_lead_captures",
     razao:
       "tests/invariants/historico-de-captacao-rls.test.ts prova isolamento " +
@@ -87,14 +138,14 @@ const PROVA_PROPRIA: readonly Excecao[] = [
   {
     tabela: "meta_templates",
     razao:
-      "tests/invariants/meta-templates-rls.test.ts (\"membro da org B NÃO vê " +
-      "o template da org A\") prova isolamento com `countAs` real.",
+      'tests/invariants/meta-templates-rls.test.ts ("membro da org B NÃO vê ' +
+      'o template da org A") prova isolamento com `countAs` real.',
   },
   {
     tabela: "webhook_sources",
     razao:
-      "tests/invariants/webhooks-rls.test.ts (\"manager B (org B) NÃO vê " +
-      "webhook_source/automation_rule da org A\") prova isolamento com " +
+      'tests/invariants/webhooks-rls.test.ts ("manager B (org B) NÃO vê ' +
+      'webhook_source/automation_rule da org A") prova isolamento com ' +
       "`countAs` real.",
   },
   {
@@ -104,8 +155,8 @@ const PROVA_PROPRIA: readonly Excecao[] = [
   {
     tabela: "automation_rule_runs",
     razao:
-      "tests/invariants/webhooks-rls.test.ts (\"service_role insere " +
-      "automation_rule_runs na org A; manager B não vê, manager A vê\").",
+      'tests/invariants/webhooks-rls.test.ts ("service_role insere ' +
+      'automation_rule_runs na org A; manager B não vê, manager A vê").',
   },
   {
     tabela: "calendar_event_types",
@@ -125,8 +176,8 @@ const PROVA_PROPRIA: readonly Excecao[] = [
     tabela: "calendar_connections",
     razao:
       "tests/invariants/agenda-rls.test.ts — TABELAS_DA_AGENDA prova o " +
-      "isolamento cross-org, e o describe seguinte (\"o gate de papel que as " +
-      "outras cinco não têm\") ainda prova o gate de dono/role por cima.",
+      'isolamento cross-org, e o describe seguinte ("o gate de papel que as ' +
+      'outras cinco não têm") ainda prova o gate de dono/role por cima.',
   },
   {
     tabela: "calendar_connection_calendars",
@@ -140,7 +191,7 @@ const PROVA_PROPRIA: readonly Excecao[] = [
     tabela: "followup_flow_versions",
     razao:
       "tests/invariants/followup-schema.test.ts — `FOLLOWUP_TABLES`, com " +
-      "\"user of org A reads 0 rows of org B\" por tabela (mesmo molde de " +
+      '"user of org A reads 0 rows of org B" por tabela (mesmo molde de ' +
       "rls-isolation.test.ts).",
   },
   {
@@ -158,8 +209,8 @@ const PROVA_PROPRIA: readonly Excecao[] = [
   {
     tabela: "user_organizations",
     razao:
-      "tests/invariants/gov-1b-team-manager-read.test.ts (\"cross-org: " +
-      "manager da org A NÃO lê linhas da org B (0 rows)\") prova isolamento " +
+      'tests/invariants/gov-1b-team-manager-read.test.ts ("cross-org: ' +
+      'manager da org A NÃO lê linhas da org B (0 rows)") prova isolamento ' +
       "com `countAs` real, além do self-read do agent.",
   },
   // ─── As três do eixo de anúncios (migrations 0213/0214) ───
@@ -203,6 +254,148 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "`describe.each`. Não guarda segredo, mas é o livro-razão de quais leads " +
       "da organização viraram venda, e quem o lê é o servidor com o admin client " +
       "filtrando organization_id à mão (a tela `/app/settings/conversoes`).",
+  },
+  // ─── migration 0222 (F01-T08) — mesma postura deny-all das três acima ───
+  {
+    tabela: "ai_usage_events",
+    razao:
+      "tests/invariants/uso-de-ia-e-server-side.test.ts — privilégio NENHUM " +
+      "para anon e authenticated, `permission denied` medido sob `set role`, " +
+      "RLS ligada, zero policies. É o livro-razão de custo de IA de todos os " +
+      "tenants; escrevem só `recordUsage` (service role, via withTenant) e — " +
+      "desde a F04-T08 — `runModelCall`, no MESMO statement do `llm_calls` que " +
+      "originou o uso (`llm_call_id`, único parcial). A leitura do tenant chega " +
+      "por agregação server-side na Fase 2.",
+  },
+  // ─── migrations 9014 e 9016 (F03) — mesma postura deny-all (D35) ───
+  //
+  // As duas nasceram `service_only`: RLS ligada, ZERO policies, `revoke all`
+  // de public/anon/authenticated e `grant all` só para service_role. Como nas
+  // quatro entradas acima, a prova NÃO conta linha cross-org — não há regra de
+  // tenant para acertar ou errar quando não há privilégio nenhum. Ela mede a
+  // recusa: `set local role` + JWT de usuário real, as QUATRO operações, nos
+  // DOIS tenants, e o `permission denied` conferido pelo nome. Por isso também
+  // não podem entrar em `TABLES`: lá o `countAs` receberia `permission denied`
+  // onde espera `0`, e a "correção" natural seria criar uma policy — isto é,
+  // passar a SERVIR pelo PostgREST a caixa de saída e o registro de execução.
+  {
+    tabela: "mock_outbox",
+    razao:
+      "tests/invariants/f03-t02-mock-outbox.test.ts — duas organizações e dois " +
+      "usuários reais em auth.users/user_organizations; `permission denied` " +
+      "medido sob `set local role authenticated` + JWT nas quatro operações " +
+      "(select/insert/update/delete) para os DOIS usuários (8/8), as mesmas " +
+      "quatro negadas para `anon` (4/4), e controle positivo de `service_role` " +
+      "que escreve e lê a linha de volta (guarda de vacuidade). O catálogo " +
+      "— RLS ligada, zero policies, relacl sem anon/authenticated/PUBLIC — é " +
+      "conferido à parte no mesmo arquivo.",
+  },
+  // ─── migration 9017 (F04) — mesma postura deny-all (D35) ───
+  //
+  // A pendência e a auditoria nasceram `service_only`: RLS ligada, ZERO
+  // policies, `revoke all` de public/anon/authenticated e `grant all` só para
+  // service_role. O Inbox do atendente as lê pelo SERVIDOR, via `withTenant` —
+  // nunca pelo PostgREST. Como nas entradas acima, a prova NÃO conta linha
+  // cross-org (não há regra de tenant para acertar quando não há privilégio
+  // nenhum): ela mede a RECUSA, sob `set local role` + JWT, nas quatro
+  // operações, nos dois tenants. Por isso também não podem entrar em `TABLES`:
+  // lá o `countAs` receberia `permission denied` onde espera `0`, e a "correção"
+  // natural seria criar policy — isto é, passar a SERVIR pelo PostgREST a
+  // auditoria que existe justamente para ninguém escrever de fora.
+  {
+    tabela: "pending_actions",
+    razao:
+      "tests/invariants/f04-t02-confirmacao-schema.test.ts — duas organizações e " +
+      "dois usuários reais em auth.users/user_organizations; `permission denied` " +
+      "medido sob `set local role authenticated` + JWT nas quatro operações " +
+      "(select/insert/update/delete) para os DOIS usuários, as mesmas quatro " +
+      "negadas para `anon`, e controle positivo de `service_role` que escreve e " +
+      "lê a linha de volta (guarda de vacuidade). O catálogo — RLS ligada, zero " +
+      "policies, relacl sem anon/authenticated/PUBLIC — é conferido à parte no " +
+      "caso `pending_actions e audit_events são service_only (D35)`, junto com a " +
+      "unicidade por conversa e a coerência status ⇔ resolved_at.",
+  },
+  {
+    tabela: "audit_events",
+    razao:
+      "tests/invariants/f04-t02-confirmacao-schema.test.ts — a mesma prova da " +
+      "linha acima sobre o registro único de §5.17: dois tenants e dois usuários " +
+      "reais, `permission denied` sob `set local role authenticated` + JWT nas " +
+      "quatro operações, `anon` negado nas quatro e `service_role` inserindo e " +
+      "lendo de volta. Os vocabulários de `actor_type`, `result` e `risk` têm " +
+      "caso próprio, com valor inventado recusado; `api_audit_log` continua de " +
+      "pé ao lado, como §5.17 manda.",
+  },
+  {
+    tabela: "job_runs",
+    razao:
+      "tests/invariants/f03-t07-fila-de-saida.test.ts — mesma prova da linha " +
+      "acima sobre o registro de tentativa: dois tenants e dois usuários reais, " +
+      "`permission denied` sob `set local role authenticated` + JWT nas quatro " +
+      "operações (8/8), `anon` negado nas quatro (4/4) e `service_role` " +
+      "inserindo e lendo de volta (guarda de vacuidade). O catálogo " +
+      "service_only continua conferido no caso `job_runs é service_only (D35)`.",
+  },
+  // ─── migration 9020 (F05) — mesma postura deny-all (D35) ───
+  //
+  // O dossiê de handoff (§5.11) carrega o TEXTO da conversa do cliente: nome,
+  // últimas cinco mensagens, resumo. Servi-lo pelo PostgREST seria pôr o
+  // conteúdo da conversa a uma anon key de distância — e um registro que o
+  // navegador lê é um registro que o navegador pode escrever. A fila do
+  // atendente é servida pelo SERVIDOR (`src/handoff/registro.ts`, via
+  // `withTenant`). Como nas entradas acima, a prova mede a RECUSA, não a
+  // contagem cross-org: sem privilégio nenhum não há regra de tenant para
+  // acertar, e em `TABLES` o `countAs` receberia `permission denied` onde
+  // espera `0`.
+  {
+    tabela: "handoffs",
+    razao:
+      "tests/invariants/f05-t01-handoff-schema.test.ts — duas organizações e " +
+      "dois usuários reais em auth.users/user_organizations; `permission denied` " +
+      "medido sob `set local role authenticated` + JWT nas quatro operações " +
+      "(select/insert/update/delete) para os DOIS usuários (8/8), as mesmas " +
+      "quatro negadas para `anon` (4/4) e controle positivo de `service_role` " +
+      "que escreve e lê a linha de volta (guarda de vacuidade). O catálogo " +
+      "— RLS ligada, zero policies, relacl sem anon/authenticated/PUBLIC — é " +
+      "conferido à parte no caso `handoffs é service_only (D35)`, junto com os " +
+      "oito motivos do enum, as cinco posições de `last_messages`, a unicidade " +
+      "do dossiê aberto por conversa e a coerência claimed_by ⇔ claimed_at.",
+  },
+  // F05-T05 (§5.16, migration 9021). O aviso por usuário carrega ids e rótulos
+  // da conversa de um cliente, e a caixa de saída do e-mail mock carrega o
+  // endereço da pessoa: os dois são servidos pelo SERVIDOR (`src/notifications`,
+  // via `withTenant`). Como nas entradas acima, a prova mede a RECUSA.
+  {
+    tabela: "notifications",
+    razao:
+      "tests/invariants/f05-t05-notifications-schema.test.ts — duas organizações e " +
+      "dois usuários reais; `permission denied` medido sob `set local role " +
+      "authenticated` + JWT nas quatro operações para os DOIS usuários (8/8 por " +
+      "tabela), as mesmas quatro negadas para `anon` (4/4) e controle positivo de " +
+      "`service_role` que escreve e lê a linha de volta (guarda de vacuidade). " +
+      "Catálogo (RLS ligada, zero policies, relacl sem anon/authenticated/PUBLIC), " +
+      "os seis eventos do enum no CHECK e o payload-objeto conferidos à parte.",
+  },
+  {
+    tabela: "email_outbox",
+    razao:
+      "tests/invariants/f05-t05-notifications-schema.test.ts — mesma prova da " +
+      "irmã `notifications`, na mesma corrida: 8/8 recusas para authenticated em " +
+      "dois tenants, 4/4 para anon, service_role escreve e lê de volta; os seis " +
+      "eventos no CHECK e destinatário/assunto/corpo não vazios conferidos à parte.",
+  },
+  // F05-T06 (§5.12, migration 9022). Registro da automação, lido pelo job, pela
+  // entrada e pelo turno via `withTenant`; a FK composta para `contacts` é o
+  // que impede cliente de outro tenant. A prova mede a RECUSA.
+  {
+    tabela: "reminder_runs",
+    razao:
+      "tests/invariants/f05-t06-reminder-schema.test.ts — duas organizações e " +
+      "dois usuários reais; `permission denied` medido sob `set local role " +
+      "authenticated` + JWT nas quatro operações para os DOIS usuários (8/8), " +
+      "as mesmas quatro negadas para `anon` (4/4) e controle positivo de " +
+      "`service_role` que escreve e lê a linha de volta. Catálogo, índice único " +
+      "do período, FK composta cruzada e as CHECKs de coerência conferidos à parte.",
   },
 ];
 
@@ -395,7 +588,10 @@ describe("varredura: completude de RLS sobre toda tabela com organization_id", (
     const porTabela = new Map(inventario().map((t) => [t.tabela, t]));
     for (const { tabela } of DEBITO_CONHECIDO) {
       const achada = porTabela.get(tabela);
-      expect(achada, `DEBITO_CONHECIDO cita tabela inexistente: ${tabela} — remova a entrada`).toBeDefined();
+      expect(
+        achada,
+        `DEBITO_CONHECIDO cita tabela inexistente: ${tabela} — remova a entrada`,
+      ).toBeDefined();
       expect(
         achada?.rlsLigada,
         `${tabela} está em DEBITO_CONHECIDO mas perdeu RLS — isto não é mais só falta de teste, é tabela exposta`,

@@ -27,6 +27,7 @@ import type { LeadCandidate } from "@/lib/leads/active-lead";
 import { createClient } from "@/lib/supabase/server";
 import type { BoardData, Pipeline, Stage } from "@/lib/kanban/types";
 import type { Lead } from "@/lib/types/leads";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 
 export const dynamic = "force-dynamic";
 
@@ -359,6 +360,14 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
   }
   const authUser = await loadAuthUser();
   const t = (texto: string) => traduzir(texto, authUser?.idioma ?? "pt-BR");
+  // F06-T01: idem ao timeline — RLS da sessão; a linha leva a associação do usuário.
+  registrarRequisicaoDe(_req, {
+    outcome: "allowed",
+    organization_id: authUser?.organizations[0]?.organization_id ?? null,
+    scope: "unresolved",
+    request_id: requestId,
+    actor_id: user.id,
+  });
 
   const [
     { data: pipeline, error: pipelineErr },

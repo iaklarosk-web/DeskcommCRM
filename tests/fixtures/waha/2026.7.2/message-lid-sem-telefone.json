@@ -1,0 +1,24 @@
+{
+  "event": "message.any",
+  "session": "f03-sessao-ficticia",
+  "payload": {
+    "id": "false_250302204792919@lid_3EB0F03LID002",
+    "from": "250302204792919@lid",
+    "to": "5511900000099@c.us",
+    "fromMe": false,
+    "body": "Sem numero alternativo neste evento",
+    "type": "chat",
+    "hasMedia": false,
+    "timestamp": 1789000120,
+    "_data": {
+      "pushName": "Cliente Ficticio Tres",
+      "key": {
+        "remoteJid": "250302204792919@lid",
+        "addressingMode": "lid",
+        "fromMe": false,
+        "id": "3EB0F03LID002"
+      },
+      "message": { "conversation": "Sem numero alternativo neste evento" }
+    }
+  }
+}

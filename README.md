@@ -42,6 +42,82 @@
 
 ---
 
+## 🏢 CRM SaaS multi-tenant sobre este código (fork CRM-OS, F00–F07)
+
+Este checkout é o **fork multi-tenant** do DeskcommCRM construído por fases
+(F00–F07) para o piloto de uma distribuidora e, depois, para um SaaS comercial.
+O que segue abaixo desta seção é o README herdado do projeto original e
+continua valendo para o kit de instalação single-tenant. O que é do fork está
+em quatro lugares e nesta ordem de leitura:
+
+| O quê | Onde |
+|---|---|
+| Como o agente trabalha (regras duras, DoD, quando parar) | [`AGENTS.md`](AGENTS.md) |
+| O que construir: decisões D01–D50, módulos, backlog F01–F17, `verify.sh`, condição de parada | [`docs/DIRETRIZ.md`](docs/DIRETRIZ.md) |
+| Estado da construção: fase corrente, `next_task`, bloco `VERIFY SUMMARY` de cada fase, BLOCKERs | [`BUILD-STATE.md`](BUILD-STATE.md) |
+| Decisões de arquitetura, uma por arquivo (ADR-001…) | [`docs/decisions/`](docs/decisions/) |
+| Relatório final da Fase 1 em staging (8 seções, bloco colado, o que NÃO foi verificado) | [`FINAL-VALIDATION.md`](FINAL-VALIDATION.md) |
+| Auditoria do código herdado e estado-alvo por módulo | [`docs/migration/deskcomm-audit.md`](docs/migration/deskcomm-audit.md), [`docs/migration/target-state.md`](docs/migration/target-state.md) |
+| Achados abertos e portões do proprietário | [`docs/migration/VARREDURA-MELHORIAS.md`](docs/migration/VARREDURA-MELHORIAS.md) |
+| Runbook do staging desta VPS (Compose, Supabase local, Tailscale) | [`docs/ops/staging.md`](docs/ops/staging.md) |
+
+### Como rodar tudo do zero
+
+O que a F07-T04 executa, passo a passo, está em [`scripts/from-scratch.sh`](scripts/from-scratch.sh)
+(clone → instalação → banco novo com o baseline → seeds → `verify.sh` → derrubar).
+À mão, na ordem:
+
+```bash
+git clone --branch feat/F03-conversation-inbox git@github.com:iaklarosk-web/DeskcommCRM.git crm && cd crm
+pnpm install --frozen-lockfile
+bash scripts/verify/sandbox.sh up                       # Supabase descartável (5542x) + supabase/baseline.sql
+SUPABASE_WORKDIR=.verify-logs/sandbox-workdir E2E_PORT=3102 pnpm e2e:env   # .env.e2e (privado)
+export SUPABASE_DB_URL="postgresql://postgres:${SANDBOX_DB_PASSWORD:-postgres}@127.0.0.1:55422/postgres"
+bash scripts/create-tenant.sh docs/tenants/deka.seed.yaml
+bash scripts/create-tenant.sh docs/tenants/demo2.seed.yaml
+F02_E2E_SANDBOX_ID=f02-crm-cadastros-disposable E2E_PORT=3102 bash scripts/verify.sh   # STATUS: READY (Fnn)
+bash scripts/verify/sandbox.sh down
+```
+
+O schema é `supabase/baseline.sql` (o que o self-host aplica), não a cadeia de
+migrations; migration nova = apêndice idempotente no baseline + linha no
+[`supabase/migrations/MANIFEST.md`](supabase/migrations/MANIFEST.md). O `.env.example`
+é gerado do código com arquivo:linha (`bash scripts/env-inventory.sh`).
+
+### Como criar um tenant novo
+
+Um arquivo YAML por tenant em [`docs/tenants/`](docs/tenants/) com o schema de
+DIRETRIZ §5.21 (`tenant`, `users`, `channel_accounts`, `products`, `customers`,
+`settings`, `faq`); nada da empresa vive em `src/` (`grep -ril <slug> src/` = 0).
+
+```bash
+cp docs/tenants/demo2.seed.yaml docs/tenants/<slug>.seed.yaml   # edite slug, nome, usuários, produtos, clientes, settings, faq
+SUPABASE_DB_URL=... bash scripts/create-tenant.sh docs/tenants/<slug>.seed.yaml
+# → validateSeed: 0 erros · products=N customers=N companies=N · faq=N acervo_materiais=1 · tenant=<slug> organization_id=… rows_created=N
+SUPABASE_DB_URL=... bash scripts/create-tenant.sh docs/tenants/<slug>.seed.yaml   # de novo: rows_created=0 (idempotente)
+```
+
+O loader grava organização (com `onboarded_at`), usuários e papéis (ADR-003),
+`channel_accounts` mock, `tenant_settings`, catálogo, clientes/empresas e o FAQ
+no acervo da organização (ADR-029 §3). Valores `TODO-…` são pendência: contam,
+não viram linha. No staging, `bash scripts/staging/seed-users.sh <slug>` dá senha
+aos usuários fictícios e sessão de canal mock; `SMOKE_TENANTS=<slug> bash
+scripts/smoke.sh http://127.0.0.1:3200` confere. O ciclo inteiro — criar, smoke,
+navegador, remover — é [`scripts/verify/tenant-efemero.sh <slug>`](scripts/verify/tenant-efemero.sh)
+(F07-T03). Configuração viva depois disso é do `tenant_admin`, pela tela; a
+conexão WhatsApp real entra por `channel_accounts` (provider `waha`) só com
+autorização do proprietário (D04, D13).
+
+### Staging e o gate
+
+O `scripts/verify.sh` é a única prova aceita de "pronto" (D25): imprime o bloco
+`VERIFY SUMMARY` e `STATUS: READY (Fnn)`; dentro do staging desta VPS
+(`VERIFY_ENVIRONMENT=staging`, ADR-028) imprime `READY (staging)`. Receita, portas
+e usuários fictícios: [`docs/ops/staging.md`](docs/ops/staging.md). Mocks sempre:
+`WHATSAPP_MODE=mock AI_PROVIDER=mock`; nada sai para pessoa.
+
+---
+
 ## ⚡ Instalar na sua VPS (o caminho principal)
 
 ### 1. Entre na sua VPS

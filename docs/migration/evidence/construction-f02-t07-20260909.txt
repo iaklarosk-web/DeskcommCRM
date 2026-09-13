@@ -1,0 +1,14 @@
+F02-T07 — seeds fictícios, checkpoint ainda em construção
+Base de código publicada ef4e32ec; arquivos T07 promovidos da preparação /tmp, sem regras Deka preenchidas.
+Unitário combinado T04–T07:108/108 casos executados; parser de seed não carregou por jsdom/URL import.meta. Pragma explícito de ambiente Node corrigiu o preparo. Rechecagem T07:19/19 em três arquivos.
+Primeira integração:3/6; ON CONFLICT sem alvo em crm_order_items não pode usar a constraint diferível de posição. Correção no writer: ON CONFLICT(id), preservando constraint e migrations. Rechecagem:6/6.
+Integração ampliada:7/7, incluindo execução real do CLI duas vezes para cada um de dois tenants. YAML e contagens conferidos; segunda execução cria zero linhas e preserva snapshots e settings. O comando roda com ambiente filtrado e conexão explícita ao Postgres efêmero do harness; nenhum canal foi configurado nesse caso.
+Mutante23: primeira instrumentação encerrou127 porque bash direto não recebeu vitest no PATH; não contou como mutante morto. Corrigido runner para pnpm exec bash;1/1 detectado pela asserção nominal: escritor sem guard aceitou marcador inválido. Fonte real permaneceu intacta; sandbox/scratch removidos.
+Typecheck identificou arrays readonly passados ao pg; os dois helpers agora entregam uma cópia mutável sem alterar os valores. Provas posteriores executaram o writer corrigido. O novo teste CLI também precisou declarar NODE_ENV=test no ProcessEnv, exigido pelo tipo de ambiente do projeto; rechecagem final ainda pendente.
+Não configura a Deka, não executa provedores reais e não autoriza executores de IA/automação no serviço operacional. Legacy products.size continua sem mapeamento seguro, registrado como pendência.
+.verify-logs/f02-t07/unit-recheck.json: sha256=027bca63a7569f307f78bb57d85c97f7f6b336d1203f31f24d8d2fa277fc4461
+.verify-logs/f02-t07/integration.json: sha256=6018e61bfbcee15af8a82c21a64444a2a692f40504081b855c86512a3ef5952a
+.verify-logs/f02-t07/integration-recheck.json: sha256=39921c9b4675d238ab58b244b77314f32a654e7d953e9e03abd87cb55821372c
+.verify-logs/f02-t07/integration-cli.json: sha256=6114620fd8d1d5d00d22cf2de0e0efb326ad2b15474e0c287e7d62a9d6ebb56d
+.verify-logs/f02-t07/mutant23.log: sha256=0a71822ef8686d7e7b109897ab003a0e94a6c3feebb1bb5277c8b08bcb1b864b
+.verify-logs/f02-t07/mutant23-recheck.log: sha256=347fecd06bf5ce47ef8425a8c0f396dd6037924cd858149e53e09c7bb702330c

@@ -71,6 +71,9 @@ export const crmListConversations: McpToolDefinition<typeof listInputShape> = {
         // é erro de tipo. A tool do MCP não expõe filtro por comando (quem
         // pergunta é a tela), então ela não filtra por ele.
         comando: undefined,
+        // Mesma razão, mesma decisão: o filtro por estado D16 (F03-T09) é da
+        // TELA do inbox. A tool não o expõe.
+        saas_state: undefined,
         limit: input.limit,
         cursor: input.cursor,
       },

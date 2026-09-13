@@ -67,6 +67,14 @@ const schema = z.object({
 
   // Supabase — obrigatórias sempre (até pra dev local)
   NEXT_PUBLIC_SUPABASE_URL: requiredAlways("NEXT_PUBLIC_SUPABASE_URL").url(),
+  /**
+   * F06-T06 (ADR-028): a URL do Supabase que o NAVEGADOR usa quando ela difere
+   * da do servidor. Num Compose o servidor alcança o kong pelo nome do serviço
+   * (`http://kong:8000`) e o navegador não; sem esta chave os dois lados
+   * dividem `NEXT_PUBLIC_SUPABASE_URL`, como sempre. Só o `PublicEnvScript`
+   * a lê — o servidor continua em `NEXT_PUBLIC_SUPABASE_URL`.
+   */
+  NEXT_PUBLIC_SUPABASE_URL_BROWSER: z.string().url().optional(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: requiredAlways("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
   SUPABASE_SERVICE_ROLE_KEY: requiredAlways("SUPABASE_SERVICE_ROLE_KEY"),
 
