@@ -24,7 +24,7 @@ beforeAll(async () => {
   await pool.query("insert into organizations(id,slug,legal_name,display_name) values($1,$2,'F13 A','F13 A'),($3,$4,'F13 B','F13 B')", [orgA, `f13-a-${orgA.slice(0, 8)}`, orgB, `f13-b-${orgB.slice(0, 8)}`]);
   await pool.query("insert into user_organizations(organization_id,user_id,role,accepted_at) values($1,$2,'admin',now()),($3,$4,'admin',now())", [orgA, userA, orgB, userB]);
   const r = await pool.query<{ id: string }>("insert into crm_companies(organization_id,legal_name,custom_fields) values($1,'Empresa B','{\"segmento\":\"varejo\"}') returning id", [orgB]);
-  empresaB = r.rows[0].id;
+  empresaB = r.rows[0]!.id;
 });
 afterAll(() => pool.end());
 
@@ -51,13 +51,13 @@ describe("F13-T01 — crm_companies.custom_fields (9026)", () => {
     expect(col.rows).toHaveLength(1);
     expect(col.rows[0]).toMatchObject({ data_type: "jsonb", is_nullable: "NO" });
     const nova = await pool.query<{ custom_fields: unknown }>("insert into crm_companies(organization_id,legal_name) values($1,'Sem campos') returning custom_fields", [orgA]);
-    expect(nova.rows[0].custom_fields).toEqual({});
+    expect(nova.rows[0]!.custom_fields).toEqual({});
     await expect(pool.query("insert into crm_companies(organization_id,legal_name,custom_fields) values($1,'Lista','[1,2]')", [orgA])).rejects.toThrow(/crm_companies_custom_fields_object/);
   });
 
   it("valor gravado sobrevive sem definição: o banco não conhece a definição, só o objeto", async () => {
     const r = await pool.query<{ custom_fields: Record<string, unknown> }>("select custom_fields from crm_companies where id=$1", [empresaB]);
-    expect(r.rows[0].custom_fields).toEqual({ segmento: "varejo" });
+    expect(r.rows[0]!.custom_fields).toEqual({ segmento: "varejo" });
     const setting = await pool.query("select count(*)::int as n from tenant_settings where organization_id=$1 and key='crm.fields.companies'", [orgB]);
     expect(setting.rows[0].n).toBe(0);
   });
