@@ -19,6 +19,7 @@ import { audit } from "@/lib/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { slugToEvent } from "@/lib/nuvemshop/config";
 import { verifyHmac } from "@/lib/nuvemshop/oauth";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -75,6 +76,8 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     // intentionally return 200 so Nuvemshop stops retrying, but log silently.
     return ok({ accepted: false, reason: "tenant_not_found" });
   }
+
+  registrarRequisicaoDe(req, { outcome: "accepted", organization_id: integration.organization_id }); // F06-T01
 
   // Decrypt webhook secret (= app client_secret at connect time).
   const dec = await admin.rpc("fn_decrypt_oauth", {

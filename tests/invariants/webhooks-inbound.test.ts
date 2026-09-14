@@ -4,10 +4,17 @@ import { readFileSync } from "node:fs";
 import { NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import type { env as Environment } from "@/lib/env";
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
+// O limitador real usa apenas memória nesta fixture, sem Redis externo.
+vi.mock("@/lib/env", async (original) => {
+  const real = await original<{ env: typeof Environment }>();
+  return { ...real, env: { ...real.env, UPSTASH_REDIS_REST_URL: "", UPSTASH_REDIS_REST_TOKEN: "" } };
+});
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { POST } from "@/app/api/v1/webhooks/in/[token]/route";
 import { GOV_ORG, GOV_PIPELINE, GOV_STAGE, seedGov, sql } from "./gov-helpers";
 
@@ -532,11 +539,36 @@ describe("POST /api/v1/webhooks/in/[token] (Task 6)", () => {
     // si (insertErr.code === "23505") fica sem cobertura direta de teste.
   });
 
-  // ponytail: rate limit cai no fallback in-memory sem Upstash (sem env
-  // configurada no vitest.db.config.ts) — esse fallback já é coberto por
-  // unit test em lib/ai/dispatcher/rate-limit.ts. Provar o 429 aqui exigiria
-  // 61 chamadas sequenciais só pra exercitar um path já testado; pulado.
-  it.skip("rate limit 429 após estourar a janela — coberto por unit test do fallback in-memory", () => {});
+  it("rate limit 429 após estourar a janela — coberto por unit test do fallback in-memory", async () => {
+    // Contador REAL, 59 incrementos baratos; só a fronteira faz POST e SQL.
+    // Token próprio e relógio fixo impedem interferência dos outros casos.
+    const token = "wh-in-rate-limit-isolado-1234";
+    const otherToken = "wh-in-rate-limit-controle-1234";
+    sql(`insert into public.webhook_sources (organization_id, name, path_token, default_pipeline_id, default_stage_id)
+      values ('${GOV_ORG}', 'Rate limit', '${token}', '${GOV_PIPELINE}', '${GOV_STAGE}'),
+             ('${GOV_ORG}', 'Rate limit control', '${otherToken}', '${GOV_PIPELINE}', '${GOV_STAGE}')`);
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-09-09T12:00:00Z"));
+    try {
+      for (let i = 1; i <= 59; i++) {
+        expect(await checkRateLimit(`webhook_in:${token}`, 60, 60)).toMatchObject({ allowed: true, count: i });
+      }
+      expect((await POST(jsonReq(token, { nome: "Limite permitido", telefone: "11999770001" }), reqCtx(token))).status).toBe(200);
+      // A recusa acontece antes de abrir o cliente: nenhuma leitura/escrita nova.
+      vi.mocked(createAdminClient).mockClear();
+      const blocked = await POST(jsonReq(token, { nome: "Não criar", telefone: "11999770002" }), reqCtx(token));
+      expect(blocked.status).toBe(429);
+      expect(blocked.headers.get("Retry-After")).toBe("60");
+      expect(await blocked.json()).toMatchObject({ error: { code: "rate_limited" } });
+      expect(createAdminClient).not.toHaveBeenCalled();
+      expect(rows(`select id from public.contacts where organization_id = '${GOV_ORG}' and phone_number = '+5511999770002'`)).toHaveLength(0);
+      expect(rows(`select id from public.webhook_events_log where webhook_path_token = '${token}'`)).toHaveLength(1);
+      expect((await POST(jsonReq(otherToken, { nome: "Outro token", telefone: "11999770003" }), reqCtx(otherToken))).status).toBe(200);
+      clock.mockReturnValue(Date.parse("2026-09-09T12:01:00Z"));
+      expect((await POST(jsonReq(token, { nome: "Nova janela", telefone: "11999770004" }), reqCtx(token))).status).toBe(200);
+    } finally {
+      clock.mockRestore();
+    }
+  });
 });
 
 describe("POST /api/v1/webhooks/in/[token] — Respondi (payload aninhado, achado 2026-08-25)", () => {

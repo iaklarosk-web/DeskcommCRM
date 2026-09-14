@@ -14,7 +14,7 @@
  * então some junto a casca: o dono vê "Algo deu errado" e um ID. Rastro existe,
  * mas não onde se procura primeiro — o throw é do cliente, então não há linha no
  * log do servidor Next; quem recebe é o Sentry, que numa instalação padrão é o
- * da comunidade (`SENTRY_DSN` vazio no `.env.example` cai no `DEFAULT_SENTRY_DSN`).
+ * da comunidade só se a instalação escolheu `SENTRY_DSN=community` (desde §B11/F11-T00 o vazio DESLIGA).
  * Com `SENTRY_DSN=off` não sobra rastro nenhum.
  *
  * Quem é atingido, e quem não é — está medido em `components/admin/AdminShell.tsx`

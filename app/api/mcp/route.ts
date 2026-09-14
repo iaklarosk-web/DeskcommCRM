@@ -15,6 +15,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 
 import { createMcpServer } from "@/lib/mcp/server";
 import { McpAuthError, validateBearerToken } from "@/lib/mcp/auth";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -46,6 +47,9 @@ async function handle(req: NextRequest): Promise<Response> {
     const msg = err instanceof Error ? err.message : "auth_failed";
     return jsonRpcError(-32603, msg, 500);
   }
+
+  // F06-T01: o token Bearer resolve a organização — a linha sai aqui.
+  registrarRequisicaoDe(req, { outcome: "allowed", organization_id: auth.organizationId, request_id: requestId });
 
   const transport = new WebStandardStreamableHTTPServerTransport({});
   const server = createMcpServer(auth, requestId);

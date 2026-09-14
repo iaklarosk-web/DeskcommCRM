@@ -8,6 +8,7 @@
  *  - lgpdAnonymizeSchema    → POST /api/v1/lgpd/anonymize (irreversible)
  */
 import { z } from "zod";
+import { contactCommercialFieldsSchema } from "@/src/crm/commercial_fields";
 
 const PHONE_REGEX = /^\+\d{8,15}$/;
 const CPF_DIGITS = /^\d{11}$/;
@@ -68,6 +69,9 @@ export type ContactCreate = z.infer<typeof contactCreateSchema>;
 
 export const contactPatchSchema = contactCreateSchema.partial().extend({
   source: z.string().min(1).optional(),
+  // São campos exclusivos do PATCH: criar um contato não cria vínculo comercial.
+  company_id: contactCommercialFieldsSchema.shape.company_id.optional(),
+  recurring: contactCommercialFieldsSchema.shape.recurring.optional(),
 });
 export type ContactPatch = z.infer<typeof contactPatchSchema>;
 

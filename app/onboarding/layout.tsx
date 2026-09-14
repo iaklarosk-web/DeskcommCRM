@@ -9,14 +9,23 @@ import { branding } from "@/lib/branding";
 import { passosVisiveis } from "@/lib/onboarding/passos";
 import { env } from "@/lib/env";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
+import { acessoDaOrganizacao } from "@/lib/auth/acesso-da-assinatura";
 
 export default async function OnboardingLayout({ children }: { children: React.ReactNode }) {
   const user = await requireAuth();
   const activeOrg = await resolveActiveOrg(user);
+  // Acompanhamento observa a organização incompleta no shell com saída explícita.
+  if (user.support) redirect("/app/inbox");
   // Sem organização o onboarding não tem o que mostrar — mas mandar para
   // `/login` fechava o círculo: quem entrasse de novo voltaria para cá. A saída
   // é a tela que CRIA a organização que falta.
   if (!activeOrg) redirect("/get-started");
+
+  // F11-T04 (D38/D39, ADR-030 §1): a ORDEM da entrada é assinatura →
+  // onboarding → produto. Sem assinatura que permita uso (pendente de
+  // pagamento, cancelada) o wizard não abre: a pessoa contrata primeiro.
+  const acesso = await acessoDaOrganizacao(activeOrg.orgId);
+  if (acesso.mode === "billing_only") redirect("/app/billing");
 
   const { state, onboardedAt } = await loadOnboardingState(activeOrg.orgId);
   if (onboardedAt) redirect("/app/inbox");

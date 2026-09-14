@@ -1,0 +1,207 @@
+F07 — Validação final em staging. Evidência de construção.
+Fechamento: 2026-09-13 ~11:40Z (08:40 de Brasília). Branch feat/F03-conversation-inbox.
+Código validado: d7543c1463242b0fdc0b9fd5f8b0722ed9cb4532 (T01–T09 + verify v1.5 + consertos de duas provas +
+ADR-029 §5). O gate f07-gate-06 já saíra READY (staging) com o MESMO bloco sobre 7632a058; o from-scratch
+sobre esse commit achou `next-env.d.ts` (gerado pelo build) na lista de inputs, o conserto foi d7543c14 e o
+f07-gate-07 revalidou o commit final.
+Autorização: mensagem do proprietário de 12/09/2026 (D50 c). Hosting: D50 (a), ADR-027, ADR-028. Decisões da fase: ADR-029.
+
+== GATE INTEGRAL — DENTRO DO STAGING (ADR-028 §2), COM OS CAMPOS DE §8.4 (ADR-029) ==
+./scripts/verify.sh, WHATSAPP_MODE=mock AI_PROVIDER=mock CI=1, um worker, zero retries,
+VERIFY_ENVIRONMENT=staging F02_E2E_SANDBOX_ID=crm-staging E2E_PORT=3202: o navegador rodou DUAS vezes
+contra o Supabase do STAGING desta VPS (loopback 56421/56422, app do gate em 3202) — E2E_TENANT=deka e
+depois E2E_TENANT=demo2, na mesma árvore, sem commit entre elas; unit/db/integration no Postgres efêmero
+de scripts/test-db.sh. Evidência do ambiente: sandbox.json {environment:"staging", sandbox:"crm-staging",
+api:"loopback:56421", database:"loopback:56422/postgres", app:"loopback:3202", providers mock/mock}.
+Execução f07-gate-07, 6196 s (103,3 min; 06:27:27 → 08:10:43 de Brasília, 13/09), exit 0,
+STATUS: READY (staging), violations=0, SÉTIMA tentativa (a sexta, f07-gate-06, 5654 s sobre 7632a058,
+imprimiu bloco byte a byte igual — `diff` vazio entre os dois gate.out).
+
+VERIFY SUMMARY
+scope=phase phase=F07 current_phase=F07 environment=staging
+build=ok lint=ok typecheck=ok shell=ok
+unit=8492/8492 integration=155/155 db=1651/1651 e2e=41/41 baseline_n0=8997
+baseline_comparable: scope=unit+db passed=10143 required=8738 full_n0=pending
+e2e_scope: F07-required passed=41/41 specs=10/10
+isolation: tables=135 ops=4 dirs=2 leaks=0 (material_cross_org=97/135)
+rls-coverage: tables_with_org_id=135 policies_found=116 missing=0 service_only_with_grant=0
+rbac: roles=3 denied_expected=19 denied_actual=19
+entitlement: usage_events_written=23
+ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0
+handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3 notify=3 notify_rows=6 msgs_after=3 provider_calls_after=0
+reminder: runs=2 sent=1 duplicates=0 tables_summed=3
+webhook: replay=2 stored=1 tables_checked=7
+logs: routes=270 routes_logged=270 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
+rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=270 routes_with_schema=270 routes_reading_input=143 validated=143
+lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2
+replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=41/41 demo2=41/41 specs=10/10 org_a=seed-replica)
+secrets: files_scanned=491 findings=0
+tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=56/56
+debt_known=0 skip_only_occurrences=15 violations=0
+STATUS: READY (staging)
+
+Inputs: 3529 arquivos, SHA-256 65f0bfe6…fd498 idêntico antes e depois (gate 06: 3530, f0e26785…4444dd —
+o arquivo a mais era next-env.d.ts).
+Etapas (gate 07): typecheck 14 s · lint 85 s · build 111 s · shell 74 s · unit 1459 s (802 arquivos) ·
+integration 79 s (25 arquivos) · db 909 s (202 arquivos) · secrets 0 s · e2e-plan 3 s · e2e-deka 1108 s
+(41/41) · e2e-demo2 1138 s (41/41) · replicability 0 s · mutantes 56/56 · inputs 1 s — com o from-scratch
+(tentativa 3) rodando em paralelo na mesma máquina a partir de unit. Gate 06: typecheck 17 · lint 118 ·
+build 117 · shell 60 · unit 1674 · integration 81 · db 859 · e2e-deka 946 · e2e-demo2 877 · mutantes 56/56.
+Logs em .verify-logs/f07-gate-06/ e f07-gate-07/ (não versionados).
+replicability.json: src_tree_before = src_tree_after = c527a699f1b3fd2749dce22be2b9180282a4746b,
+src_diff_lines=0, tenants=[deka, demo2], org_a=seed-replica.
+Máquina: VPS reiniciada pelo proprietário às 03:24Z de 13/09 e de volta com 4 núcleos/16 GB (era 2/7,9 GB);
+swap não reativado (§B14); load average 3–13 durante os gates 06 e 07 (outras sessões e, no 07, o
+from-scratch em paralelo); o staging (15 containers, 1457 MiB) ficou de pé os dois gates inteiros.
+
+== AS TENTATIVAS ANTERIORES (não reclassificadas) ==
+gate-01 (12/09 21:13Z → interrompido 22:47Z): typecheck 20 s · lint 110 s · build 352 s · shell 58 s · unit
+  1800 s (8492/8492, 802 arquivos) · integration 100 s (155/155; seed-blocks: products=1/1 customers=1/1
+  companies=1/1 faq=7 materiais=1 second_run_rows=0) · db 1011 s (1651/1651) · secrets 491/0 ·
+  e2e-plan 3 s · e2e-deka 2199 s → 38/41, TRÊS falhas: (1) f02-daily-checks "em B": o pdf.js
+  devolveu "F02 B 7 79c2395" e "Linha diária 7 79c2395 0" para o sufixo 779c2395 (dois glifos
+  iguais colados) e a spec comparava com espaço exato — DEFEITO REAL da prova, latente desde a F02
+  e dependente do sufixo aleatório; consertado em cbbdc46b (comparação sem espaços; o que se
+  afirma não muda). (2) f02-crm-navigation "em B": link do pedido não visível em 5 s. (3)
+  f02-support-readonly-api: /app/inbox não carregou em 30 s. As duas últimas sob load average
+  12–13 (Playwright de outro projeto — Oferta-OS — e swap de 1,7 GB na VPS de 2 núcleos);
+  passaram isoladas antes e depois. Gate interrompido durante e2e-demo2 ao ler a falha; réplica
+  e usuários da fixture apagados do staging (2 organizações, 2 usuários).
+gate-02 (22:53Z → interrompido 13/09 01:22Z): typecheck 45 s · lint 237 s · build 1287 s · shell 64 s ·
+  unit 3109 s (8492/8492) · integration 133 s (155/155) · db 4028 s → REPROVADO: 1641/1651, 1
+  falha + 9 skipped derivados de "Hook timed out in 300000ms" (isolation-varredura) e "Test timed
+  out in 30000ms" (f03-t01-conversa-estado, 1205 s de parede). Máquina em thrash: load average
+  223–311, swap 2 GB cheio, 127 MB livres — `next build` de produção do transportes-os (2,3 GB),
+  `pnpm install` do Marketing-OS, `tsc` do Transportes-OS, Playwright do Oferta-OS, tudo de
+  outras sessões nesta VPS. Nenhuma falha de código: as duas provas passam na F06 e no gate 01.
+  Interrompido ao ler o db; réplica do e2e-deka e 2 usuários apagados do staging.
+gate-03 (01:33Z → interrompido 03:01Z): build 268 s · shell 67 s · unit 2883 s (8492/8492) ·
+  integration 448 s (155/155) · db interrompido em 148 ✓ com 7 testes já estourados em 30 s
+  (webhooks-inbound, leads: 32–66 s de parede cada) — starvation, não código: load average
+  13→23 e swap cheio de novo (Playwright e Postgres de dev de outros projetos, `gh` de outra
+  sessão). Sem resíduo no staging (organizations=2).
+Entre o gate 03 e o 04 a VPS foi reiniciada pelo proprietário (uptime zerado às 03:24Z) e
+  voltou com 4 núcleos e 16 GB (era 2/7,9 GB); swap não ativado após o reboot (VARREDURA §B14).
+gate-04 (03:26Z → interrompido 05:04Z, VPS já com 4 núcleos/16 GB): typecheck 21 s · lint 101 s ·
+  build 186 s · shell 65 s · unit 1760 s (8492/8492) · integration 90 s (155/155) · db 1002 s
+  (1651/1651) · secrets 491/0 · e2e-plan 4 s · e2e-deka 1222 s → 41/41 · e2e-demo2 1372 s →
+  40/41: f04-ai-settings "documento subido em B … não no do outro" exigia `acervo-vazio` no
+  OUTRO lado, e o outro lado (A vinda do seed do demo2) tem o material "FAQ do seed" — DEFEITO
+  REAL da prova (pressupunha organização vazia; no deka passou porque o FAQ do deka é TODO-);
+  consertado em 7632a058 (tela contra banco: lista = acervo.length, vazio só quando zero).
+  replicability: src_tree igual antes e depois (c527a699…), src_diff_lines=0. Interrompido nos
+  mutantes ao ler a falha (o bloco sairia NOT READY). Sem resíduo no staging (organizations=2).
+gate-05 (05:10Z → interrompido 05:22Z): typecheck · lint · build 130 s · shell exit=1 em 62 s — duas
+  provas HERDADAS do hostgator-setup-kit/test-validators.sh: "o .env.hostgator.example promete
+  chave(s) que o install.sh não grava: INTERNAL_CRON_SECRET" (o install.sh:1650 grava; o próprio
+  teste documenta que sob load average > 30 o pipeline que monta a lista de escrita volta
+  truncado e o teste INVENTA a chave — o piso de vacuidade não pegou este caso) e "o instalador
+  nem mostrou o que encontrou antes de agir" (cenário de Traefik em modo host, sandbox com
+  tempo). As duas passaram nos gates 01 e 04 sobre o mesmo kit (sem mudança em
+  hostgator-setup-kit desde a F06). Load average 12–15 no lançamento (Playwright e Codex de
+  outras sessões). Interrompido ao ler o shell.
+
+== O QUE e2e[<tenant>] MEDE (ADR-029 §2) ==
+Com E2E_TENANT=<slug>, a organização A de cada uma das dez specs nasce por scripts/create-tenant.sh a
+partir de docs/tenants/<slug>.seed.yaml (slug sufixado, users fora — a spec traz os seus —, account_ref
+sufixado; YAML temporário em os.tmpdir()); B continua fictícia. src/ não muda entre as duas execuções
+(write-tree sobre índice temporário; §8.3). Rejeitado rodar dentro do deka/demo2 persistentes: as
+specs apagam A na limpeza e pressupunham organização vazia. Duas dessas pressuposições apareceram como
+defeito real nos gates 01 e 04 e foram consertadas SEM mudar o que se afirma (baseline lido antes de
+inserir; acervo do outro lado = o que o banco dele tem). O deka entra como está (TODO-DEKA, D48):
+nome TODO-DEKA, 10 settings pendentes puladas, 3 produtos e 18 FAQ pendentes não gravados.
+
+== T03 — TENANT EFÊMERO demo3 (scripts/verify/tenant-efemero.sh, 13/09 06:57Z) ==
+docs/tenants/demo3.seed.yaml (padaria fictícia: 2 usuários, 2 produtos, 1 cliente com empresa e telefone
+fictício, lembrete ligado, 5 FAQ; validateSeed 0 erros, seed_todos=0).
+create-tenant.sh → products=2 customers=1 companies=1 (size sem coluna: 2 itens, declarado) · faq=5
+acervo_materiais=1 acervo_trechos=1 · rows_created=24. seed-users.sh demo3 → senha + sessão de canal mock.
+smoke: steps=6 pass=6/6 customers[demo3]=1/1 inbox_new=1 logins=1/1 products[demo3]=2/2 webhook_accepted=1/1 reminder_listed=1/1 tenants=demo3
+navegador E2E_TENANT=demo3 (10 specs, inventário da F07) → 41/41.
+remoção: organização por cascata (removed=1), usuários do seed (2), réplicas restantes 0, tenants=2.
+demo3: created=1 smoke=pass=6/6 e2e[demo3]=41/41 specs=10/10 removed=1 tenants=2
+
+== T04 — DO ZERO (scripts/from-scratch.sh, 13/09 07:12Z) ==
+tentativa 1 (07:12Z, clone de 7632a058 em ~/projetos/.from-scratch-cAu9): clone 2 s · install 7 s (store do pnpm
+quente, 1,3 GB) · sandbox 44 s (Supabase descartável 5542x + baseline.sql) · env 3 s · seeds 5 s (deka
+rows_created=10; demo2 rows_created=52 com fixtures; segunda passada 0 nos dois) · verify no clone: typecheck 93 s ·
+lint 92 s · build 193 s · shell 79 s · unit 1486 s → 8491/8492: `documentacao-aponta-para-o-que-existe`
+acusou "README.md → FINAL-VALIDATION.md" — o README (97a4b901) já apontava para o relatório e o arquivo só
+existia na árvore de trabalho. O clone prova o que está no COMMIT, e é para isso que ele existe. Interrompido;
+sandbox derrubado (0 containers), clone removido. Tentativa 2 sobre o commit que inclui FINAL-VALIDATION.md:
+clone de 15585bd2 em ~/projetos/.from-scratch-NVlZ (07:49Z): clone 1 s · install 5 s · sandbox 48 s · env 3 s ·
+seeds 4 s (deka 10, demo2 52, segunda passada 0/0) · verify 5668 s: typecheck · lint · build 188 s · shell 76 s ·
+unit 1460 s (8492/8492) · integration 83 s (155/155) · db 816 s (1651/1651) · e2e-deka 935 s (41/41) ·
+e2e-demo2 947 s (41/41) · replicability src_diff_lines=0 · mutantes 56/56 · inputs REPROVOU:
+files_before=3529 files_after=3530 — o arquivo novo é `next-env.d.ts` (gitignorado, gerado pelo `next build`
+do gate às 04:54 local, listado como input pelo snapshot). Resultado: steps=7 pass=6/7 verify_exit=1
+status="NOT READY" — todas as suítes verdes, o gate reprovado pela própria lista de inputs. É achado do
+"do zero": na árvore de trabalho o arquivo existia desde 08/09 e nenhum gate o viu nascer. Conserto em
+d7543c14 (ADR-029 §5: o arquivo sai do snapshot; gate.cases exige igualdade com ele criado depois do
+snapshot). Sandbox derrubado (0 containers), clone removido.
+Tentativa 3 sobre d7543c14 (o mesmo commit do gate f07-gate-07):
+clone em ~/projetos/.from-scratch-bmPl (09:56Z, lançado de propósito durante o gate 07 para sobrepor só as
+fases leves): clone 2 s · install 5 s · sandbox 43 s · env 3 s · seeds 5 s · verify: shell 72 s · unit
+(8492/8492) · integration 155 s (155/155) · db (1651/1651) · e2e-plan 4 s · e2e-deka 1038 s → 40/41:
+f02-crm-orders "pedido completo em B" (organização FICTÍCIA) estourou `waitForResponse` de 30 s às 11:04–11:21Z,
+exatamente sobre o e2e-demo2 e os mutantes do gate 07 na mesma máquina (load average 10–13). Carga, não
+código. Interrompido; sandbox derrubado, clone removido.
+Tentativa 4 sobre d7543c14, com a máquina só para ela:
+clone em ~/projetos/.from-scratch-mPYH (11:22Z → 13:04Z): clone 1 s · install 6 s (store do pnpm, 1,3 GB) · sandbox 43 s
+(Supabase descartável 5542x + baseline.sql = a migração) · env 3 s (.env.e2e gerado, privado) · seeds 5 s (deka
+rows_created=10; demo2 rows_created=52 com fixtures; segunda passada 0/0) · verify 6033 s no clone, sandbox:
+typecheck 87 s · lint 77 s · build 183 s · shell 74 s · unit 1549 s (8492/8492) · integration 92 s (155/155) ·
+db 941 s (1651/1651) · secrets · e2e-plan 3 s · e2e-deka 984 s (41/41) · e2e-demo2 946 s (41/41) · replicability
+src_diff_lines=0 · mutantes 56/56 · inputs 3529/3529, SHA bb2dc3a9… igual antes e depois (difere do SHA da árvore
+de trabalho só pelo modo 0744×0755 de tests/mutants/28-order-check-receipts-private.sh; conteúdo idêntico) ·
+STATUS: READY (F07) · down 3 s (0 containers restantes). Clone removido (2,8 GB).
+from-scratch: steps=7 pass=7/7 verify_exit=0 status="READY (F07)" clone=~/projetos/.from-scratch-mPYH commit=d7543c14
+
+== RESTORE E SMOKE DA F07 (contra o staging) ==
+scripts/backup.sh → backups/staging-20260913T071443Z.dump (1.745.469 bytes, 177 tabelas). scripts/restore.sh →
+banco VAZIO restore_20260913_071444 (nunca o em uso):
+restore: tables=179 tables_restored=179 rows=4027 rows_diff=0 dump=staging-20260913T071443Z.dump target=restore_20260913_071444 seconds=9 at=20260913T071444Z
+bash scripts/smoke.sh http://127.0.0.1:3200 (13/09 07:18Z; denominadores = seed + fixture fictícia, ADR-029 §3):
+smoke: steps=6 pass=6/6 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 tenants=deka,demo2
+p95_ms: endpoints=3/3 health=25 contacts=409 conversations=623 samples=20 url=http://127.0.0.1:3200
+(medido com o verify do from-scratch rodando na mesma máquina; F06 ociosa: 23/455/436.)
+
+== T08 — pilot-queries.sql (staging, 12/09 20:40Z) ==
+grep -c "^-- medida:" docs/ai-eval/pilot-queries.sql = 4. psql -v tenant=<slug> -v dias=7: cada consulta
+devolve UMA linha. demo2: mensagens=5 recebidas=5 enviadas=0 mensagens_por_dia=0.71 provedores=mock ·
+conversas=2 resolvidas=0 resolvidas_sem_handoff=0 · pedidos_pj=2 via_whatsapp=0 dos_quais_pela_ia=0 ·
+handoffs=0 por_motivo={}. deka: zeros com denominador (nenhum dado real, D48).
+
+== O QUE A FASE ENTREGOU ==
+T01 (gate-06 sobre 7632a058; gate-07 sobre d7543c14) bloco acima; ADR-029 §1.
+T02 (022478fd, a0fc0962, cbbdc46b, 7632a058) verify v1.5: F07 em GATED_PHASES; duas execuções do navegador
+    por tenant do seed; scripts/verify/replicability.mjs (write-tree + numstat); report.mjs exige e imprime
+    `replicability`; tests/e2e/utils/tenant-do-seed.ts; gate.cases 91→102; mutante 59.
+T03 (46f466e0, 788f839d) loader completo (§B13): scripts/seed-blocks.ts, onboarded_at no INSERT,
+    sentinelas TODO- contadas (users, products, customers, faq); f02-fixture-writer não trata linha do
+    seed como alheia; seed-users.sh por slug + onboarded_at + reset do Alfa + apaga TODO-user; smoke.mjs
+    por SMOKE_TENANTS com seed+fixture; teste de integração 2/2 + mutante 58; demo3.seed.yaml;
+    tenant-efemero.sh. Staging: demo2 recebeu as linhas do seed (rows_created=6, depois 0).
+T04 (788f839d; d7543c14 para o snapshot) scripts/from-scratch.sh — executado acima, três tentativas.
+T05 tests_deleted=0 tests_skipped=0 mutants_killed=56/56 (Q ≥ 5) no bloco.
+T06 FINAL-VALIDATION.md — 8 seções (grep -c "^## " = 8), bloco colado, lista do que NÃO foi verificado.
+T08 (788f839d) docs/ai-eval/pilot-queries.sql — 4 medidas.
+T09 (97a4b901) README.md — seção do fork; grep -c "^## " = 17; links resolvem.
+T07 BLOCKER-PROD no BUILD-STATE (7 itens de D12) e branch blocker/PROD.
+Mutantes: 54 → 56 (58, 59), todos mortos no gate.
+
+== LIMITES DECLARADOS ==
+- "Dentro do staging" = navegador contra o Supabase do staging com o app do gate em 3202; unit/db/integration
+  no Postgres efêmero; o container do app é o que o smoke exercita (ADR-028 §2).
+- e2e[deka]/e2e[demo2]/e2e[demo3] = organização A provisionada DO SEED do tenant pelo loader, não o tenant
+  persistente (ADR-029 §2). from-scratch roda no sandbox (READY (F07)), não no staging.
+- Nenhum provedor real: WhatsApp adapter mock, IA mock, e-mail no mailpit, SENTRY_DSN=off. NOT VALIDATED
+  (real) para todos (D12). Acesso do proprietário via Tailscale e teste visual não exercidos (§8.6).
+- O run do verify.yml no GitHub e o link são do proprietário (§7.7 T08).
+- Restore só em banco vazio de staging (D36). Firewall dos outros stacks (§B12), swap (§B14) e o rerun do
+  up.sh com fixtures (§B15) são do proprietário. products[].size sem coluna (declarado).
+- READY (staging) da F07 é o nível "verificado em staging" (§8.1); owner_validated continua em branco.
+- Custo de máquina: sete gates ≈ 7,6 h de parede (01: 94 min interrompido; 02: 149; 03: 88; 04: 98; 05: 12;
+  06: 94; 07: 103) + três from-scratch (25 min interrompido; 95; ~100) + demo3 (15 min). Três gates perdidos
+  para a VPS de 2 núcleos dividida com outras sessões antes do upgrade; dois para defeitos reais de prova
+  achados pela replicabilidade; um gate e um from-scratch a mais por causa do next-env.d.ts.

@@ -29,7 +29,16 @@ export default defineConfig({
       ".claude/**",
       "tests/e2e/**",
       "tests/invariants/**",
+      // tests/integration/** roda no runner próprio (pnpm test:integration,
+      // F01-T02): precisa do Postgres efêmero com baseline; no vitest unitário
+      // cairia com ECONNREFUSED.
+      "tests/integration/**",
       "tests/journeys/**",
+      // F06-T06: a árvore do build do app montada para a imagem do staging
+      // (scripts/staging/up.sh) carrega uma cópia de tests/ pelo tracing do
+      // standalone; sem excluir, a suíte rodaria cada teste duas vezes.
+      ".staging/**",
+      ".verify-logs/**",
     ],
   },
   resolve: { alias: { "@": path.resolve(__dirname, ".") } },

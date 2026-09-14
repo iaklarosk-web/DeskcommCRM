@@ -26,6 +26,7 @@ import { triggerSlaAlarm } from "@/lib/lgpd/sla-alarm";
 import { marcaDaSaida, type MarcaDeSaida } from "@/lib/branding/saida";
 import type { LgpdRequest } from "@/lib/lgpd/types";
 import type { AlarmThreshold } from "@/lib/lgpd/sla-alarm";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +59,8 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (accepted.length === 0 || !provided || !accepted.includes(provided)) {
     return fail("forbidden", "Cron secret missing or invalid.", 403, { requestId });
   }
+  // F06-T01: linha api.request da rota global de cron (sem organização por desenho).
+  registrarRequisicaoDe(req, { scope: "cron", outcome: "allowed", request_id: requestId, status: 200 });
 
   // ────────────────────────────────────────────────────────────────────────
   // Query — system-wide scan via admin client (bypasses RLS intentionally;

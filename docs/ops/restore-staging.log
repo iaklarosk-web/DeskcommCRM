@@ -1,0 +1,3 @@
+restore: tables=179 tables_restored=179 rows=342 rows_diff=0 dump=staging-20260912T155052Z.dump target=restore_20260912_155124 seconds=15 at=20260912T155124Z
+restore: tables=179 tables_restored=179 rows=4027 rows_diff=0 dump=staging-20260913T071443Z.dump target=restore_20260913_071444 seconds=9 at=20260913T071444Z
+restore: tables=183 tables_restored=183 rows=7889 rows_diff=0 dump=staging-20260914T012353Z.dump target=restore_20260914_012354 seconds=13 at=20260914T012354Z

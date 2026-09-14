@@ -171,6 +171,13 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
       "(`vars.RELOGIO_LIGADO`), não uma adaptação de fork — mas ela fica no mapa para " +
       "que trocar a variável por outra coisa continue passando por revisão.",
   },
+  "verify.yml::verify": {
+    condicao: null,
+    efeito:
+      "F06-T08 (§7.7): o gate integral (scripts/verify.sh) em todo pull request — é o " +
+      "check que bloqueia o merge. Desligado, o PR entra sem o bloco VERIFY SUMMARY e " +
+      "a régua da fase passa a ser palavra de quem abriu o PR.",
+  },
 };
 
 interface JobLido {

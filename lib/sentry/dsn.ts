@@ -1,13 +1,17 @@
 /**
- * DSN do Sentry com opt-out em runtime — modelo "telemetria de comunidade".
+ * DSN do Sentry com opt-IN em runtime — F11-T00 (VARREDURA §B11, D51 d).
  *
- * Por padrão, erros vão pro Sentry do projeto (DEFAULT_SENTRY_DSN): num open source
- * self-host, é o que dá visibilidade pra corrigir bugs que afetam todo mundo. Quem
- * hospeda controla isso pelo `.env`, SEM rebuild da imagem:
+ * Antes, SEM `SENTRY_DSN` os erros iam para o Sentry do autor do Deskcomm
+ * (DEFAULT_SENTRY_DSN, "telemetria de comunidade"). Num SaaS com dados de
+ * tenant, uma instalação que esquecesse a chave exportava erro para uma conta
+ * que não é do proprietário (o scrub de PII é denylist). O padrão inverteu:
+ * sem DSN, NADA é enviado; a comunidade continua disponível, mas só por
+ * escolha explícita. Quem hospeda controla pelo `.env`, SEM rebuild da imagem:
  *
- *   SENTRY_DSN=off           → desliga toda a telemetria (nada é enviado)
+ *   SENTRY_DSN=  (vazio)     → telemetria DESLIGADA (padrão)
+ *   SENTRY_DSN=off           → desligada, explicitamente
  *   SENTRY_DSN=<seu-dsn>     → manda os erros pro SEU Sentry
- *   SENTRY_DSN=  (vazio)     → usa o Sentry da comunidade (padrão)
+ *   SENTRY_DSN=community     → opt-in no Sentry da comunidade (só erro; ver abaixo)
  *
  * Vale para servidor (process.env) e navegador (window.__PUBLIC_ENV__.SENTRY_DSN,
  * injetado em runtime pelo <PublicEnvScript/>). O DSN não é segredo — DSNs do Sentry
@@ -16,10 +20,15 @@
 export const DEFAULT_SENTRY_DSN =
   "https://58fabf8ad54504863d404a3647ef3714@o4509908078559232.ingest.us.sentry.io/4509908083212288";
 
+/** O valor que liga a comunidade de propósito. */
+export const COMMUNITY_SENTRY_OPT_IN = "community";
+
 export function resolveSentryDsn(value: string | undefined | null): string | undefined {
-  const v = (value ?? "").trim().toLowerCase() === "off" ? "off" : (value ?? "").trim();
-  if (v === "off" || v === "false" || v === "0") return undefined;
-  return v.length > 0 ? v : DEFAULT_SENTRY_DSN;
+  const bruto = (value ?? "").trim();
+  const v = bruto.toLowerCase();
+  if (v === "" || v === "off" || v === "false" || v === "0") return undefined;
+  if (v === COMMUNITY_SENTRY_OPT_IN) return DEFAULT_SENTRY_DSN;
+  return bruto;
 }
 
 /**

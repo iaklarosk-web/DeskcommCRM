@@ -79,3 +79,37 @@ if (typeof globalThis.ResizeObserver === "undefined") {
     disconnect() {}
   };
 }
+
+/**
+ * F12-T04 (ADR-030 §3): o guarda `requireRole` passou a perguntar à ASSINATURA
+ * o que a organização pode. A suíte de unidade nunca teve banco — o Supabase é
+ * dublê em todo teste de rota —, então o leitor da assinatura também vira dublê
+ * AQUI, com a resposta de "organização sem assinatura" (`full`,
+ * `legacy_without_subscription`): é exatamente o que uma organização de teste
+ * herdada é. Quem quer provar o guarda sob `blocked`/`pending_payment`/erro
+ * redeclara o mock no próprio arquivo (`tests/unit/f12-t04-guarda-da-assinatura.test.ts`);
+ * o caminho real, contra o banco, é medido em `tests/integration/f12-assinatura.test.ts`
+ * e no navegador (`tests/e2e/f12-assinatura.spec.ts`).
+ */
+import { vi } from "vitest";
+vi.mock("@/lib/auth/assinatura-provisionada", () => ({
+  PLANO_DEFAULT_PROVISIONADO: "PLAN_A",
+  provisionarAssinatura: vi.fn(async (organizationId: string, entrada: { plan_code?: string; origin: string; status: string }) => ({
+    id: "00000000-0000-4000-8000-00000000f12a",
+    organization_id: organizationId,
+    plan_code: entrada.plan_code ?? "PLAN_A",
+    status: entrada.status,
+    origin: entrada.origin,
+    gateway: null, gateway_ref: null, current_period_start: null, current_period_end: null,
+    failed_at: null, grace_until: null, blocked_at: null, cancelled_at: null, cancel_reason: null, last_event_at: null,
+  })),
+}));
+vi.mock("@/lib/auth/acesso-da-assinatura", () => ({
+  acessoDaOrganizacao: vi.fn(async () => ({
+    mode: "full",
+    status: null,
+    reason: "legacy_without_subscription",
+    plan_code: null,
+    grace_until: null,
+  })),
+}));

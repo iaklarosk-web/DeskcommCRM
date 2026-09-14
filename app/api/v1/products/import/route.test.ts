@@ -103,7 +103,7 @@ describe("POST /api/v1/products/import — reimportar não pisa a moeda de quem 
    * pode carregar a chave `moeda` — é o MESMO cuidado que o comentário do
    * arquivo já declara para `descricao`, `imagem_url` e `ativo`.
    */
-  it("produto EXISTENTE não tem a moeda tocada, mesmo se a organização mudou de moeda", async () => {
+  it("produto EXISTENTE não tem moeda nem unidade tocadas quando a coluna não veio no CSV", async () => {
     vi.mocked(createClient).mockResolvedValue(supabaseCom("MXN", ["AND-01"]) as never);
     const { POST } = await import("./route");
 
@@ -112,6 +112,7 @@ describe("POST /api/v1/products/import — reimportar não pisa a moeda de quem 
     const linhaExistente = upserts.flat().find((l) => l.codigo === "AND-01");
     expect(linhaExistente).toBeDefined();
     expect(linhaExistente).not.toHaveProperty("moeda");
+    expect(linhaExistente).not.toHaveProperty("sale_unit");
   });
 
   it("planilha com os dois casos grava cada grupo no shape certo", async () => {
@@ -129,3 +130,10 @@ describe("POST /api/v1/products/import — reimportar não pisa a moeda de quem 
     expect(existente).not.toHaveProperty("moeda");
   });
 });
+
+// Este teste isola o handler; autoridade de suporte é exercitada na suíte própria.
+vi.mock("@/lib/impersonate/support", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/impersonate/support")>(),
+  requireSupportWrite: vi.fn(async () => null),
+  authenticatedSessionId: vi.fn(async () => "f2200000-0000-4000-8000-000000000099"),
+}));
