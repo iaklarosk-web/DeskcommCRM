@@ -2,10 +2,10 @@
 updated_at: 2026-09-14T01:15:00Z
 head_commit: 1e13071d32f92d3d6daf507ff2adf3e901e53a74   # código validado pelo gate f12-gate-05 (READY (staging), dentro do staging, F11+F12 — ADR-030/031)
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
-plan_version: "2.6 (2026-09-13); D38–D51; ADR-006…031"
+plan_version: "2.7 (2026-09-14); D38–D52; ADR-006…032"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
 current_phase: F12
-next_task: F08-T00             # F11+F12 concluídas (READY (staging), f12-gate-05); F08 tem preparação em ~/projetos/CRM-OS/docs/f08/ e começa em branch nova a partir de 1e13071d, com nova mensagem do proprietário (D50 c)
+next_task: F08-T01             # F08 autorizada pelo proprietário em 14/09 (D52, ADR-032); branch feat/F08-producao-inicial a partir de dc45a638; F08-T00 feita fora da árvore em 13/09
 status: READY_STAGING          # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26)
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
@@ -488,7 +488,7 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 | F05 | Adaptar handoff e notificações; criar regra de lembrete PJ sobre infraestrutura existente | done(verify=2026-09-12 5aa5de54) — T01–T10 concluídas; pausada antes de F06 (D50 c) |
 | F06 | Deploy de staging, mocks, segurança/observabilidade e smoke | done(verify=2026-09-12 270852a6) — READY (staging) dentro do staging; T01–T09 concluídas; pausada antes de F07 (D50 c) |
 | F07 | Validação técnica do piloto, replicabilidade deka/demo2 e abertura de BLOCKER-PROD | done(verify=2026-09-13 d7543c14) — READY (staging) com os campos de §8.4; T01–T09 concluídas; BLOCKER-PROD aberto; F08+ aguarda o proprietário (D50 c) |
-| F08 | Serviços reais e produção inicial: WAHA/IA, e-mail, domínio, orçamento, backup/retorno e onboarding configurável | pending — preparação FORA da árvore em `~/projetos/CRM-OS/docs/f08/DECOMPOSICAO-F08-20260913.md` (D12 itens 1,2,3,5,6,7 respondidos; `/srv/secrets/crm-prod.env`; DNS); começa em `feat/F08-producao-inicial` a partir de `1e13071d` |
+| F08 | Serviços reais e produção inicial: WAHA/IA, e-mail, domínio, orçamento, backup/retorno e onboarding configurável | in_progress — D52 (14/09/2026), tasks T01–T10 em ADR-032; branch `feat/F08-producao-inicial` a partir de `dc45a638`; T00 feita fora da árvore em 13/09 (`~/projetos/CRM-OS/docs/f08/`); BLOCKER-PROD segue aberto (D13) |
 | F09 | Piloto Deka acompanhado, com baseline/metas, pedidos, separação, tempo e qualidade/custo da IA medidos | pending |
 | F10 | Segunda empresa real operando por configuração, com preço aceito; gate da expansão comercial | pending |
 | F11 | Administração da plataforma, empresas/equipes, suporte limitado e auditado, cadastro e entrada guiada | done(verify=2026-09-13 1e13071d) — READY (staging) no f12-gate-05 (inventário de F12 contém o de F11, ADR-031); T00–T06 concluídas; `admin:` medido |
