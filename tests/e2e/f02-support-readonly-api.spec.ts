@@ -223,6 +223,25 @@ async function count(table: string, organizationId: string) {
   return result.count;
 }
 
+/**
+ * A auditoria é fire-and-forget (`void audit(...)` em require-role.ts e no
+ * início do acompanhamento): a linha chega DEPOIS da resposta. Sob carga
+ * (load ≥ 10, f08-gate-02) o audit do `startReadonly` chegou depois da
+ * contagem "antes" e a prova viu +3 em vez de +2 — sem nenhuma recusa a
+ * mais. A linha de base só vale quando parou de crescer: duas leituras
+ * iguais com 1,5 s entre elas.
+ */
+async function countEstavel(table: string, organizationId: string) {
+  let anterior = await count(table, organizationId);
+  for (let i = 0; i < 20; i += 1) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const atual = await count(table, organizationId);
+    if (atual === anterior) return atual;
+    anterior = atual;
+  }
+  throw new Error(`${table} não estabilizou em 30 s`);
+}
+
 test("suporte readonly lê quatro grupos F02, recusa escritas comerciais e audita recusas", async ({
   page,
   fixture,
@@ -274,7 +293,7 @@ test("suporte readonly lê quatro grupos F02, recusa escritas comerciais e audit
   const deniedCommandId = randomUUID();
   const suppliedRequestId = randomUUID();
   const before = {
-    audits: await count("api_audit_log", fixture.orgB),
+    audits: await countEstavel("api_audit_log", fixture.orgB),
     products: await count("catalog_products", fixture.orgB),
     orders: await count("crm_orders", fixture.orgB),
     notes: await count("crm_notes", fixture.orgB),
