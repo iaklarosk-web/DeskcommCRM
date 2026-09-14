@@ -5,7 +5,7 @@ f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskco
 plan_version: "2.7 (2026-09-14); D38–D53; ADR-006…033"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
 current_phase: F08
-next_task: F13-T00             # F08 concluída; D53: tenant Deka criado, WhatsApp adiado, nenhuma fase sem nova mensagem (D50 c); sugestão de próxima fase: F13 (CRM comercial completo) — não depende de número nem de liberação geral
+next_task: F13-T01             # ADR-034 decompõe a F13 (T00 feita: ADR-034/035, verify v1.8, §B17); branch feat/F13-crm-comercial a partir de 187fde8f (D53)
 status: READY_STAGING          # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26)
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"

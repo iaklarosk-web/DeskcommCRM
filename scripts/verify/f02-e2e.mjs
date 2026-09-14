@@ -101,6 +101,17 @@ export const EXPECTED_F12_E2E_TESTS = EXPECTED_F11_E2E_TESTS + 4;
 export const REQUIRED_F08_E2E_SPECS = REQUIRED_F12_E2E_SPECS;
 export const EXPECTED_F08_E2E_TESTS = EXPECTED_F12_E2E_TESTS;
 
+/**
+ * F13 (ADR-035): o CRM comercial acrescenta UMA spec (3 jornadas × 2 tenants
+ * + 1 do painel do dono = 7 testes) ao inventário de F12; roda por tenant do
+ * seed como a F07 e mede a linha `crm:` pela suíte de integração.
+ */
+export const REQUIRED_F13_E2E_SPECS = Object.freeze([
+  ...REQUIRED_F12_E2E_SPECS,
+  "tests/e2e/f13-crm-comercial.spec.ts",
+]);
+export const EXPECTED_F13_E2E_TESTS = EXPECTED_F12_E2E_TESTS + 7;
+
 /** Tenants do seed que a F07 percorre, na ordem (§7.8 T02: deka, depois demo2). */
 export const REPLICABILITY_TENANTS = Object.freeze(["deka", "demo2"]);
 
@@ -115,6 +126,7 @@ const CLOSED_E2E_PHASES = Object.freeze({
   F11: { specs: REQUIRED_F11_E2E_SPECS, tests: EXPECTED_F11_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
   F12: { specs: REQUIRED_F12_E2E_SPECS, tests: EXPECTED_F12_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
   F08: { specs: REQUIRED_F08_E2E_SPECS, tests: EXPECTED_F08_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
+  F13: { specs: REQUIRED_F13_E2E_SPECS, tests: EXPECTED_F13_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
 });
 
 /**

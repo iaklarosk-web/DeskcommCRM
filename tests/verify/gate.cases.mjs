@@ -18,6 +18,7 @@ const {
   EXPECTED_F08_E2E_TESTS,
   EXPECTED_F11_E2E_TESTS,
   EXPECTED_F12_E2E_TESTS,
+  EXPECTED_F13_E2E_TESTS,
   REQUIRED_F02_E2E_SPECS,
   REQUIRED_F03_E2E_SPECS,
   REQUIRED_F04_E2E_SPECS,
@@ -25,6 +26,7 @@ const {
   REQUIRED_F08_E2E_SPECS,
   REQUIRED_F11_E2E_SPECS,
   REQUIRED_F12_E2E_SPECS,
+  REQUIRED_F13_E2E_SPECS,
   compareF02Inputs,
   snapshotF02Inputs,
   verifyF02Sandbox,
@@ -1094,4 +1096,72 @@ test("F07 keeps its own inventory (10 specs, 41 tests) and never requires admin 
   const bloco = render(data, result);
   assert.match(bloco, /admin: tenants_listed=pending/);
   assert.match(bloco, /billing: plans=pending/);
+});
+
+// ─── ADR-035 — verify.sh v1.8: F13 (CRM comercial) mede `crm:`; a matriz D15 passa a 4 papéis ──
+
+const stateF13 = stateF08.replace("current_phase: F08", "current_phase: F13")
+  .replace("| F08 | Produção inicial | in_progress |", "| F08 | Produção inicial | done(verify=2026-09-14 dc39424a) |\n| F13 | CRM comercial | in_progress |");
+const F13_SPEC_COUNTS = [...F12_SPEC_COUNTS, 7];
+const CRM_OK = "crm: fields_defined=6 values_rejected=3/3 values_preserved=4/4 queue_size=5 distributed=5/5 balanced=1 second_claim_rejected=1/1 history_types=5 orders_linked=1/1 cross_org_link_denied=1/1 report_indicators=9/9 roles_denied=3/3";
+const RBAC_4 = "rbac: roles=4 denied_expected=27 denied_actual=27";
+function f13Input() {
+  const data = fasePorTenant("F12", stateF13, REQUIRED_F13_E2E_SPECS, F13_SPEC_COUNTS, EXPECTED_F13_E2E_TESTS);
+  data.metrics.crm = CRM_OK;
+  data.metrics.rbac = RBAC_4;
+  return data;
+}
+
+test("F13 is gated: inventory of 13 specs (58 tests) per tenant, admin, billing and crm measured, rbac with 4 roles; in staging it prints READY (staging)", () => {
+  const data = f13Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F13)");
+  const bloco = render(data, result);
+  assert.match(bloco, /e2e_scope: F13-required passed=58\/58 specs=13\/13/);
+  assert.match(bloco, /crm: fields_defined=6 values_rejected=3\/3 values_preserved=4\/4 queue_size=5 distributed=5\/5 balanced=1/);
+  assert.match(bloco, /replicability: e2e\[deka\]=ok e2e\[demo2\]=ok src_diff_lines=0 grep_deka_in_src=0 \(deka=58\/58 demo2=58\/58 specs=13\/13 org_a=seed-replica\)/);
+  const staging = f13Input();
+  staging.sandbox = stagingEvidence();
+  assert.equal(evaluate(staging).status, "READY (staging)");
+});
+
+test("missing crm line makes otherwise green F13 fail", () => {
+  const data = f13Input();
+  delete data.metrics.crm;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.some((e) => /Métrica obrigatória ausente: crm/.test(e)), result.errors.join("\n"));
+});
+
+test("F13 requires rbac roles=4 (the tree has four D15 roles) and F08 still requires roles=3", () => {
+  const tres = f13Input();
+  tres.metrics.rbac = "rbac: roles=3 denied_expected=19 denied_actual=19";
+  assert.ok(evaluate(tres).errors.includes("RBAC fora do contrato"));
+  const f08ComQuatro = f08Input();
+  f08ComQuatro.metrics.rbac = RBAC_4;
+  assert.ok(evaluate(f08ComQuatro).errors.includes("RBAC fora do contrato"));
+});
+
+test("crm line stays pending before F13 and is not required there", () => {
+  const data = f08Input();
+  assert.deepEqual(evaluate(data).errors, []);
+  assert.match(render(data, evaluate(data)), /crm: fields_defined=pending/);
+});
+
+for (const [rotulo, linha] of [
+  ["fila distribuída pela metade", CRM_OK.replace("distributed=5/5", "distributed=3/5")],
+  ["rodízio desequilibrado", CRM_OK.replace("balanced=1", "balanced=0")],
+  ["valor preservado a menos", CRM_OK.replace("values_preserved=4/4", "values_preserved=3/4")],
+  ["indicador divergente da origem", CRM_OK.replace("report_indicators=9/9", "report_indicators=8/9")],
+  ["segundo claim aceito", CRM_OK.replace("second_claim_rejected=1/1", "second_claim_rejected=0/1")],
+  ["vínculo entre organizações aceito", CRM_OK.replace("cross_org_link_denied=1/1", "cross_org_link_denied=0/1")],
+  ["papel permitido onde nega", CRM_OK.replace("roles_denied=3/3", "roles_denied=2/3")],
+  ["poucos tipos no histórico", CRM_OK.replace("history_types=5", "history_types=4")],
+]) test(`F13 rejects a crm line out of contract: ${rotulo}`, () => {
+  const data = f13Input();
+  data.metrics.crm = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, rotulo);
+  assert.ok(result.errors.some((e) => /^crm fora do contrato/.test(e)), result.errors.join("\n"));
 });

@@ -36,6 +36,9 @@ case "$PHASE" in
   # ADR-033: F08 (produção inicial) roda o inventário de F12; a prova de
   # produção é a linha `prod:` fora do bloco (scripts/prod/prova.sh).
   F08) CLOSED_E2E=1; EXPECTED_SPECS=12; REPLICABILITY_TENANTS="deka,demo2" ;;
+  # ADR-035: F13 (CRM comercial) acrescenta a spec f13-crm-comercial (+7
+  # testes) ao inventário de F12 e mede a linha `crm:`.
+  F13) CLOSED_E2E=1; EXPECTED_SPECS=13; REPLICABILITY_TENANTS="deka,demo2" ;;
   *)   CLOSED_E2E=0; EXPECTED_SPECS=0 ;;
 esac
 REPLICABILITY_TENANTS="${REPLICABILITY_TENANTS:-}"

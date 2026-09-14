@@ -16,7 +16,7 @@ const integer = (n) => Number.isSafeInteger(n) && n >= 0;
  */
 // ADR-033: F08 (produção inicial) fecha com o inventário de F12 e sem campo
 // novo no bloco — a produção é medida pela linha `prod:` FORA dele (ADR-032 §4).
-const GATED_PHASES = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F08", "F11", "F12"];
+const GATED_PHASES = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F08", "F11", "F12", "F13"];
 
 /** §8.3: cada campo passa a ser obrigatório a partir da fase que o cria. */
 const phaseNumber = (phase) => Number(phase.slice(1));
@@ -33,10 +33,16 @@ const requiresReplicability = (phase) => phaseNumber(phase) >= phaseNumber("F07"
 // pelas suítes de integração via `gravarLinhaDoVerify`; `pending` antes.
 // ADR-033: a F08 fecha DEPOIS de F11/F12 (D51 a, D52) e herda os dois campos;
 // a ordem de fechamento, não o número da fase, decide o que é obrigatório.
-const CLOSING_ORDER = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F11", "F12", "F08"];
-const closesAtOrAfter = (phase, ref) => CLOSING_ORDER.indexOf(phase) >= CLOSING_ORDER.indexOf(ref) || phaseNumber(phase) > phaseNumber("F12");
+// ADR-035: a F13 (CRM comercial) fecha DEPOIS da F08 e mede a linha `crm:`;
+// fases fora da ordem escrita (F09, F10, F14+) contam pelo número.
+const CLOSING_ORDER = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F11", "F12", "F08", "F13"];
+const closesAtOrAfter = (phase, ref) => CLOSING_ORDER.indexOf(phase) >= CLOSING_ORDER.indexOf(ref) || phaseNumber(phase) > phaseNumber("F13");
 const requiresAdmin = (phase) => closesAtOrAfter(phase, "F11"); // MUTANT: admin-required
 const requiresBilling = (phase) => closesAtOrAfter(phase, "F12"); // MUTANT: billing-required
+const requiresCrm = (phase) => closesAtOrAfter(phase, "F13"); // MUTANT: crm-required
+// ADR-035 §3: a matriz D15 é propriedade da ÁRVORE — quatro papéis a partir
+// da F13 (ADR-034 §2 T02), medidos pela fase ativa, não pela fase pedida.
+const papeisEsperados = (phase) => (closesAtOrAfter(phase, "F13") ? 4 : 3);
 
 export function phaseContext(state, requestedPhase) {
   const active = /^current_phase:\s*(F\d{2})\b/m.exec(state)?.[1];
@@ -212,7 +218,7 @@ export function evaluate(input) {
     if (isolation && (isolation.tables < 1 || isolation.ops !== 4 || isolation.dirs !== 2 || isolation.leaks !== 0)) errors.push("Isolamento fora do contrato");
     if (rls && (rls.tables_with_org_id < 1 || rls.policies_found < 1 || rls.missing !== 0 || rls.service_only_with_grant !== 0)) errors.push("Cobertura de RLS fora do contrato");
     if (isolation && rls && isolation.tables !== rls.tables_with_org_id) errors.push("Denominadores de isolamento/RLS divergem");
-    if (rbac && (rbac.roles !== 3 || rbac.denied_expected < 1 || rbac.denied_expected !== rbac.denied_actual)) errors.push("RBAC fora do contrato");
+    if (rbac && (rbac.roles !== papeisEsperados(context.active) || rbac.denied_expected < 1 || rbac.denied_expected !== rbac.denied_actual)) errors.push("RBAC fora do contrato");
     if (entitlement && entitlement.usage_events_written < 2) errors.push("Entitlement sem prova mínima de uso");
   }
   // §8.3: mesma fixture 2x; linhas criadas em cada uma das T tabelas do
@@ -295,6 +301,25 @@ export function evaluate(input) {
       errors.push("billing fora do contrato: exige plans>=3, events>=4, duplicates>=1, out_of_order>=1, activations=1, blocked_writes_denied>=4, grace_days>=1, reconciliation_mismatch=0, cancellations=1, data_preserved>=1");
     }
   }
+  // ADR-035 §2: o CRM comercial (F13). Cada campo é uma jornada com
+  // denominador; `balanced=1` é o rodízio de verdade, `values_preserved` é
+  // "evolução preserva dados", `report_indicators` é "indicador confere com a
+  // origem" (§7.9).
+  if (requiresCrm(context.phase)) {
+    const crm = metric("crm", ["fields_defined", "values_rejected", "values_preserved", "queue_size", "distributed", "balanced", "second_claim_rejected", "history_types", "orders_linked", "cross_org_link_denied", "report_indicators", "roles_denied"]);
+    const den = (field) => {
+      const m = new RegExp(`\\b${field}=(\\d+)/(\\d+)`).exec(input.metrics.crm ?? "");
+      return m ? Number(m[2]) : null;
+    };
+    if (crm && (crm.fields_defined < 4 || crm.values_rejected < 3 || crm.values_rejected !== den("values_rejected") ||
+        crm.values_preserved < 1 || crm.values_preserved !== den("values_preserved") || crm.queue_size < 3 ||
+        crm.distributed !== crm.queue_size || crm.distributed !== den("distributed") || crm.balanced !== 1 ||
+        crm.second_claim_rejected !== 1 || crm.history_types < 5 || crm.orders_linked !== 1 || crm.cross_org_link_denied !== 1 ||
+        crm.report_indicators < 8 || crm.report_indicators !== den("report_indicators") || crm.roles_denied < 3 ||
+        crm.roles_denied !== den("roles_denied"))) {
+      errors.push("crm fora do contrato: exige fields_defined>=4, values_rejected>=3 (=denominador), values_preserved=denominador (>=1), queue_size>=3, distributed=queue_size, balanced=1, second_claim_rejected=1, history_types>=5, orders_linked=1, cross_org_link_denied=1, report_indicators>=8 (=denominador), roles_denied>=3 (=denominador)");
+    }
+  }
   const clean = errors.length === 0;
   // ADR-028 §2: a partir de F06, o gate limpo rodado no ambiente `staging`
   // sai `READY (staging)`; no sandbox sai `READY (Fnn)` — prova de código.
@@ -351,7 +376,7 @@ export function collect(root, directory, context) {
   // reprova), enquanto §8.3 fixa o rótulo do campo com underscore. O mapa é o
   // único lugar onde essa diferença existe.
   const ARQUIVO_DA_METRICA = { ai_eval: "ai-eval" };
-  for (const name of ["isolation", "rls-coverage", "rbac", "entitlement", "webhook", "ai_eval", "handoff", "reminder", "logs", "rate-limit", "lgpd", "admin", "billing"]) {
+  for (const name of ["isolation", "rls-coverage", "rbac", "entitlement", "webhook", "ai_eval", "handoff", "reminder", "logs", "rate-limit", "lgpd", "admin", "billing", "crm"]) {
     metrics[name] = read(path.join(directory, "metrics", `${ARQUIVO_DA_METRICA[name] ?? name}.line`));
   }
   metrics.secrets = read(path.join(directory, "secrets.log"));
@@ -416,6 +441,7 @@ export function render(input, result) {
     input.metrics.lgpd ?? "lgpd: tables=pending rows=pending rows_remaining=pending audit_rows=pending",
     input.metrics.admin ?? "admin: tenants_listed=pending support_sessions=pending support_reason=pending support_scope_denied=pending support_writes_denied=pending full_mode_rejected=pending signup_awaiting_payment=pending orgs_without_subscription=pending",
     input.metrics.billing ?? "billing: plans=pending events=pending duplicates=pending out_of_order=pending activations=pending blocked_writes_denied=pending grace_days=pending reconciliation_mismatch=pending cancellations=pending data_preserved=pending",
+    input.metrics.crm ?? "crm: fields_defined=pending values_rejected=pending values_preserved=pending queue_size=pending distributed=pending balanced=pending second_claim_rejected=pending history_types=pending orders_linked=pending cross_org_link_denied=pending report_indicators=pending roles_denied=pending",
     replicability,
     input.metrics.secrets ?? "secrets: pending",
     `tests_deleted=${input.testsDeleted ?? "pending"} tests_skipped=${count("skipped")} expected_failures=${count("expectedFailures")} tests_failed=${count("failed")} tests_pending=${count("pending")} mutants_killed=${input.mutants.killed ?? "pending"}/${input.mutants.total ?? "pending"}`,

@@ -112,7 +112,9 @@ export async function GET(req: NextRequest) {
   }
 
   if (q) {
-    query = query.or(`display_name.ilike.%${q}%,slug::text.ilike.%${q}%,cnpj.ilike.%${q}%`);
+    // §B17 (ADR-034 §4): `slug` já é texto; o PostgREST recusa o cast `::text`
+    // dentro do `or` ("failed to parse logic tree") e a rota respondia 500.
+    query = query.or(`display_name.ilike.%${q}%,slug.ilike.%${q}%,cnpj.ilike.%${q}%`);
   }
 
   if (cursorPayload) {
