@@ -17,6 +17,7 @@ import { ContactOrders } from "@/components/crm/ContactOrders";
 import { useAuth } from "@/hooks/auth/AuthProvider";
 import { useDefaultPipeline } from "@/hooks/pipelines/useDefaultPipeline";
 import { camposDoFunil } from "@/lib/leads/campos-do-funil";
+import { unirDefinicoes, useCrmFields } from "@/hooks/crm/useCrmFields";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { TimelineView } from "@/components/contacts/TimelineView";
 import { EditContactDialog } from "@/components/contacts/EditContactDialog";
@@ -44,6 +45,8 @@ export function ContactDetailClient({ contactId }: Props) {
   // As DEFINIÇÕES continuam no funil (`crm_pipelines.settings.fields[]`) — só o
   // VALOR mora no contato. `camposDoFunil` é o mesmo leitor que o Kanban usa.
   const pipelineQuery = useDefaultPipeline(Boolean(activeOrg));
+  // F13-T01: mais as definições por ORGANIZAÇÃO (crm.fields.contacts).
+  const crmFieldsQuery = useCrmFields(Boolean(activeOrg));
   const [editOpen, setEditOpen] = useState(false);
   const [anonOpen, setAnonOpen] = useState(false);
 
@@ -321,8 +324,9 @@ export function ContactDetailClient({ contactId }: Props) {
         contact={contact}
         open={editOpen && podeEditarVinculo}
         onOpenChange={setEditOpen}
-        customFieldDefs={camposDoFunil(
-          pipelineQuery.data?.pipeline.settings ?? null,
+        customFieldDefs={unirDefinicoes(
+          camposDoFunil(pipelineQuery.data?.pipeline.settings ?? null),
+          crmFieldsQuery.data?.contacts ?? [],
         )}
       />
       <AnonymizeDialog

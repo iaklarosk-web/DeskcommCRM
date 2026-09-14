@@ -7,7 +7,7 @@
  *
  * `default: null` é um default de verdade ("ainda não configurado", que a UI
  * mostra vazio); o invariante 1 da §5.2 — toda chave tem default e validador —
- * vale para as 24. O validador não mora na entrada: ele é derivado do `tipo`
+ * vale para as 28. O validador não mora na entrada: ele é derivado do `tipo`
  * em validators.ts, para que um tipo novo ganhe validação num lugar só.
  */
 
@@ -22,7 +22,9 @@ export type TipoDeSetting =
   | "int_array"
   | "string_array"
   | "enum"
-  | "reminder";
+  | "reminder"
+  /** F13-T01 (ADR-034): lista de definições de campo (`customFieldSchema`), ≤ 50, chaves únicas. */
+  | "custom_fields";
 
 export interface SettingEntry {
   key: string;
@@ -120,6 +122,15 @@ export const SETTINGS_SCHEMA: readonly SettingEntry[] = [
   { key: "notifications.email.to", tipo: "string_nullable", default: null },
   // orders (D23)
   { key: "orders.recurring_reminder", tipo: "reminder", default: REMINDER_DEFAULT },
+  // crm (F13, ADR-034 §2): campos configuráveis por ORGANIZAÇÃO (a definição
+  // por funil continua em `crm_pipelines.settings.fields` para a oportunidade)
+  // e a fila de oportunidades. Nenhum campo nasce definido; a distribuição
+  // nasce manual — a organização escolhe o rodízio (§5 da ADR: defaults
+  // declarados, nunca fato).
+  { key: "crm.fields.contacts", tipo: "custom_fields", default: [] },
+  { key: "crm.fields.companies", tipo: "custom_fields", default: [] },
+  { key: "crm.distribution", tipo: "enum", default: "manual", valores: ["manual", "round_robin"] },
+  { key: "crm.queue_roles", tipo: "string_array", default: ["attendant"] },
 ] as const;
 
 const POR_CHAVE = new Map(SETTINGS_SCHEMA.map((e) => [e.key, e]));

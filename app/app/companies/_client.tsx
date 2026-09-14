@@ -26,6 +26,7 @@ function draftFrom(company: Company): CompanyDraft {
     legal_name: company.legal_name,
     trade_name: company.trade_name ?? "",
     cnpj: company.cnpj ?? "",
+    custom_fields: company.custom_fields ?? {},
   };
 }
 

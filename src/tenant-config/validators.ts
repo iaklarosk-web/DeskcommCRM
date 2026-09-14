@@ -3,6 +3,8 @@
  * uma frase de gente quando não serve — a frase vai para o erro da UI e para o
  * relatório do validateSeed, então ela diz O QUE se esperava, não só "inválido".
  */
+import { validarDefinicoes } from "@/src/crm/campos/definicoes";
+
 import { REMINDER_DEFAULT, type SettingEntry } from "./schema";
 
 const REMINDER_PERIODS = ["weekly"] as const;
@@ -49,6 +51,8 @@ export function validar(entry: SettingEntry, value: unknown): string | null {
         : `esperava um de: ${(entry.valores ?? []).join(", ")}`;
     case "reminder":
       return validarReminder(value);
+    case "custom_fields":
+      return validarDefinicoes(value);
   }
 }
 

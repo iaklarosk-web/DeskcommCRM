@@ -165,8 +165,12 @@ describe("hubSections", () => {
       "/app/orders",
       "/app/orders/daily",
       "/app/tasks",
+      // F13-T03 (ADR-034): a fila de oportunidades é trabalho de todo dia.
+      "/app/crm/fila",
       "/app/products",
       "/app/settings/tenant/pipelines",
+      // F13-T01 (ADR-034): campos do cadastro se definem uma vez, como as etapas.
+      "/app/settings/tenant/crm-fields",
     ]);
     const viewerRoutes = hubSections("crm", VIEWER.platform, VIEWER.role).flatMap((section) =>
       section.items.map((item) => item.href),

@@ -7,7 +7,9 @@ import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { createClient } from "@/lib/supabase/server";
+import { validarCamposDa } from "@/src/crm/campos";
 import { companyCreateSchema } from "@/src/crm/companies/schema";
+import { ctxDaRota } from "@/src/crm/permissao-da-rota";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +21,7 @@ const querySchema = z
   })
   .strict();
 
-const COLUMNS = "id,organization_id,legal_name,trade_name,cnpj,created_at,updated_at";
+const COLUMNS = "id,organization_id,legal_name,trade_name,cnpj,custom_fields,created_at,updated_at";
 
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = getRequestId(req);
@@ -55,10 +57,16 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (!authz.ok) return authz.response;
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
+  // F13-T01: o valor dos campos configuráveis passa pelo validador único
+  // (definições de `crm.fields.companies`); campo sem definição é preservado.
+  const campos = await validarCamposDa(ctxDaRota(authz), "companies", parsed.data.custom_fields);
+  if (!campos.ok) {
+    return fail("custom_field_invalid", "Campos personalizados inválidos.", 422, { requestId, details: { erros: campos.erros } });
+  }
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("crm_companies")
-    .insert({ ...parsed.data, organization_id: authz.org.orgId })
+    .insert({ ...parsed.data, custom_fields: campos.valores, organization_id: authz.org.orgId })
     .select(COLUMNS)
     .single();
   if (error) {

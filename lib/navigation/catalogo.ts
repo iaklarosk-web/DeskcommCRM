@@ -305,6 +305,40 @@ export const NAV_CATALOG = [
     // Tarefas se abrem todo dia. É esse o corte que decide quem fica no menu.
   },
 
+  {
+    // F13-T01 (ADR-034 §2): os campos configuráveis por ORGANIZAÇÃO para
+    // contatos e empresas — a definição por funil continua em Etapas do funil.
+    href: "/app/settings/tenant/crm-fields",
+    label: "Campos do cadastro",
+    description: "Os campos que contatos e empresas desta organização carregam além do padrão.",
+    icon: "ListChecks",
+    group: "crm",
+    section: "Preparar a venda",
+    minRole: "manager",
+  },
+  {
+    // F13-T03 (ADR-034 §2): a fila de oportunidades sem dono — quem distribui
+    // (manager+) e quem puxa (attendant).
+    href: "/app/crm/fila",
+    label: "Fila de oportunidades",
+    description: "Oportunidades abertas sem responsável: distribuir por rodízio ou assumir uma.",
+    icon: "Signpost",
+    group: "crm",
+    section: "O dia a dia da venda",
+    minRole: "agent",
+  },
+  {
+    // F13-T05 (ADR-034 §2): o relatório comercial da organização — funil,
+    // ganhas/perdidas, por responsável, fila, tarefas e pedidos por estado.
+    href: "/app/reports/crm",
+    label: "Relatório comercial",
+    description: "Funil com valor, negócios ganhos e perdidos, fila, tarefas e pedidos do período.",
+    icon: "ChartBar",
+    group: "analise",
+    section: "Os números do período",
+    minRole: "manager",
+  },
+
   // ---- Agente de IA — montar, ensinar, acompanhar ----
   {
     href: "/app/ai/agents",

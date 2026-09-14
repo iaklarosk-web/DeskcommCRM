@@ -474,6 +474,12 @@ export const AUDIT_ACTIONS = [
   "billing.checkout_started",
   "billing.plan_changed",
   "billing.subscription_cancelled",
+  // F13 (ADR-034 §2): o CRM comercial — definições de campo por organização,
+  // distribuição/claim da fila de oportunidades e o vínculo com o pedido.
+  "crm_fields.updated",
+  "crm_opportunity.distributed",
+  "crm_opportunity.claimed",
+  "crm_opportunity.order_linked",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

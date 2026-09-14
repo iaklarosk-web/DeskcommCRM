@@ -16,6 +16,8 @@ import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { contactPatchSchema, validateRequest } from "@/lib/schemas";
 import { createClient } from "@/lib/supabase/server";
+import { validarCamposDa } from "@/src/crm/campos";
+import { ctxDaRota } from "@/src/crm/permissao-da-rota";
 
 import { deleteContactHandler, getContactHandler, patchContactHandler } from "../_handler";
 
@@ -94,6 +96,16 @@ export async function PATCH(
       });
     }
     throw err;
+  }
+  // F13-T01 (ADR-034): o valor dos campos configuráveis do contato passa pelo
+  // validador único (definições de `crm.fields.contacts`); chave sem definição
+  // é preservada — apagar uma definição não apaga o valor gravado.
+  if (input.custom_fields !== undefined) {
+    const campos = await validarCamposDa(ctxDaRota(authz), "contacts", input.custom_fields);
+    if (!campos.ok) {
+      return fail("custom_field_invalid", "Campos personalizados inválidos.", 422, { requestId, details: { erros: campos.erros } });
+    }
+    input = { ...input, custom_fields: campos.valores };
   }
 
   try {

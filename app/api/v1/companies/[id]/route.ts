@@ -7,7 +7,9 @@ import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { createClient } from "@/lib/supabase/server";
+import { validarCamposDa } from "@/src/crm/campos";
 import { companyPatchSchema } from "@/src/crm/companies/schema";
+import { ctxDaRota } from "@/src/crm/permissao-da-rota";
 
 export const dynamic = "force-dynamic";
 type RouteContext = { params: Promise<{ id: string }> };
@@ -44,10 +46,20 @@ export async function PATCH(req: NextRequest, context: RouteContext): Promise<Re
   if (!authz.ok) return authz.response;
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
+  // F13-T01: o objeto inteiro é validado contra as definições vigentes; chave
+  // sem definição segue intacta (apagar definição não apaga valor).
+  let alteracao = parsed.data;
+  if (parsed.data.custom_fields !== undefined) {
+    const campos = await validarCamposDa(ctxDaRota(authz), "companies", parsed.data.custom_fields);
+    if (!campos.ok) {
+      return fail("custom_field_invalid", "Campos personalizados inválidos.", 422, { requestId, details: { erros: campos.erros } });
+    }
+    alteracao = { ...parsed.data, custom_fields: campos.valores };
+  }
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("crm_companies")
-    .update(parsed.data)
+    .update(alteracao)
     .eq("organization_id", authz.org.orgId)
     .eq("id", id.data)
     .select(COLUMNS)

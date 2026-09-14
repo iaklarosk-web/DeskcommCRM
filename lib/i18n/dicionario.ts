@@ -8579,6 +8579,24 @@ export const DICIONARIO: Traducoes = {
   "Esta instalação está em modo de teste: o WhatsApp é simulado. Conecte o canal de teste para concluir o passo.": {"es":"Esta instalación está en modo de prueba: el WhatsApp es simulado. Conecte el canal de prueba para concluir el paso."},
   "Falha ao conectar o canal de teste:": {"es":"Falla al conectar el canal de prueba:"},
   "Conectar canal de teste": {"es":"Conectar canal de prueba"},
+  // F13-T01 (ADR-034): campos configuráveis por organização.
+  "Campos do cadastro": {"es":"Campos del registro"},
+  "Os campos que contatos e empresas desta organização carregam além do padrão. Apagar um campo não apaga o que já foi gravado.": {"es":"Los campos que contactos y empresas de esta organización llevan además del estándar. Borrar un campo no borra lo que ya fue guardado."},
+  "Os campos que contatos e empresas desta organização carregam além do padrão.": {"es":"Los campos que contactos y empresas de esta organización llevan además del estándar."},
+  "Campos salvos.": {"es":"Campos guardados."},
+  "Não foi possível salvar os campos.": {"es":"No fue posible guardar los campos."},
+  "Não foi possível carregar os campos.": {"es":"No fue posible cargar los campos."},
+  "Empresas": {"es":"Empresas"},
+  "Campos definidos": {"es":"Campos definidos"},
+  "Nenhum campo definido.": {"es":"Ningún campo definido."},
+  "obrigatório": {"es":"obligatorio"},
+  "Opções (separadas por vírgula)": {"es":"Opciones (separadas por coma)"},
+  // F13-T03 (ADR-034): fila de oportunidades.
+  "Fila de oportunidades": {"es":"Cola de oportunidades"},
+  "Oportunidades abertas sem responsável: distribuir por rodízio ou assumir uma.": {"es":"Oportunidades abiertas sin responsable: distribuir por turnos o asumir una."},
+  // F13-T05 (ADR-034): relatório comercial.
+  "Relatório comercial": {"es":"Informe comercial"},
+  "Funil com valor, negócios ganhos e perdidos, fila, tarefas e pedidos do período.": {"es":"Embudo con valor, negocios ganados y perdidos, cola, tareas y pedidos del período."},
 };
 
 /**
