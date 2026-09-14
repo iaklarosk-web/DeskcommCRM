@@ -52,20 +52,22 @@ const ESPERADO_DA_DIRETRIZ: readonly {
   { name: "create_order", risk: "medium", executors: ["human", "ai"], confirmation: "by_risk" },
   { name: "update_order_quantity", risk: "medium", executors: ["human", "ai"], confirmation: "by_risk" },
   { name: "create_task", risk: "low", executors: ["human", "ai", "automation"], confirmation: "none" },
-  { name: "transfer_to_human", risk: "low", executors: ["human", "ai"], confirmation: "none" },
+  { name: "transfer_to_human", risk: "low", executors: ["human", "ai", "automation"], confirmation: "none" },
   { name: "request_confirmation", risk: "low", executors: ["human", "ai"], confirmation: "none" },
   { name: "send_message", risk: "medium", executors: ["human", "ai", "automation"], confirmation: "none" },
   { name: "resume_ai", risk: "low", executors: ["human"], confirmation: "none" },
   // F06-T03 (§5.18, §7.7): as duas ações `high` da LGPD mínima, só humanas.
   { name: "export_customer_data", risk: "high", executors: ["human"], confirmation: "none" },
+  // F15-T04 (ADR-036 §2 T04): entregar uma oportunidade — automação e humano; a IA não escolhe quem vende.
+  { name: "assign_owner", risk: "low", executors: ["human", "automation"], confirmation: "none" },
   { name: "delete_customer_data", risk: "high", executors: ["human"], confirmation: "none" },
 ];
 
 /** As nove de D18. `resume_ai` (D34) e as duas da LGPD (F06-T03) são humanas e NÃO estão aqui. */
 const TOOLS_D18 = ESPERADO_DA_DIRETRIZ.filter((e) => e.executors.includes("ai")).map((e) => e.name);
 
-describe("F04-T01 — as entradas do catálogo (dez de F04 + duas de F06-T03), com os oito campos", () => {
-  it("o catálogo tem as dez de §5.8 mais as duas de §7.7 T03, com risco, executores e confirmação do documento", () => {
+describe("F04-T01 — as entradas do catálogo (dez de F04 + duas de F06-T03 + uma de F15-T04), com os oito campos", () => {
+  it("o catálogo tem as dez de §5.8, as duas de §7.7 T03 e assign_owner (ADR-036), com risco, executores e confirmação do documento", () => {
     // Arrange — o documento.
     const esperado = ESPERADO_DA_DIRETRIZ;
 
@@ -155,8 +157,9 @@ describe("F04-T01 — a matriz N × 3 executores (§5.8, invariante 1)", () => {
     // Assert
     const celulas = ACTION_CATALOG.length * ACTION_EXECUTORS.length;
     expect(permitidas + negadas.length).toBe(celulas);
-    // Seis de F04 mais quatro de F06-T03: as duas ações LGPD são negadas a
-    // `ai` e a `automation`, cada uma.
+    // Seis de F04 mais quatro de F06-T03 (as duas ações LGPD negadas a `ai` e a
+    // `automation`) — e a F15-T04 troca uma por outra: `transfer_to_human`
+    // ganha `automation` (−1) e `assign_owner` nasce negada a `ai` (+1).
     expect(negadas.length, `células negadas: ${negadas.join(", ")}`).toBe(10);
     console.info(
       `f04-t01-matriz: cells=${celulas} allowed=${permitidas} denied=${negadas.length}/10`,
@@ -185,12 +188,13 @@ describe("F04-T01 — a matriz N × 3 executores (§5.8, invariante 1)", () => {
     // As outras duas listas, para que o filtro por executor não seja acidente.
     const humanas = toolsFor({}, "human").length;
     const automacao = toolsFor({}, "automation").length;
-    expect(humanas, "toolsFor(human) devia devolver as doze").toBe(ACTION_CATALOG.length);
-    // Cinco: as três leituras, `create_task` e `send_message` — as mesmas que
-    // §5.12 precisa para o Job de lembrete.
-    expect(automacao, "toolsFor(automation) mudou de tamanho").toBe(5);
+    expect(humanas, "toolsFor(human) devia devolver as treze").toBe(ACTION_CATALOG.length);
+    // Sete: as três leituras, `create_task` e `send_message` (as que §5.12
+    // precisa para o Job de lembrete) mais `transfer_to_human` e `assign_owner`
+    // (F15-T04, as quatro ações de regra são todas de `automation`).
+    expect(automacao, "toolsFor(automation) mudou de tamanho").toBe(7);
     console.info(
-      `f04-t01-toolsfor: ai=${doModelo.length}/9 human=${humanas}/12 automation=${automacao}/5`,
+      `f04-t01-toolsfor: ai=${doModelo.length}/9 human=${humanas}/13 automation=${automacao}/7`,
     );
   });
 

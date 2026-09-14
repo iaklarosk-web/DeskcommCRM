@@ -378,6 +378,8 @@ describe("F04-T01 — executor fora do subset é negado e auditado", () => {
         (executor) => ({ entrada, executor }),
       ),
     );
+    // Dez: a F15-T04 tira uma (`transfer_to_human` ganha `automation`) e põe
+    // uma (`assign_owner` negada à IA).
     expect(celulasNegadas.length, "a matriz deixou de ter dez células negadas").toBe(10);
 
     // Act — cada célula é TENTADA. Ler o catálogo provaria o catálogo; o que
@@ -430,11 +432,12 @@ describe("F04-T01 — executor fora do subset é negado e auditado", () => {
     const linha = `action-policy: actions=${catalogo} catalog_total=${catalogo} fields=8/8 executor_denied=${negadas}/${celulasNegadas.length} audit_rows=${auditoriaDaIaNoCatalogo}/9`;
     console.info(linha);
     gravarLinhaDoVerify("action-policy", linha);
-    // Doze desde a F06-T03 (dez de F04 + as duas ações LGPD, negadas a `ai` e
-    // `automation`: 6 + 4 células). A auditoria da IA no catálogo não muda —
-    // a IA nunca vê as duas novas.
+    // Treze desde a F15-T04 (dez de F04 + as duas ações LGPD, negadas a `ai` e
+    // `automation`: 6 + 4 células; `transfer_to_human` ganha `automation` e
+    // `assign_owner` nasce negada a `ai`: 10 células). A auditoria da IA no
+    // catálogo não muda — a IA nunca vê `assign_owner`.
     expect(linha).toBe(
-      "action-policy: actions=12 catalog_total=12 fields=8/8 executor_denied=10/10 audit_rows=9/9",
+      "action-policy: actions=13 catalog_total=13 fields=8/8 executor_denied=10/10 audit_rows=9/9",
     );
   });
 });

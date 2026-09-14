@@ -15,6 +15,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptRuleActionSecrets } from "@/lib/webhooks/secrets";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { regraForaDoVocabulario } from "@/src/automation/regras";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,13 @@ export async function POST(req: NextRequest): Promise<Response> {
       requestId,
       details: parsed.error.flatten(),
     });
+  }
+  // F15-T04 (ADR-036 §2 T04): o vocabulário do SaaS é fechado — só os
+  // gatilhos de GATILHOS_DE_REGRA e ações do catálogo D17 (executor
+  // `automation`). O que está fora é recusado com nome (`outside_catalog`).
+  const foraDoVocabulario = regraForaDoVocabulario(parsed.data.trigger_event, parsed.data.actions);
+  if (foraDoVocabulario !== null) {
+    return fail("outside_catalog", foraDoVocabulario, 422, { requestId });
   }
 
   // Secrets de call_webhook nunca ficam em claro no jsonb (migration 0041).

@@ -2,8 +2,8 @@
  * Action Policy — o catálogo (§5.8, D17/D18/D33/D34).
  *
  * DEZ entradas na F04-T01: as nove tools de D18 mais `resume_ai` (D34). As duas
- * ações LGPD de F06-T03 fecham as doze de §5.8 — não estão aqui porque entrada
- * de catálogo sem executor é uma linha que não leva a lugar nenhum.
+ * ações LGPD de F06-T03 fecham as doze de §5.8; `assign_owner` (F15-T04) é a
+ * décima terceira — a automação entrega oportunidade pelo rodízio.
  *
  * `toolsFor(ctx, "ai")` devolve exatamente NOVE: `resume_ai` é humana por
  * desenho (D34 — devolver a conversa à IA é decisão de quem a tirou dela).
@@ -22,6 +22,8 @@ import { toJSONSchema, type z } from "zod";
 import { CONVERSATION_STATES, type ConversationState } from "@/src/conversation";
 
 import {
+  assignOwnerInputSchema,
+  assignOwnerOutputSchema,
   createOrderInputSchema,
   createOrderOutputSchema,
   createTaskInputSchema,
@@ -171,10 +173,12 @@ export const ACTION_CATALOG: readonly ActionCatalogEntry[] = [
     output_schema: createTaskOutputSchema,
     resource_type: "crm_tasks",
   },
+  // F15-T04: `automation` também transfere (regra "transferir a uma pessoa");
+  // o ator da transição continua `system` (`tools/conversa.ts`).
   {
     name: "transfer_to_human",
     risk: "low",
-    executors: ["human", "ai"],
+    executors: ["human", "ai", "automation"],
     confirmation: "none",
     side_effect: "transition(handoff.requested) + item de inbox kind=handoff",
     audit: "always",
@@ -229,6 +233,21 @@ export const ACTION_CATALOG: readonly ActionCatalogEntry[] = [
     input_schema: customerDataInputSchema,
     output_schema: exportCustomerDataOutputSchema,
     resource_type: "contacts",
+  },
+  // F15-T04 (ADR-036 §2 T04) — a única ação NOVA da F15: entregar uma
+  // oportunidade a uma pessoa (rodízio ou nomeada). `automation` porque é o
+  // que uma regra faz; `human` porque a fila da F13 já deixa o manager
+  // distribuir; NÃO `ai` — a IA não escolhe quem vende (D40, autorização).
+  {
+    name: "assign_owner",
+    risk: "low",
+    executors: ["human", "automation"],
+    confirmation: "none",
+    side_effect: "crm_leads.owner_user_id/assigned_at + crm_lead_activities (owner_assigned)",
+    audit: "always",
+    input_schema: assignOwnerInputSchema,
+    output_schema: assignOwnerOutputSchema,
+    resource_type: "crm_leads",
   },
   {
     name: "delete_customer_data",

@@ -28,6 +28,7 @@ const DEFAULTS_DECLARADOS: Record<string, "allow" | "approve" | "block" | "trans
   send_message: "allow",
   resume_ai: "block", // só humana (D34): a IA não devolve a conversa a si mesma
   export_customer_data: "block",
+  assign_owner: "block", // automação e humano (F15-T04): a IA não escolhe quem vende
   delete_customer_data: "block",
 };
 
@@ -58,7 +59,7 @@ describe("F15-T01 — o modo efetivo por ação", () => {
     const tabela = tabelaDaPolitica("ai", POLITICA_PADRAO, "medium");
     // Act
     const efetivos = Object.fromEntries(tabela.map((l) => [l.action, l.mode]));
-    // Assert — contagem, não amostra: as 12 do catálogo, uma a uma.
+    // Assert — contagem, não amostra: as 13 do catálogo, uma a uma.
     expect(tabela).toHaveLength(ACTION_CATALOG.length);
     expect(efetivos).toEqual(DEFAULTS_DECLARADOS);
     expect(tabela.every((l) => l.source === "padrão")).toBe(true);

@@ -10,6 +10,7 @@
  * `crm_lead_activities` (`owner_assigned`, `owner_claimed`, `order_linked`).
  */
 import { papelD15DoHerdado } from "@/src/rbac/matrix";
+import { selectRoundRobin } from "@/lib/routing/decide";
 import { getSetting } from "@/src/tenant-config/settings";
 import { withTenant, type TenantCtx, type TenantDb } from "@/src/tenant-context";
 import type { ServicePool } from "@/src/tenant-context/db";
@@ -185,6 +186,42 @@ export async function reivindicar(ctx: TenantCtx, opportunityId: string, userId:
       if ((existe.rowCount ?? 0) === 0) throw new OportunidadeNaoEncontrada(opportunityId);
       if (!(await atribuir(db, ctx, opportunityId, userId, "claim", agora))) throw new JaAtribuida(opportunityId);
       return { opportunity_id: opportunityId, user_id: userId };
+    },
+    deps,
+  );
+}
+
+/** F15-T04: ninguém elegível em `crm.queue_roles` para receber a oportunidade. */
+export class SemElegivel extends Error {
+  constructor() {
+    super("nenhum membro elegível para o rodízio");
+    this.name = "SemElegivel";
+  }
+}
+
+/**
+ * F15-T04 (ADR-036 §2 T04) — UMA oportunidade entregue pelo rodízio (ou a um
+ * usuário nomeado): é o que a ação `assign_owner` do catálogo faz quando uma
+ * regra dispara. Independe de `crm.distribution` (a regra é a intenção
+ * explícita da organização); a oportunidade tem de estar aberta e sem dono
+ * (`JaAtribuida` caso contrário). Mesmo `atribuir` da fila da F13.
+ */
+export async function atribuirPorRodizio(
+  ctx: TenantCtx,
+  opportunityId: string,
+  userId: string | null,
+  deps: DepsDasOportunidades = {},
+): Promise<{ opportunity_id: string; user_id: string; mode: "round_robin" | "named" }> {
+  const agora = (deps.agora ?? (() => new Date()))();
+  const escolhido = userId ?? selectRoundRobin(await elegiveis(ctx, deps));
+  if (escolhido === null) throw new SemElegivel();
+  return withTenant(
+    ctx,
+    async (db) => {
+      const existe = await db.query(`select 1 from public.crm_leads where organization_id = $1 and id = $2`, [ctx.organization_id, opportunityId]);
+      if ((existe.rowCount ?? 0) === 0) throw new OportunidadeNaoEncontrada(opportunityId);
+      if (!(await atribuir(db, ctx, opportunityId, escolhido, "round_robin", agora))) throw new JaAtribuida(opportunityId);
+      return { opportunity_id: opportunityId, user_id: escolhido, mode: userId === null ? "round_robin" : "named" };
     },
     deps,
   );

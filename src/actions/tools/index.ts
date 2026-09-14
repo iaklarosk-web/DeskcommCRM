@@ -13,6 +13,7 @@ import { getCustomer, getOrders, searchProducts } from "./leitura";
 import { createOrder, createTask, updateOrderQuantity } from "./pedido";
 import { requestConfirmation, resumeAi, sendMessage, transferToHuman } from "./conversa";
 import { deleteCustomerData, exportCustomerData } from "./lgpd";
+import { assignOwner } from "./oportunidade";
 import type { ToolRunner } from "./contrato";
 
 const HANDLERS: Readonly<Record<string, ToolRunner>> = {
@@ -28,6 +29,7 @@ const HANDLERS: Readonly<Record<string, ToolRunner>> = {
   resume_ai: resumeAi,
   export_customer_data: exportCustomerData,
   delete_customer_data: deleteCustomerData,
+  assign_owner: assignOwner,
 };
 
 const SEM_HANDLER = ACTION_CATALOG.filter((entrada) => !(entrada.name in HANDLERS));

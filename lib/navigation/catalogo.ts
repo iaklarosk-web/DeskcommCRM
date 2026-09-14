@@ -694,6 +694,18 @@ export const NAV_CATALOG = [
     minRole: "manager",
   },
   {
+    // F15-T04 (ADR-036 §2, D54 e): as regras QUANDO/ENTÃO sobre o catálogo —
+    // configuração comercial da operação, manager+ (a tela herdada de
+    // Webhooks continua para o kit; o SaaS escreve aqui).
+    href: "/app/settings/tenant/automation-rules",
+    label: "Regras de automação",
+    description: "Quando algo acontecer, faça uma ação do catálogo: mensagem, tarefa, transferência ou entrega da oportunidade.",
+    icon: "FlowArrow",
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "manager",
+  },
+  {
     // O USO fica ao lado do contrato do agente (F05-T09): tokens e custo
     // estimado por período, somados do registro de uso da própria empresa.
     href: "/app/settings/tenant/ia/uso",

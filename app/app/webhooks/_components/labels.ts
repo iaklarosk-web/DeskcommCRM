@@ -20,6 +20,11 @@ export const TRIGGER_LABELS: Record<TriggerEvent, string> = {
   "message.received": "Quando chegar mensagem no WhatsApp",
   "lead.tag_added": "Quando um lead ganhar uma tag",
   "contact.tag_added": "Quando um contato ganhar uma tag",
+  // F15-T04 (ADR-036): os gatilhos do SaaS — a tela de regras do SaaS é
+  // /app/settings/tenant/automation-rules; aqui só o rótulo, para o kit.
+  "conversation.resolved": "Quando uma conversa for resolvida",
+  "order.confirmed": "Quando um pedido for confirmado",
+  "task.overdue": "Quando uma tarefa vencer",
 };
 
 export const ACTION_LABELS: Record<ActionType, string> = {

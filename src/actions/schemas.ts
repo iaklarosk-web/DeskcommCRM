@@ -267,6 +267,21 @@ export type SendMessageOutput = z.infer<typeof sendMessageOutputSchema>;
 
 export const resumeAiInputSchema = z.strictObject({ conversation_id: uuid });
 
+/**
+ * F15-T04 (ADR-036 §2 T04) — `assign_owner`: entrega UMA oportunidade a uma
+ * pessoa. Sem `user_id`, pelo rodízio de `crm.queue_roles`; com `user_id`, a
+ * quem a regra nomeou. Executores `automation` e `human` — a IA não distribui.
+ */
+export const assignOwnerInputSchema = z.strictObject({
+  opportunity_id: uuid,
+  user_id: uuid.nullable().default(null),
+});
+export const assignOwnerOutputSchema = z.strictObject({
+  opportunity_id: uuid,
+  user_id: uuid,
+  mode: z.enum(["round_robin", "named"]),
+});
+
 /** F06-T03 — LGPD mínima: as duas ações `high` do tenant_admin sobre um cliente. */
 export const customerDataInputSchema = z.strictObject({ contact_id: uuid });
 export const exportCustomerDataOutputSchema = z.strictObject({

@@ -108,10 +108,20 @@ escrita é recusada e a leitura funciona. Nenhuma spec apagada nem pulada
 - **Tabela nova `ai_policies`.** D21 já dá o lugar (`tenant_settings`, uma
   linha por chave com `source`); tabela nova exigiria RLS, prova e MANIFEST
   para repetir o que a Setting faz. Mesmo motivo de ADR-034.
-- **Motor de regras novo em `src/`.** O herdado tem condições, throttle,
-  adiamento pela janela e runs auditadas provados no Deskcomm; reescrever
-  seria REFAZER o que D29 manda ADAPTAR. O que se restringe é o vocabulário
-  de ações, não o motor.
+- **Motor de regras novo em `src/` — rejeitado no desenho, ADAPTADO na
+  execução (T04).** O laço herdado (`lib/automation/engine.ts`) fala com o
+  banco pelo cliente Supabase/PostgREST, que o gate de integração (Postgres
+  descartável, sem PostgREST) não tem — e a prova `rules=4 runs=4/4 replays=4
+  duplicate_runs=0` precisa rodar ali. `src/automation/motor.ts` reusa o que
+  é puro (`evaluateConditions`), as tabelas (`automation_rules`,
+  `automation_rule_runs`) e o desenho (regras por gatilho → condições →
+  ações → run); troca só o acesso (pg via `withTenant`) e o vocabulário de
+  ações (catálogo, pelo caminho único `execute()`). O handler do `event_log`
+  passa a chamar este motor para todos os gatilhos de regra; o laço herdado
+  fica no kit sem consumidor (dois motores sobre as mesmas regras executariam
+  cada regra duas vezes). Throttle/adiamento pela janela do WhatsApp herdados
+  não se perdem: `send_message` do catálogo entra na fila de saída, que já
+  respeita a janela do pacing (F08).
 - **Manter as 7 ações herdadas disponíveis nas regras SaaS.** `call_webhook`
   é HTTP arbitrário (D18 proíbe), `send_whatsapp`/`send_ai_message` enviam
   fora do `send_message` do catálogo (invariante 3 de §5.7), `assign_owner`
@@ -136,8 +146,19 @@ escrita é recusada e a leitura funciona. Nenhuma spec apagada nem pulada
   e `handoff.assignment` ganha um valor — o schema de §5.2 passa de 28 para
   30 entradas; 1 migration (9027) só com índice; nenhuma tabela nova, nenhuma
   prova de RLS nova.
-- Catálogo passa de 12 para 13 entradas (`assign_owner`); `toolsFor(ctx, "ai")`
-  continua devolvendo NOVE (D18): `assign_owner` é `automation`+`human`.
+- Catálogo passa de 12 para 13 entradas (`assign_owner`, `automation`+`human`);
+  `transfer_to_human` ganha o executor `automation` (a regra "transferir a uma
+  pessoa" é uma transição com ator `system`, como o corte do lembrete). As
+  células negadas da matriz continuam 10 (−1 +1); `toolsFor(ctx, "ai")`
+  continua devolvendo NOVE (D18); `toolsFor(ctx, "automation")` passa a 7.
+- Vocabulário de regra do SaaS (`src/automation/regras.ts`): 5 gatilhos
+  (`lead.created`, `lead.stage_changed`, `conversation.resolved`,
+  `order.confirmed`, `task.overdue`) × 4 ações; a rota herdada
+  `/api/v1/automation-rules` (POST/PATCH) recusa o resto com `outside_catalog`
+  (422); a tela do SaaS é `/app/settings/tenant/automation-rules` (sem
+  condições na v1 — declarado); a tela herdada de Webhooks continua para o
+  kit. `lib/schemas/webhooks.ts` ganha os três gatilhos e as três ações no
+  enum do kit (o SaaS filtra por cima).
 - `ActionDenyReason` ganha `policy_blocked` e `policy_transferred`. O enum de
   motivos de handoff (D19) NÃO cresce: `transfer` e o limite diário usam
   `tenant_rule` ("regra do tenant" da lista única) com o resumo dizendo qual

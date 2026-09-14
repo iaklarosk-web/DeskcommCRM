@@ -11,6 +11,7 @@ import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { autoriaDaMudanca } from "@/lib/operacao/autoria";
 import { updateAutomationRuleSchema } from "@/lib/schemas";
+import { ehGatilhoDeRegra, validarAcoesDeRegra } from "@/src/automation/regras";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptRuleActionSecrets } from "@/lib/webhooks/secrets";
@@ -45,6 +46,14 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
       requestId,
       details: parsed.error.flatten(),
     });
+  }
+  // F15-T04 (ADR-036 §2 T04): o que muda tem de continuar no vocabulário do SaaS.
+  if (parsed.data.trigger_event !== undefined && !ehGatilhoDeRegra(parsed.data.trigger_event)) {
+    return fail("outside_catalog", `gatilho fora do vocabulário: ${parsed.data.trigger_event}`, 422, { requestId });
+  }
+  if (parsed.data.actions !== undefined) {
+    const problema = validarAcoesDeRegra(parsed.data.actions);
+    if (problema !== null) return fail("outside_catalog", problema, 422, { requestId });
   }
 
   const supabase = await createClient();

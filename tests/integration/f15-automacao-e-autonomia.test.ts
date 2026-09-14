@@ -19,6 +19,11 @@ import { createFakeRegistry } from "@/lib/agent-engine/edge/llm/providers";
 import { comoTextoDoProvedor, responderTurno } from "@/src/ai";
 import { estadoDoLimite } from "@/src/ai/limite";
 import { execute } from "@/src/actions/execute";
+import { processarEventoDeRegra } from "@/src/automation/motor";
+import { validarAcoesDeRegra } from "@/src/automation/regras";
+import { executeOrderCommand } from "@/src/crm/orders/service";
+import { varrerTarefasVencidas } from "@/src/crm/tarefas/vencidas";
+import { transition } from "@/src/conversation";
 import { claim, filaDeHandoffs } from "@/src/handoff/registro";
 import { criarAdapterMock } from "@/src/channels/mock";
 import { can, type Permissao, type PapelD15 } from "@/src/rbac/matrix";
@@ -70,6 +75,11 @@ const medidas = {
   handoffs: 0,
   balanced: 0,
   assignees_distinct: 0,
+  rules: 0,
+  runs: 0,
+  replays: 0,
+  duplicate_runs: 0,
+  outside_catalog_denied: 0,
 };
 
 // ─── T02: um tenant próprio para o turno de IA (fixture da F04) ─────────────
@@ -437,6 +447,145 @@ describe("F15-T03 — handoff por rodízio: entregue a um, visto por um, assumid
     expect(linha?.assigned_to).toBeNull();
     expect(avisos).toBe(3);
     console.info(`f15-t03-queue: unassigned=1/1 notified_queue=${avisos}/3`);
+  });
+});
+
+describe("F15-T04 — regras sobre o catálogo: 4 gatilhos × 4 ações, replays sem duplicar, fora do catálogo negado", () => {
+  const regras: Record<string, string> = {};
+  let leadA = "";
+  let pedidoDo3 = "";
+  let pedidoConfirmavel = "";
+  const eventoDe = async (tipo: string) =>
+    (
+      await pool.query<{ id: string; organization_id: string; event_type: string; entity_kind: string; entity_id: string | null; payload: Record<string, unknown> }>(
+        `select id, organization_id, event_type, entity_kind, entity_id, payload from public.event_log
+          where organization_id=$1 and event_type=$2 order by created_at desc limit 1`,
+        [ORG_A, tipo],
+      )
+    ).rows[0]!;
+  const runsDaOrg = () => conta(`select count(*)::text as n from public.automation_rule_runs where organization_id=$1`, [ORG_A]);
+
+  it("quatro regras ativas, uma por gatilho, cada uma com uma ação do catálogo (rules=4)", async () => {
+    // Arrange — o funil padrão e uma oportunidade sem dono para o contato 1;
+    // um pedido para o contato 3 (a conversa 3 será resolvida).
+    const funil = await pool.query<{ id: string }>(`select id from crm_pipelines where organization_id=$1 and is_default order by position limit 1`, [ORG_A]);
+    const etapas = await pool.query<{ id: string }>(`select id from crm_stages where organization_id=$1 and pipeline_id=$2 and not is_won and not is_lost order by position limit 2`, [ORG_A, funil.rows[0]!.id]);
+    leadA = randomUUID();
+    await pool.query(
+      `insert into crm_leads (id, organization_id, pipeline_id, stage_id, contact_id, title, created_at, updated_at) values ($1,$2,$3,$4,$5,'Oportunidade da regra',now(),now())`,
+      [leadA, ORG_A, funil.rows[0]!.id, etapas.rows[0]!.id, contatoDe(ORG_A, 1)],
+    );
+    const pedido3 = await executeOrderCommand(ctxA, { type: "human", user_id: ADMIN_A }, {
+      command: "create_draft", idempotency_key: randomUUID(), contact_id: contatoDe(ORG_A, 3), company_id: null, company_name: null, channel: "whatsapp", delivery_date: "2026-09-22", currency: "BRL",
+      items: [{ id: randomUUID(), position: 1, requested_text: "1 un", product_id: PRODUCT_A, product_name: "Produto A", sale_unit: "un", quantity: "1.000", unit_price_cents: 1000, currency: "BRL" }],
+    }, { pool });
+    pedidoDo3 = pedido3.order.id;
+    // O pedido que a regra de `order.confirmed` vai ver confirmado: criado pelo
+    // serviço (com data prevista), porque o rascunho cru da fixture é incompleto.
+    const pedido2 = await executeOrderCommand(ctxA, { type: "human", user_id: ADMIN_A }, {
+      command: "create_draft", idempotency_key: randomUUID(), contact_id: contatoDe(ORG_A, 2), company_id: null, company_name: null, channel: "whatsapp", delivery_date: "2026-09-23", currency: "BRL",
+      items: [{ id: randomUUID(), position: 1, requested_text: "2 un", product_id: PRODUCT_A, product_name: "Produto A", sale_unit: "un", quantity: "2.000", unit_price_cents: 1000, currency: "BRL" }],
+    }, { pool });
+    pedidoConfirmavel = pedido2.order.id;
+    const definicoes: Array<[string, string, Record<string, unknown>]> = [
+      ["lead.stage_changed", "assign_owner", { user_id: null }],
+      ["order.confirmed", "create_task", { title: "Preparar a entrega do pedido confirmado", priority: "high", due_in_hours: 24 }],
+      ["task.overdue", "send_message", { body: "Passando para lembrar do seu pedido — precisa de algo?" }],
+      ["conversation.resolved", "create_task", { title: "Pós-atendimento: ligar em 2 dias", priority: "medium", due_in_hours: null }],
+    ];
+    // Act
+    for (const [gatilho, acao, config] of definicoes) {
+      const r = await pool.query<{ id: string }>(
+        `insert into public.automation_rules (organization_id, name, trigger_event, conditions, actions, is_active, created_by_user_id)
+         values ($1,$2,$3,'[]'::jsonb,$4::jsonb,true,$5) returning id`,
+        [ORG_A, `regra ${gatilho} → ${acao}`, gatilho, JSON.stringify([{ type: acao, config }]), ADMIN_A],
+      );
+      regras[gatilho] = r.rows[0]!.id;
+    }
+    // Assert
+    expect(Object.keys(regras)).toHaveLength(4);
+    expect(definicoes.every(([, acao, config]) => validarAcoesDeRegra([{ type: acao, config }]) === null)).toBe(true);
+    medidas.rules = 4;
+    console.info(`f15-t04-regras: rules=4 actions_valid=4/4`);
+  });
+
+  it("cada gatilho real dispara a sua regra (runs=4/4) e o efeito da ação está no banco", async () => {
+    // Arrange — os quatro eventos, pelos emissores reais (T00) ou pela rota herdada (lead).
+    const etapaNova = (await pool.query<{ stage_id: string }>(`select id as stage_id from crm_stages where organization_id=$1 and not is_won and not is_lost and id <> (select stage_id from crm_leads where id=$2) order by position limit 1`, [ORG_A, leadA])).rows[0]!.stage_id;
+    await pool.query(`select public.emit_event('lead.stage_changed','crm_lead',$2::uuid,$3::jsonb,'{"source":"test"}'::jsonb,$1::uuid)`, [ORG_A, leadA, JSON.stringify({ lead_id: leadA, to_stage_id: etapaNova })]);
+    await executeOrderCommand(ctxA, { type: "human", user_id: ADMIN_A }, { command: "confirm_order", idempotency_key: randomUUID(), order_id: pedidoConfirmavel, expected_revision: 1 }, { pool });
+    await pool.query(`insert into public.crm_tasks (id, organization_id, title, due_date, status, contact_id) values ($1,$2,'vencida da regra',now() - interval '1 hour','pending',$3)`, [randomUUID(), ORG_A, contatoDe(ORG_A, 1)]);
+    await varrerTarefasVencidas({ organization_id: ORG_A, source: "cron" }, { pool });
+    await transition(ctxA, conversaDe(ORG_A, 3), "human.resolved", { kind: "attendant", userId: ATT_A1 }, { pool });
+    const tarefasAntes = await tarefasDe(ORG_A);
+    const mensagensAntes = await mensagensDe(conversaDe(ORG_A, 1));
+    // Act
+    const resultados = [];
+    for (const tipo of ["lead.stage_changed", "order.confirmed", "task.overdue", "conversation.resolved"]) {
+      resultados.push(await processarEventoDeRegra(await eventoDe(tipo), { pool, adapters: { mock: adapterMock }, modo: "mock" }));
+    }
+    // Assert — cada run `success`, e o efeito medido na tabela de destino.
+    const runs = resultados.flatMap((r) => r.runs);
+    expect(runs.map((r) => r.status)).toEqual(["success", "success", "success", "success"]);
+    const dono = (await pool.query<{ owner_user_id: string | null }>(`select owner_user_id from crm_leads where id=$1`, [leadA])).rows[0]!.owner_user_id;
+    expect([ATT_A1, ATT_A2, ATT_A3]).toContain(dono);
+    const tarefaDoPedido = await conta(`select count(*)::text as n from crm_tasks where organization_id=$1 and order_id=$2 and title='Preparar a entrega do pedido confirmado'`, [ORG_A, pedidoConfirmavel]);
+    expect(tarefaDoPedido).toBe(1);
+    expect((await mensagensDe(conversaDe(ORG_A, 1))) - mensagensAntes).toBe(1);
+    const tarefaDoPos = await conta(`select count(*)::text as n from crm_tasks where organization_id=$1 and order_id=$2 and title='Pós-atendimento: ligar em 2 dias'`, [ORG_A, pedidoDo3]);
+    expect(tarefaDoPos).toBe(1);
+    expect((await tarefasDe(ORG_A)) - tarefasAntes).toBe(2);
+    const auditadas = await conta(`select count(*)::text as n from audit_events where organization_id=$1 and actor_type='automation' and result='executed' and request_id like 'rule:%'`, [ORG_A]);
+    expect(auditadas).toBe(4);
+    medidas.runs = runs.filter((r) => r.status === "success").length;
+    console.info(`f15-t04-runs: runs=${medidas.runs}/4 owner_assigned=1/1 task_on_order=1/1 message_sent=1/1 task_after_resolved=1/1 audited_automation=${auditadas}/4`);
+  });
+
+  it("redespachar os quatro eventos não executa nada de novo (replays=4 duplicate_runs=0)", async () => {
+    // Arrange
+    const runsAntes = await runsDaOrg();
+    const tarefasAntes = await tarefasDe(ORG_A);
+    const mensagensAntes = await mensagensDe(conversaDe(ORG_A, 1));
+    // Act
+    const resultados = [];
+    for (const tipo of ["lead.stage_changed", "order.confirmed", "task.overdue", "conversation.resolved"]) {
+      resultados.push(await processarEventoDeRegra(await eventoDe(tipo), { pool, adapters: { mock: adapterMock }, modo: "mock" }));
+    }
+    // Assert — o índice da 9027 recusou as quatro; nenhuma linha, tarefa ou mensagem nova.
+    const status = resultados.flatMap((r) => r.runs.map((x) => x.status));
+    expect(status).toEqual(["duplicate", "duplicate", "duplicate", "duplicate"]);
+    expect((await runsDaOrg()) - runsAntes).toBe(0);
+    expect((await tarefasDe(ORG_A)) - tarefasAntes).toBe(0);
+    expect((await mensagensDe(conversaDe(ORG_A, 1))) - mensagensAntes).toBe(0);
+    medidas.replays = status.length;
+    medidas.duplicate_runs = (await runsDaOrg()) - runsAntes;
+    console.info(`f15-t04-replays: replays=${status.length} duplicate_runs=${medidas.duplicate_runs} tasks_delta=0/0 messages_delta=0/0`);
+  });
+
+  it("ação fora do catálogo é recusada na escrita e não executa na leitura (outside_catalog_denied=1/1)", async () => {
+    // Arrange — uma regra legada com ação herdada do kit (call_webhook).
+    const recusa = validarAcoesDeRegra([{ type: "call_webhook", config: { url: "https://example.invalid" } }]);
+    const legada = await pool.query<{ id: string }>(
+      `insert into public.automation_rules (organization_id, name, trigger_event, conditions, actions, is_active)
+       values ($1,'legada',$2,'[]'::jsonb,$3::jsonb,true) returning id`,
+      [ORG_A, "order.confirmed", JSON.stringify([{ type: "call_webhook", config: { url: "https://example.invalid" } }])],
+    );
+    // Um evento NOVO de verdade no barramento (a run tem FK para event_log).
+    const novoEvento = await pool.query<{ id: string }>(
+      `select public.emit_event('order.confirmed','crm_order',$2::uuid,$3::jsonb,'{"source":"test"}'::jsonb,$1::uuid) as id`,
+      [ORG_A, pedidoConfirmavel, JSON.stringify({ order_id: pedidoConfirmavel, contact_id: contatoDe(ORG_A, 2) })],
+    );
+    const evento = { ...(await eventoDe("order.confirmed")), id: novoEvento.rows[0]!.id };
+    // Act
+    const r = await processarEventoDeRegra(evento, { pool, adapters: { mock: adapterMock }, modo: "mock" });
+    const daLegada = r.runs.find((x) => x.rule_id === legada.rows[0]!.id);
+    // Assert
+    expect(recusa).toMatch(/fora do catálogo: call_webhook/);
+    expect(daLegada?.status).toBe("failed");
+    expect(daLegada?.actions[0]).toMatchObject({ type: "call_webhook", status: "failed", error: "outside_catalog" });
+    await pool.query(`delete from public.automation_rules where id=$1`, [legada.rows[0]!.id]);
+    medidas.outside_catalog_denied = recusa !== null && daLegada?.status === "failed" ? 1 : 0;
+    console.info(`f15-t04-catalogo: outside_catalog_denied=${medidas.outside_catalog_denied}/1 (write=1/1 run=1/1)`);
   });
 });
 
