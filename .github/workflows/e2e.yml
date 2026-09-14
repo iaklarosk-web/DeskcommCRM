@@ -610,6 +610,7 @@ jobs:
         f05-ai-usage.spec.ts
         f11-admin-e-entrada.spec.ts
         f12-assinatura.spec.ts
+        f13-crm-comercial.spec.ts
 
       FORA_DO_CI: >-
         vps-fresh-onboarding.spec.ts
