@@ -129,7 +129,14 @@ export type ActivityType =
    * doutrina de migrations), então o banco aceitaria a divergência calado e a
    * timeline cairia no fallback.
    */
-  | "contacts_merged";
+  | "contacts_merged"
+  /**
+   * F13-T03/T04 (ADR-034 §2): a oportunidade ganhou DONO pela fila (rodízio
+   * ou claim) e foi VINCULADA a um pedido (`crm_lead_links`, target `order`).
+   * Emitidas por `src/crm/oportunidades`.
+   */
+  | "owner_assigned"
+  | "order_linked";
 
 export const ACTIVITY_LABELS: Record<ActivityType, string> = {
   lead_created: "Entrou pelo WhatsApp",
@@ -226,6 +233,8 @@ export const ACTIVITY_LABELS: Record<ActivityType, string> = {
   // cadastros da mesma pessoa viraram um — e é por isso que este negócio pode
   // ter mudado de contato sem ninguém tê-lo movido.
   contacts_merged: "Contatos duplicados juntados",
+  owner_assigned: "Ganhou responsável pela fila",
+  order_linked: "Pedido vinculado",
 };
 
 /** Quando o tipo é legado/desconhecido, a linha ainda é honesta — sem jargão. */
