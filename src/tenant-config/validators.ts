@@ -3,7 +3,7 @@
  * uma frase de gente quando não serve — a frase vai para o erro da UI e para o
  * relatório do validateSeed, então ela diz O QUE se esperava, não só "inválido".
  */
-import { validarPolitica } from "@/src/actions/politica";
+import { validarPolitica } from "@/src/actions/nomes";
 import { validarDefinicoes } from "@/src/crm/campos/definicoes";
 
 import { REMINDER_DEFAULT, type SettingEntry } from "./schema";

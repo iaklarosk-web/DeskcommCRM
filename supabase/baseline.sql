@@ -27302,12 +27302,16 @@ begin
 end
 $f12_t01_eventos$;
 
+-- Vocabulário FINAL (uma constraint, um bloco — tests/unit/baseline-constraint-
+-- reconstruida.test.ts): os nove desta migration mais 'ai.limit_reached' da
+-- 9028 (F15-T02). O apêndice da 9028 NÃO recria a constraint; edita-se aqui.
 alter table public.notifications drop constraint if exists notifications_event_check;
 alter table public.notifications add constraint notifications_event_check
   check (event in (
     'handoff.created','task.assigned','confirmation.requested',
     'customer.replied_while_human','reminder.no_reply','job.blocked',
-    'subscription.payment_failed','subscription.blocked','subscription.activated'
+    'subscription.payment_failed','subscription.blocked','subscription.activated',
+    'ai.limit_reached'
   ));
 
 alter table public.email_outbox drop constraint if exists email_outbox_event_check;
@@ -27315,7 +27319,8 @@ alter table public.email_outbox add constraint email_outbox_event_check
   check (event in (
     'handoff.created','task.assigned','confirmation.requested',
     'customer.replied_while_human','reminder.no_reply','job.blocked',
-    'subscription.payment_failed','subscription.blocked','subscription.activated'
+    'subscription.payment_failed','subscription.blocked','subscription.activated',
+    'ai.limit_reached'
   ));
 
 -- ---------------------------------------------------------------------------
@@ -27911,9 +27916,11 @@ notify pgrst, 'reload schema';
 --
 -- Apêndice 9028 — o aviso ai.limit_reached no vocabulário de notificações
 -- (F15-T02, ADR-036 §2). Par idempotente da migration
--- 20260914220000_9028_evento_de_limite_diario_da_ia.sql, byte-fiel ao arquivo
--- aplicado. ⚠️ ENTRA ANTES DO BLOCO DA VARREDURA anon, que é de propósito o
--- último do arquivo. Só CHECKs reconstruídos por adição em tabelas service_only.
+-- 20260914220000_9028_evento_de_limite_diario_da_ia.sql — NÃO byte-fiel de
+-- propósito: as duas constraints de evento são reconstruídas UMA vez só, no
+-- bloco da 9023 acima (tests/unit/baseline-constraint-reconstruida.test.ts);
+-- aqui ficam os grants e a guarda de vacuidade. ⚠️ ENTRA ANTES DO BLOCO DA
+-- VARREDURA anon, que é de propósito o último do arquivo.
 
 -- F15-T02 — o aviso `ai.limit_reached` entra no vocabulário de notificações
 -- (ADR-036 §2 T02, D54 c).
@@ -27935,23 +27942,10 @@ notify pgrst, 'reload schema';
 -- (a ÚLTIMA definição do CHECK na cadeia lista exatamente o enum) e
 -- tests/integration/f05-notificacoes.test.ts (um aviso e um e-mail por evento).
 
-alter table public.notifications drop constraint if exists notifications_event_check;
-alter table public.notifications add constraint notifications_event_check
-  check (event in (
-    'handoff.created','task.assigned','confirmation.requested',
-    'customer.replied_while_human','reminder.no_reply','job.blocked',
-    'subscription.payment_failed','subscription.blocked','subscription.activated',
-    'ai.limit_reached'
-  ));
-
-alter table public.email_outbox drop constraint if exists email_outbox_event_check;
-alter table public.email_outbox add constraint email_outbox_event_check
-  check (event in (
-    'handoff.created','task.assigned','confirmation.requested',
-    'customer.replied_while_human','reminder.no_reply','job.blocked',
-    'subscription.payment_failed','subscription.blocked','subscription.activated',
-    'ai.limit_reached'
-  ));
+-- (constraints notifications_event_check / email_outbox_event_check: definidas
+--  uma vez só, no bloco da 9023 acima — 'ai.limit_reached' está lá. O arquivo
+--  aplicado 20260914220000_9028 recria as duas; o baseline é apêndice
+--  idempotente, não diário de bordo: tests/unit/baseline-constraint-reconstruida.)
 
 -- Grants explícitos (G-54): as duas tabelas são service_only desde a 9021;
 -- nada muda, só fica dito.

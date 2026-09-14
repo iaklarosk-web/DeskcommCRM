@@ -26,42 +26,16 @@
  */
 import { ACTION_CATALOG, ACTION_RISKS, findAction, nivelDeRisco, type ActionCatalogEntry, type ActionExecutor, type ActionRisk } from "./catalog";
 
-export const MODOS_DA_POLITICA = ["allow", "approve", "block", "transfer"] as const;
-export type ModoDaPolitica = (typeof MODOS_DA_POLITICA)[number];
+import { validarPolitica, type ModoDaPolitica } from "./nomes";
+
+// O validador e os nomes vivem em `nomes.ts` (sem o catálogo) para que
+// `tenant-config/validators` não arraste `lib/env` pelo ciclo de import.
+export { MODOS_DA_POLITICA, NOMES_DO_CATALOGO, validarPolitica, type ModoDaPolitica } from "./nomes";
 
 export type Politica = Readonly<Record<string, ModoDaPolitica>>;
 
 /** Default declarado da chave: vazio — o efetivo vem de D33 (ver cabeçalho). */
 export const POLITICA_PADRAO: Politica = Object.freeze({});
-
-/**
- * Lido na CHAMADA, nunca na carga do módulo: `tenant-config/schema` →
- * `validators` → este arquivo → `catalog` → `conversation` → `settings` →
- * `schema` é um ciclo de import, e uma constante calculada aqui no topo veria
- * `ACTION_CATALOG` ainda `undefined` quando a entrada é o catálogo.
- */
-function nomesDoCatalogo(): ReadonlySet<string> {
-  return new Set(ACTION_CATALOG.map((e) => e.name));
-}
-
-/**
- * Validador do tipo `action_policy` de `tenant_settings`: objeto cujas chaves
- * são nomes do catálogo e cujos valores são um dos quatro modos. Devolve
- * `null` quando serve, ou uma frase de gente (padrão de `validators.ts`).
- */
-export function validarPolitica(value: unknown): string | null {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return "esperava objeto {<ação do catálogo>: allow|approve|block|transfer}";
-  }
-  const nomes = nomesDoCatalogo();
-  for (const [nome, modo] of Object.entries(value as Record<string, unknown>)) {
-    if (!nomes.has(nome)) return `ação fora do catálogo: ${nome}`;
-    if (typeof modo !== "string" || !(MODOS_DA_POLITICA as readonly string[]).includes(modo)) {
-      return `${nome}: esperava um de: ${MODOS_DA_POLITICA.join(", ")}`;
-    }
-  }
-  return null;
-}
 
 export function politicaValida(value: unknown): value is Politica {
   return validarPolitica(value) === null;

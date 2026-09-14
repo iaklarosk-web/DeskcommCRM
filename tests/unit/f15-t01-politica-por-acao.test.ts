@@ -13,6 +13,7 @@
 import { describe, expect, it } from "vitest";
 
 import { ACTION_CATALOG } from "@/src/actions/catalog";
+import { NOMES_DO_CATALOGO } from "@/src/actions/nomes";
 import { modoDeD33, modoEfetivo, POLITICA_PADRAO, tabelaDaPolitica, validarPolitica } from "@/src/actions/politica";
 
 /** ADR-036 §4: o modo efetivo de cada ação para a IA, sem entrada da organização, com `confirm_from_risk=medium`. */
@@ -33,6 +34,10 @@ const DEFAULTS_DECLARADOS: Record<string, "allow" | "approve" | "block" | "trans
 };
 
 describe("F15-T01 — validador do tipo action_policy", () => {
+  it("NOMES_DO_CATALOGO (sem o catálogo, por causa do ciclo de import) é igual aos nomes de ACTION_CATALOG", () => {
+    expect([...NOMES_DO_CATALOGO].sort()).toEqual(ACTION_CATALOG.map((e) => e.name).sort());
+  });
+
   it("aceita objeto vazio e entradas do catálogo; recusa lista, ação fora do catálogo e modo fora do enum", () => {
     // Arrange + Act
     const casos: Array<[unknown, boolean]> = [
