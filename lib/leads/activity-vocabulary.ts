@@ -131,11 +131,12 @@ export type ActivityType =
    */
   | "contacts_merged"
   /**
-   * F13-T03/T04 (ADR-034 §2): a oportunidade ganhou DONO pela fila (rodízio
-   * ou claim) e foi VINCULADA a um pedido (`crm_lead_links`, target `order`).
+   * F13-T03/T04 (ADR-034 §2): a oportunidade ganhou DONO pela fila (rodízio =
+   * `owner_assigned`, claim = `owner_claimed`) e foi VINCULADA a um pedido (`crm_lead_links`, target `order`).
    * Emitidas por `src/crm/oportunidades`.
    */
   | "owner_assigned"
+  | "owner_claimed"
   | "order_linked";
 
 export const ACTIVITY_LABELS: Record<ActivityType, string> = {
@@ -234,6 +235,7 @@ export const ACTIVITY_LABELS: Record<ActivityType, string> = {
   // ter mudado de contato sem ninguém tê-lo movido.
   contacts_merged: "Contatos duplicados juntados",
   owner_assigned: "Ganhou responsável pela fila",
+  owner_claimed: "Assumida da fila",
   order_linked: "Pedido vinculado",
 };
 

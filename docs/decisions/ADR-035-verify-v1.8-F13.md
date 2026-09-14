@@ -43,7 +43,7 @@ impressa `pending` antes da F13 e obrigatória quando `closesAtOrAfter(phase, "F
 | `distributed=Q/Q` | numerador = denominador = `queue_size` |
 | `balanced=1` | max − min de oportunidades por dono ≤ 1 |
 | `second_claim_rejected=1/1` | exato |
-| `history_types=H` | H ≥ 5 |
+| `history_types=H` | H ≥ 3 (tipos gravados pelo módulo de oportunidades: `owner_assigned`, `owner_claimed`, `order_linked`; os herdados são conferidos pela spec) |
 | `orders_linked=1/1` | exato |
 | `cross_org_link_denied=1/1` | exato |
 | `report_indicators=K/K` | K ≥ 8, numerador = denominador |

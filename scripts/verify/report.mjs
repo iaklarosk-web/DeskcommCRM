@@ -314,10 +314,10 @@ export function evaluate(input) {
     if (crm && (crm.fields_defined < 4 || crm.values_rejected < 3 || crm.values_rejected !== den("values_rejected") ||
         crm.values_preserved < 1 || crm.values_preserved !== den("values_preserved") || crm.queue_size < 3 ||
         crm.distributed !== crm.queue_size || crm.distributed !== den("distributed") || crm.balanced !== 1 ||
-        crm.second_claim_rejected !== 1 || crm.history_types < 5 || crm.orders_linked !== 1 || crm.cross_org_link_denied !== 1 ||
+        crm.second_claim_rejected !== 1 || crm.history_types < 3 || crm.orders_linked !== 1 || crm.cross_org_link_denied !== 1 ||
         crm.report_indicators < 8 || crm.report_indicators !== den("report_indicators") || crm.roles_denied < 3 ||
         crm.roles_denied !== den("roles_denied"))) {
-      errors.push("crm fora do contrato: exige fields_defined>=4, values_rejected>=3 (=denominador), values_preserved=denominador (>=1), queue_size>=3, distributed=queue_size, balanced=1, second_claim_rejected=1, history_types>=5, orders_linked=1, cross_org_link_denied=1, report_indicators>=8 (=denominador), roles_denied>=3 (=denominador)");
+      errors.push("crm fora do contrato: exige fields_defined>=4, values_rejected>=3 (=denominador), values_preserved=denominador (>=1), queue_size>=3, distributed=queue_size, balanced=1, second_claim_rejected=1, history_types>=3, orders_linked=1, cross_org_link_denied=1, report_indicators>=8 (=denominador), roles_denied>=3 (=denominador)");
     }
   }
   const clean = errors.length === 0;

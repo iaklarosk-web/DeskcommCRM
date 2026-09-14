@@ -7,7 +7,7 @@
  * `crm.distribution = round_robin`; claim por quem puxa da fila (o segundo
  * perde: 409); vínculo com pedido da MESMA organização (`crm_lead_links`,
  * ADR-012 intocado). Toda escrita passa por `withTenant` e deixa linha em
- * `crm_lead_activities` (`owner_assigned`, `order_linked`).
+ * `crm_lead_activities` (`owner_assigned`, `owner_claimed`, `order_linked`).
  */
 import { papelD15DoHerdado } from "@/src/rbac/matrix";
 import { getSetting } from "@/src/tenant-config/settings";
@@ -124,6 +124,9 @@ function papeisDaFila(valor: unknown): readonly string[] {
   return lidos.length > 0 ? lidos : ["attendant"];
 }
 
+/** O tipo da linha do tempo por modo: rodízio grava `owner_assigned`, claim grava `owner_claimed`. */
+const TIPO_POR_MODO = { round_robin: "owner_assigned", claim: "owner_claimed" } as const;
+
 async function atribuir(db: TenantDb, ctx: TenantCtx, opportunityId: string, userId: string, modo: "round_robin" | "claim", agora: Date): Promise<boolean> {
   const r = await db.query(
     `update public.crm_leads
@@ -136,10 +139,10 @@ async function atribuir(db: TenantDb, ctx: TenantCtx, opportunityId: string, use
   await db.query(
     `insert into public.crm_lead_activities
        (organization_id, lead_id, contact_id, source_module, type, payload, performed_by_user_id, performed_at)
-     select organization_id, id, contact_id, 'crm', 'owner_assigned',
-            jsonb_build_object('user_id', $3::uuid, 'mode', $4::text), $5::uuid, $6::timestamptz
+     select organization_id, id, contact_id, 'crm', $4::text,
+            jsonb_build_object('user_id', $3::uuid, 'mode', $7::text), $5::uuid, $6::timestamptz
        from public.crm_leads where organization_id = $1 and id = $2`,
-    [ctx.organization_id, opportunityId, userId, modo, ctx.user_id ?? null, agora.toISOString()],
+    [ctx.organization_id, opportunityId, userId, TIPO_POR_MODO[modo], ctx.user_id ?? null, agora.toISOString(), modo],
   );
   return true;
 }

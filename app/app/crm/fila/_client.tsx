@@ -48,6 +48,19 @@ export function FilaClient({ podeDistribuir }: { podeDistribuir: boolean }) {
   const [ocupado, setOcupado] = React.useState<string | null>(null);
   const [ultima, setUltima] = React.useState<Distribuicao | null>(null);
 
+  async function mudarModo(distribution: "manual" | "round_robin") {
+    setOcupado("modo");
+    try {
+      await apiClient.patch("/api/v1/settings/crm", { distribution });
+      await queryClient.invalidateQueries({ queryKey: ["crm-opportunity-queue"] });
+    } catch (e) {
+      if (e instanceof ApiError) showApiError(e);
+      else toast.error(t("Não foi possível alterar a distribuição."));
+    } finally {
+      setOcupado(null);
+    }
+  }
+
   async function distribuir() {
     setOcupado("distribuir");
     try {
@@ -101,7 +114,20 @@ export function FilaClient({ podeDistribuir }: { podeDistribuir: boolean }) {
         </div>
         <div>
           <p className="text-xs uppercase text-muted-foreground">{t("Distribuição")}</p>
-          <p className="text-sm font-medium" data-testid="fila-modo">{fila.mode === "round_robin" ? t("Rodízio") : t("Manual")}</p>
+          {podeDistribuir ? (
+            <select
+              className="mt-1 h-9 rounded-md border px-2 text-sm"
+              value={fila.mode}
+              disabled={ocupado !== null}
+              onChange={(e) => void mudarModo(e.target.value as "manual" | "round_robin")}
+              data-testid="fila-modo"
+            >
+              <option value="manual">{t("Manual")}</option>
+              <option value="round_robin">{t("Rodízio")}</option>
+            </select>
+          ) : (
+            <p className="text-sm font-medium" data-testid="fila-modo">{fila.mode === "round_robin" ? t("Rodízio") : t("Manual")}</p>
+          )}
         </div>
         {podeDistribuir && (
           <Button className="ml-auto" disabled={ocupado !== null || fila.queue_size === 0 || fila.mode !== "round_robin"} onClick={() => void distribuir()} data-testid="fila-distribuir">

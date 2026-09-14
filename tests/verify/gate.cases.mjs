@@ -1103,7 +1103,7 @@ test("F07 keeps its own inventory (10 specs, 41 tests) and never requires admin 
 const stateF13 = stateF08.replace("current_phase: F08", "current_phase: F13")
   .replace("| F08 | Produção inicial | in_progress |", "| F08 | Produção inicial | done(verify=2026-09-14 dc39424a) |\n| F13 | CRM comercial | in_progress |");
 const F13_SPEC_COUNTS = [...F12_SPEC_COUNTS, 7];
-const CRM_OK = "crm: fields_defined=6 values_rejected=3/3 values_preserved=4/4 queue_size=5 distributed=5/5 balanced=1 second_claim_rejected=1/1 history_types=5 orders_linked=1/1 cross_org_link_denied=1/1 report_indicators=9/9 roles_denied=3/3";
+const CRM_OK = "crm: fields_defined=6 values_rejected=3/3 values_preserved=4/4 queue_size=5 distributed=5/5 balanced=1 second_claim_rejected=1/1 history_types=3 orders_linked=1/1 cross_org_link_denied=1/1 report_indicators=9/9 roles_denied=3/3";
 const RBAC_4 = "rbac: roles=4 denied_expected=27 denied_actual=27";
 function f13Input() {
   const data = fasePorTenant("F12", stateF13, REQUIRED_F13_E2E_SPECS, F13_SPEC_COUNTS, EXPECTED_F13_E2E_TESTS);
@@ -1157,7 +1157,7 @@ for (const [rotulo, linha] of [
   ["segundo claim aceito", CRM_OK.replace("second_claim_rejected=1/1", "second_claim_rejected=0/1")],
   ["vínculo entre organizações aceito", CRM_OK.replace("cross_org_link_denied=1/1", "cross_org_link_denied=0/1")],
   ["papel permitido onde nega", CRM_OK.replace("roles_denied=3/3", "roles_denied=2/3")],
-  ["poucos tipos no histórico", CRM_OK.replace("history_types=5", "history_types=4")],
+  ["poucos tipos no histórico", CRM_OK.replace("history_types=3", "history_types=2")],
 ]) test(`F13 rejects a crm line out of contract: ${rotulo}`, () => {
   const data = f13Input();
   data.metrics.crm = linha;

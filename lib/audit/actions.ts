@@ -477,6 +477,7 @@ export const AUDIT_ACTIONS = [
   // F13 (ADR-034 §2): o CRM comercial — definições de campo por organização,
   // distribuição/claim da fila de oportunidades e o vínculo com o pedido.
   "crm_fields.updated",
+  "crm_settings.updated",
   "crm_opportunity.distributed",
   "crm_opportunity.claimed",
   "crm_opportunity.order_linked",

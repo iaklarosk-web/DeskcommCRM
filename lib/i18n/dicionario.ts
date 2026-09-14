@@ -5409,6 +5409,7 @@ export const DICIONARIO: Traducoes = {
   "Anotação": { es: "Anotación" },
   // F13-T03/T04 (ADR-034): linhas novas do vocabulário de atividades.
   "Ganhou responsável pela fila": { es: "Ganó responsable por la cola" },
+  "Assumida da fila": { es: "Asumida de la cola" },
   "Pedido vinculado": { es: "Pedido vinculado" },
   "Atendimento da IA": { es: "Atención de la IA" },
   "Envio bloqueado": { es: "Envío bloqueado" },
@@ -8598,6 +8599,7 @@ export const DICIONARIO: Traducoes = {
   "Fila de oportunidades": {"es":"Cola de oportunidades"},
   "Oportunidades abertas sem responsável: distribuir por rodízio ou assumir uma.": {"es":"Oportunidades abiertas sin responsable: distribuir por turnos o asumir una."},
   "Fila distribuída.": {"es":"Cola distribuida."},
+  "Não foi possível alterar a distribuição.": {"es":"No fue posible cambiar la distribución."},
   "Não foi possível distribuir a fila.": {"es":"No fue posible distribuir la cola."},
   "Oportunidade assumida.": {"es":"Oportunidad asumida."},
   "Não foi possível assumir a oportunidade.": {"es":"No fue posible asumir la oportunidad."},
