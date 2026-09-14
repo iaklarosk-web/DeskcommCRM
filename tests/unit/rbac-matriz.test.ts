@@ -101,9 +101,10 @@ describe("rbac — matriz D15 (roles=4 desde a F13, ADR-034)", () => {
     expect(PAPEL_HERDADO.attendant).toBe("agent");
   });
 
-  it("F13-T02: manager tem tudo de attendant mais as quatro permissões comerciais, e nada da administração", () => {
+  it("F13-T02: manager tem tudo de attendant mais as quatro permissões comerciais e a configuração comercial, e nada da administração de usuários/produtos/acervo", () => {
     const comerciais: Permissao[] = ["pipelines.manage", "fields.manage", "opportunities.assign", "reports.read"];
-    const administrativas: Permissao[] = ["settings.manage", "users.manage", "products.manage", "knowledge.manage"];
+    // `settings.manage` (configuração comercial, F02-T08) é manager+ desde o Deskcomm e continua.
+    const administrativas: Permissao[] = ["users.manage", "products.manage", "knowledge.manage"];
     for (const p of PERMISSOES) {
       if (MATRIZ[p].attendant) expect(MATRIZ[p].manager, `${p}: manager herda attendant`).toBe(true);
     }

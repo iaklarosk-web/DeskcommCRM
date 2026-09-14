@@ -2,8 +2,9 @@
  * A matriz única de RBAC da Fase 1 (DIRETRIZ §5.4, D15; mapa em ADR-003).
  *
  * Quatro papéis de PESSOA (três até a F13): `attendant` opera o atendimento;
- * `manager` é attendant + gestão comercial (funil, campos, fila, relatório —
- * F13, ADR-034); `tenant_admin` é manager + administração do tenant;
+ * `manager` é attendant + gestão comercial (funil, campos, fila, relatório e a
+ * configuração comercial da operação — F13, ADR-034); `tenant_admin` é manager +
+ * administração do tenant (usuários, produtos, acervo);
  * `platform_admin` cria tenant por script
  * e lê contadores globais — e NÃO opera tenant nenhum (célula negada de
  * propósito: quem administra a plataforma não lê conversa de cliente).
@@ -54,7 +55,11 @@ export const MATRIZ: Record<Permissao, Record<PapelD15, boolean>> = {
   "actions.confirm": { platform_admin: false, tenant_admin: true, manager: true, attendant: true },
   "tasks.create": { platform_admin: false, tenant_admin: true, manager: true, attendant: true },
   "notes.create": { platform_admin: false, tenant_admin: true, manager: true, attendant: true },
-  "settings.manage": { platform_admin: false, tenant_admin: true, manager: false, attendant: false },
+  // `settings.manage` é a configuração COMERCIAL da operação (F02-T08/ADR-014:
+  // pedidos do dia, corte, entrega — rota `PATCH /api/v1/settings/commercial`
+  // é manager+ desde o Deskcomm); usuários, produtos e acervo continuam do
+  // tenant_admin.
+  "settings.manage": { platform_admin: false, tenant_admin: true, manager: true, attendant: false },
   "users.manage": { platform_admin: false, tenant_admin: true, manager: false, attendant: false },
   "products.manage": { platform_admin: false, tenant_admin: true, manager: false, attendant: false },
   "knowledge.manage": { platform_admin: false, tenant_admin: true, manager: false, attendant: false },
