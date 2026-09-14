@@ -9,7 +9,7 @@ trap 'rm -rf "$scratch"' EXIT
 node --input-type=module - "$scratch/report.mjs" <<'JS'
 import { readFileSync, writeFileSync } from 'node:fs';
 const source = readFileSync('scripts/verify/report.mjs', 'utf8');
-const original = 'const requiresBilling = (phase) => phaseNumber(phase) >= phaseNumber("F12"); // MUTANT: billing-required';
+const original = 'const requiresBilling = (phase) => closesAtOrAfter(phase, "F12"); // MUTANT: billing-required';
 if (source.split(original).length - 1 !== 1) throw new Error('Mutant target missing');
 writeFileSync(process.argv[2], source.replace(original, 'const requiresBilling = () => false; // MUTANTE: billing decorativo'));
 JS

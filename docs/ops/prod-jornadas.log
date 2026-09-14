@@ -1,0 +1,2 @@
+# docs/ops/prod-jornadas.log — jornadas REAIS da produção inicial (F08, ADR-032 §4), uma linha por jornada com o id do provedor; nunca corpo, nunca PII. Lido por scripts/prod/prova.sh.
+sentry: ok id=a4514e84e77a4005b082a8cc9be0e4e0 community=false kept=4/8 pii_fields=0/4 flushed=1/1 at=20260914T024050Z sha=a88b4ca8 via=scripts/prod/jornada-sentry.ts

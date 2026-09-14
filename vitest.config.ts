@@ -38,6 +38,7 @@ export default defineConfig({
       // (scripts/staging/up.sh) carrega uma cópia de tests/ pelo tracing do
       // standalone; sem excluir, a suíte rodaria cada teste duas vezes.
       ".staging/**",
+      ".prod/**",
       ".verify-logs/**",
     ],
   },

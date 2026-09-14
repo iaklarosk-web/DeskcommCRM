@@ -8,13 +8,14 @@
 #
 # Uso:  bash scripts/backup.sh [pasta]            (padrão: ./backups)
 # Env:  SUPABASE_DB_URL (ou /srv/secrets/crm-staging.env + porta 56422)
-#       RETENTION_DAYS (padrão 14)
+#       RETENTION_DAYS (padrão 14); BACKUP_PREFIX (padrão staging — scripts/prod/backup.sh passa prod)
 # Saída: uma linha `backup: file=<caminho> bytes=N tables=T` e o caminho do dump.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 DIR="${1:-./backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
+PREFIX="${BACKUP_PREFIX:-staging}"
 ENV_FILE="/srv/secrets/crm-staging.env"
 
 URL="${SUPABASE_DB_URL:-}"
@@ -26,12 +27,12 @@ fi
 
 mkdir -p "$DIR"
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
-OUT="$DIR/staging-$STAMP.dump"
+OUT="$DIR/$PREFIX-$STAMP.dump"
 pg_dump "$URL" --format=custom --schema=public --schema=auth --schema=storage \
   --no-owner --no-privileges --file="$OUT"
 TABELAS=$(pg_restore --list "$OUT" | grep -c ' TABLE [a-z_]* [a-z_]* ' || true)
 echo "backup: file=$OUT bytes=$(stat -c %s "$OUT") tables=$TABELAS"
 
 # retenção: apaga dumps mais velhos que RETENTION_DAYS
-find "$DIR" -name 'staging-*.dump' -mtime +"$RETENTION_DAYS" -delete
+find "$DIR" -name "$PREFIX-*.dump" -mtime +"$RETENTION_DAYS" -delete
 echo "$OUT"

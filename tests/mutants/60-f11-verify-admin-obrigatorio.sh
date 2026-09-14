@@ -10,7 +10,7 @@ trap 'rm -rf "$scratch"' EXIT
 node --input-type=module - "$scratch/report.mjs" <<'JS'
 import { readFileSync, writeFileSync } from 'node:fs';
 const source = readFileSync('scripts/verify/report.mjs', 'utf8');
-const original = 'const requiresAdmin = (phase) => phaseNumber(phase) >= phaseNumber("F11"); // MUTANT: admin-required';
+const original = 'const requiresAdmin = (phase) => closesAtOrAfter(phase, "F11"); // MUTANT: admin-required';
 if (source.split(original).length - 1 !== 1) throw new Error('Mutant target missing');
 writeFileSync(process.argv[2], source.replace(original, 'const requiresAdmin = () => false; // MUTANTE: admin decorativo'));
 JS

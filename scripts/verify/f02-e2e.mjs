@@ -93,6 +93,14 @@ export const REQUIRED_F12_E2E_SPECS = Object.freeze([
 ]);
 export const EXPECTED_F12_E2E_TESTS = EXPECTED_F11_E2E_TESTS + 4;
 
+/**
+ * F08 (ADR-033): produção inicial NÃO acrescenta tela de tenant; o navegador
+ * roda o inventário de F12 (que contém F11 e F07) por tenant do seed. O que a
+ * F08 prova de verdade (provedores reais) fica fora do gate, na linha `prod:`.
+ */
+export const REQUIRED_F08_E2E_SPECS = REQUIRED_F12_E2E_SPECS;
+export const EXPECTED_F08_E2E_TESTS = EXPECTED_F12_E2E_TESTS;
+
 /** Tenants do seed que a F07 percorre, na ordem (§7.8 T02: deka, depois demo2). */
 export const REPLICABILITY_TENANTS = Object.freeze(["deka", "demo2"]);
 
@@ -106,6 +114,7 @@ const CLOSED_E2E_PHASES = Object.freeze({
   F07: { specs: REQUIRED_F07_E2E_SPECS, tests: EXPECTED_F07_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
   F11: { specs: REQUIRED_F11_E2E_SPECS, tests: EXPECTED_F11_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
   F12: { specs: REQUIRED_F12_E2E_SPECS, tests: EXPECTED_F12_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
+  F08: { specs: REQUIRED_F08_E2E_SPECS, tests: EXPECTED_F08_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
 });
 
 /**

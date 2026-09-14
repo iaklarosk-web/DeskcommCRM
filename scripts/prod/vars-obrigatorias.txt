@@ -1,0 +1,32 @@
+# scripts/prod/vars-obrigatorias.txt — as variáveis que a PRODUÇÃO exige em
+# /srv/secrets/crm-prod.env (F08, ADR-032 §4). `prova.sh` conta presença e
+# ausência de placeholder para cada uma (`config_vars=V/V placeholders=0/V`).
+# Fora da lista, de propósito: WAHA_API_KEY até haver número (D12-4) — está
+# no env, mas não é obrigatória; OPENROUTER_*/AI_GATEWAY_* (não usados).
+PROD_BIND_IP
+POSTGRES_PASSWORD
+JWT_SECRET
+ANON_KEY
+SERVICE_ROLE_KEY
+INTERNAL_SECRET
+INTERNAL_CRON_SECRET
+IMPERSONATE_COOKIE_SECRET
+SRH_TOKEN
+CPF_ENCRYPTION_KEY
+WAHA_BYO_ENCRYPTION_KEY
+AI_CRED_AES_KEY
+REALTIME_DB_ENC_KEY
+REALTIME_SECRET_KEY_BASE
+WAHA_HMAC_SECRET
+WAHA_API_KEY_SHA512
+BILLING_MOCK_WEBHOOK_SECRET
+NEXT_PUBLIC_APP_URL
+PLATFORM_NAME
+ANTHROPIC_API_KEY
+OPENAI_API_KEY
+RESEND_API_KEY
+RESEND_FROM_EMAIL
+SENTRY_DSN
+OWNER_EMAIL
+OWNER_ORG_NAME
+OWNER_PASSWORD

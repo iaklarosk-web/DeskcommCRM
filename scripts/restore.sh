@@ -14,6 +14,7 @@
 # Uso:  bash scripts/restore.sh <arquivo.dump>
 # Env:  SUPABASE_DB_URL (ou /srv/secrets/crm-staging.env + porta 56422)
 #       KEEP_DB=1 mantém o banco de teste para inspeção (apagar depois é seu)
+#       RESTORE_LOG (padrão docs/ops/restore-staging.log — scripts/prod/restore.sh passa o de produção)
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
@@ -28,14 +29,14 @@ fi
 [ -n "$URL" ] || { echo "FATAL: SUPABASE_DB_URL ausente e $ENV_FILE ilegível" >&2; exit 1; }
 case "$URL" in
   *@127.0.0.1:*|*@localhost:*) ;;
-  *) echo "RECUSADO: restore só contra Postgres local do staging (D11)" >&2; exit 1 ;;
+  *) echo "RECUSADO: restore só contra Postgres local desta VPS, num banco novo (D11)" >&2; exit 1 ;;
 esac
 
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 ALVO="restore_$(date -u +%Y%m%d_%H%M%S)"
 ORIGEM_URL="$URL"
 ALVO_URL="${URL%/postgres}/$ALVO"
-LOG="docs/ops/restore-staging.log"
+LOG="${RESTORE_LOG:-docs/ops/restore-staging.log}"
 mkdir -p docs/ops
 
 contar() {

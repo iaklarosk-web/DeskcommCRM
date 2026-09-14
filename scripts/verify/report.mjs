@@ -14,7 +14,9 @@ const integer = (n) => Number.isSafeInteger(n) && n >= 0;
  * herda TODOS os controles de F02 (sandbox descartável, snapshot SHA-256 dos
  * inputs, E2E fechado) e acrescenta o campo `webhook` medido.
  */
-const GATED_PHASES = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F11", "F12"];
+// ADR-033: F08 (produção inicial) fecha com o inventário de F12 e sem campo
+// novo no bloco — a produção é medida pela linha `prod:` FORA dele (ADR-032 §4).
+const GATED_PHASES = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F08", "F11", "F12"];
 
 /** §8.3: cada campo passa a ser obrigatório a partir da fase que o cria. */
 const phaseNumber = (phase) => Number(phase.slice(1));
@@ -29,8 +31,12 @@ const requiresHardening = (phase) => phaseNumber(phase) >= phaseNumber("F06");
 const requiresReplicability = (phase) => phaseNumber(phase) >= phaseNumber("F07"); // MUTANT: replicability-required
 // ADR-031: administração/entrada (F11) e assinatura/cobrança (F12), gravadas
 // pelas suítes de integração via `gravarLinhaDoVerify`; `pending` antes.
-const requiresAdmin = (phase) => phaseNumber(phase) >= phaseNumber("F11"); // MUTANT: admin-required
-const requiresBilling = (phase) => phaseNumber(phase) >= phaseNumber("F12"); // MUTANT: billing-required
+// ADR-033: a F08 fecha DEPOIS de F11/F12 (D51 a, D52) e herda os dois campos;
+// a ordem de fechamento, não o número da fase, decide o que é obrigatório.
+const CLOSING_ORDER = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F11", "F12", "F08"];
+const closesAtOrAfter = (phase, ref) => CLOSING_ORDER.indexOf(phase) >= CLOSING_ORDER.indexOf(ref) || phaseNumber(phase) > phaseNumber("F12");
+const requiresAdmin = (phase) => closesAtOrAfter(phase, "F11"); // MUTANT: admin-required
+const requiresBilling = (phase) => closesAtOrAfter(phase, "F12"); // MUTANT: billing-required
 
 export function phaseContext(state, requestedPhase) {
   const active = /^current_phase:\s*(F\d{2})\b/m.exec(state)?.[1];

@@ -15,12 +15,14 @@ const {
   EXPECTED_F03_E2E_TESTS,
   EXPECTED_F04_E2E_TESTS,
   EXPECTED_F05_E2E_TESTS,
+  EXPECTED_F08_E2E_TESTS,
   EXPECTED_F11_E2E_TESTS,
   EXPECTED_F12_E2E_TESTS,
   REQUIRED_F02_E2E_SPECS,
   REQUIRED_F03_E2E_SPECS,
   REQUIRED_F04_E2E_SPECS,
   REQUIRED_F05_E2E_SPECS,
+  REQUIRED_F08_E2E_SPECS,
   REQUIRED_F11_E2E_SPECS,
   REQUIRED_F12_E2E_SPECS,
   compareF02Inputs,
@@ -1018,6 +1020,27 @@ test("F12 is gated: inventory of 12 specs (51 tests) per tenant, admin and billi
   const emStaging = evaluate(staging);
   assert.deepEqual(emStaging.errors, []);
   assert.equal(emStaging.status, "READY (staging)");
+});
+
+// ─── ADR-033 — verify.sh v1.7: F08 fecha com o inventário de F12; a produção fica fora do bloco ──
+
+const stateF08 = stateF12.replace("current_phase: F12", "current_phase: F08")
+  .replace("| F11 | Administração | in_progress |", "| F11 | Administração | done(verify=2026-09-13 1e13071d) |")
+  .replace("| F12 | Assinatura | in_progress |", "| F12 | Assinatura | done(verify=2026-09-13 1e13071d) |\n| F08 | Produção inicial | in_progress |");
+const f08Input = () => fasePorTenant("F12", stateF08, REQUIRED_F08_E2E_SPECS, F12_SPEC_COUNTS, EXPECTED_F08_E2E_TESTS);
+
+test("F08 is gated with the F12 inventory (12 specs, 51 tests) per tenant, admin and billing still required; in staging it prints READY (staging)", () => {
+  const data = f08Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F08)");
+  assert.match(render(data, result), /e2e_scope: F08-required passed=51\/51 specs=12\/12/);
+  const staging = f08Input();
+  staging.sandbox = stagingEvidence();
+  assert.equal(evaluate(staging).status, "READY (staging)");
+  const semBilling = f08Input();
+  delete semBilling.metrics.billing;
+  assert.ok(evaluate(semBilling).errors.some((e) => /Métrica obrigatória ausente: billing/.test(e)));
 });
 
 test("missing admin line makes otherwise green F11 fail", () => {
