@@ -12,6 +12,12 @@ vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
+// F13-T01: as rotas validam `custom_fields` contra as definições em tenant_settings
+// (pool de serviço). Aqui o validador é dublado; a prova real está em
+// tests/integration/f13-crm-comercial.test.ts e na spec f13-crm-comercial.
+vi.mock("@/src/crm/campos", () => ({
+  validarCamposDa: vi.fn(async (_ctx: unknown, _entidade: unknown, valores: Record<string, unknown> | null | undefined) => ({ ok: true, valores: { ...(valores ?? {}) } })),
+}));
 
 const ORG = "a2000000-0000-4000-8000-000000000001";
 const USER = "a2000000-0000-4000-8000-000000000002";
@@ -93,6 +99,8 @@ describe("empresas de clientes — API autorizada", () => {
     expect(requireRole).toHaveBeenCalledWith("agent", expect.anything());
     expect(query.insert).toHaveBeenCalledWith({
       legal_name: "Empresa fictícia",
+      // F13-T01: o insert sempre grava o objeto de campos configuráveis (vazio sem valor).
+      custom_fields: {},
       organization_id: ORG,
     });
     expect(audit).toHaveBeenCalledTimes(1);

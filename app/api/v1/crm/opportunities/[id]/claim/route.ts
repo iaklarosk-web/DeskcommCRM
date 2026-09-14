@@ -25,9 +25,10 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
   if (!authz.ok) return authz.response;
   const id = idSchema.safeParse((await context.params).id);
   if (!id.success) return fail("validation_failed", "Identificador inválido.", 422, { requestId });
+  const opportunityId = id.data;
   try {
-    const resultado = await reivindicar(ctxDaRota(authz), id.data, authz.user.id);
-    await audit({ organizationId: authz.org.orgId, actorUserId: authz.user.id, action: "crm_opportunity.claimed", resourceType: "crm_leads", resourceId: id.data, requestId });
+    const resultado = await reivindicar(ctxDaRota(authz), opportunityId, authz.user.id);
+    await audit({ organizationId: authz.org.orgId, actorUserId: authz.user.id, action: "crm_opportunity.claimed", resourceType: "crm_leads", resourceId: opportunityId, requestId });
     return ok(resultado, { requestId });
   } catch (error) {
     const falha = falhaDaOportunidade(error, requestId);

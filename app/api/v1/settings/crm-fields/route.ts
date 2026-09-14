@@ -64,9 +64,10 @@ export async function PUT(req: Request): Promise<Response> {
     actorUserId: authz.user.id,
     action: "crm_fields.updated",
     resourceType: "tenant_settings",
-    resourceId: `crm.fields.${parsed.data.entity}`,
+    // `resource_id` é uuid: a chave natural vai no metadata.
+    resourceId: null,
     requestId,
-    metadata: { entity: parsed.data.entity, fields: parsed.data.fields.length },
+    metadata: { key: `crm.fields.${parsed.data.entity}`, entity: parsed.data.entity, fields: parsed.data.fields.length },
   });
   return ok({ entity: parsed.data.entity, fields: await definicoesDa(ctx, parsed.data.entity) }, { requestId });
 }

@@ -10,6 +10,8 @@ import { ApiError } from "@/lib/api/types";
 import { apiClient } from "@/lib/api/client";
 import { useT } from "@/lib/i18n/IdiomaProvider";
 
+import type { CustomFieldDef } from "@/lib/schemas/settings";
+
 import { CompanyForm } from "./_form";
 import {
   companyBody,
@@ -30,7 +32,7 @@ function draftFrom(company: Company): CompanyDraft {
   };
 }
 
-export function CompaniesClient({ podeEditar }: { podeEditar: boolean }) {
+export function CompaniesClient({ podeEditar, definicoes = [] }: { podeEditar: boolean; definicoes?: CustomFieldDef[] }) {
   const t = useT();
   const [companies, setCompanies] = React.useState<Company[]>([]);
   const [search, setSearch] = React.useState("");
@@ -156,6 +158,7 @@ export function CompaniesClient({ podeEditar }: { podeEditar: boolean }) {
       {form && podeEditar ? (
         <div className="mb-5">
           <CompanyForm
+            definicoes={definicoes}
             initial={form === "new" ? EMPTY_COMPANY : draftFrom(form)}
             saving={saving}
             title={form === "new" ? t("Nova empresa") : t("Editar empresa")}

@@ -19,6 +19,11 @@ vi.mock("@/hooks/contacts/useContact", () => ({
 vi.mock("@/hooks/pipelines/useDefaultPipeline", () => ({
   useDefaultPipeline: () => ({ data: null }),
 }));
+// F13-T01: a ficha soma as definições por organização (react-query) às do funil.
+vi.mock("@/hooks/crm/useCrmFields", () => ({
+  useCrmFields: () => ({ data: null }),
+  unirDefinicoes: (doFunil: unknown[], daOrganizacao: unknown[]) => [...doFunil, ...daOrganizacao],
+}));
 vi.mock("@/hooks/crm/useCrmAuthorNames", () => ({
   useCrmAuthorNames: () => ({ autor: "Nome real" }),
 }));

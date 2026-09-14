@@ -82,6 +82,8 @@ describe("EmpresasClient", () => {
         legal_name: "Nova Ltda.",
         trade_name: null,
         cnpj: null,
+        // F13-T01: o formulário sempre envia os campos configuráveis (vazio sem definição).
+        custom_fields: {},
       }),
     );
 

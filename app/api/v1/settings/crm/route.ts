@@ -57,6 +57,7 @@ export async function PATCH(req: Request): Promise<Response> {
     if (error instanceof InvalidSettingError) return fail("validation_failed", error.message, 422, { requestId });
     throw error;
   }
-  await audit({ organizationId: authz.org.orgId, actorUserId: authz.user.id, action: "crm_settings.updated", resourceType: "tenant_settings", resourceId: "crm", requestId, metadata: parsed.data });
+  // `resource_id` é uuid: a chave natural (`crm.distribution`/`crm.queue_roles`) vai no metadata.
+  await audit({ organizationId: authz.org.orgId, actorUserId: authz.user.id, action: "crm_settings.updated", resourceType: "tenant_settings", resourceId: null, requestId, metadata: { keys: Object.keys(parsed.data).map((k) => `crm.${k}`), ...parsed.data } });
   return ok(await leitura(ctx), { requestId });
 }
