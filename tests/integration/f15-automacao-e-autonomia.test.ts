@@ -19,6 +19,7 @@ import { createFakeRegistry } from "@/lib/agent-engine/edge/llm/providers";
 import { comoTextoDoProvedor, responderTurno } from "@/src/ai";
 import { estadoDoLimite } from "@/src/ai/limite";
 import { execute } from "@/src/actions/execute";
+import { claim, filaDeHandoffs } from "@/src/handoff/registro";
 import { criarAdapterMock } from "@/src/channels/mock";
 import { can, type Permissao, type PapelD15 } from "@/src/rbac/matrix";
 import { setSetting } from "@/src/tenant-config/settings";
@@ -41,6 +42,8 @@ const ORG_A = "f1500001-0000-4000-8000-00000000000a";
 const ORG_B = "f1500001-0000-4000-8000-00000000000b";
 const ADMIN_A = "f1500001-1001-4000-8000-00000000000a";
 const ATT_A1 = "f1500001-1003-4000-8000-00000000000a";
+const ATT_A2 = "f1500001-1004-4000-8000-00000000000a";
+const ATT_A3 = "f1500001-1005-4000-8000-00000000000a";
 const ATT_B = "f1500001-1003-4000-8000-00000000000b";
 const SESSAO_A = "f1500001-3000-4000-8000-00000000000a";
 const SESSAO_B = "f1500001-3000-4000-8000-00000000000b";
@@ -64,6 +67,9 @@ const medidas = {
   calls_after_limit_total: 0,
   paused: 0,
   resumed: 0,
+  handoffs: 0,
+  balanced: 0,
+  assignees_distinct: 0,
 };
 
 // ─── T02: um tenant próprio para o turno de IA (fixture da F04) ─────────────
@@ -112,11 +118,13 @@ const estadoDa = async (conversa: string) => (await pool.query<{ s: string }>(`s
 beforeAll(async () => {
   await pool.query(`
     insert into auth.users (id, email) values
-      ('${ADMIN_A}','f15-admin-a@integration.test'), ('${ATT_A1}','f15-att-a1@integration.test'), ('${ATT_B}','f15-att-b@integration.test');
+      ('${ADMIN_A}','f15-admin-a@integration.test'), ('${ATT_A1}','f15-att-a1@integration.test'), ('${ATT_A2}','f15-att-a2@integration.test'),
+      ('${ATT_A3}','f15-att-a3@integration.test'), ('${ATT_B}','f15-att-b@integration.test');
     insert into public.organizations (id, slug, legal_name, display_name, status, onboarded_at) values
       ('${ORG_A}','f15-auto-a','F15 A','F15 A','active', now()), ('${ORG_B}','f15-auto-b','F15 B','F15 B','active', now());
     insert into public.user_organizations (organization_id, user_id, role, accepted_at) values
-      ('${ORG_A}','${ADMIN_A}','admin',now()), ('${ORG_A}','${ATT_A1}','agent',now()), ('${ORG_B}','${ATT_B}','agent',now());
+      ('${ORG_A}','${ADMIN_A}','admin',now()), ('${ORG_A}','${ATT_A1}','agent',now()), ('${ORG_A}','${ATT_A2}','agent',now()),
+      ('${ORG_A}','${ATT_A3}','agent',now()), ('${ORG_B}','${ATT_B}','agent',now());
     insert into public.tenant_settings (organization_id, key, value, schema_version, source) values
       ('${ORG_A}','ai.enabled','true'::jsonb,1,'tenant_admin'), ('${ORG_B}','ai.enabled','true'::jsonb,1,'tenant_admin');
     insert into public.channel_sessions (id, organization_id, waha_session_name, webhook_secret_encrypted) values
@@ -126,7 +134,7 @@ beforeAll(async () => {
     insert into public.catalog_products (id, organization_id, codigo, nome, preco_cents, moeda, sale_unit, ativo) values
       ('${PRODUCT_A}','${ORG_A}','F15-A','Produto A',1000,'BRL','un',true);
   `);
-  for (const n of [1, 2, 3, 4]) {
+  for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9]) {
     await pool.query(
       `insert into public.contacts (id, organization_id, display_name, phone_number) values ($1,$2,$3,$4)`,
       [contatoDe(ORG_A, n), ORG_A, `Contato A ${n}`, `+55119015000${n}`],
@@ -354,6 +362,81 @@ describe("F15-T02 — limite diário de turnos: pausa automática, aviso único,
     expect(semTeto).toMatchObject({ limit: 0, remaining: null, allowed: true });
     medidas.resumed = 1;
     console.info(`f15-t02-retomada: resumed=1/1 provider_calls=${estado.chamadas}/1 no_limit_allowed=1/1`);
+  });
+});
+
+describe("F15-T03 — handoff por rodízio: entregue a um, visto por um, assumido por um", () => {
+  const ctxAtt = (user: string): TenantCtx => ({ organization_id: ORG_A, source: "session", user_id: user });
+  const handoffsDe = (conversas: number[]) =>
+    pool.query<{ conversation_id: string; assigned_to: string | null; claimed_at: Date | null }>(
+      `select conversation_id, assigned_to, claimed_at from public.handoffs where organization_id=$1 and conversation_id = any($2::uuid[]) order by created_at`,
+      [ORG_A, conversas.map((n) => conversaDe(ORG_A, n))],
+    );
+
+  it("round_robin: H=4 handoffs sobre 3 attendants → balanced=1, assignees_distinct=3, aviso só ao atribuído (4/4)", async () => {
+    // Arrange
+    await setSetting(ctxA, "handoff.assignment", "round_robin", "tenant_admin", { pool });
+    const avisosAntes = await conta(`select count(*)::text as n from public.notifications where organization_id=$1 and event='handoff.created'`, [ORG_A]);
+    // Act — quatro transferências pela IA (o caminho real do turno).
+    for (const n of [5, 6, 7, 8]) {
+      const r = await execute(ctxIaA, IA, "transfer_to_human", { conversation_id: conversaDe(ORG_A, n), reason: "customer_request", summary: `Cliente ${n} pediu uma pessoa.` }, deps());
+      expect(r.status, `${r.reason ?? ""} ${r.detalhe ?? ""}`).toBe("executed");
+    }
+    const linhas = await handoffsDe([5, 6, 7, 8]);
+    const porPessoa = new Map<string, number>();
+    for (const l of linhas.rows) porPessoa.set(l.assigned_to ?? "null", (porPessoa.get(l.assigned_to ?? "null") ?? 0) + 1);
+    const cargas = [...porPessoa.values()];
+    const avisos = await pool.query<{ user_id: string; payload: Record<string, unknown> }>(
+      `select user_id, payload from public.notifications where organization_id=$1 and event='handoff.created' and payload->>'conversation_id' = any($2::text[]) order by created_at`,
+      [ORG_A, [5, 6, 7, 8].map((n) => conversaDe(ORG_A, n))],
+    );
+    // Assert
+    expect(linhas.rows).toHaveLength(4);
+    expect(linhas.rows.every((l) => l.assigned_to !== null)).toBe(true);
+    expect(porPessoa.has("null")).toBe(false);
+    expect(porPessoa.size).toBe(3);
+    expect(Math.max(...cargas) - Math.min(...cargas)).toBeLessThanOrEqual(1);
+    expect(avisos.rows).toHaveLength(4);
+    expect(avisos.rows.every((a) => a.user_id === a.payload.assigned_to)).toBe(true);
+    expect((await conta(`select count(*)::text as n from public.notifications where organization_id=$1 and event='handoff.created'`, [ORG_A])) - avisosAntes).toBe(4);
+    medidas.handoffs = linhas.rows.length;
+    medidas.balanced = Math.max(...cargas) - Math.min(...cargas) <= 1 ? 1 : 0;
+    medidas.assignees_distinct = porPessoa.size;
+    console.info(`f15-t03-rodizio: handoffs=${linhas.rows.length} balanced=${medidas.balanced} assignees_distinct=${porPessoa.size} notified_assignee_only=${avisos.rows.length}/4 loads=${cargas.join(",")}`);
+  });
+
+  it("cada attendant vê só o que lhe foi entregue; o claim de outro é assigned_to_other e o do atribuído assume", async () => {
+    // Arrange
+    const linhas = await handoffsDe([5, 6, 7, 8]);
+    const alvo = linhas.rows[0]!;
+    const dono = alvo.assigned_to!;
+    const outro = [ATT_A1, ATT_A2, ATT_A3].find((u) => u !== dono)!;
+    const idDoAlvo = (await pool.query<{ id: string }>(`select id from public.handoffs where organization_id=$1 and conversation_id=$2`, [ORG_A, alvo.conversation_id])).rows[0]!.id;
+    // Act
+    const filaDoDono = await filaDeHandoffs(ctxAtt(dono), dono, { pool });
+    const filaDoOutro = await filaDeHandoffs(ctxAtt(outro), outro, { pool });
+    const recusado = await claim(ctxAtt(outro), idDoAlvo, outro, { pool });
+    const assumido = await claim(ctxAtt(dono), idDoAlvo, dono, { pool });
+    // Assert
+    expect(filaDoDono.some((h) => h.id === idDoAlvo)).toBe(true);
+    expect(filaDoOutro.some((h) => h.id === idDoAlvo)).toBe(false);
+    expect(recusado).toMatchObject({ ok: false, reason: "assigned_to_other" });
+    expect(assumido).toMatchObject({ ok: true, assignee_id: dono, to: "human_handling" });
+    console.info(`f15-t03-fila: visible_to_assignee=1/1 hidden_from_other=1/1 other_claim_rejected=1/1 assignee_claim_ok=1/1`);
+  });
+
+  it("queue (default) continua sem atribuição: o handoff nasce para a corrida e avisa a fila inteira (1/1)", async () => {
+    // Arrange
+    await setSetting(ctxA, "handoff.assignment", "queue", "tenant_admin", { pool });
+    // Act
+    const r = await execute(ctxIaA, IA, "transfer_to_human", { conversation_id: conversaDe(ORG_A, 9), reason: "customer_request", summary: "Cliente 9 pediu uma pessoa." }, deps());
+    const linha = (await handoffsDe([9])).rows[0];
+    const avisos = await conta(`select count(*)::text as n from public.notifications where organization_id=$1 and event='handoff.created' and payload->>'conversation_id'=$2`, [ORG_A, conversaDe(ORG_A, 9)]);
+    // Assert
+    expect(r.status).toBe("executed");
+    expect(linha?.assigned_to).toBeNull();
+    expect(avisos).toBe(3);
+    console.info(`f15-t03-queue: unassigned=1/1 notified_queue=${avisos}/3`);
   });
 });
 

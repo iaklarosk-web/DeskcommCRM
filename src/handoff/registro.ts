@@ -37,7 +37,7 @@ import {
 } from "@/src/conversation";
 import { incrementCounter } from "@/src/obs/counters";
 import { PAPEIS_D15, papelD15DoHerdado, type PapelD15 } from "@/src/rbac/matrix";
-import { getSetting } from "@/src/tenant-config/settings";
+import { getSetting, getSettingIn } from "@/src/tenant-config/settings";
 import type { ServicePool } from "@/src/tenant-context/db";
 import { withTenant, type TenantCtx, type TenantDb } from "@/src/tenant-context";
 
@@ -46,12 +46,14 @@ import {
   ResumoIncompleto,
   type ResumoDoHandoff,
 } from "./resumo";
+import { ATRIBUICOES, ehAtribuicao, entregarPorRodizio, type Atribuicao } from "./rodizio";
 
 /**
- * O único valor de `handoff.assignment` da Fase 1 (§5.2, §5.11): todo
- * `attendant` vê o handoff e um faz o claim. `round_robin` é Fase 2 e não tem
- * código aqui — entrada de vocabulário sem implementação é uma fila que promete
- * distribuir e não distribui.
+ * O default de `handoff.assignment` (§5.2, §5.11): todo `attendant` vê o
+ * handoff e um faz o claim. Desde a F15-T03 (ADR-036, D54 d) existe também
+ * `round_robin` — o dossiê nasce ENTREGUE a um membro da fila (`rodizio.ts`);
+ * só ele o vê e o claim de outro é recusado. O vocabulário vive em
+ * `ATRIBUICOES`; qualquer outro valor falha FECHADO.
  */
 export const ATRIBUICAO_DA_FASE_1 = "queue" as const;
 
@@ -89,7 +91,7 @@ export async function gravarHandoff(
     readonly created_by: "ai" | "system" | "human";
     readonly resumo: ResumoDoHandoff;
   },
-): Promise<{ readonly id: string; readonly criado: boolean }> {
+): Promise<{ readonly id: string; readonly criado: boolean; readonly assigned_to: string | null }> {
   const faltando = camposAusentes(entrada.resumo);
   if (faltando.length > 0) throw new ResumoIncompleto(faltando);
 
@@ -117,7 +119,16 @@ export async function gravarHandoff(
   const criado = gravado.rows[0]?.id;
   if (criado !== undefined) {
     incrementCounter("handoff_registrado", { reason: entrada.resumo.reason });
-    return { id: criado, criado: true };
+    // F15-T03: em `round_robin` o dossiê nasce entregue; em `queue` fica na
+    // corrida (assigned_to nulo). Lido na MESMA transação.
+    const modalidade = await getSettingIn(db, ctx, "handoff.assignment");
+    if (!ehAtribuicao(modalidade)) throw new AtribuicaoNaoSuportada(modalidade);
+    let atribuido: string | null = null;
+    if (modalidade === "round_robin") {
+      atribuido = await entregarPorRodizio(db, ctx, criado, papeisDaFila(await getSettingIn(db, ctx, "handoff.queue_roles")));
+      incrementCounter(atribuido === null ? "handoff_rodizio_sem_elegivel" : "handoff_entregue_por_rodizio");
+    }
+    return { id: criado, criado: true, assigned_to: atribuido };
   }
 
   // `do nothing` não devolve linha: o episódio já tinha dossiê aberto.
@@ -134,7 +145,7 @@ export async function gravarHandoff(
   // `criado: false` é o que diz ao chamador para NÃO avisar de novo (§5.16):
   // o episódio já tinha dossiê, já tinha aviso, e um segundo aviso pelo mesmo
   // fato é ruído para a mesma pessoa.
-  return { id, criado: false };
+  return { id, criado: false, assigned_to: null };
 }
 
 // ─── 2 · A fila (§5.11, `assignment = queue`) ───────────────────────────────
@@ -157,12 +168,11 @@ interface LinhaDaFila extends Omit<HandoffNaFila, "created_at"> {
   created_at: Date | string;
 }
 
-/** `handoff.assignment` fora do vocabulário da Fase 1 — falha FECHADA. */
+/** `handoff.assignment` fora do vocabulário — falha FECHADA. */
 export class AtribuicaoNaoSuportada extends Error {
   constructor(public readonly valor: unknown) {
     super(
-      `handoff.assignment=${String(valor)} não existe na Fase 1 (§5.11: só ` +
-        `${ATRIBUICAO_DA_FASE_1}); round_robin é Fase 2`,
+      `handoff.assignment=${String(valor)} não existe (§5.11: ${ATRIBUICOES.join(" | ")})`,
     );
     this.name = "AtribuicaoNaoSuportada";
   }
@@ -196,10 +206,10 @@ export function papeisDaFila(valor: unknown): readonly PapelD15[] {
 export async function modalidadeDeAtribuicao(
   ctx: TenantCtx,
   deps: DepsDoHandoff = {},
-): Promise<typeof ATRIBUICAO_DA_FASE_1> {
+): Promise<Atribuicao> {
   const valor = await getSetting(ctx, "handoff.assignment", deps);
-  if (valor !== ATRIBUICAO_DA_FASE_1) throw new AtribuicaoNaoSuportada(valor);
-  return ATRIBUICAO_DA_FASE_1;
+  if (!ehAtribuicao(valor)) throw new AtribuicaoNaoSuportada(valor);
+  return valor;
 }
 
 /** O papel D15 deste usuário NESTE tenant, ou `null` quando ele não é membro. */
@@ -237,7 +247,7 @@ export async function filaDeHandoffs(
   userId: string,
   deps: DepsDoHandoff = {},
 ): Promise<readonly HandoffNaFila[]> {
-  await modalidadeDeAtribuicao(ctx, deps);
+  const modalidade = await modalidadeDeAtribuicao(ctx, deps);
   const papeis = papeisDaFila(await getSetting(ctx, "handoff.queue_roles", deps));
   const papel = await papelNaOrganizacao(ctx, userId, deps);
   if (papel === null || !papeis.includes(papel)) return [];
@@ -249,13 +259,16 @@ export async function filaDeHandoffs(
       // interface de saída (`string`). Intersectar os dois daria
       // `Date & string` = `string`, e o `instanceof` abaixo deixaria de
       // compilar — sintoma de um tipo que mente sobre o que o banco devolve.
+      // F15-T03: em `round_robin` cada pessoa vê o que foi entregue a ela (e o
+      // que ficou sem elegível, para ninguém ficar sem ver); em `queue`, tudo.
       const linhas = await db.query<LinhaDaFila>(
         `select id, conversation_id, reason, customer, intent, summary,
                 pending_action, suggested_next_step, created_at
            from public.handoffs
           where organization_id = $1 and claimed_at is null
+            and ($3::boolean or assigned_to is null or assigned_to = $2::uuid)
           order by created_at asc, id asc`,
-        [ctx.organization_id],
+        [ctx.organization_id, userId, modalidade === "queue"],
       );
       return linhas.rows.map((linha) => ({
         ...linha,
@@ -276,6 +289,8 @@ export type MotivoDaRecusaDeClaim =
   | "handoff_not_found"
   | "not_in_queue"
   | "already_claimed"
+  /** F15-T03: o rodízio entregou a outra pessoa; só ela assume. */
+  | "assigned_to_other"
   | "illegal_transition";
 
 export type ResultadoDoClaim =
@@ -320,13 +335,13 @@ export async function claim(
   userId: string,
   deps: DepsDoHandoff = {},
 ): Promise<ResultadoDoClaim> {
-  await modalidadeDeAtribuicao(ctx, deps);
+  const modalidade = await modalidadeDeAtribuicao(ctx, deps);
 
   const cabecalho = await withTenant(
     ctx,
     async (db) => {
-      const linha = await db.query<{ conversation_id: string; claimed_at: Date | null }>(
-        `select conversation_id, claimed_at from public.handoffs
+      const linha = await db.query<{ conversation_id: string; claimed_at: Date | null; assigned_to: string | null }>(
+        `select conversation_id, claimed_at, assigned_to from public.handoffs
           where id = $1 and organization_id = $2`,
         [handoffId, ctx.organization_id],
       );
@@ -341,6 +356,10 @@ export async function claim(
   if (cabecalho.claimed_at !== null) {
     incrementCounter("handoff_claim_recusado", { reason: "already_claimed" });
     return { ok: false, reason: "already_claimed", handoff_id: handoffId };
+  }
+  if (modalidade === "round_robin" && cabecalho.assigned_to !== null && cabecalho.assigned_to !== userId) {
+    incrementCounter("handoff_claim_recusado", { reason: "assigned_to_other" });
+    return { ok: false, reason: "assigned_to_other", handoff_id: handoffId };
   }
 
   const papeis = papeisDaFila(await getSetting(ctx, "handoff.queue_roles", deps));

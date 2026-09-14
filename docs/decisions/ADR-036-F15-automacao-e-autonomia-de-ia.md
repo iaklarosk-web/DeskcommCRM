@@ -158,6 +158,10 @@ escrita é recusada e a leitura funciona. Nenhuma spec apagada nem pulada
   das duas tabelas é reconstruído por ADIÇÃO na **migration 9028** (a
   segunda da fase: a 9027 é a idempotência das runs); `f05-t05` (unit e
   invariante) e `f12-t01-billing-schema` passam a afirmar dez.
+- `handoffs.assigned_to`/`assigned_at` (**migration 9029**, a terceira da
+  fase; sem FK, como `claimed_by`): em `round_robin` o dossiê nasce entregue
+  (`src/handoff/rodizio.ts`), só o atribuído o vê na fila e é avisado, e o
+  claim de outro é `assigned_to_other`. Atribuição não é claim.
 - O limite diário mora no resolver PADRÃO de Entitlement
   (`resolverComLimiteDiario(resolverPorPlano)`, `src/ai/limite.ts`): `ai.reply`
   é negada com `daily_limit_reached` antes do provedor; quem injeta `resolver`

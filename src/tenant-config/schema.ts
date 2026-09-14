@@ -123,8 +123,9 @@ export const SETTINGS_SCHEMA: readonly SettingEntry[] = [
   // conversation
   { key: "conversation.confirmation_timeout_minutes", tipo: "int", default: 60, min: 1, max: 10_080 },
   { key: "conversation.auto_resolve_hours", tipo: "int", default: 48, min: 1, max: 720 },
-  // handoff (§5.11; round_robin é Fase 2 — acrescentar o valor aqui QUANDO existir)
-  { key: "handoff.assignment", tipo: "enum", default: "queue", valores: ["queue"] },
+  // handoff (§5.11): `round_robin` desde a F15-T03 (ADR-036, D54 d) — o dossiê
+  // nasce entregue a um membro da fila; `queue` (default) continua a corrida.
+  { key: "handoff.assignment", tipo: "enum", default: "queue", valores: ["queue", "round_robin"] },
   { key: "handoff.queue_roles", tipo: "string_array", default: ["attendant"] },
   // notifications
   { key: "notifications.email.enabled", tipo: "boolean", default: false },

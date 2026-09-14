@@ -95,11 +95,12 @@ export async function gravarItemDeHandoff(
 
   let notificados = 0;
   if (dossie.criado) {
-    const fila = await membrosPorPapel(
-      db,
-      ctx,
-      papeisDaFila(await getSettingIn(db, ctx, "handoff.queue_roles")),
-    );
+    // F15-T03: entregue pelo rodízio → só o atribuído é avisado; na corrida
+    // (`queue`, ou rodízio sem elegível) → a fila inteira, como antes.
+    const fila =
+      dossie.assigned_to !== null
+        ? [dossie.assigned_to]
+        : await membrosPorPapel(db, ctx, papeisDaFila(await getSettingIn(db, ctx, "handoff.queue_roles")));
     // Só ids e rótulos no payload (§5.16): o resumo fica no dossiê, que a
     // pessoa abre pela fila.
     const aviso = await notify(db, ctx, "handoff.created", fila, {
@@ -107,6 +108,7 @@ export async function gravarItemDeHandoff(
       conversation_id: pedido.conversation_id,
       reason: pedido.reason,
       created_by: pedido.created_by,
+      assigned_to: dossie.assigned_to,
     });
     notificados = aviso.count;
   }

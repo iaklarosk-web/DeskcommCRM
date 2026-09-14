@@ -1,11 +1,11 @@
 ---
-updated_at: 2026-09-14T21:25:34Z
+updated_at: 2026-09-14T21:36:19Z
 head_commit: 767d22a66d167fb28440d41a3b9a7b55237b6b07   # código validado pelo gate f13-gate-05 (READY (staging), dentro do staging, F13 — ADR-034/035); produção com o código da F13 (linha prod:)
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
 plan_version: "2.9 (2026-09-14); D38–D54; ADR-006…037"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
 current_phase: F15
-next_task: F15-T03             # F15 (D54): T00–T02 concluídas (política por ação; limite diário com pausa automática e aviso, migration 9028); T03 = handoff por rodízio
+next_task: F15-T04             # F15 (D54): T00–T03 concluídas (política; limite diário; handoff round_robin com migration 9029); T04 = regras sobre o catálogo
 status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26)
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
