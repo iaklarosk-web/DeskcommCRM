@@ -73,7 +73,7 @@ ORGS_SEM=$(q "select count(*) from public.organizations o where not exists (sele
 # rag-indexer com `ai_chunks.embedding vector(1536)` do provedor real
 # (ADR-002: o acervo do SaaS usa embedding determinístico; o real é o herdado).
 AI_TURNS=$(q "select count(*) from public.ai_usage_events where operation = 'chat' and model not ilike '%mock%'")
-CHUNKS=$(q "select count(*) from public.ai_chunks c join public.ai_knowledge_sources s on s.id = c.knowledge_source_id where s.last_index_status = 'ok'")
+CHUNKS=$(q "select count(*) from public.ai_chunks c join public.ai_knowledge_sources s on s.id = c.knowledge_source_id where s.last_index_status = 'success'")
 AI_TURN=$([ "$AI_TURNS" -ge 1 ] && echo 1 || echo 0); [ "$AI_TURN" = 1 ] || falha "nenhum turno real de IA em ai_usage_events"
 EMBEDDING=$([ "$CHUNKS" -ge 1 ] && echo 1 || echo 0); [ "$EMBEDDING" = 1 ] || falha "nenhum material indexado com embedding real (ai_chunks)"
 

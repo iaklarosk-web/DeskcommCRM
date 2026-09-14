@@ -7,11 +7,11 @@
 # SMTP (compose.prod.yml: `GOTRUE_SMTP_HOST=smtp.resend.com`). Destinatário =
 # `OWNER_EMAIL`, e só ele (regra da casa: nunca mensagem a terceiros).
 #
-# Evidência (sem corpo, sem valor de segredo): o GoTrue aceitou (HTTP 200), a
-# linha `user_recovery_requested` em `auth.audit_log_entries` cresceu em 1, e a
-# Resend lista o e-mail entregue (id, remetente, assunto) pela API de leitura.
-# Saída: `email: ok id=<id da Resend> from=<remetente> ...` — o que
-# `scripts/prod/prova.sh` lê em docs/ops/prod-jornadas.log.
+# Dois caminhos, um destinatário: (1) SMTP do GoTrue — o `/recover` aceito
+# (HTTP 200) e a linha `user_recovery_requested` em `auth.audit_log_entries`;
+# (2) a API do produto (`lib/email/resend.ts`, jornada-email.ts no worker) —
+# a Resend devolve o id do envio. Saída: `email: ok id=<id da Resend> …`, o
+# que `scripts/prod/prova.sh` lê em docs/ops/prod-jornadas.log.
 source "$(dirname "$0")/_env.sh"
 APP_URL=$(prod_env NEXT_PUBLIC_APP_URL)
 DB_URL=$(prod_db_url)
@@ -30,24 +30,14 @@ sleep 5
 DEPOIS=$(psql "$DB_URL" -Atc "select count(*) from auth.audit_log_entries where payload->>'action' = 'user_recovery_requested'")
 [ "$DEPOIS" -gt "$ANTES" ] || { echo "==> auth.audit_log_entries não registrou user_recovery_requested ($ANTES → $DEPOIS)" >&2; exit 1; }
 
-# A Resend lista os envios (leitura): pega o mais recente para o dono, depois do início.
-ID=""; FROM=""; ASSUNTO=""; ESTADO=""
-for i in $(seq 1 12); do
-  LEITURA=$(curl -s --max-time 30 -H "Authorization: Bearer $CHAVE" "https://api.resend.com/emails?limit=20")
-  eval "$(node -e '
-    let d=""; process.stdin.on("data",c=>d+=c).on("end",()=>{
-      const [destino, inicio] = process.argv.slice(1);
-      let j; try { j = JSON.parse(d); } catch { return; }
-      const lista = Array.isArray(j.data) ? j.data : [];
-      const m = lista.find((e) => (e.to ?? []).map((t) => String(t).toLowerCase()).includes(destino.toLowerCase()) && String(e.created_at) >= inicio);
-      if (!m) return;
-      const q = (s) => "\x27" + String(s ?? "").replace(/\x27/g, "") + "\x27";
-      process.stdout.write(`ID=${q(m.id)}; FROM=${q(m.from)}; ASSUNTO=${q(m.subject)}; ESTADO=${q(m.last_event)}`);
-    })' "$DESTINO" "$INICIO" <<<"$LEITURA")"
-  [ -n "$ID" ] && break
-  sleep 5
-done
-[ -n "$ID" ] || { echo "==> a Resend não listou e-mail para o dono desde $INICIO (o GoTrue aceitou; confira o remetente/DKIM)" >&2; exit 1; }
-FROM_OK=0; case "$FROM" in *"$REMETENTE"*) FROM_OK=1 ;; esac
-[ "$FROM_OK" = 1 ] || { echo "==> remetente inesperado na Resend: $FROM" >&2; exit 1; }
-echo "email: ok id=$ID from=$REMETENTE subject=\"$ASSUNTO\" state=$ESTADO recovery_audit=$((DEPOIS-ANTES))/1 via=gotrue-smtp-resend"
+# A chave da Resend é SÓ de envio (restricted_api_key: a API de listagem
+# responde 401), então a evidência do caminho SMTP é o GoTrue (audit
+# `user_recovery_requested` + envio sem erro) e o e-mail na caixa do
+# proprietário. O caminho da API do produto (`lib/email/resend.ts`) devolve o
+# id do envio: roda dentro do worker, com o env resolvido pelo compose.
+docker cp scripts/prod/jornada-email.ts crm-prod-worker:/app/scripts/prod-jornada-email.ts
+API=$(docker exec -w /app crm-prod-worker sh -c 'TSX_TSCONFIG_PATH=/app/tsconfig.json node --import /app/node_modules/tsx/dist/loader.mjs /app/scripts/prod-jornada-email.ts' 2>&1 | grep -E '^email_api:' || true)
+docker exec crm-prod-worker rm -f /app/scripts/prod-jornada-email.ts
+case "$API" in "email_api: ok id="*) ;; *) echo "==> envio pela API do produto falhou: ${API:-sem linha}" >&2; exit 1 ;; esac
+ID=$(printf '%s' "$API" | sed -E 's/^email_api: ok id=([^ ]+).*/\1/')
+echo "email: ok id=$ID from=$REMETENTE recovery_audit=$((DEPOIS-ANTES))/1 recovery_via=gotrue-smtp-resend api_via=lib/email/resend.ts to=owner"
