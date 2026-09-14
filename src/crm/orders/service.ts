@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { ServicePool } from "@/src/tenant-context/db";
+import { emitirEvento } from "@/src/events/emitir";
 import { withTenant, type TenantCtx, type TenantDb } from "@/src/tenant-context";
 import { authorizeOrderCommand, type TrustedOrderExecutor } from "./authorization";
 import { orderCommandSchema, type OrderCommand, type OrderItemCommand } from "./commands";
@@ -319,6 +320,25 @@ export async function executeOrderCommand(
           JSON.stringify({ receipt_id: receiptId, revision: after.revision, status: after.status }),
         ],
       );
+      // F15-T00 (ADR-036): o pedido confirmado avisa o barramento na MESMA
+      // transação (`order.confirmed`, gatilho de regra aprovado pelo
+      // proprietário). O recibo idempotente acima garante que o replay do
+      // comando não chega aqui — um comando confirma uma vez, um evento.
+      if (command.command === "confirm_order" && after.status === "confirmed") {
+        await emitirEvento(db, ctx, {
+          type: "order.confirmed",
+          entity_id: orderId,
+          payload: {
+            order_id: orderId,
+            contact_id: after.contact_id,
+            company_id: after.company_id ?? null,
+            revision: after.revision,
+            total_cents: after.total_cents,
+            delivery_date: after.delivery_date ?? null,
+          },
+          source: "crm.orders.service",
+        });
+      }
       await db.query(
         `update public.crm_order_command_receipts set order_id=$4,response_body=$5::jsonb,completed_at=now()
         where organization_id=$1 and operation=$2 and idempotency_key=$3 and id=$6`,

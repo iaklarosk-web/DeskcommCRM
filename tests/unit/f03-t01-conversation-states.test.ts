@@ -46,6 +46,11 @@ function fakePool(saasState: ConversationState) {
   const client = {
     query: async (text: string, values?: unknown[]) => {
       queries.push({ text, values });
+      // F15-T00 (ADR-036): chegar a `resolved` emite `conversation.resolved`
+      // pelo barramento; o dublê devolve o id que a função SQL devolveria.
+      if (text.includes("public.emit_event")) {
+        return { rows: [{ id: "e15e0000-0000-4000-8000-000000000001" }] };
+      }
       if (text.includes("from public.conversations") && text.includes("for no key update")) {
         return {
           rows: [
@@ -201,6 +206,13 @@ describe("F03-T01 — a tabela D16 é a única descrição da máquina", () => {
     expect(textos).toContain("app.conversation_transition");
     expect(textos).toContain("fn_service_status");
     expect(textos).toContain("saas_state = $3");
+    // F15-T00: a chegada a `resolved` emitiu UM `conversation.resolved` com os ids.
+    const emissoes = queries.filter((q) => q.text.includes("public.emit_event"));
+    expect(emissoes).toHaveLength(1);
+    expect(emissoes[0]?.values?.[0]).toBe("conversation.resolved");
+    expect(emissoes[0]?.values?.[1]).toBe("conversation");
+    expect(emissoes[0]?.values?.[2]).toBe(CONVERSA_ID);
+    expect(emissoes[0]?.values?.[5]).toBe(ctx.organization_id);
     expect(counterTotal("conversation_illegal_transition")).toBe(0);
   });
 });

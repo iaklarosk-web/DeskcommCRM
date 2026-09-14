@@ -25,6 +25,7 @@ import { capturarErro } from "@/src/obs/erros";
 import { rodarVarreduraDaCarencia } from "@/src/billing/carencia";
 import { rodarCortes } from "@/src/reminder/corte";
 import { rodarLembretes } from "@/src/reminder/envio";
+import { rodarVarreduraDeTarefasVencidas } from "@/src/crm/tarefas/vencidas";
 
 const CAMINHO_ABSOLUTO = path.resolve(process.argv[1] ?? "workers/lembrete-worker.ts");
 
@@ -63,6 +64,19 @@ async function umCiclo(): Promise<void> {
   });
   // F12-T06 (D44): a carência da assinatura vence de hora em hora, no mesmo
   // relógio do lembrete — um processo, um intervalo, um `--once` para provar.
+  // F15-T00 (ADR-036): tarefas vencidas viram `task.overdue` no barramento,
+  // uma por (tarefa, prazo), só nos tenants com regra ouvindo.
+  const vencidas = await rodarVarreduraDeTarefasVencidas();
+  logger.info("worker.cycle", {
+    worker: "tasks-overdue",
+    request_id: `cycle-${process.pid}-${Date.now()}`,
+    organization_id: null,
+    tenants_eligible: vencidas.tenants_eligible,
+    failed: vencidas.tenants_failed,
+    overdue_found: vencidas.overdue_found,
+    emitted: vencidas.emitted,
+    already_emitted: vencidas.already_emitted,
+  });
   const carencia = await rodarVarreduraDaCarencia();
   logger.info("worker.cycle", {
     worker: "billing-grace",

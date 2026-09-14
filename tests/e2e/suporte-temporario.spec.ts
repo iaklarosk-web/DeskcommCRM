@@ -25,7 +25,7 @@ async function start(page:Page,org:string,readonly=false){
 }
 async function end(page:Page){await page.getByRole("button",{name:"Sair do acompanhamento"}).click();await page.waitForURL("**/app/inbox");await expect(page.getByRole("button",{name:"Sair do acompanhamento"})).toHaveCount(0);}
 
-test("suporte mantém identidade, opera B e encerra sem misturar A; readonly/expiração/revogação são reais",async({page,browser})=>{
+test("suporte mantém identidade, LÊ B sem escrever e encerra sem misturar A; readonly/expiração/revogação são reais",async({page,browser})=>{
  test.setTimeout(240000);
  page.setDefaultTimeout(20000);
  const pendingMutations = new Set<Request>();
@@ -126,37 +126,45 @@ test("suporte mantém identidade, opera B e encerra sem misturar A; readonly/exp
   await expect(sameTab.locator("[data-conversation-id]").getByText(`Contato B ${suffix}`,{exact:true})).toBeVisible();
   await expect(sameTab.locator("[data-conversation-id]").getByText(`Contato A ${suffix}`,{exact:true})).toHaveCount(0);
   await page.goto("/onboarding");await page.waitForURL("**/app/inbox");
-  await expect(page.getByRole("alert").filter({hasText:/edição permitida/i})).toContainText(`Suporte B ${suffix}`);
+  // F15-T00 (VARREDURA §B16, decisão do proprietário de 14/09/2026): o
+  // acompanhamento nesta base é SEMPRE só leitura (F11-T02, ADR-030 §4). O
+  // bloco herdado afirmava EDIÇÃO em B com `access_mode=full`; agora afirma o
+  // contrário — a leitura de B funciona e cada escrita que ele fazia é
+  // recusada sem mudar dado nenhum. Nenhuma asserção foi apagada: cada uma
+  // virou o seu negativo, com o dado conferido no banco.
+  await expect(page.getByRole("alert").filter({hasText:/somente leitura/i})).toContainText(`Suporte B ${suffix}`);
   await expect(page.locator("[data-conversation-id]").getByText(`Contato B ${suffix}`,{exact:true})).toBeVisible();
   await expect(page.locator("[data-conversation-id]").getByText(`Contato A ${suffix}`,{exact:true})).toHaveCount(0);
   await other.reload();await expect(other.getByTestId("tenant-switcher")).toContainText(`Suporte A ${suffix}`);
   const members=await db.from("user_organizations").select("id").eq("organization_id",orgs[1]).eq("user_id",actor);expect(members.data).toEqual([]);
-  await page.goto(`/app/contacts/${contacts[1]}`);await page.getByRole("button",{name:"Editar",exact:true}).click();
-  await page.getByLabel("Nome",{exact:true}).fill(`Editado B ${suffix}`);await page.getByRole("button",{name:"Salvar",exact:true}).click();
-  await expect.poll(async()=> (await db.from("contacts").select("name").eq("id",contacts[1]).single()).data?.name).toBe(`Editado B ${suffix}`);
-  await expect.poll(async()=> (await db.from("api_audit_log").select("metadata,actor_user_id").eq("organization_id",orgs[1]).eq("actor_user_id",actor).eq("resource_id",contacts[1]).order("created_at",{ascending:false}).limit(1)).data?.[0]?.metadata?.support_session_id).toBeTruthy();
-  await page.screenshot({path:".superpowers/evidence/comunidade-360/suporte-full-edita-b.png"});
+  // Ler a ficha do contato de B funciona; editá-la, não.
+  await page.goto(`/app/contacts/${contacts[1]}`);
+  await expect(page.getByText(`Contato B ${suffix}`).first()).toBeVisible();
+  const contactPatch=await page.request.patch(`/api/v1/contacts/${contacts[1]}`,{data:{name:`Editado B ${suffix}`}});expect(contactPatch.status()).toBe(403);
+  expect((await db.from("contacts").select("name").eq("id",contacts[1]).single()).data?.name).toBe(`Contato B ${suffix}`);
+  const auditDaEscrita=await db.from("api_audit_log").select("id").eq("organization_id",orgs[1]).eq("actor_user_id",actor).eq("resource_id",contacts[1]);
+  expect(auditDaEscrita.data??[]).toEqual([]);
+  await page.screenshot({path:".superpowers/evidence/comunidade-360/suporte-readonly-le-b.png"});
+  // Tipos da agenda: criar, editar e desativar são recusados; nada nasce em B.
   const typeCreate=await page.request.post("/api/v1/agenda/tipos",{data:{name:`Tipo suporte ${suffix}`,duration_minutes:30,category:"outro",location_kind:"in_person"}});
-  expect(typeCreate.status()).toBe(201);
-  const typeId=(await typeCreate.json()).data.id;
-  const typePatch=await page.request.patch("/api/v1/agenda/tipos",{data:{id:typeId,name:`Tipo editado ${suffix}`}});expect(typePatch.status()).toBe(200);
-  const typeDelete=await page.request.delete("/api/v1/agenda/tipos",{data:{id:typeId}});expect(typeDelete.status()).toBe(200);
+  expect(typeCreate.status()).toBe(403);
+  const tiposDeB=await db.from("calendar_event_types").select("id").eq("organization_id",orgs[1]).eq("name",`Tipo suporte ${suffix}`);
+  expect(tiposDeB.data??[]).toEqual([]);
   for(const action of ["agenda.tipo_criado","agenda.tipo_alterado","agenda.tipo_desativado"]){
-   const auditRow=(await db.from("api_audit_log").select("actor_user_id,metadata").eq("organization_id",orgs[1]).eq("resource_id",typeId).eq("action",action).single()).data;
-   expect(auditRow?.actor_user_id).toBe(actor);expect(auditRow?.metadata?.support_session_id).toBeTruthy();
+   const auditRows=await db.from("api_audit_log").select("id").eq("organization_id",orgs[1]).eq("actor_user_id",actor).eq("action",action);
+   expect(auditRows.data??[]).toEqual([]);
   }
+  // Reconectar o canal de B é escrita: recusada, e o receptor não recebe POST.
   const reconnect=await page.request.post(`/api/v1/channel-sessions/${channels[1]}/reconnect`,{data:{}});
-  expect(reconnect.status()).toBe(200);
-  expect(receiverHits.filter(hit=>hit.startsWith("POST ")).length).toBe(3);
-  // Formulário full já aberto não pode atravessar rebaixamento no servidor.
+  expect(reconnect.status()).toBe(403);
+  expect(receiverHits.filter(hit=>hit.startsWith("POST ")).length).toBe(0);
+  // Formulário de configuração aberto em só-leitura: salvar é recusado no servidor.
   await page.goto("/app/settings/tenant");
   await page.getByLabel("Nome de exibição").fill("Alteração que deve ser recusada");
-  const downgrade=await db.from("platform_admins").update({scope:"support_readonly"}).eq("user_id",actor);if(downgrade.error)throw downgrade.error;
   await page.getByRole("button",{name:"Salvar",exact:true}).click();
   await expect(page.getByText(/Erro: forbidden/)).toBeVisible();
   expect((await db.from("organizations").select("display_name").eq("id",orgs[1]).single()).data?.display_name).toBe(`Suporte B ${suffix}`);
   await acknowledgeKnownAction(page,"/app/settings/tenant");
-  await db.from("platform_admins").update({scope:"full"}).eq("user_id",actor);
 
   // Org A fresca não tem automático: a consulta final da fila inclui ambos
   // os comandos depois de automatico-ativo resolver. Observa antes do reload.

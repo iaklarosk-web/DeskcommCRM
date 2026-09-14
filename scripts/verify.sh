@@ -39,6 +39,9 @@ case "$PHASE" in
   # ADR-035: F13 (CRM comercial) acrescenta a spec f13-crm-comercial (+7
   # testes) ao inventário de F12 e mede a linha `crm:`.
   F13) CLOSED_E2E=1; EXPECTED_SPECS=13; REPLICABILITY_TENANTS="deka,demo2" ;;
+  # ADR-037: F15 (automação/autonomia) acrescenta a spec f15-automacao-e-autonomia
+  # (+7 testes) ao inventário de F13 e mede a linha `autonomy:`.
+  F15) CLOSED_E2E=1; EXPECTED_SPECS=14; REPLICABILITY_TENANTS="deka,demo2" ;;
   *)   CLOSED_E2E=0; EXPECTED_SPECS=0 ;;
 esac
 REPLICABILITY_TENANTS="${REPLICABILITY_TENANTS:-}"

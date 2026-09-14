@@ -18,6 +18,7 @@
  */
 import { incrementCounter } from "@/src/obs/counters";
 import type { ServicePool } from "@/src/tenant-context/db";
+import { emitirEvento } from "@/src/events/emitir";
 import { withTenant, type TenantCtx, type TenantDb } from "@/src/tenant-context";
 
 import { resolverDeGuardasF03, type GuardConversation, type GuardResolver } from "./guards";
@@ -246,6 +247,20 @@ export async function transition(
           where id = $1 and organization_id = $2`,
         [conversationId, ctx.organization_id, to],
       );
+
+      // F15-T00 (ADR-036): chegar a `resolved` vindo de outro estado emite
+      // `conversation.resolved` no barramento, na MESMA transação — é o
+      // gatilho de regra que o proprietário aprovou. Não é efeito da tabela
+      // D16 (a tabela declara o que a conversa faz; isto é o que o resto do
+      // sistema fica sabendo), e `resolved → resolved` não existe na tabela.
+      if (to === "resolved" && from !== "resolved") {
+        await emitirEvento(db, ctx, {
+          type: "conversation.resolved",
+          entity_id: conversationId,
+          payload: { conversation_id: conversationId, contact_id: conversa.contact_id, from, event, actor_kind: actor.kind },
+          source: "conversation.transition",
+        });
+      }
 
       for (const efeito of efeitos) {
         // O executor injetado tem a primeira palavra e a recusa é explícita:

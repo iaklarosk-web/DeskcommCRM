@@ -1,12 +1,12 @@
 ---
-updated_at: 2026-09-14T19:40:00Z
+updated_at: 2026-09-14T20:41:54Z
 head_commit: 767d22a66d167fb28440d41a3b9a7b55237b6b07   # código validado pelo gate f13-gate-05 (READY (staging), dentro do staging, F13 — ADR-034/035); produção com o código da F13 (linha prod:)
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
-plan_version: "2.8 (2026-09-14); D38–D53; ADR-006…035"
+plan_version: "2.9 (2026-09-14); D38–D54; ADR-006…037"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
-current_phase: F13
-next_task: F14-T00             # F13 concluída (READY (staging) f13-gate-05, produção com o código da F13); nenhuma fase começa sem nova mensagem (D50 c/D53 c); F14 (WhatsApp, chat do site, agenda) depende de número (D12-4) e de D41
-status: READY_STAGING          # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26)
+current_phase: F15
+next_task: F15-T01             # F15 autorizada em 14/09/2026 (D54); T00 concluída (ADR-036/037, verify v1.9, migration 9027, emissores, §B16); T01 = política por ação
+status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26)
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
 hosting_confirmed: yes         # D50 (11/09/2026): staging nesta VPS, Docker Compose com Supabase local, acesso só por Tailscale — ADR-027
@@ -596,7 +596,7 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 | F12 | Planos/assinatura/cobrança, confirmação de pagamento, acesso, limites/uso, inadimplência e conciliação | done(verify=2026-09-13 1e13071d) — READY (staging) com gateway MOCK e planos placeholder (D14); T01–T08 concluídas; `billing:` medido; cobrança REAL é NOT VALIDATED (real) |
 | F13 | CRM comercial: funis/oportunidades, campos, papéis/filas, histórico, tarefas, pedidos e relatórios | done(verify=2026-09-14 767d22a6) — READY (staging) no f13-gate-05 (13 specs, linha `crm:`, `roles=4`; ADR-034/035); T00–T06 concluídas; produção com o código da F13 (linha `prod:`); §B17 consertado |
 | F14 | WhatsApp, chat do site e agenda de clientes/equipe sincronizada com Google Agenda | pending |
-| F15 | Automações e autonomia de IA por empresa/ação, aprovação/handoff, limites, auditoria e conhecimento | pending |
+| F15 | Automações e autonomia de IA por empresa/ação, aprovação/handoff, limites, auditoria e conhecimento | in_progress (D54, 14/09/2026; ADR-036/037; T00 concluída) |
 | F16 | Marca do SaaS e presets configuráveis; profundidade de templates, white-label e domínios por cliente a definir | pending |
 | F17 | Operação, capacidade/recuperação, suporte, atualização, regressão e aceite comercial pelo proprietário | pending |
 

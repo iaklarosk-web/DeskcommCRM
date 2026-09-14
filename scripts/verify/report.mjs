@@ -16,7 +16,8 @@ const integer = (n) => Number.isSafeInteger(n) && n >= 0;
  */
 // ADR-033: F08 (produção inicial) fecha com o inventário de F12 e sem campo
 // novo no bloco — a produção é medida pela linha `prod:` FORA dele (ADR-032 §4).
-const GATED_PHASES = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F08", "F11", "F12", "F13"];
+// ADR-037: F15 (automação/autonomia) fecha DEPOIS da F13 e mede a linha `autonomy:`.
+const GATED_PHASES = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F08", "F11", "F12", "F13", "F15"];
 
 /** §8.3: cada campo passa a ser obrigatório a partir da fase que o cria. */
 const phaseNumber = (phase) => Number(phase.slice(1));
@@ -34,12 +35,16 @@ const requiresReplicability = (phase) => phaseNumber(phase) >= phaseNumber("F07"
 // ADR-033: a F08 fecha DEPOIS de F11/F12 (D51 a, D52) e herda os dois campos;
 // a ordem de fechamento, não o número da fase, decide o que é obrigatório.
 // ADR-035: a F13 (CRM comercial) fecha DEPOIS da F08 e mede a linha `crm:`;
-// fases fora da ordem escrita (F09, F10, F14+) contam pelo número.
-const CLOSING_ORDER = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F11", "F12", "F08", "F13"];
-const closesAtOrAfter = (phase, ref) => CLOSING_ORDER.indexOf(phase) >= CLOSING_ORDER.indexOf(ref) || phaseNumber(phase) > phaseNumber("F13");
+// ADR-037: a F15 fecha DEPOIS da F13 e mede `autonomy:`. Fases fora da ordem
+// escrita (F09, F10, F14, F16+) contam pelo número contra a ÚLTIMA fase da
+// ordem: a F14, quando fechar, entra aqui pela sua ADR.
+const CLOSING_ORDER = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F11", "F12", "F08", "F13", "F15"];
+const ULTIMA_DA_ORDEM = CLOSING_ORDER[CLOSING_ORDER.length - 1];
+const closesAtOrAfter = (phase, ref) => CLOSING_ORDER.indexOf(phase) >= CLOSING_ORDER.indexOf(ref) || phaseNumber(phase) > phaseNumber(ULTIMA_DA_ORDEM);
 const requiresAdmin = (phase) => closesAtOrAfter(phase, "F11"); // MUTANT: admin-required
 const requiresBilling = (phase) => closesAtOrAfter(phase, "F12"); // MUTANT: billing-required
 const requiresCrm = (phase) => closesAtOrAfter(phase, "F13"); // MUTANT: crm-required
+const requiresAutonomy = (phase) => closesAtOrAfter(phase, "F15"); // MUTANT: autonomy-required
 // ADR-035 §3: a matriz D15 é propriedade da ÁRVORE — quatro papéis a partir
 // da F13 (ADR-034 §2 T02), medidos pela fase ativa, não pela fase pedida.
 const papeisEsperados = (phase) => (closesAtOrAfter(phase, "F13") ? 4 : 3);
@@ -320,6 +325,28 @@ export function evaluate(input) {
       errors.push("crm fora do contrato: exige fields_defined>=4, values_rejected>=3 (=denominador), values_preserved=denominador (>=1), queue_size>=3, distributed=queue_size, balanced=1, second_claim_rejected=1, history_types>=3, orders_linked=1, cross_org_link_denied=1, report_indicators>=8 (=denominador), roles_denied>=3 (=denominador)");
     }
   }
+  // ADR-037 §2: automação e autonomia (F15). `policy_modes=4/4` é D40
+  // (permitir/aprovar/bloquear/transferir respeitados), `calls_after_limit=0/K`
+  // é "limites" com denominador, `duplicate_runs=0` ao lado de `replays` é
+  // "repetição segura", `outside_catalog_denied` é "nenhum efeito fora da
+  // política" (§7.9).
+  if (requiresAutonomy(context.phase)) {
+    const aut = metric("autonomy", ["policy_modes", "ai_task_created", "limit_hits", "calls_after_limit", "paused", "resumed", "handoffs", "balanced", "assignees_distinct", "rules", "runs", "replays", "duplicate_runs", "outside_catalog_denied", "reindexed", "unchanged_skipped", "sources_cited", "roles_denied"]);
+    const den = (field) => {
+      const m = new RegExp(`\\b${field}=(\\d+)/(\\d+)`).exec(input.metrics.autonomy ?? "");
+      return m ? Number(m[2]) : null;
+    };
+    if (aut && (aut.policy_modes !== 4 || den("policy_modes") !== 4 || aut.ai_task_created !== 1 || aut.limit_hits !== 1 ||
+        aut.calls_after_limit !== 0 || !(den("calls_after_limit") >= 3) || aut.paused !== 1 || aut.resumed !== 1 ||
+        aut.handoffs < 3 || aut.balanced !== 1 || aut.assignees_distinct < 2 || aut.rules < 4 ||
+        aut.runs !== aut.rules || aut.runs !== den("runs") || aut.replays < aut.rules || aut.duplicate_runs !== 0 ||
+        aut.outside_catalog_denied !== 1 || aut.reindexed < 1 || aut.reindexed !== den("reindexed") ||
+        aut.unchanged_skipped < 1 || aut.unchanged_skipped !== den("unchanged_skipped") ||
+        aut.sources_cited < 1 || aut.sources_cited !== den("sources_cited") ||
+        aut.roles_denied < 3 || aut.roles_denied !== den("roles_denied"))) {
+      errors.push("autonomy fora do contrato: exige policy_modes=4/4, ai_task_created=1, limit_hits=1, calls_after_limit=0/K (K>=3), paused=1, resumed=1, handoffs>=3, balanced=1, assignees_distinct>=2, rules>=4, runs=rules (=denominador), replays>=rules, duplicate_runs=0, outside_catalog_denied=1, reindexed/unchanged_skipped/sources_cited >=1 (=denominador), roles_denied>=3 (=denominador)");
+    }
+  }
   const clean = errors.length === 0;
   // ADR-028 §2: a partir de F06, o gate limpo rodado no ambiente `staging`
   // sai `READY (staging)`; no sandbox sai `READY (Fnn)` — prova de código.
@@ -376,7 +403,7 @@ export function collect(root, directory, context) {
   // reprova), enquanto §8.3 fixa o rótulo do campo com underscore. O mapa é o
   // único lugar onde essa diferença existe.
   const ARQUIVO_DA_METRICA = { ai_eval: "ai-eval" };
-  for (const name of ["isolation", "rls-coverage", "rbac", "entitlement", "webhook", "ai_eval", "handoff", "reminder", "logs", "rate-limit", "lgpd", "admin", "billing", "crm"]) {
+  for (const name of ["isolation", "rls-coverage", "rbac", "entitlement", "webhook", "ai_eval", "handoff", "reminder", "logs", "rate-limit", "lgpd", "admin", "billing", "crm", "autonomy"]) {
     metrics[name] = read(path.join(directory, "metrics", `${ARQUIVO_DA_METRICA[name] ?? name}.line`));
   }
   metrics.secrets = read(path.join(directory, "secrets.log"));
@@ -442,6 +469,7 @@ export function render(input, result) {
     input.metrics.admin ?? "admin: tenants_listed=pending support_sessions=pending support_reason=pending support_scope_denied=pending support_writes_denied=pending full_mode_rejected=pending signup_awaiting_payment=pending orgs_without_subscription=pending",
     input.metrics.billing ?? "billing: plans=pending events=pending duplicates=pending out_of_order=pending activations=pending blocked_writes_denied=pending grace_days=pending reconciliation_mismatch=pending cancellations=pending data_preserved=pending",
     input.metrics.crm ?? "crm: fields_defined=pending values_rejected=pending values_preserved=pending queue_size=pending distributed=pending balanced=pending second_claim_rejected=pending history_types=pending orders_linked=pending cross_org_link_denied=pending report_indicators=pending roles_denied=pending",
+    input.metrics.autonomy ?? "autonomy: policy_modes=pending ai_task_created=pending limit_hits=pending calls_after_limit=pending paused=pending resumed=pending handoffs=pending balanced=pending assignees_distinct=pending rules=pending runs=pending replays=pending duplicate_runs=pending outside_catalog_denied=pending reindexed=pending unchanged_skipped=pending sources_cited=pending roles_denied=pending",
     replicability,
     input.metrics.secrets ?? "secrets: pending",
     `tests_deleted=${input.testsDeleted ?? "pending"} tests_skipped=${count("skipped")} expected_failures=${count("expectedFailures")} tests_failed=${count("failed")} tests_pending=${count("pending")} mutants_killed=${input.mutants.killed ?? "pending"}/${input.mutants.total ?? "pending"}`,

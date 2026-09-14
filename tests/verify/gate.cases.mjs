@@ -19,6 +19,7 @@ const {
   EXPECTED_F11_E2E_TESTS,
   EXPECTED_F12_E2E_TESTS,
   EXPECTED_F13_E2E_TESTS,
+  EXPECTED_F15_E2E_TESTS,
   REQUIRED_F02_E2E_SPECS,
   REQUIRED_F03_E2E_SPECS,
   REQUIRED_F04_E2E_SPECS,
@@ -27,6 +28,7 @@ const {
   REQUIRED_F11_E2E_SPECS,
   REQUIRED_F12_E2E_SPECS,
   REQUIRED_F13_E2E_SPECS,
+  REQUIRED_F15_E2E_SPECS,
   compareF02Inputs,
   snapshotF02Inputs,
   verifyF02Sandbox,
@@ -1164,4 +1166,78 @@ for (const [rotulo, linha] of [
   const result = evaluate(data);
   assert.equal(result.exitCode, 1, rotulo);
   assert.ok(result.errors.some((e) => /^crm fora do contrato/.test(e)), result.errors.join("\n"));
+});
+
+// ─── ADR-037 — verify.sh v1.9: F15 (automação e autonomia) mede `autonomy:` ──
+
+const stateF15 = stateF13.replace("current_phase: F13", "current_phase: F15")
+  .replace("| F13 | CRM comercial | in_progress |", "| F13 | CRM comercial | done(verify=2026-09-14 767d22a6) |\n| F15 | Automação e autonomia | in_progress |");
+const F15_SPEC_COUNTS = [...F13_SPEC_COUNTS, 7];
+const AUTONOMY_OK = "autonomy: policy_modes=4/4 ai_task_created=1/1 limit_hits=1/1 calls_after_limit=0/3 paused=1/1 resumed=1/1 handoffs=4 balanced=1 assignees_distinct=2 rules=4 runs=4/4 replays=4 duplicate_runs=0 outside_catalog_denied=1/1 reindexed=2/2 unchanged_skipped=3/3 sources_cited=2/2 roles_denied=3/3";
+function f15Input() {
+  const data = fasePorTenant("F12", stateF15, REQUIRED_F15_E2E_SPECS, F15_SPEC_COUNTS, EXPECTED_F15_E2E_TESTS);
+  data.metrics.crm = CRM_OK;
+  data.metrics.rbac = RBAC_4;
+  data.metrics.autonomy = AUTONOMY_OK;
+  return data;
+}
+
+test("F15 is gated: inventory of 14 specs (65 tests) per tenant, admin, billing, crm and autonomy measured; in staging it prints READY (staging)", () => {
+  const data = f15Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F15)");
+  const bloco = render(data, result);
+  assert.match(bloco, /e2e_scope: F15-required passed=65\/65 specs=14\/14/);
+  assert.match(bloco, /autonomy: policy_modes=4\/4 ai_task_created=1\/1 limit_hits=1\/1 calls_after_limit=0\/3/);
+  assert.match(bloco, /replicability: e2e\[deka\]=ok e2e\[demo2\]=ok src_diff_lines=0 grep_deka_in_src=0 \(deka=65\/65 demo2=65\/65 specs=14\/14 org_a=seed-replica\)/);
+  const staging = f15Input();
+  staging.sandbox = stagingEvidence();
+  assert.equal(evaluate(staging).status, "READY (staging)");
+});
+
+test("missing autonomy line makes otherwise green F15 fail", () => {
+  const data = f15Input();
+  delete data.metrics.autonomy;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.some((e) => /Métrica obrigatória ausente: autonomy/.test(e)), result.errors.join("\n"));
+});
+
+test("F15 still requires crm (closes after F13) and rbac roles=4", () => {
+  const semCrm = f15Input();
+  delete semCrm.metrics.crm;
+  assert.ok(evaluate(semCrm).errors.some((e) => /Métrica obrigatória ausente: crm/.test(e)));
+  const tres = f15Input();
+  tres.metrics.rbac = "rbac: roles=3 denied_expected=19 denied_actual=19";
+  assert.ok(evaluate(tres).errors.includes("RBAC fora do contrato"));
+});
+
+test("autonomy line stays pending before F15 (F13) and is not required there", () => {
+  const data = f13Input();
+  assert.deepEqual(evaluate(data).errors, []);
+  assert.match(render(data, evaluate(data)), /autonomy: policy_modes=pending/);
+});
+
+for (const [rotulo, linha] of [
+  ["modo de política faltando", AUTONOMY_OK.replace("policy_modes=4/4", "policy_modes=3/4")],
+  ["tarefa da IA não criada", AUTONOMY_OK.replace("ai_task_created=1/1", "ai_task_created=0/1")],
+  ["provedor chamado depois do limite", AUTONOMY_OK.replace("calls_after_limit=0/3", "calls_after_limit=1/3")],
+  ["limite sem tentativas suficientes", AUTONOMY_OK.replace("calls_after_limit=0/3", "calls_after_limit=0/2")],
+  ["pausa não retomada", AUTONOMY_OK.replace("resumed=1/1", "resumed=0/1")],
+  ["rodízio de handoff desequilibrado", AUTONOMY_OK.replace("balanced=1", "balanced=0")],
+  ["um único atribuído", AUTONOMY_OK.replace("assignees_distinct=2", "assignees_distinct=1")],
+  ["regra que não rodou", AUTONOMY_OK.replace("runs=4/4", "runs=3/4")],
+  ["replay duplicou run", AUTONOMY_OK.replace("duplicate_runs=0", "duplicate_runs=1")],
+  ["replay não exercitado", AUTONOMY_OK.replace("replays=4", "replays=3")],
+  ["ação fora do catálogo aceita", AUTONOMY_OK.replace("outside_catalog_denied=1/1", "outside_catalog_denied=0/1")],
+  ["trecho inalterado reembedado", AUTONOMY_OK.replace("unchanged_skipped=3/3", "unchanged_skipped=2/3")],
+  ["resposta sem fonte", AUTONOMY_OK.replace("sources_cited=2/2", "sources_cited=1/2")],
+  ["papel permitido onde nega", AUTONOMY_OK.replace("roles_denied=3/3", "roles_denied=2/3")],
+]) test(`F15 rejects an autonomy line out of contract: ${rotulo}`, () => {
+  const data = f15Input();
+  data.metrics.autonomy = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, rotulo);
+  assert.ok(result.errors.some((e) => /^autonomy fora do contrato/.test(e)), result.errors.join("\n"));
 });

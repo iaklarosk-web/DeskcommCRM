@@ -112,6 +112,17 @@ export const REQUIRED_F13_E2E_SPECS = Object.freeze([
 ]);
 export const EXPECTED_F13_E2E_TESTS = EXPECTED_F12_E2E_TESTS + 7;
 
+/**
+ * F15 (ADR-037): automação e autonomia acrescentam UMA spec (3 jornadas × 2
+ * tenants + 1 do painel do dono = 7 testes) ao inventário de F13; roda por
+ * tenant do seed e mede a linha `autonomy:` pela suíte de integração.
+ */
+export const REQUIRED_F15_E2E_SPECS = Object.freeze([
+  ...REQUIRED_F13_E2E_SPECS,
+  "tests/e2e/f15-automacao-e-autonomia.spec.ts",
+]);
+export const EXPECTED_F15_E2E_TESTS = EXPECTED_F13_E2E_TESTS + 7;
+
 /** Tenants do seed que a F07 percorre, na ordem (§7.8 T02: deka, depois demo2). */
 export const REPLICABILITY_TENANTS = Object.freeze(["deka", "demo2"]);
 
@@ -127,6 +138,7 @@ const CLOSED_E2E_PHASES = Object.freeze({
   F12: { specs: REQUIRED_F12_E2E_SPECS, tests: EXPECTED_F12_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
   F08: { specs: REQUIRED_F08_E2E_SPECS, tests: EXPECTED_F08_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
   F13: { specs: REQUIRED_F13_E2E_SPECS, tests: EXPECTED_F13_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
+  F15: { specs: REQUIRED_F15_E2E_SPECS, tests: EXPECTED_F15_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
 });
 
 /**

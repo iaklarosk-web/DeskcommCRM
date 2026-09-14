@@ -153,7 +153,7 @@ contador do bloco (como `expected_failures` já é), ou o seletor/credencial é
 consertado. Custo: baixo para o B1; o de agenda depende de conta de teste, que
 é item humano.
 
-### B5. `create_task` pela IA é negada pelo domínio
+### B5. `create_task` pela IA é negada pelo domínio — **decisão tomada em D54 (b): abrir a escrita a executor não humano com auditoria própria (F15-T01, ADR-036 §2)**
 `executeLinkedTaskCommand` exige executor humano com sessão, então a tool
 `create_task` de D18 volta `denied: non_human_executor_denied` quando a IA a
 chama. Está declarado em código e em teste, não escondido — mas D18 lista
@@ -297,7 +297,19 @@ caso de spec em `f11-admin-e-entrada`. **Não consertado na F08** (código
 validado pelo gate é `dc39424a`; mudar a rota exigiria novo gate) — entra na
 próxima fase que tocar o painel do dono, por ADR.
 
-### B16. Specs herdadas do modo de EDIÇÃO do suporte ficaram sem produto (F11-T02, D51)
+### B16. Specs herdadas do modo de EDIÇÃO do suporte ficaram sem produto (F11-T02, D51) — **RESOLVIDO na F15-T00 (D54 h, ADR-036 §5)**
+Decisão do proprietário (14/09/2026): reescrever para só-leitura. Feito em
+`tests/e2e/suporte-temporario.spec.ts`: o bloco que afirmava edição em B
+(`access_mode=full`: editar contato, criar/editar/desativar tipo de agenda,
+reconectar canal, salvar configuração) virou o seu negativo — banner "Somente
+leitura" com o nome de B, cada escrita recusada (403 / "Erro: forbidden") e o
+dado conferido intacto no banco; nenhuma asserção apagada, nenhuma `.skip`
+(D30). O trecho de acompanhamento de `agenda-presenca-recuperacao.spec.ts` já
+só lia (radar 200, `leads/at-risk` 403) e não precisou mudar. As duas
+continuam fora do inventário do gate; o `e2e.yml` as roda. O texto abaixo é o
+registro do achado como estava.
+
+
 `tests/e2e/suporte-temporario.spec.ts` e o trecho de acompanhamento de
 `tests/e2e/agenda-presenca-recuperacao.spec.ts` (fora do inventário do gate,
 listadas em `.github/workflows/e2e.yml`) abrem o diálogo de acompanhamento e,
@@ -371,7 +383,7 @@ Descrita em ADR-019. Exige tornar parcial o índice
 provados, entre eles a jornada de fusão de contatos duplicados. Muda o
 comportamento do caminho herdado, não só do SaaS.
 
-### C6. `create_task` pela IA (ver B5)
+### C6. `create_task` pela IA (ver B5) — **RESOLVIDO por D54 (b), construído na F15-T01**
 O catálogo promete e o domínio nega. Ou a escrita do CRM se abre a executor
 não-humano com auditoria própria, ou `create_task` sai do subset da IA e D18 é
 ajustada.

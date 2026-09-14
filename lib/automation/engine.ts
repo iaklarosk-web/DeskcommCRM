@@ -30,6 +30,10 @@ const EXPECTED_ENTITY_KIND: Record<string, string> = {
   "lead.tag_added": "crm_lead",
   "contact.tag_added": "contact",
   "message.received": "message",
+  // F15-T00 (ADR-036): os três gatilhos do SaaS, emitidos por `src/events/emitir.ts`.
+  "conversation.resolved": "conversation",
+  "order.confirmed": "crm_order",
+  "task.overdue": "crm_task",
 };
 
 interface RuleRow {
