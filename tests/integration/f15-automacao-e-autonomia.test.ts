@@ -24,6 +24,7 @@ import { validarAcoesDeRegra } from "@/src/automation/regras";
 import { executeOrderCommand } from "@/src/crm/orders/service";
 import { varrerTarefasVencidas } from "@/src/crm/tarefas/vencidas";
 import { transition } from "@/src/conversation";
+import { embutirDeterministico, reindexarDocumento } from "@/src/knowledge";
 import { claim, filaDeHandoffs } from "@/src/handoff/registro";
 import { criarAdapterMock } from "@/src/channels/mock";
 import { can, type Permissao, type PapelD15 } from "@/src/rbac/matrix";
@@ -80,6 +81,12 @@ const medidas = {
   replays: 0,
   duplicate_runs: 0,
   outside_catalog_denied: 0,
+  reindexed: 0,
+  reindexed_total: 0,
+  unchanged_skipped: 0,
+  unchanged_total: 0,
+  sources_cited: 0,
+  sources_total: 0,
 };
 
 // ─── T02: um tenant próprio para o turno de IA (fixture da F04) ─────────────
@@ -586,6 +593,80 @@ describe("F15-T04 — regras sobre o catálogo: 4 gatilhos × 4 ações, replays
     await pool.query(`delete from public.automation_rules where id=$1`, [legada.rows[0]!.id]);
     medidas.outside_catalog_denied = recusa !== null && daLegada?.status === "failed" ? 1 : 0;
     console.info(`f15-t04-catalogo: outside_catalog_denied=${medidas.outside_catalog_denied}/1 (write=1/1 run=1/1)`);
+  });
+});
+
+describe("F15-T05 — conhecimento: reindexação incremental e proveniência citada", () => {
+  const FONTE_L = TENANT_L.materiais[0]!.fonte;
+  const ORIGINAL = TENANT_L.materiais[0]!.trechos[0]!;
+  // ≈ 690 caracteres: com o trecho original (curto) passa de 700 e vira o SEGUNDO
+  // trecho — `partirEmTrechos` junta parágrafos curtos até o alvo de 700.
+  const NOVO = `${Array.from({ length: 8 }, (_, i) => `a retirada na loja e possivel de segunda a sexta das nove as dezoito (nota ${i})`).join(" ")} horario sujeito a alteracao em feriados e vesperas`;
+  function embutidorQueConta() {
+    const estado = { chamadas: 0 };
+    // O mesmo embutidor determinístico do turno (mock, D12), só contado: os
+    // vetores têm de continuar comparáveis com a pergunta do cliente.
+    const embutir = (texto: string) => {
+      estado.chamadas += 1;
+      return embutirDeterministico(texto);
+    };
+    return { embutir, estado };
+  }
+
+  it("trecho inalterado não é reembedado; só o novo/alterado chama o embutidor (reindexed=N/N unchanged_skipped=M/M)", async () => {
+    // Arrange — o material da fixture tem 1 trecho embutido na versão 1.
+    const chunksAntes = await conta(`select count(*)::text as n from public.ai_chunks where organization_id=$1 and knowledge_source_id=$2`, [ORG_L, FONTE_L]);
+    // Act 1 — acrescenta um parágrafo: 1 igual + 1 novo.
+    const um = embutidorQueConta();
+    const r1 = await reindexarDocumento(ctxL, FONTE_L, { conteudo: `${ORIGINAL}\n\n${NOVO}` }, { pool, embutir: um.embutir });
+    // Act 2 — o mesmo texto de novo: nada a embutir.
+    const dois = embutidorQueConta();
+    const r2 = await reindexarDocumento(ctxL, FONTE_L, { conteudo: `${ORIGINAL}\n\n${NOVO}` }, { pool, embutir: dois.embutir });
+    // Act 3 — altera o primeiro parágrafo: 1 alterado + 1 igual.
+    const tres = embutidorQueConta();
+    const r3 = await reindexarDocumento(ctxL, FONTE_L, { conteudo: `${ORIGINAL} — atualizado\n\n${NOVO}` }, { pool, embutir: tres.embutir });
+    const ativa = await pool.query<{ active_kb_version_id: string; chunks_count: number }>(`select active_kb_version_id, chunks_count from public.ai_knowledge_sources where id=$1`, [FONTE_L]);
+    const chunksDaAtiva = await conta(`select count(*)::text as n from public.ai_chunks where organization_id=$1 and kb_version_id=$2`, [ORG_L, ativa.rows[0]!.active_kb_version_id]);
+    const chunksTotal = await conta(`select count(*)::text as n from public.ai_chunks where organization_id=$1 and knowledge_source_id=$2`, [ORG_L, FONTE_L]);
+    const versoesAtivas = await conta(`select count(*)::text as n from public.ai_knowledge_versions where organization_id=$1 and knowledge_source_id=$2 and is_active`, [ORG_L, FONTE_L]);
+    // Assert — chamadas ao embutidor = trechos reindexados, sempre.
+    expect(chunksAntes).toBe(1);
+    expect(r1).toMatchObject({ version_number: 2, trechos: 2, reindexed: 1, unchanged_skipped: 1 });
+    expect(um.estado.chamadas).toBe(1);
+    expect(r2).toMatchObject({ version_number: 3, trechos: 2, reindexed: 0, unchanged_skipped: 2 });
+    expect(dois.estado.chamadas).toBe(0);
+    expect(r3).toMatchObject({ version_number: 4, trechos: 2, reindexed: 1, unchanged_skipped: 1 });
+    expect(tres.estado.chamadas).toBe(1);
+    expect(ativa.rows[0]!.active_kb_version_id).toBe(r3.version_id);
+    expect(Number(ativa.rows[0]!.chunks_count)).toBe(2);
+    expect(chunksDaAtiva).toBe(2);
+    expect(chunksTotal).toBe(2);
+    expect(versoesAtivas).toBe(1);
+    medidas.reindexed = r1.reindexed + r2.reindexed + r3.reindexed;
+    medidas.reindexed_total = um.estado.chamadas + dois.estado.chamadas + tres.estado.chamadas;
+    medidas.unchanged_skipped = r1.unchanged_skipped + r2.unchanged_skipped + r3.unchanged_skipped;
+    medidas.unchanged_total = r1.trechos + r2.trechos + r3.trechos - medidas.reindexed;
+    console.info(`f15-t05-reindex: reindexed=${medidas.reindexed}/${medidas.reindexed_total} unchanged_skipped=${medidas.unchanged_skipped}/${medidas.unchanged_total} active_versions=1/1 chunks_active=2/2 chunks_total=2/2`);
+  });
+
+  it("a resposta que usou o acervo cita a fonte no resultado e na mensagem enviada (sources_cited=S/S)", async () => {
+    // Arrange — a conversa 4 respondeu na T02 e ficou em `waiting_customer`; a
+    // mensagem nova do cliente a devolve à IA (é o que o inbound faz, D16).
+    await pool.query(`update public.conversations set saas_state='ai_handling', status='ai_handling' where id=$1`, [conversaL(4)]);
+    const { registry } = registroQueResponde();
+    // Act
+    const t = await responderTurno(ctxL, { conversation_id: conversaL(4), mensagem_do_cliente: "qual o prazo de entrega para Campinas?" }, depsDoTurno(registry));
+    const mensagem = await pool.query<{ metadata: Record<string, unknown> }>(
+      `select metadata from public.messages where organization_id=$1 and conversation_id=$2 and direction='outbound' order by created_at desc limit 1`,
+      [ORG_L, conversaL(4)],
+    );
+    // Assert
+    expect(t.status).toBe("respondido");
+    expect(t.fontes_citadas).toEqual(["Entregas e prazos"]);
+    expect(mensagem.rows[0]?.metadata["ai_sources"]).toEqual(["Entregas e prazos"]);
+    medidas.sources_cited = t.fontes_citadas.length > 0 ? 1 : 0;
+    medidas.sources_total = 1;
+    console.info(`f15-t05-proveniencia: sources_cited=${medidas.sources_cited}/${medidas.sources_total} sources=${t.fontes_citadas.join(",")}`);
   });
 });
 

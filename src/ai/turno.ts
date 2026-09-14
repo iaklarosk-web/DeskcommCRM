@@ -69,7 +69,7 @@ import { resumoDeterministico } from "@/src/handoff/motivos";
 import type { Embutidor } from "@/src/knowledge";
 import { incrementCounter } from "@/src/obs/counters";
 import { concluirLembrete, type DesfechoDoLembrete } from "@/src/reminder/resposta";
-import type { TenantCtx } from "@/src/tenant-context";
+import { withTenant, type TenantCtx, type TenantDb } from "@/src/tenant-context";
 import type { LlmEdgeConfig } from "@/lib/agent-engine/edge/llm/run-model-call";
 import type { ProviderRegistry } from "@/lib/agent-engine/edge/llm/providers";
 import type { Logger } from "@/lib/agent-engine/obs/logger";
@@ -122,6 +122,13 @@ export interface ResultadoDoTurno {
   /** §5.9: "tool_call fora da lista é descartado e contado". */
   readonly tools_descartadas: readonly string[];
   readonly mensagens_enviadas: number;
+  /**
+   * F15-T05 (ADR-036): os NOMES dos materiais do acervo que entraram no
+   * contexto da resposta enviada — a proveniência, gravada também em
+   * `messages.metadata.ai_sources` da mensagem de saída. Vazio quando o turno
+   * não respondeu ou respondeu sem acervo.
+   */
+  readonly fontes_citadas: readonly string[];
 }
 
 export interface PedidoDoTurno {
@@ -157,6 +164,21 @@ interface EstadoDoTurno {
   tools: ToolExecutada[];
   descartadas: string[];
   enviadas: number;
+  /** F15-T05: fontes citadas na resposta enviada (nomes distintos, na ordem do acervo). */
+  fontes: string[];
+}
+
+/** F15-T05: os materiais distintos do acervo que entraram no contexto, na ordem. */
+function fontesDoContexto(contexto: ContextoDoTurno): string[] {
+  const vistos = new Set<string>();
+  const nomes: string[] = [];
+  for (const t of contexto.acervo.trechos) {
+    const nome = t.source_name ?? "";
+    if (nome.length === 0 || vistos.has(nome)) continue;
+    vistos.add(nome);
+    nomes.push(nome);
+  }
+  return nomes;
 }
 
 function depsDeAcao(deps: DepsDoTurno): ExecuteDeps {
@@ -214,6 +236,7 @@ async function pedirHandoff(
     tools_executadas: estado.tools,
     tools_descartadas: estado.descartadas,
     mensagens_enviadas: estado.enviadas,
+    fontes_citadas: estado.fontes,
   };
 }
 
@@ -232,6 +255,7 @@ async function responderAoCliente(
   texto: string,
   estado: EstadoDoTurno,
   deps: DepsDoTurno,
+  fontes: readonly string[] = [],
 ): Promise<void> {
   const envio = await execute(
     ctx,
@@ -247,6 +271,23 @@ async function responderAoCliente(
   });
   if (envio.status !== "executed") return;
   estado.enviadas += 1;
+
+  // F15-T05 (ADR-036): a proveniência fica NA mensagem — quem abre a conversa
+  // vê de onde a IA tirou o que disse. Só nomes de material; nunca o trecho.
+  const messageId = envio.output?.["message_id"];
+  if (fontes.length > 0 && typeof messageId === "string") {
+    estado.fontes = [...fontes];
+    await withTenant(
+      ctx,
+      (db: TenantDb) =>
+        db.query(
+          `update public.messages set metadata = coalesce(metadata, '{}'::jsonb) || jsonb_build_object('ai_sources', $3::jsonb)
+            where id = $1 and organization_id = $2`,
+          [messageId, ctx.organization_id, JSON.stringify(fontes)],
+        ),
+      { pool: deps.pool },
+    );
+  }
 
   try {
     await transition(ctx, pedido.conversation_id, "ai.reply_sent", { kind: "ai" }, {
@@ -287,6 +328,7 @@ function silenciar(
     tools_executadas: [],
     tools_descartadas: [],
     mensagens_enviadas: 0,
+    fontes_citadas: [],
   };
 }
 
@@ -305,6 +347,7 @@ export async function responderTurno(
     tools: [],
     descartadas: [],
     enviadas: 0,
+    fontes: [],
   };
 
   // 0. SILÊNCIO — antes de ler contexto, antes de gastar um token.
@@ -499,6 +542,7 @@ async function decidir(
       tools_executadas: estado.tools,
       tools_descartadas: estado.descartadas,
       mensagens_enviadas: estado.enviadas,
+      fontes_citadas: estado.fontes,
     };
   }
 
@@ -573,7 +617,7 @@ async function decidir(
   //    `send_message` pedido pelo modelo são o mesmo texto pedido duas vezes.
   const reply = saida.reply.trim();
   if (reply.length > 0 && !enviouPelaTool) {
-    await responderAoCliente(ctx, pedido, reply, estado, deps);
+    await responderAoCliente(ctx, pedido, reply, estado, deps, fontesDoContexto(contexto));
   }
 
   return {
@@ -585,5 +629,6 @@ async function decidir(
     tools_executadas: estado.tools,
     tools_descartadas: estado.descartadas,
     mensagens_enviadas: estado.enviadas,
+    fontes_citadas: estado.fontes,
   };
 }

@@ -36,3 +36,5 @@ export {
   MODELO_DE_EMBEDDING,
   type Embutidor,
 } from "./embedding";
+// F15-T05 (ADR-036 §2 T05): reindexação incremental de um material existente.
+export { MaterialNaoEncontrado, reindexarDocumento, type ResultadoDaReindexacao } from "./reindexacao";
