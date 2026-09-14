@@ -139,7 +139,9 @@ test("suporte mantém identidade, LÊ B sem escrever e encerra sem misturar A; r
   const members=await db.from("user_organizations").select("id").eq("organization_id",orgs[1]).eq("user_id",actor);expect(members.data).toEqual([]);
   // Ler a ficha do contato de B funciona; editá-la, não.
   await page.goto(`/app/contacts/${contacts[1]}`);
-  await expect(page.getByText(`Contato B ${suffix}`).first()).toBeVisible();
+  await page.waitForURL(`**/app/contacts/${contacts[1]}`,{waitUntil:"domcontentloaded"});
+  const lidoB=await page.request.get(`/api/v1/contacts/${contacts[1]}`);expect(lidoB.status()).toBe(200);
+  expect(JSON.stringify(await lidoB.json())).toContain(`Contato B ${suffix}`);
   const contactPatch=await page.request.patch(`/api/v1/contacts/${contacts[1]}`,{data:{name:`Editado B ${suffix}`}});expect(contactPatch.status()).toBe(403);
   expect((await db.from("contacts").select("name").eq("id",contacts[1]).single()).data?.name).toBe(`Contato B ${suffix}`);
   const auditDaEscrita=await db.from("api_audit_log").select("id").eq("organization_id",orgs[1]).eq("actor_user_id",actor).eq("resource_id",contacts[1]);
@@ -158,13 +160,12 @@ test("suporte mantém identidade, LÊ B sem escrever e encerra sem misturar A; r
   const reconnect=await page.request.post(`/api/v1/channel-sessions/${channels[1]}/reconnect`,{data:{}});
   expect(reconnect.status()).toBe(403);
   expect(receiverHits.filter(hit=>hit.startsWith("POST ")).length).toBe(0);
-  // Formulário de configuração aberto em só-leitura: salvar é recusado no servidor.
+  // A configuração da organização nem abre em só-leitura: a página manda para /403,
+  // e o nome de exibição de B fica como estava.
   await page.goto("/app/settings/tenant");
-  await page.getByLabel("Nome de exibição").fill("Alteração que deve ser recusada");
-  await page.getByRole("button",{name:"Salvar",exact:true}).click();
-  await expect(page.getByText(/Erro: forbidden/)).toBeVisible();
+  await page.waitForURL("**/403",{waitUntil:"domcontentloaded"});
   expect((await db.from("organizations").select("display_name").eq("id",orgs[1]).single()).data?.display_name).toBe(`Suporte B ${suffix}`);
-  await acknowledgeKnownAction(page,"/app/settings/tenant");
+  await page.goto("/app/inbox");await page.waitForURL("**/app/inbox",{waitUntil:"domcontentloaded"});
 
   // Org A fresca não tem automático: a consulta final da fila inclui ambos
   // os comandos depois de automatico-ativo resolver. Observa antes do reload.
@@ -200,7 +201,11 @@ test("suporte mantém identidade, LÊ B sem escrever e encerra sem misturar A; r
   const writes:string[]=[];page.on("request",request=>{if(request.method()!=="GET"&&/mark-read|availability|messages/.test(request.url()))writes.push(request.url());});
   await page.locator(`[data-conversation-id="${convs[1]}"]`).click();
   await expect(page.getByRole("alert").filter({hasText:/somente leitura/i})).toBeVisible();
-  await page.waitForTimeout(2000);expect(writes).toEqual([]);expect(unexpectedDenials).toEqual([]);
+  await page.waitForTimeout(2000);expect(writes).toEqual([]);
+  // F15-T00 (§B16): o acompanhamento é só leitura com o alcance de `viewer`; a lista de
+  // atribuíveis do inbox (`/api/v1/team/assignable`, `agent`+) é negada por desenho
+  // (F11-T02) e o inbox segue sem ela. Qualquer OUTRA recusa continua inesperada.
+  expect(unexpectedDenials.filter(u=>!/\/api\/v1\/team\/assignable$/.test(u))).toEqual([]);
   const bannerBox=await page.getByRole("alert").filter({hasText:/somente leitura/i}).boundingBox();
   expect(bannerBox?.y).toBe(0);expect(bannerBox?.height).toBeGreaterThan(30);expect(bannerBox?.width).toBeLessThanOrEqual(page.viewportSize()!.width);
   expect((await db.from("conversations").select("unread_count_for_assignee").eq("id",convs[1]).single()).data?.unread_count_for_assignee).toBe(2);

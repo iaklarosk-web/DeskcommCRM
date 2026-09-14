@@ -30,6 +30,7 @@ import { criarAdapterMock } from "@/src/channels/mock";
 import { can, type Permissao, type PapelD15 } from "@/src/rbac/matrix";
 import { setSetting } from "@/src/tenant-config/settings";
 import type { TenantCtx } from "@/src/tenant-context";
+import { gravarLinhaDoVerify } from "@/tests/lib/verify-metrics";
 import { ROLE_RANK } from "@/lib/auth/types";
 
 import { CFG_LLM, semearTenant, type ConfigDeTenant } from "./f04-turno-fixtures";
@@ -688,5 +689,29 @@ describe("F15-T01 — papéis: as rotas novas negam o attendant e o dono da plat
     medidas.roles_denied = negou.filter(Boolean).length;
     medidas.roles_denied_total = negadas.length;
     console.info(`f15-t01-papeis: roles_denied=${medidas.roles_denied}/${medidas.roles_denied_total} manager_allowed=1/1`);
+  });
+});
+
+describe("F15 — a linha `autonomy:` do VERIFY SUMMARY (ADR-037 §2)", () => {
+  it("grava a linha com todos os campos medidos e denominadores", () => {
+    // Arrange — tudo medido pelos casos acima (a ordem do arquivo é a ordem de execução).
+    const linha =
+      `autonomy: policy_modes=${medidas.policy_modes}/4 ai_task_created=${medidas.ai_task_created}/1 ` +
+      `limit_hits=${medidas.limit_hits}/1 calls_after_limit=${medidas.calls_after_limit}/${medidas.calls_after_limit_total} ` +
+      `paused=${medidas.paused}/1 resumed=${medidas.resumed}/1 ` +
+      `handoffs=${medidas.handoffs} balanced=${medidas.balanced} assignees_distinct=${medidas.assignees_distinct} ` +
+      `rules=${medidas.rules} runs=${medidas.runs}/${medidas.rules} replays=${medidas.replays} duplicate_runs=${medidas.duplicate_runs} ` +
+      `outside_catalog_denied=${medidas.outside_catalog_denied}/1 ` +
+      `reindexed=${medidas.reindexed}/${medidas.reindexed_total} unchanged_skipped=${medidas.unchanged_skipped}/${medidas.unchanged_total} ` +
+      `sources_cited=${medidas.sources_cited}/${medidas.sources_total} roles_denied=${medidas.roles_denied}/${medidas.roles_denied_total}`;
+    // Assert — nenhum campo pela metade (regra 7 da RETOMADA); o contrato de ADR-037 é o do report.mjs.
+    expect(linha).not.toMatch(/=0\/0|=\/|undefined|NaN/);
+    expect(medidas).toMatchObject({ policy_modes: 4, ai_task_created: 1, limit_hits: 1, calls_after_limit: 0, paused: 1, resumed: 1, balanced: 1, outside_catalog_denied: 1, duplicate_runs: 0 });
+    expect(medidas.handoffs).toBeGreaterThanOrEqual(3);
+    expect(medidas.assignees_distinct).toBeGreaterThanOrEqual(2);
+    expect(medidas.runs).toBe(medidas.rules);
+    expect(medidas.replays).toBeGreaterThanOrEqual(medidas.rules);
+    console.info(linha);
+    gravarLinhaDoVerify("autonomy", linha);
   });
 });

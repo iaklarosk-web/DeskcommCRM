@@ -306,8 +306,18 @@ leitura" com o nome de B, cada escrita recusada (403 / "Erro: forbidden") e o
 dado conferido intacto no banco; nenhuma asserção apagada, nenhuma `.skip`
 (D30). O trecho de acompanhamento de `agenda-presenca-recuperacao.spec.ts` já
 só lia (radar 200, `leads/at-risk` 403) e não precisou mudar. As duas
-continuam fora do inventário do gate; o `e2e.yml` as roda. O texto abaixo é o
-registro do achado como estava.
+continuam fora do inventário do gate; o `e2e.yml` as roda. **Medido contra o
+staging (14/09, app do gate em 3202)**: a spec reescrita passa por todo o bloco
+de só-leitura (banner, contato 403, tipos de agenda 403, reconexão 403, página
+de configuração → /403) e para na linha 212, "Assinatura B não confirmada" —
+a asserção herdada de REALTIME (websocket do inbox), a mesma que tira
+`inbox-tempo-real.spec.ts` do CI (`e2e.yml`, nota de 2026-08-26). Não é da
+reescrita; fica registrado, sem afrouxar. Três ajustes de bancada entraram na
+reescrita: a leitura de B pela rota (`GET /api/v1/contacts/{id}` 200) em vez
+de texto do DOM, a página de configuração é /403 em só-leitura (não "salvar
+recusado"), e a recusa de `/api/v1/team/assignable` (`agent`+) é por desenho
+para o viewer do acompanhamento. O texto abaixo é o registro do achado como
+estava.
 
 
 `tests/e2e/suporte-temporario.spec.ts` e o trecho de acompanhamento de
