@@ -1,3 +1,5 @@
+import { requireSupportWrite } from "@/lib/impersonate/support";
+import { getRequestId } from "@/lib/api/request-id";
 /**
  * GET    /api/v1/contacts/[id] — fetch single (handler em ../_handler.ts)
  * PATCH  /api/v1/contacts/[id] — update (handler em ../_handler.ts)
@@ -5,7 +7,6 @@
  *
  * Thin wrapper: auth + Zod + ok/fail. Decrypt CPF + LGPD irreversibility no handler.
  */
-import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 
 import { ApiError } from "@/lib/api/types";
@@ -24,7 +25,7 @@ export async function GET(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const requestId = randomUUID();
+  const requestId = getRequestId(req);
   const { id } = await ctx.params;
 
   const supabase = await createClient();
@@ -69,7 +70,10 @@ export async function PATCH(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const requestId = randomUUID();
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
+
+  const requestId = getRequestId(req);
   const { id } = await ctx.params;
 
   const supabase = await createClient();
@@ -117,7 +121,10 @@ export async function DELETE(
   _req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const requestId = randomUUID();
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
+
+  const requestId = getRequestId(_req);
   const { id } = await ctx.params;
 
   const authz = await requireRole("agent", { requestId, resource: "contacts" });

@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { audit } from "@/lib/audit";
+import { provisionarAssinatura } from "@/lib/auth/assinatura-provisionada";
 
 /** Normaliza o nome da empresa para um slug candidato (citext unique no DB). */
 function slugify(name: string): string {
@@ -95,6 +96,31 @@ export async function ensureTenantForUser(
   });
   if (memberError && memberError.code !== "23505") {
     throw new Error(`signup provisioning: membership insert failed: ${memberError.message}`);
+  }
+
+  // F11-T04 (D38, ADR-030 §3): a organização do cadastro nasce ESPERANDO
+  // pagamento — `pending_payment`, origem `self_service`, no plano default
+  // declarado. É o que faz "/app" cair em "/app/billing" até o webhook do
+  // gateway confirmar. Se a assinatura não puder ser gravada, a organização
+  // não sobrevive ao fluxo (compensação): organização sem assinatura seria
+  // exatamente o "acesso operacional gratuito por falha no fluxo" que §7.9
+  // proíbe — e a falha é relançada, nunca engolida.
+  try {
+    await provisionarAssinatura(org.id, { origin: "self_service", status: "pending_payment" });
+  } catch (erro) {
+    await admin.from("organizations").delete().eq("id", org.id);
+    void audit({
+      action: "tenant.created_by_signup",
+      actorUserId: user.id,
+      organizationId: org.id,
+      resourceType: "organization",
+      resourceId: org.id,
+      bypassedRls: true,
+      metadata: { slug: org.slug, outcome: "rolled_back", reason: "subscription_insert_failed" },
+    });
+    throw new Error(
+      `signup provisioning: subscription insert failed, organization removed: ${erro instanceof Error ? erro.message : String(erro)}`,
+    );
   }
 
   void audit({

@@ -1,3 +1,4 @@
+import { supportCallbackWriteAllowed } from "@/lib/impersonate/support";
 /**
  * GET /api/v1/integrations/nuvemshop/callback
  *
@@ -17,6 +18,7 @@ import { getConfig, SUBSCRIBED_EVENTS, eventToSlug } from "@/lib/nuvemshop/confi
 import { exchangeCodeForToken } from "@/lib/nuvemshop/oauth";
 import { NuvemshopApiClient } from "@/lib/nuvemshop/api-client";
 import { verifyState } from "@/lib/nuvemshop/state";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 
 export const dynamic = "force-dynamic";
 
@@ -37,12 +39,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   const state = verifyState(stateParam);
   if (!state) {
+    registrarRequisicaoDe(req, { outcome: "rejected", scope: "unresolved", status: 302 }); // F06-T01
     await audit({
       action: "nuvemshop.oauth_failed",
       metadata: { reason: "invalid_state" },
     });
     return redirectTo(`/app/integrations/nuvemshop?error=invalid_state`);
   }
+  registrarRequisicaoDe(req, { outcome: "accepted", organization_id: state.orgId, actor_id: state.userId }); // F06-T01
 
   if (!code) {
     await audit({
@@ -52,6 +56,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     });
     return redirectTo(`/app/integrations/nuvemshop?error=missing_code`);
   }
+
+  if (!(await supportCallbackWriteAllowed(state.orgId, state.userId, state.authSessionId))) return redirectTo("/app/integrations/nuvemshop?error=invalid_state");
 
   // Exchange code for access token.
   const tokenRes = await exchangeCodeForToken(code, cfg);
@@ -100,7 +106,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const scopes = scope ? scope.split(/[\s,]+/).filter(Boolean) : [];
 
   // Upsert tenant_integrations row.
-  const { error: upsertErr } = await admin
+  const { data: integration, error: upsertErr } = await admin
     .from("tenant_integrations")
     .upsert(
       {
@@ -116,7 +122,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         last_sync_at: new Date().toISOString(),
       },
       { onConflict: "organization_id,provider" },
-    );
+    ).select("id").single();
 
   if (upsertErr) {
     await audit({
@@ -149,10 +155,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     .eq("provider", "nuvemshop");
 
   await audit({
+    actorUserId: state.userId,
+    actorAuthSessionId: state.authSessionId,
     action: "nuvemshop.connected",
     organizationId: state.orgId,
     resourceType: "tenant_integration",
-    resourceId: storeId,
+    resourceId: integration?.id,
     requestId: randomUUID(),
     metadata: {
       store_id: storeId,

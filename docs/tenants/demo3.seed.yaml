@@ -1,0 +1,28 @@
+# demo3.seed.yaml — tenant EFÊMERO da F07-T03 (§7.8, D36, ADR-029 §4).
+#
+# Terceiro segmento FICTÍCIO (padaria de bairro), criado ao pé da letra de
+# "como criar um tenant novo" (§8.7 §6) no staging, coberto por smoke e
+# navegador, e REMOVIDO ao fim (`tenants=2`). Nenhuma pessoa, número ou empresa
+# real: telefones +55 00 0000-0xxx são o prefixo fictício dos seeds da casa.
+tenant: {slug: demo3, name: "Demo Padaria"}
+users:
+  - {email: admin@demo3.test, name: "Carla", role: tenant_admin}
+  - {email: atende@demo3.test, name: "Dario", role: attendant}
+channel_accounts:
+  - {provider: mock, account_ref: demo3-mock, test_number: "+5500000000003"}
+products:
+  - {sku: PAO-01, name: "Pão francês", unit: "g", price_cents: 90, active: true}
+  - {sku: BOLO-01, name: "Bolo de fubá", unit: "un", price_cents: 2800, active: true}
+customers:
+  - {name: "Café da Esquina", phone: "+5500000000103", company: "Esquina Cafés ME", recurring: true, recurring_weekday: 1, notes: "retira às 7h"}
+settings:
+  branding: {name: "Demo Padaria", logo_url: "", primary_color: "#8B4513"}
+  business: {timezone: America/Sao_Paulo, phone: "+5500000000003", address: "Rua Demo, 3", hours: "06-19", delivery_days: [1,2,3,4,5,6], delivery_regions: ["bairro"], cancellation_policy: "até 12h antes"}
+  orders.recurring_reminder: {enabled: true, weekday: 5, hour: 16, cutoff_hours: 14, period: weekly, message_template: "Olá {{customer.name}}, confirma a encomenda desta semana?"}
+  ai: {enabled: true, system_prompt: "Você atende a Demo Padaria...", unknown_answer: "Não tenho essa informação; vou chamar alguém da equipe.", confidence_threshold: 0.6}
+faq:
+  - {q: "Vocês abrem domingo?", a: "Sim, das 6h às 12h."}
+  - {q: "Fazem bolo por encomenda?", a: "Sim, com 48h de antecedência."}
+  - {q: "Vocês entregam?", a: "Só no bairro, com pedido mínimo de R$ 30,00."}
+  - {q: "Aceitam cartão?", a: "Cartão, Pix e dinheiro."}
+  - {q: "Têm opção sem glúten?", a: "Sim, o pão de queijo e o bolo de fubá são sem glúten."}

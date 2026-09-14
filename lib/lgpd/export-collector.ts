@@ -8,6 +8,22 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/logger";
+import type { Json } from "@/lib/database.types";
+import {
+  collectOperationalOrderExport,
+  type OperationalOrderCheckRow,
+  type OperationalOrderEventRow,
+  type OperationalOrderRow,
+  type OperationalOrderSavedSnapshot,
+} from "@/src/crm/orders/export";
+import {
+  collectCrmWorkExport,
+  type CrmNoteExportRow,
+  type LinkedTaskEventExportRow,
+  type LinkedTaskExportRow,
+} from "@/src/crm/work/export";
+import type { TenantCtx } from "@/src/tenant-context";
+import type { ServicePool } from "@/src/tenant-context/db";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -110,6 +126,11 @@ export interface AppointmentRow {
   ends_at: string;
   time_zone: string;
   status: string;
+  google_base_projection?: Json | null;
+  google_conflict?: Json | null;
+  google_pending_write?: Json | null;
+  meeting_url?: string | null;
+  meeting_state?: string;
 }
 
 /**
@@ -171,6 +192,26 @@ export interface AuditRow {
   created_at: string;
 }
 
+/** Entrega do link: estado e referência ao compromisso, sem autorização/claim. */
+export interface MeetingDeliveryRow {
+  id: string;
+  status: string;
+  created_at: string;
+  run_after: string;
+  appointment_id: string | null;
+}
+
+/** Aviso sobre um compromisso comprovadamente ligado ao titular. */
+export interface AppointmentNoticeRow {
+  id: string;
+  ref_id: string | null;
+  title: string;
+  body: string | null;
+  status: string;
+  created_at: string;
+  resolved_at: string | null;
+}
+
 export interface ExportPayload {
   request_id: string;
   organization_id: string;
@@ -193,11 +234,35 @@ export interface ExportPayload {
   messages_recent: MessageRow[];
   leads: LeadRow[];
   orders: OrderRow[];
+  /** Sempre preenchido pelo coletor real; opcional só preserva fixtures anteriores. */
+  operational_orders?: OperationalOrderRow[];
+  operational_order_events?: OperationalOrderEventRow[];
+  operational_order_saved_snapshots?: OperationalOrderSavedSnapshot[];
+  /** Journal quantitativo sem texto, chave ou hash privado de idempotência. */
+  operational_order_checks?: OperationalOrderCheckRow[];
+  /** Notas humanas sobre o titular; fatal se a coleta transacional falhar. */
+  crm_notes?: CrmNoteExportRow[];
+  /** Tarefas de pedido; tarefas legadas permanecem no campo `tasks`. */
+  linked_tasks?: LinkedTaskExportRow[];
+  /** Journal sem texto livre: vínculos, estados, revisão, ator e horário. */
+  linked_task_events?: LinkedTaskEventExportRow[];
   activities: ActivityRow[];
   appointments: AppointmentRow[];
   tasks: TaskRow[];
   webhook_captures: CaptureRow[];
   audit_log_extract: AuditRow[];
+  meeting_deliveries: MeetingDeliveryRow[];
+  appointment_notices: AppointmentNoticeRow[];
+  reply_drafts?: Array<{
+    id: string;
+    status: string;
+    original_body: string | null;
+    edited_body: string | null;
+    approved_body: string | null;
+    proposals: unknown;
+    feedback: unknown;
+    created_at: string;
+  }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -209,6 +274,7 @@ interface CollectArgs {
   requestId: string;
   contactId: string | null;
   externalCustomerId: string | null;
+  tenantCtx?: TenantCtx;
 }
 
 const RECENT_MESSAGES_LIMIT = 100;
@@ -252,7 +318,10 @@ async function lerControlador(
   };
 }
 
-export async function collectExportData(args: CollectArgs): Promise<ExportPayload> {
+export async function collectExportData(
+  args: CollectArgs,
+  dependencies: { pool?: ServicePool } = {},
+): Promise<ExportPayload> {
   const admin = createAdminClient();
   const { organizationId, requestId, externalCustomerId } = args;
   // ANTES do primeiro `return`: o caminho "nenhum dado localizado" também gera
@@ -392,9 +461,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
 
     const { data, error } = await admin
       .from("messages")
-      .select(
-        "id, conversation_id, direction, type, status, body, media_url, sent_at, created_at",
-      )
+      .select("id, conversation_id, direction, type, status, body, media_url, sent_at, created_at")
       .eq("organization_id", organizationId)
       .eq("contact_id", contactId)
       .order("created_at", { ascending: false })
@@ -424,9 +491,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
   if (contactId) {
     const { data, error } = await admin
       .from("crm_leads")
-      .select(
-        "id, pipeline_id, stage_id, title, status, value_cents, currency, created_at",
-      )
+      .select("id, pipeline_id, stage_id, title, status, value_cents, currency, created_at")
       .eq("organization_id", organizationId)
       .eq("contact_id", contactId)
       .order("created_at", { ascending: false })
@@ -477,6 +542,24 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
   }
 
   // Activities — direct contact_id on crm_lead_activities.
+  // Operational orders are independent from legacy ecommerce `orders`. Failure is fatal:
+  // a successful export missing this block would falsely claim completeness.
+  const operational = contactId
+    ? await collectOperationalOrderExport(
+        args.tenantCtx ?? { organization_id: organizationId, source: "job" },
+        contactId,
+        dependencies,
+      )
+    : { orders: [], events: [], saved_snapshots: [], checks: [] };
+  // Uma única fotografia para notas, tarefas vinculadas e seu journal. A falha
+  // é fatal: sucesso sem estes blocos declararia falsamente um export completo.
+  const crmWork = contactId
+    ? await collectCrmWorkExport(
+        args.tenantCtx ?? { organization_id: organizationId, source: "job" },
+        contactId,
+        dependencies,
+      )
+    : { notes: [], linked_tasks: [], task_events: [] };
   let activities: ActivityRow[] = [];
   if (contactId) {
     const { data, error } = await admin
@@ -509,7 +592,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     const { data, error } = await admin
       .from("calendar_appointments")
       .select(
-        "id, title, description, notes, location_details, cancellation_reason, starts_at, ends_at, time_zone, status",
+        "id, title, description, notes, location_details, cancellation_reason, starts_at, ends_at, time_zone, status, google_base_projection, google_conflict, google_pending_write, meeting_url, meeting_state",
       )
       .eq("organization_id", organizationId)
       .eq("contact_id", contactId)
@@ -525,7 +608,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     }
   }
 
-  // Tarefas — contact_id direto em crm_tasks (migration 0210).
+  // Tarefas legadas — as vinculadas a pedido saem no snapshot crmWork acima.
   //
   // O texto que a equipe escreveu sobre o titular ("ligar para Fulano confirmar
   // o orçamento") é dado dele. Se a anonimização o apaga — e ela apaga —, o
@@ -537,6 +620,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
       .select("id, title, description, due_date, status, priority")
       .eq("organization_id", organizationId)
       .eq("contact_id", contactId)
+      .is("order_id", null)
       .order("due_date", { ascending: false })
       .limit(500);
     if (error) {
@@ -597,6 +681,109 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     }
   }
 
+  // A 0226/0229 redige estes registros. Só o FK de contato e os compromissos
+  // comprovados abaixo dão escopo: nunca o conteúdo livre de um aviso ou a
+  // autorização privada do job. Paginar os IDs evita perder avisos de consultas
+  // antigas além do recorte de appointments mostrado no relatório.
+  const reply_drafts: NonNullable<ExportPayload["reply_drafts"]> = [];
+  if (contactId) {
+    for (let offset = 0; ; offset += 500) {
+      const { data, error } = await admin
+        .from("ai_reply_drafts")
+        .select("id,status,original_body,edited_body,approved_body,proposals,feedback,created_at")
+        .eq("organization_id", organizationId)
+        .eq("contact_id", contactId)
+        .order("id")
+        .range(offset, offset + 499);
+      if (error) throw error;
+      reply_drafts.push(...(data ?? []));
+      if (!data || data.length < 500) break;
+    }
+  }
+  const meeting_deliveries: MeetingDeliveryRow[] = [];
+  const appointment_notices: AppointmentNoticeRow[] = [];
+  if (contactId) {
+    const appointmentIds = new Set<string>();
+    const pageSize = 500;
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await admin
+        .from("calendar_appointments")
+        .select("id")
+        .eq("organization_id", organizationId)
+        .eq("contact_id", contactId)
+        .order("id")
+        .range(offset, offset + pageSize - 1);
+      if (error) {
+        logger.warn("[lgpd-export-worker] meeting references load failed", {
+          request_id: requestId,
+        });
+        break;
+      }
+      for (const appointment of data ?? []) appointmentIds.add(appointment.id);
+      if (!data || data.length < pageSize) break;
+    }
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await admin
+        .from("job_queue")
+        .select("id,status,created_at,run_after,appointment_id:payload->>appointment_id")
+        .eq("organization_id", organizationId)
+        .eq("contact_id", contactId)
+        .eq("kind", "transactional_delivery")
+        .order("id")
+        .range(offset, offset + pageSize - 1);
+      if (error) {
+        logger.warn("[lgpd-export-worker] meeting deliveries load failed", {
+          request_id: requestId,
+        });
+        break;
+      }
+      for (const job of data ?? [])
+        meeting_deliveries.push({
+          id: job.id,
+          status: job.status,
+          created_at: job.created_at,
+          run_after: job.run_after,
+          appointment_id:
+            typeof job.appointment_id === "string" && appointmentIds.has(job.appointment_id)
+              ? job.appointment_id
+              : null,
+        });
+      if (!data || data.length < pageSize) break;
+    }
+    const ids = [...appointmentIds];
+    const refBatchSize = 100; // Mantém o filtro IN abaixo dos limites de URL dos proxies.
+    for (let batch = 0; batch < ids.length; batch += refBatchSize) {
+      for (let offset = 0; ; offset += pageSize) {
+        const { data, error } = await admin
+          .from("agent_inbox_items")
+          .select("id,ref_id,title,body,status,created_at,resolved_at")
+          .eq("organization_id", organizationId)
+          .eq("ref_kind", "appointment")
+          .in("kind", ["other", "appointment_outcome_required", "appointment_recovery_review"])
+          .in("ref_id", ids.slice(batch, batch + refBatchSize))
+          .order("id")
+          .range(offset, offset + pageSize - 1);
+        if (error) {
+          logger.warn("[lgpd-export-worker] appointment notices load failed", {
+            request_id: requestId,
+          });
+          break;
+        }
+        for (const notice of data ?? [])
+          appointment_notices.push({
+            id: notice.id,
+            ref_id: notice.ref_id,
+            title: notice.title,
+            body: notice.body,
+            status: notice.status,
+            created_at: notice.created_at,
+            resolved_at: notice.resolved_at,
+          });
+        if (!data || data.length < pageSize) break;
+      }
+    }
+  }
+
   return {
     request_id: requestId,
     organization_id: organizationId,
@@ -612,11 +799,21 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     messages_recent,
     leads,
     orders,
+    operational_orders: operational.orders,
+    operational_order_events: operational.events,
+    operational_order_saved_snapshots: operational.saved_snapshots,
+    operational_order_checks: operational.checks,
+    crm_notes: crmWork.notes,
+    linked_tasks: crmWork.linked_tasks,
+    linked_task_events: crmWork.task_events,
     activities,
     appointments,
     tasks,
     webhook_captures,
     audit_log_extract,
+    reply_drafts,
+    meeting_deliveries,
+    appointment_notices,
   };
 }
 
@@ -640,10 +837,19 @@ function emptyPayload(
     messages_recent: [],
     leads: [],
     orders: [],
+    operational_orders: [],
+    operational_order_events: [],
+    operational_order_saved_snapshots: [],
+    operational_order_checks: [],
+    crm_notes: [],
+    linked_tasks: [],
+    linked_task_events: [],
     activities: [],
     appointments: [],
     tasks: [],
     webhook_captures: [],
     audit_log_extract: [],
+    meeting_deliveries: [],
+    appointment_notices: [],
   };
 }

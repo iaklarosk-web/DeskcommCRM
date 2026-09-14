@@ -1,0 +1,49 @@
+Observed upgrade proof; sanitized execution log
+Completed at UTC: 2026-09-08T21:46:58.044628+00:00
+Checkout HEAD during integration: 960a46907449fcd4a7e773e40016742c25c0a09d
+Command: bash scripts/verify/upgrade-f01-v117/run.sh
+Runner SHA256: f589704f78fec67341de1411a79cc027eb30742ef33e5668a2bed1e30189c9b5
+Sanitization: temporary host path, disposable container name and allocated port omitted.
+Data: synthetic fixtures only. No real Supabase/Auth/Storage or external providers used.
+Comparator exception: add the exact canonical_conversation_tags default only when absent.
+No prior field value can change; baseline block G3-05 supplies the documented default.
+
+artifacts=<exclusive temporary directory; path omitted>
+COMPARATOR_CHECK identity=1/1 accepted_default=1/1 negative=2/2
+baseline_old_commit=960a46907449fcd4a7e773e40016742c25c0a09d
+baseline_old_sha256=251c6b4d69f688d2adffc593ace337ef93b39efb64441f86afdcec7ecfc28d27
+baseline_combined_sha256=a8d9c3c64ba76ff1e98c2d5d971ec576cc929073e411677903323399923c60f0
+harness_prelude_sha256=71b37dedda7ef7d9976279ab957e6c5b52ead8d6362acfe6d90dd429b2009f49
+image=pgvector/pgvector:pg15
+container=<unique disposable container> port=127.0.0.1:<Docker allocated port>
+image_id=sha256:a947c45cdc5906a1bc951f20a8709e321256343ee0f251e4ae00b5e7def4e6da
+prelude=pass
+install-f01=pass
+seed-f01=pass
+security-before=pass
+observed: F01_SECURITY rls=4/4 anon_denied=4/4 service_only=2/2 constraints_negative=6/6
+rls-before=pass
+observed: ISOLATION direction=1 read_tables=8/8 own_update=1 cross_write_denied=4/4
+observed: ISOLATION direction=2 read_tables=8/8 own_update=1 cross_write_denied=4/4
+upgrade-combined=pass
+preserved_groups=13/13 expected_added_default_keys=2 prior_values_changed=0
+security-after=pass
+observed: F01_SECURITY rls=4/4 anon_denied=4/4 service_only=2/2 constraints_negative=6/6
+rls-after=pass
+observed: ISOLATION direction=1 read_tables=8/8 own_update=1 cross_write_denied=4/4
+observed: ISOLATION direction=2 read_tables=8/8 own_update=1 cross_write_denied=4/4
+rerun-combined=pass
+security-rerun=pass
+observed: F01_SECURITY rls=4/4 anon_denied=4/4 service_only=2/2 constraints_negative=6/6
+rls-rerun=pass
+observed: ISOLATION direction=1 read_tables=8/8 own_update=1 cross_write_denied=4/4
+observed: ISOLATION direction=2 read_tables=8/8 own_update=1 cross_write_denied=4/4
+public_tables=128
+tenant_tables=120
+policies=471
+observed_new_tables=ai_reply_drafts,appointment_recovery_receipts,channel_connection_requests,event_service_origins,platform_support_sessions
+service_revision_columns=2
+PRESERVATION groups=13/13 rows=25/25 checks=11 indexes=8 prior_values_changed=0 rerun_diffs=0
+UPGRADE old=960a469 passes=2/2 strict_errors=0 source_inputs_unchanged=yes
+UPGRADE_PROOF=PASS
+container_removed=yes

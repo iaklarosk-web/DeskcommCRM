@@ -16,6 +16,12 @@ import { channelLabel, useChannelSessions } from "@/hooks/channels/useChannelSes
 import { useAuth } from "@/hooks/auth/AuthProvider";
 import { useConversationTagVocabulary } from "@/hooks/inbox/useConversationTags";
 import { useConversationCounts } from "@/hooks/inbox/useConversationCounts";
+import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
+import {
+  ESTADOS_D16,
+  ROTULO_DO_ESTADO_D16,
+  type ConversationState,
+} from "@/lib/inbox/estado-d16";
 import type { Role, VisibilityMode } from "@/lib/auth/types";
 
 export type InboxTab = "unassigned" | "mine" | "all" | "closed" | "ai";
@@ -50,7 +56,14 @@ export interface InboxFiltersValue {
   onlyUnread: boolean;
   channel_session_id?: string;
   tag?: string;
+  /** Estado D16 (§5.6). Vive na URL — ver `InboxLayout`. */
+  estado?: ConversationState;
+  /** Id do atendente responsável. Vive na URL, ao lado do estado. */
+  responsavel?: string;
 }
+
+/** O valor do `Select` quando o filtro está desligado. Radix não aceita "". */
+const SEM_FILTRO = "todos";
 
 interface Props {
   value: InboxFiltersValue;
@@ -64,6 +77,10 @@ export function InboxFilters({ value, onChange }: Props) {
   const { activeOrg } = useAuth();
   const { data: tagVocabulary } = useConversationTagVocabulary(activeOrg?.orgId ?? null);
   const { data: counts } = useConversationCounts(activeOrg?.orgId ?? null);
+  // Os mesmos destinos válidos que a transferência usa (agent+ ativos da org):
+  // uma segunda lista de "quem atende" divergiria da primeira no dia em que
+  // alguém perdesse acesso.
+  const { data: membros } = useAssignableMembers(Boolean(activeOrg));
 
   const tabs = activeOrg
     ? visibleInboxTabs(activeOrg.role, activeOrg.visibility_mode)
@@ -139,6 +156,69 @@ export function InboxFilters({ value, onChange }: Props) {
           >
             {t("Não lidos")}
           </button>
+        </div>
+
+        {/* ESTADO E RESPONSÁVEL — os dois filtros de F03-T09 (§7.4).
+            Sempre visíveis, ao contrário do canal e da tag: aqueles só
+            discriminam quando a org tem mais de um valor; estes são a pergunta
+            que a fase existe para responder ("em que pé está" e "de quem é"), e
+            um filtro que só aparece às vezes não é filtro, é surpresa.
+            Os oito estados saem de `ESTADOS_D16` — a própria tabela D16. */}
+        <div className="flex gap-2">
+          <Select
+            value={value.estado ?? SEM_FILTRO}
+            onValueChange={(v) =>
+              onChange({
+                ...value,
+                estado: v === SEM_FILTRO ? undefined : (v as ConversationState),
+              })
+            }
+          >
+            <SelectTrigger
+              data-testid="filtro-estado"
+              className={cn(
+                "h-8 min-w-0 flex-1 rounded-full border-transparent bg-surface-elevated px-3 text-xs shadow-none",
+                value.estado != null && "border-accent bg-accent-soft text-accent",
+              )}
+              aria-label={t("Filtrar por estado da conversa")}
+            >
+              <SelectValue placeholder={t("Todos os estados")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={SEM_FILTRO}>{t("Todos os estados")}</SelectItem>
+              {ESTADOS_D16.map((estado) => (
+                <SelectItem key={estado} value={estado}>
+                  {t(ROTULO_DO_ESTADO_D16[estado])}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={value.responsavel ?? SEM_FILTRO}
+            onValueChange={(v) =>
+              onChange({ ...value, responsavel: v === SEM_FILTRO ? undefined : v })
+            }
+          >
+            <SelectTrigger
+              data-testid="filtro-responsavel"
+              className={cn(
+                "h-8 min-w-0 flex-1 rounded-full border-transparent bg-surface-elevated px-3 text-xs shadow-none",
+                value.responsavel != null && "border-accent bg-accent-soft text-accent",
+              )}
+              aria-label={t("Filtrar por responsável")}
+            >
+              <SelectValue placeholder={t("Todos os responsáveis")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={SEM_FILTRO}>{t("Todos os responsáveis")}</SelectItem>
+              {membros?.map((membro) => (
+                <SelectItem key={membro.user_id} value={membro.user_id}>
+                  {membro.full_name ?? t("Atendente")}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {(showChannelSwitch || (tagVocabulary?.length ?? 0) > 0) && (

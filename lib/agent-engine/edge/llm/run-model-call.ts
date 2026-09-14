@@ -1,3 +1,4 @@
+import { guardServiceTools } from "@/lib/atendimento/fronteira-server";
 /**
  * SEAM ÚNICO de chamada de modelo: TODA chamada de LLM do harness passa por
  * runModelCall — agente, classificadores auxiliares e compaction usam esta MESMA
@@ -131,6 +132,14 @@ export interface RunModelCallInput {
    * 2B) — resolvido no seam, nunca no call site. Sem ele, config da org.
    */
   llmOverride?: import('./credentials').LlmResolveOverride;
+  /**
+   * A conversa que motivou a chamada — vai para `ai_usage_events.conversation_id`
+   * (F04-T08, §5.3). `llm_calls` não tem essa coluna: o motor herdado é de LEAD e
+   * atribui por `contact_id`. O livro-razão multi-tenant precisa dela para
+   * responder "quanto esta conversa custou". Opcional: o turno SaaS a preenche;
+   * os pontos auxiliares (classificador, compaction) não têm conversa.
+   */
+  conversationId?: string | null;
 }
 
 export interface RunModelCallDeps {
@@ -307,6 +316,30 @@ async function aplicarOrcamento(d: {
   throw erro;
 }
 
+/**
+ * `purpose` (atribuição de custo do motor) → `operation` (vocabulário de §5.3,
+ * CHECK `chat|embedding|summary` em `ai_usage_events`).
+ *
+ * Mapa e não cópia do texto: os dois vocabulários pertencem a donos diferentes e
+ * crescem por razões diferentes — `purpose` ganha ponto novo quando alguém liga
+ * um classificador; `operation` só muda com §5.3. `embedding` não aparece aqui
+ * porque embedding NÃO passa por este seam (`lib/ai/embed.ts` fala com a OpenAI
+ * por outro caminho); quem o registrar registra pelo `recordUsage` direto.
+ */
+function operacaoDoPurpose(purpose: string): 'chat' | 'embedding' | 'summary' {
+  return purpose === 'compaction' ? 'summary' : 'chat';
+}
+
+/**
+ * O id que o provedor deu à resposta, quando deu — é o que permite conferir uma
+ * linha do livro-razão contra a fatura sem depender de horário. Nunca inventado:
+ * ausente vira NULL.
+ */
+function idDaRespostaDoProvedor(result: Awaited<ReturnType<typeof generateText>>): string | null {
+  const id: unknown = result.response?.id;
+  return typeof id === 'string' && id.length > 0 ? id : null;
+}
+
 export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunModelCallInput, deps: RunModelCallDeps = {}) {
   const registry = deps.registry ?? createDefaultRegistry();
   const purpose = input.purpose ?? 'agent_turn';
@@ -422,7 +455,7 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
       model: factory(config.apiKey, model, decisao.baseUrl ?? undefined),
       system: prefix.system,
       messages: input.messages,
-      tools: prefix.tools,
+      tools: guardServiceTools(prefix.tools),
       stopWhen: input.maxSteps === undefined ? undefined : stepCountIs(input.maxSteps),
       temperature,
       topP,
@@ -474,13 +507,42 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
   };
   const cost = costCents(model, usage);
 
+  // ═══ UM REGISTRO, DOIS LIVROS, UMA TRANSAÇÃO (F04-T08, ADR-021 decisão 3) ═══
+  //
+  // `ai_usage_events` (§5.3) existia desde a F01 e NÃO tinha chamador de
+  // produção. O reflexo seria embrulhar este seam em `withEntitlement` e deixar
+  // ele gravar — e aí a MESMA chamada viraria duas cobranças, calculadas por
+  // duas tabelas de preço, com o orçamento (`ai_budgets`, gatilho sobre
+  // `llm_calls`) cego à segunda. O defeito não apareceria em nenhuma tela: só na
+  // fatura.
+  //
+  // Então o livro-razão multi-tenant é PROJEÇÃO deste insert, não um segundo
+  // lançamento: mesmos tokens, mesmo `latency_ms`, mesmo custo, mesma fonte de
+  // preço (`./pricing`), e `llm_call_id` apontando para a linha que o originou —
+  // com índice único, de modo que uma segunda projeção da mesma chamada seja
+  // erro 23505 e não um número inflado.
+  //
+  // UM statement, e é isso que faz "na mesma transação" ser verdade sem depender
+  // de `begin`/`commit` aqui: um CTE que escreve nas duas tabelas commita junto
+  // ou não commita nada. Abrir transação explícita exigiria `db.connect()`, e o
+  // seam recebe `pg.Pool` de chamadores que hoje injetam fakes só com `query`.
   const { rows } = await db.query<{ id: string }>(
-    `insert into llm_calls
-       (organization_id, contact_id, job_id, variant_id, purpose, provider, model,
-        input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_cents, latency_ms,
-        status, origem_da_escolha, agent_id)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'ok', $14, $15)
-     returning id`,
+    `with chamada as (
+       insert into llm_calls
+         (organization_id, contact_id, job_id, variant_id, purpose, provider, model,
+          input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_cents, latency_ms,
+          status, origem_da_escolha, agent_id)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'ok', $14, $15)
+       returning id, organization_id, model, input_tokens, output_tokens, cost_cents, latency_ms
+     ), uso as (
+       insert into public.ai_usage_events
+         (organization_id, conversation_id, model, operation, prompt_tokens,
+          completion_tokens, estimated_cost_cents, latency_ms, provider_request_id, llm_call_id)
+       select c.organization_id, $16::uuid, c.model, $17::text, c.input_tokens,
+              c.output_tokens, coalesce(c.cost_cents, 0), c.latency_ms, $18::text, c.id
+         from chamada c
+     )
+     select id from chamada`,
     [
       input.tenantId,
       input.leadId ?? null,
@@ -497,6 +559,9 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
       latencyMs,
       decisao.origem,
       input.agentId ?? null,
+      input.conversationId ?? null,
+      operacaoDoPurpose(purpose),
+      idDaRespostaDoProvedor(result),
     ],
   );
 
