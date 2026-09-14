@@ -27,6 +27,9 @@ export const EVENTOS_DE_NOTIFICACAO = [
   "subscription.payment_failed",
   "subscription.blocked",
   "subscription.activated",
+  // F15-T02 (ADR-036 §2, D54 c): a IA da organização bateu o limite diário de
+  // turnos e ficou pausada até o dia virar. Vai ao `tenant_admin`; só números.
+  "ai.limit_reached",
 ] as const;
 
 export type EventoDeNotificacao = (typeof EVENTOS_DE_NOTIFICACAO)[number];
@@ -85,6 +88,11 @@ export const TEXTO_DO_EMAIL: Record<
     assunto: "Assinatura ativa",
     corpo:
       "O pagamento foi confirmado e a assinatura ({{plan_code}}) está ativa até {{current_period_end}}.",
+  },
+  "ai.limit_reached": {
+    assunto: "A IA atingiu o limite diário e está pausada",
+    corpo:
+      "A IA desta organização usou {{used}} de {{limit}} turnos permitidos em {{day}} e não responde mais sozinha até o dia virar; as conversas seguem para a fila de pessoas. Ajuste o limite em /app/settings/tenant/ia/autonomia.",
   },
 };
 

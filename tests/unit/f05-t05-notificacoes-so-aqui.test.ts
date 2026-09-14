@@ -33,6 +33,8 @@ const MIGRATION = path.join(
  * listou (tests/unit/migrations-nao-encolhem-vocabulario cobre o "não encolhe").
  */
 const MIGRATION_9023 = path.join(RAIZ, "supabase/migrations/20260913160000_9023_planos_assinaturas_e_cobranca_mock.sql");
+// F15-T02 (ADR-036): a 9028 recriou os dois CHECKs com dez eventos — é a ÚLTIMA definição da cadeia.
+const MIGRATION_9028 = path.join(RAIZ, "supabase/migrations/20260914220000_9028_evento_de_limite_diario_da_ia.sql");
 
 function arquivosTs(dir: string, achados: string[] = []): string[] {
   for (const nome of readdirSync(dir)) {
@@ -81,28 +83,32 @@ describe("F05-T05 — ninguém fora de src/notifications toca as tabelas de avis
     );
   });
 
-  it("o enum do TypeScript e a ÚLTIMA definição do CHECK na cadeia (9023) listam os mesmos nove eventos; a 9021 está contida", () => {
-    // Arrange — a 9021 criou os CHECKs com seis; a 9023 os recriou com nove.
+  it("o enum do TypeScript e a ÚLTIMA definição do CHECK na cadeia (9028) listam os mesmos dez eventos; a 9021 e a 9023 estão contidas", () => {
+    // Arrange — a 9021 criou os CHECKs com seis; a 9023 os recriou com nove; a 9028 (F15-T02) com dez.
     const re = /constraint (notifications|email_outbox)_event_check\s+check \(event in \(([\s\S]*?)\)\)/g;
     const na9021 = [...readFileSync(MIGRATION, "utf8").matchAll(re)];
     const na9023 = [...readFileSync(MIGRATION_9023, "utf8").matchAll(re)];
+    const na9028 = [...readFileSync(MIGRATION_9028, "utf8").matchAll(re)];
     expect(na9021.length, "a 9021 não tem os dois CHECKs de evento").toBe(2);
     expect(na9023.length, "a 9023 não recria os dois CHECKs de evento").toBe(2);
+    expect(na9028.length, "a 9028 não recria os dois CHECKs de evento").toBe(2);
     const valoresDe = (corpo: string) => [...corpo.matchAll(/'([a-z_.]+)'/g)].map((m) => m[1]!).sort();
 
-    // Act + Assert — a última definição contém exatamente o enum, e tudo da 9021.
+    // Act + Assert — a última definição contém exatamente o enum, e tudo das anteriores.
     let contidos = 0;
-    for (const [, tabela, corpo] of na9023) {
+    for (const [, tabela, corpo] of na9028) {
       const valores = valoresDe(corpo!);
-      expect(valores, `${tabela}_event_check (9023) diverge do enum`).toEqual([...EVENTOS_DE_NOTIFICACAO].sort());
-      const antigos = valoresDe(na9021.find((m) => m[1] === tabela)![2]!);
-      for (const v of antigos) {
-        expect(valores, `${tabela}_event_check (9023) perdeu ${v} da 9021`).toContain(v);
-        contidos += 1;
+      expect(valores, `${tabela}_event_check (9028) diverge do enum`).toEqual([...EVENTOS_DE_NOTIFICACAO].sort());
+      for (const anterior of [na9021, na9023]) {
+        const antigos = valoresDe(anterior.find((m) => m[1] === tabela)![2]!);
+        for (const v of antigos) {
+          expect(valores, `${tabela}_event_check (9028) perdeu ${v} de uma migration anterior`).toContain(v);
+          contidos += 1;
+        }
       }
     }
     expect(Object.keys(TEXTO_DO_EMAIL).sort()).toEqual([...EVENTOS_DE_NOTIFICACAO].sort());
-    console.info(`f05-t05-enum-x-check: tabelas=2/2 eventos=${EVENTOS_DE_NOTIFICACAO.length}/9 da_9021_contidos=${contidos}/12`);
+    console.info(`f05-t05-enum-x-check: tabelas=2/2 eventos=${EVENTOS_DE_NOTIFICACAO.length}/10 anteriores_contidos=${contidos}/30`);
   });
 
   it("o template de e-mail lê o payload e denuncia campo ausente com `?`", () => {

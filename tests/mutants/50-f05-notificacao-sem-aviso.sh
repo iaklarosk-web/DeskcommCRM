@@ -25,6 +25,6 @@ exec node tests/mutants/f04-turno-mutante.mjs \
   --de 'for (const userId of destinatarios) {' \
   --para 'for (const userId of destinatarios.slice(1)) {' \
   --suite "tests/integration/f05-notificacoes.test.ts" \
-  --titulo "notifications: events=9 rows=9/9 email_outbox=9/9" \
+  --titulo "notifications: events=10 rows=10/10 email_outbox=10/10" \
   --espera "não gravou o aviso" \
   --nome "f05-notificacao-sem-aviso"

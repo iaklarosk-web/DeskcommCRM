@@ -111,6 +111,9 @@ export const SETTINGS_SCHEMA: readonly SettingEntry[] = [
   { key: "ai.confidence_threshold", tipo: "number01", default: 0.6 },
   { key: "ai.forbidden_topics", tipo: "string_array", default: [] },
   { key: "ai.context_budget_tokens", tipo: "int", default: 6000, min: 1, max: 1_000_000 },
+  // F15-T02 (ADR-036 §2, D54 c): teto diário de turnos por organização; 0 =
+  // sem teto (declarado, nunca fato). Contado em `ai_usage_events` (chat).
+  { key: "ai.limits.daily_turns", tipo: "int", default: 0, min: 0, max: 100_000 },
   // actions (§5.8)
   { key: "actions.confirm_from_risk", tipo: "enum", default: "medium", valores: ["low", "medium", "high"] },
   // F15-T01 (ADR-036 §4, D54 b): política por ação para executores não

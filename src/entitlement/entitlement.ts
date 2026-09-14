@@ -15,6 +15,8 @@ import type { ServicePool } from "@/src/tenant-context/db";
 import { withTenant, type TenantCtx } from "@/src/tenant-context";
 
 import { CAPABILITIES, type Capability, type EntitlementResposta } from "./capability";
+import { resolverComLimiteDiario } from "@/src/ai/limite";
+
 import { resolverPorPlano } from "./plano";
 import { estimatedCostCents } from "./pricing";
 
@@ -27,6 +29,17 @@ export class EntitlementDenied extends Error {
     this.name = "EntitlementDenied";
   }
 }
+
+/**
+ * F15-T02 (ADR-036): o resolver padrão é o plano (F12) e, para `ai.reply`, o
+ * limite diário da organização por cima. Quem injeta `resolver` (o dublê de
+ * D36, `provider_calls_at_zero_balance`) continua mandando.
+ */
+let resolverPadraoCache: Resolver | null = null;
+const resolverPadrao: Resolver = (ctx, capability, deps) => {
+  resolverPadraoCache ??= resolverComLimiteDiario(resolverPorPlano);
+  return resolverPadraoCache(ctx, capability, deps);
+};
 
 export type Resolver = (
   ctx: TenantCtx,
@@ -48,7 +61,7 @@ export async function entitlement(
   if (!CAPABILITIES.includes(capability)) {
     throw new Error(`capability desconhecida: ${String(capability)}`);
   }
-  return (deps.resolver ?? resolverPorPlano)(ctx, capability, { pool: deps.pool });
+  return (deps.resolver ?? resolverPadrao)(ctx, capability, { pool: deps.pool });
 }
 
 export interface Usage {

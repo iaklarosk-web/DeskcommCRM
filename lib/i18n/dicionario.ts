@@ -8653,6 +8653,13 @@ export const DICIONARIO: Traducoes = {
   "padrão pelo risco": {"es":"estándar por el riesgo"},
   "Voltar ao padrão": {"es":"Volver al estándar"},
   "Pedir aprovação vale para ações feitas dentro de uma conversa (pedido, quantidade, mensagem); numa ação sem conversa, como criar tarefa, a IA é recusada em vez de esperar.": {"es":"Pedir aprobación vale para acciones hechas dentro de una conversación (pedido, cantidad, mensaje); en una acción sin conversación, como crear tarea, la IA es rechazada en vez de esperar."},
+  "Limite diário de turnos": {"es":"Límite diario de turnos"},
+  "Quantas vezes por dia a IA pode responder nesta organização. Ao bater o limite, ela para até o dia virar e as conversas vão para a fila de pessoas. Zero é sem teto.": {"es":"Cuántas veces por día la IA puede responder en esta organización. Al alcanzar el límite, se detiene hasta que cambie el día y las conversaciones van a la fila de personas. Cero es sin tope."},
+  "sem teto": {"es":"sin tope"},
+  "IA pausada até o dia virar": {"es":"IA en pausa hasta que cambie el día"},
+  "Turnos por dia": {"es":"Turnos por día"},
+  "Salvar limite": {"es":"Guardar límite"},
+  "Limite inválido: use um inteiro maior ou igual a zero.": {"es":"Límite inválido: use un entero mayor o igual a cero."},
 };
 
 /**

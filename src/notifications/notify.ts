@@ -143,6 +143,26 @@ export async function notify(
 }
 
 /**
+ * F15-T02 (ADR-036): "um aviso por dia" — existe aviso deste evento cujo
+ * payload tem `campo = valor` nesta organização? Mora aqui porque só este
+ * módulo lê `public.notifications` (a régua `f05-t05-notificacoes-so-aqui`).
+ */
+export async function jaAvisado(
+  db: TenantDb,
+  ctx: TenantCtx,
+  event: EventoDeNotificacao,
+  campo: string,
+  valor: string,
+): Promise<boolean> {
+  const { rows } = await db.query<{ n: string }>(
+    `select count(*)::text as n from public.notifications
+      where organization_id = $1 and event = $2 and payload->>$3 = $4`,
+    [ctx.organization_id, event, campo, valor],
+  );
+  return Number(rows[0]?.n ?? 0) > 0;
+}
+
+/**
  * `notify` para quem NÃO está em transação (o cron do lembrete, §5.12). Abre a
  * sua por `withTenant` e delega. Chamador que já tem `db` NÃO usa esta.
  */

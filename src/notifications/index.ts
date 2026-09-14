@@ -29,6 +29,7 @@ export {
 } from "./eventos";
 export {
   EventoDesconhecido,
+  jaAvisado,
   marcarLida,
   naoLidas,
   notify,

@@ -203,10 +203,12 @@ describe("F12-T01 — assinatura: uma por organização, estados fechados e coer
     console.info("f12-t01-eventos: duplicado_recusado=1/1 outro_ref_aceito=1/1 tipo_livre_recusado=1/1 desfecho_incoerente_recusado=1/1 fatura_incoerente_recusada=2/2");
   });
 
-  it("os três eventos de notificação da cobrança entraram nos dois CHECKs de 9021 sem perder os seis (por adição)", () => {
+  it("os três eventos de notificação da cobrança entraram nos dois CHECKs de 9021 sem perder os seis (por adição); a 9028 acrescentou o do limite diário", () => {
+    // F15-T02 (ADR-036): a última definição (9028) tem os nove desta task mais `ai.limit_reached`.
     const eventos = [
       "handoff.created", "task.assigned", "confirmation.requested", "customer.replied_while_human",
       "reminder.no_reply", "job.blocked", "subscription.payment_failed", "subscription.blocked", "subscription.activated",
+      "ai.limit_reached",
     ];
     let aceitos = 0;
     for (const tabela of ["notifications", "email_outbox"]) {

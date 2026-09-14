@@ -218,7 +218,7 @@ async function clienteEscreve(telefoneE164: string, corpo: string, idExterno: st
   });
 }
 
-/** Um destinatário por evento — é o que faz `rows=N/N` e `email_outbox=N/N` serem 1:1 (N = 6 de §5.16 + 3 da assinatura). */
+/** Um destinatário por evento — é o que faz `rows=N/N` e `email_outbox=N/N` serem 1:1 (N = 6 de §5.16 + 3 da assinatura + 1 do limite diário, F15-T02). */
 const ROTEIRO: readonly { readonly evento: EventoDeNotificacao; readonly para: string; readonly payload: Record<string, unknown> }[] = [
   { evento: "handoff.created", para: ATENDENTE_A, payload: { handoff_id: "h-1", conversation_id: conversa(1), reason: "customer_request" } },
   { evento: "task.assigned", para: ATENDENTE_B, payload: { task_id: "t-1", order_id: PEDIDO.id } },
@@ -231,10 +231,12 @@ const ROTEIRO: readonly { readonly evento: EventoDeNotificacao; readonly para: s
   { evento: "subscription.payment_failed", para: ADMIN, payload: { grace_until: "2026-09-20T12:00:00.000Z", grace_days: 7 } },
   { evento: "subscription.blocked", para: ADMIN, payload: { blocked_at: "2026-09-21T12:00:00.000Z" } },
   { evento: "subscription.activated", para: ADMIN, payload: { plan_code: "PLAN_A", current_period_end: "2026-10-13T12:00:00.000Z" } },
+  // F15-T02 (ADR-036, D54 c): a IA bateu o limite diário — `tenant_admin`, só números.
+  { evento: "ai.limit_reached", para: ADMIN, payload: { used: 20, limit: 20, day: "2026-09-14" } },
 ];
 
 describe("F05-T05 — os seis eventos de §5.16 (mais os três da assinatura, F12), um aviso por destinatário, e-mail mock por aviso", () => {
-  it("notifications: events=9 rows=9/9 email_outbox=9/9", async () => {
+  it("notifications: events=10 rows=10/10 email_outbox=10/10", async () => {
     // Arrange — o roteiro cobre o enum inteiro; se um evento entrar em §5.16
     // sem linha aqui, reprova.
     expect([...ROTEIRO].map((r) => r.evento).sort()).toEqual([...EVENTOS_DE_NOTIFICACAO].sort());

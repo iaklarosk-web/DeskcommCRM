@@ -62,6 +62,7 @@ import {
   type HANDOFF_REASONS,
 } from "@/src/actions";
 import { IllegalTransition, transition } from "@/src/conversation";
+import { avisarLimiteDiario, MOTIVO_LIMITE_DIARIO } from "@/src/ai/limite";
 import { EntitlementDenied } from "@/src/entitlement";
 import { acoesDeRiscoAlto, gatilhoDeTexto } from "@/src/handoff/gatilhos";
 import { resumoDeterministico } from "@/src/handoff/motivos";
@@ -390,17 +391,33 @@ export async function responderTurno(
     const motivo: MotivoDoHandoff =
       erro instanceof EntitlementDenied ? "tenant_rule" : "provider_error";
     if (erro instanceof EntitlementDenied) estado.chamadas = 0;
-    incrementCounter("ai_turno_erro_do_provedor", { motivo });
-    deps.log?.warn("ai: turno terminou em handoff por falha antes da resposta", {
-      organization_id: ctx.organization_id,
-      conversation_id: pedido.conversation_id,
-      motivo,
-    });
+    // F15-T02 (ADR-036): o limite diário da organização é uma regra do tenant
+    // com nome próprio — a IA fica pausada até o dia virar, e o tenant_admin
+    // é avisado UMA vez por dia (`ai.limit_reached`). Nenhum byte saiu.
+    const limiteDiario = erro instanceof EntitlementDenied && erro.reason === MOTIVO_LIMITE_DIARIO;
+    if (limiteDiario) {
+      incrementCounter("ai_limite_diario_atingido");
+      const aviso = await avisarLimiteDiario(ctx, { pool: deps.pool });
+      deps.log?.info("ai: limite diário de turnos atingido — IA pausada até o dia virar", {
+        organization_id: ctx.organization_id,
+        conversation_id: pedido.conversation_id,
+        day: aviso.day,
+        notified: aviso.notified,
+        already_notified: aviso.already,
+      });
+    } else {
+      incrementCounter("ai_turno_erro_do_provedor", { motivo });
+      deps.log?.warn("ai: turno terminou em handoff por falha antes da resposta", {
+        organization_id: ctx.organization_id,
+        conversation_id: pedido.conversation_id,
+        motivo,
+      });
+    }
     return pedirHandoff(
       ctx,
       pedido,
       motivo,
-      "erro_antes_da_resposta",
+      limiteDiario ? "limite_diario_de_turnos" : "erro_antes_da_resposta",
       estado,
       conversa.estado,
       deps,

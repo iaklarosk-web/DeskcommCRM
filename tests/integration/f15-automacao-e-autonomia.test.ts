@@ -15,12 +15,17 @@ import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { createFakeRegistry } from "@/lib/agent-engine/edge/llm/providers";
+import { comoTextoDoProvedor, responderTurno } from "@/src/ai";
+import { estadoDoLimite } from "@/src/ai/limite";
 import { execute } from "@/src/actions/execute";
 import { criarAdapterMock } from "@/src/channels/mock";
 import { can, type Permissao, type PapelD15 } from "@/src/rbac/matrix";
 import { setSetting } from "@/src/tenant-config/settings";
 import type { TenantCtx } from "@/src/tenant-context";
 import { ROLE_RANK } from "@/lib/auth/types";
+
+import { CFG_LLM, semearTenant, type ConfigDeTenant } from "./f04-turno-fixtures";
 
 const rawPort = process.env.TEST_DB_PORT;
 if (!rawPort) throw new Error("TEST_DB_PORT obrigatório: rode com pnpm test:integration");
@@ -54,7 +59,47 @@ const medidas = {
   ai_task_created: 0,
   roles_denied: 0,
   roles_denied_total: 0,
+  limit_hits: 0,
+  calls_after_limit: 0,
+  calls_after_limit_total: 0,
+  paused: 0,
+  resumed: 0,
 };
+
+// ─── T02: um tenant próprio para o turno de IA (fixture da F04) ─────────────
+const ORG_L = "f1500002-0000-4000-8000-00000000000a";
+const ADMIN_L = "f1500002-1001-4000-8000-00000000000a";
+const ctxL: TenantCtx = { organization_id: ORG_L, source: "job" };
+const conversaL = (n: number) => `f1500002-4${String(n).padStart(3, "0")}-4000-8000-00000000000a`;
+const contatoL = (n: number) => `f1500002-2${String(n).padStart(3, "0")}-4000-8000-00000000000a`;
+const TENANT_L: ConfigDeTenant = {
+  org: ORG_L,
+  slug: "f15-limite",
+  usuario: "f1500002-1000-4000-8000-00000000000a",
+  sessao: "f1500002-3000-4000-8000-00000000000a",
+  conta: "f15-limite-conta",
+  contatos: [1, 2, 3, 4, 5, 6].map((n) => ({ id: contatoL(n), nome: `Cliente L${n}`, telefone: `+551193400000${n}` })),
+  conversas: [1, 2, 3, 4, 5, 6].map((n) => ({ id: conversaL(n), contato: contatoL(n), estado: "ai_handling", statusLegado: "ai_handling" })),
+  produtos: [{ id: "f1500002-5100-4000-8000-00000000000a", codigo: "CAFE-01", nome: "Café torrado premium", preco_cents: 2500 }],
+  materiais: [{ fonte: "f1500002-6100-4000-8000-00000000000a", versao: "f1500002-7100-4000-8000-00000000000a", nome: "Entregas e prazos", trechos: ["o prazo de entrega para Campinas e de dois dias uteis"] }],
+  settings: { "ai.enabled": true, "ai.unknown_answer": "Ainda não tenho essa informação aqui.", "ai.confidence_threshold": 0.6 },
+};
+
+function registroQueResponde() {
+  const estado = { chamadas: 0 };
+  const registry = createFakeRegistry(async () => {
+    estado.chamadas += 1;
+    return {
+      content: [{ type: "text" as const, text: comoTextoDoProvedor({ reply: "Claro, posso ajudar.", intent: "saudacao", confidence: 0.95, tool_calls: [], handoff: { wanted: false, reason: null } }) }],
+      finishReason: { unified: "stop" as const, raw: undefined },
+      usage: { inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 5, text: 5, reasoning: 0 } },
+      warnings: [],
+    };
+  });
+  return { registry, estado };
+}
+const depsDoTurno = (registry: ReturnType<typeof createFakeRegistry>) => ({ pool, cfg: CFG_LLM, registry, adapters: { mock: adapterMock }, modo: "mock" });
+const turnosGravados = () => conta(`select count(*)::text as n from public.ai_usage_events where organization_id=$1 and operation='chat'`, [ORG_L]);
 
 async function conta(sql: string, params: unknown[] = []): Promise<number> {
   const { rows } = await pool.query<{ n: string }>(sql, params);
@@ -102,6 +147,22 @@ beforeAll(async () => {
      values ($1,$2,$3,1,'1 un',$4,'Produto A','un',1.000,1000,'BRL',1000)`,
     [ITEM_A, ORG_A, PEDIDO_A, PRODUCT_A],
   );
+});
+
+beforeAll(async () => {
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await semearTenant(client, TENANT_L);
+    await client.query(`insert into auth.users (id, email) values ($1, 'f15-admin-l@integration.test')`, [ADMIN_L]);
+    await client.query(`insert into public.user_organizations (organization_id, user_id, role, accepted_at) values ($1,$2,'admin',now())`, [ORG_L, ADMIN_L]);
+    await client.query("commit");
+  } catch (erro) {
+    await client.query("rollback");
+    throw erro;
+  } finally {
+    client.release();
+  }
 });
 
 afterAll(async () => {
@@ -219,6 +280,80 @@ describe("F15-T01 — política por ação: os quatro modos, por executor ai, co
     expect(r.status).toBe("executed");
     expect(medidas.policy_modes).toBe(4);
     console.info(`f15-t01-modes: policy_modes=${medidas.policy_modes}/4`);
+  });
+});
+
+describe("F15-T02 — limite diário de turnos: pausa automática, aviso único, retomada", () => {
+  it("com daily_turns=2, dois turnos respondem; o terceiro bate o limite (limit_hits=1/1) e vira handoff tenant_rule sem chamar o provedor", async () => {
+    // Arrange
+    await setSetting({ organization_id: ORG_L, source: "session", user_id: ADMIN_L }, "ai.limits.daily_turns", 2, "tenant_admin", { pool });
+    const { registry, estado } = registroQueResponde();
+    // Act
+    const t1 = await responderTurno(ctxL, { conversation_id: conversaL(1), mensagem_do_cliente: "oi, tem café?" }, depsDoTurno(registry));
+    const t2 = await responderTurno(ctxL, { conversation_id: conversaL(2), mensagem_do_cliente: "qual o prazo?" }, depsDoTurno(registry));
+    const gravadosAntes = await turnosGravados();
+    const t3 = await responderTurno(ctxL, { conversation_id: conversaL(3), mensagem_do_cliente: "e o preço?" }, depsDoTurno(registry));
+    const limite = await estadoDoLimite(ctxL, { pool });
+    // Assert
+    expect(t1.status).toBe("respondido");
+    expect(t2.status).toBe("respondido");
+    expect(gravadosAntes).toBe(2);
+    expect(t3.status).toBe("handoff");
+    expect(t3.motivo).toBe("tenant_rule");
+    expect(t3.chamadas_ao_modelo).toBe(0);
+    expect(estado.chamadas, "o provedor foi chamado depois do limite").toBe(2);
+    expect(limite).toMatchObject({ limit: 2, used: 2, remaining: 0, allowed: false });
+    expect(await estadoDa(conversaL(3))).toBe("waiting_human");
+    medidas.limit_hits = 1;
+    console.info(`f15-t02-limite: turns_before=2/2 limit_hits=1/1 provider_calls=${estado.chamadas}/2 state=waiting_human`);
+  });
+
+  it("depois do limite: três turnos, zero chamadas ao provedor, saldo de ai_usage_events inalterado (calls_after_limit=0/3); um aviso só ao tenant_admin (paused=1/1)", async () => {
+    // Arrange
+    const { registry, estado } = registroQueResponde();
+    const gravadosAntes = await turnosGravados();
+    // Act — três conversas distintas: a que bateu já está com gente.
+    const desfechos = [];
+    for (const n of [4, 5, 6]) {
+      desfechos.push(await responderTurno(ctxL, { conversation_id: conversaL(n), mensagem_do_cliente: `tentativa ${n}` }, depsDoTurno(registry)));
+    }
+    const gravadosDepois = await turnosGravados();
+    const avisos = await pool.query<{ user_id: string; payload: Record<string, unknown> }>(
+      `select user_id, payload from public.notifications where organization_id=$1 and event='ai.limit_reached'`,
+      [ORG_L],
+    );
+    // Assert — G-20: saldo antes/depois.
+    expect(desfechos.map((d) => d.status)).toEqual(["handoff", "handoff", "handoff"]);
+    expect(desfechos.every((d) => d.motivo === "tenant_rule" && d.chamadas_ao_modelo === 0)).toBe(true);
+    expect(estado.chamadas).toBe(0);
+    expect(gravadosDepois).toBe(gravadosAntes);
+    expect(avisos.rows).toHaveLength(1);
+    expect(avisos.rows[0]).toMatchObject({ user_id: ADMIN_L });
+    expect(avisos.rows[0]?.payload).toMatchObject({ used: 2, limit: 2 });
+    expect(typeof avisos.rows[0]?.payload.day).toBe("string");
+    medidas.calls_after_limit = estado.chamadas;
+    medidas.calls_after_limit_total = desfechos.length;
+    medidas.paused = 1;
+    console.info(`f15-t02-pausa: calls_after_limit=${estado.chamadas}/${desfechos.length} usage_delta=${gravadosDepois - gravadosAntes}/0 notified_admin=${avisos.rows.length}/1 (over 4 attempts)`);
+  });
+
+  it("subir o limite retoma a IA na hora (resumed=1/1); 0 volta a 'sem teto'", async () => {
+    // Arrange — a conversa 4 voltou para a IA (o atendente devolveu, D34).
+    await pool.query(`update public.conversations set saas_state='ai_handling', status='ai_handling', assigned_to_user_id=null where id=$1`, [conversaL(4)]);
+    await setSetting({ organization_id: ORG_L, source: "session", user_id: ADMIN_L }, "ai.limits.daily_turns", 10, "tenant_admin", { pool });
+    const { registry, estado } = registroQueResponde();
+    const gravadosAntes = await turnosGravados();
+    // Act
+    const t = await responderTurno(ctxL, { conversation_id: conversaL(4), mensagem_do_cliente: "voltei" }, depsDoTurno(registry));
+    await setSetting({ organization_id: ORG_L, source: "session", user_id: ADMIN_L }, "ai.limits.daily_turns", 0, "tenant_admin", { pool });
+    const semTeto = await estadoDoLimite(ctxL, { pool });
+    // Assert
+    expect(t.status).toBe("respondido");
+    expect(estado.chamadas).toBe(1);
+    expect((await turnosGravados()) - gravadosAntes).toBe(1);
+    expect(semTeto).toMatchObject({ limit: 0, remaining: null, allowed: true });
+    medidas.resumed = 1;
+    console.info(`f15-t02-retomada: resumed=1/1 provider_calls=${estado.chamadas}/1 no_limit_allowed=1/1`);
   });
 });
 

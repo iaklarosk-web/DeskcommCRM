@@ -154,7 +154,15 @@ escrita é recusada e a leitura funciona. Nenhuma spec apagada nem pulada
   (F05-T08) passa a criar a tarefa em vez de gravar `non_human_executor_denied`
   — as suítes `f04-action-policy` e `f05-lembrete-resposta` mudam de
   expectativa por esta decisão (D30: justificado, não afrouxado).
-- Eventos de notificação passam de 9 para 10 (`ai.limit_reached`).
+- Eventos de notificação passam de 9 para 10 (`ai.limit_reached`) — o CHECK
+  das duas tabelas é reconstruído por ADIÇÃO na **migration 9028** (a
+  segunda da fase: a 9027 é a idempotência das runs); `f05-t05` (unit e
+  invariante) e `f12-t01-billing-schema` passam a afirmar dez.
+- O limite diário mora no resolver PADRÃO de Entitlement
+  (`resolverComLimiteDiario(resolverPorPlano)`, `src/ai/limite.ts`): `ai.reply`
+  é negada com `daily_limit_reached` antes do provedor; quem injeta `resolver`
+  (o dublê de D36) continua mandando. O aviso ao `tenant_admin` é um por dia
+  (`jaAvisado`, dentro de `src/notifications`).
 - `event_log` recebe três tipos novos (`conversation.resolved`,
   `order.confirmed`, `task.overdue`); o `EXPECTED_ENTITY_KIND` do motor ganha
   as três entradas (`conversation`, `crm_order`, `crm_task`).

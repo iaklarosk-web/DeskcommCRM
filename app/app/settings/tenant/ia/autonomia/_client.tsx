@@ -27,6 +27,7 @@ interface Leitura {
   policy: Record<string, Modo>;
   confirm_from_risk: unknown;
   table: Linha[];
+  limits: { daily_turns: number; used_today: number; remaining: number | null; day: string; timezone: string; paused: boolean };
 }
 
 const MODOS: Modo[] = ["allow", "approve", "block", "transfer"];
@@ -40,6 +41,7 @@ export function AiAutonomyClient() {
     queryFn: async (): Promise<Leitura> => (await apiClient.get<{ data: Leitura }>("/api/v1/settings/ai-autonomy")).data,
   });
   const [salvando, setSalvando] = React.useState<string | null>(null);
+  const [limiteRascunho, setLimiteRascunho] = React.useState<string | null>(null);
 
   const rotuloDoModo: Record<Modo, string> = {
     allow: t("Permitir"),
@@ -54,18 +56,29 @@ export function AiAutonomyClient() {
     blocked: t("bloqueado"),
   };
 
-  async function gravar(action: string, mode: Modo | null) {
-    setSalvando(action);
+  async function enviar(corpo: Record<string, unknown>, chave: string) {
+    setSalvando(chave);
     try {
-      const r = await apiClient.patch<{ data: Leitura }>("/api/v1/settings/ai-autonomy", { policy: { [action]: mode } });
+      const r = await apiClient.patch<{ data: Leitura }>("/api/v1/settings/ai-autonomy", corpo);
       queryClient.setQueryData<Leitura>(["ai-autonomy"], r.data);
       toast.success(t("Autonomia salva."));
+      return true;
     } catch (e) {
       if (e instanceof ApiError) showApiError(e);
       else toast.error(t("Não foi possível salvar a autonomia."));
+      return false;
     } finally {
       setSalvando(null);
     }
+  }
+  const gravar = (action: string, mode: Modo | null) => enviar({ policy: { [action]: mode } }, action);
+  async function gravarLimite(valor: string) {
+    const n = Number(valor);
+    if (!Number.isInteger(n) || n < 0) {
+      toast.error(t("Limite inválido: use um inteiro maior ou igual a zero."));
+      return;
+    }
+    if (await enviar({ daily_turns: n }, "daily_turns")) setLimiteRascunho(null);
   }
 
   if (consulta.isError) {
@@ -80,7 +93,44 @@ export function AiAutonomyClient() {
   if (!dados) return <p className="text-sm text-muted-foreground">{t("Carregando…")}</p>;
 
   const sobrescritas = dados.table.filter((l) => l.source === "organização").length;
+  const limites = dados.limits;
   return (
+    <div className="grid gap-6">
+    <section className="rounded-lg border bg-card p-4" data-testid="ai-limits" data-paused={limites.paused ? "1" : "0"}>
+      <h2 className="font-medium">{t("Limite diário de turnos")}</h2>
+      <p className="text-xs text-muted-foreground">
+        {t("Quantas vezes por dia a IA pode responder nesta organização. Ao bater o limite, ela para até o dia virar e as conversas vão para a fila de pessoas. Zero é sem teto.")}
+      </p>
+      <p className="mt-2 text-sm" data-testid="ai-limits-uso">
+        {t("Hoje")} ({limites.day}, {limites.timezone}): <span data-testid="ai-limits-usado">{limites.used_today}</span>
+        {" / "}
+        <span data-testid="ai-limits-teto">{limites.daily_turns === 0 ? t("sem teto") : limites.daily_turns}</span>
+        {limites.paused ? <span className="ml-2 rounded-md border px-2 py-0.5 text-xs" data-testid="ai-limits-pausada">{t("IA pausada até o dia virar")}</span> : null}
+      </p>
+      <form
+        className="mt-3 flex items-end gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void gravarLimite(limiteRascunho ?? String(limites.daily_turns));
+        }}
+      >
+        <label className="text-sm">
+          {t("Turnos por dia")}
+          <input
+            type="number"
+            min={0}
+            step={1}
+            value={limiteRascunho ?? String(limites.daily_turns)}
+            onChange={(e) => setLimiteRascunho(e.target.value)}
+            className="mt-1 h-9 w-32 rounded-md border bg-background px-3"
+            data-testid="ai-limits-input"
+          />
+        </label>
+        <Button type="submit" size="sm" disabled={salvando === "daily_turns"} data-testid="ai-limits-salvar">
+          {salvando === "daily_turns" ? t("Salvando…") : t("Salvar limite")}
+        </Button>
+      </form>
+    </section>
     <section className="rounded-lg border bg-card p-4" data-testid="ai-autonomy">
       <p className="text-xs text-muted-foreground">
         {t("Pedir aprovação vale para ações feitas dentro de uma conversa (pedido, quantidade, mensagem); numa ação sem conversa, como criar tarefa, a IA é recusada em vez de esperar.")}
@@ -137,5 +187,6 @@ export function AiAutonomyClient() {
         </table>
       </div>
     </section>
+    </div>
   );
 }
