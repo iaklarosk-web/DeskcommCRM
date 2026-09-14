@@ -8616,6 +8616,19 @@ export const DICIONARIO: Traducoes = {
   // F13-T05 (ADR-034): relatório comercial.
   "Relatório comercial": {"es":"Informe comercial"},
   "Funil com valor, negócios ganhos e perdidos, fila, tarefas e pedidos do período.": {"es":"Embudo con valor, negocios ganados y perdidos, cola, tareas y pedidos del período."},
+  "Abertas": {"es":"Abiertas"},
+  "Funil (abertas agora)": {"es":"Embudo (abiertas ahora)"},
+  "Negócios no período": {"es":"Negocios en el período"},
+  "Nenhum pedido criado no período.": {"es":"Ningún pedido creado en el período."},
+  "Nenhuma oportunidade com responsável.": {"es":"Ninguna oportunidad con responsable."},
+  "Não foi possível carregar o relatório.": {"es":"No fue posible cargar el informe."},
+  "Por responsável": {"es":"Por responsable"},
+  "Tarefas abertas": {"es":"Tareas abiertas"},
+  "Tarefas concluídas no período": {"es":"Tareas concluidas en el período"},
+  "Tarefas e pedidos": {"es":"Tareas y pedidos"},
+  "Tarefas vencidas": {"es":"Tareas vencidas"},
+  "Valor ganho": {"es":"Valor ganado"},
+  "Valor perdido": {"es":"Valor perdido"},
 };
 
 /**
