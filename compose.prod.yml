@@ -283,8 +283,8 @@ services:
   app:
     # Imagem FINA sobre o build do host (`pnpm build` → `.next/standalone`),
     # pelo `Dockerfile.staging` (o mesmo estágio `runner`): o mesmo `next build`
-    # que o gate valida. ADR-032 §3: a imagem `ghcr.io/melgarafael/...` do
-    # compose herdado não entra em produção (código de terceiro, não auditado).
+    # que o gate valida. ADR-032 §3: a imagem pré-buildada do upstream (ver
+    # docker-compose.prod.yml) não entra em produção (código de terceiro, não auditado).
     build:
       # `.prod/app/` é montado por scripts/prod/up.sh com o `.next/standalone`,
       # o `.next/static` e o `public/` do build do host.
