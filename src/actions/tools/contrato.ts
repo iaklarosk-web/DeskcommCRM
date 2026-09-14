@@ -65,6 +65,10 @@ export type ActionDenyReason =
   | "illegal_transition"
   /** A Action é `blocked` na taxonomia de §5.8: nega para TODO executor. */
   | "risk_blocked"
+  /** F15-T01 (D54 b): a política da organização BLOQUEIA esta ação para o executor. */
+  | "policy_blocked"
+  /** F15-T01: a política TRANSFERE — a ação não executa; a conversa vai a um humano. */
+  | "policy_transferred"
   /** A pendência não existe, já foi resolvida, ou outro atendente ganhou. */
   | "pending_conflict"
   /** O `attendant` recusou a ação pendente. Desfecho normal, não defeito. */

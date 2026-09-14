@@ -37,14 +37,9 @@ import { getSetting, getSettingIn } from "@/src/tenant-config/settings";
 import { withTenant, type TenantCtx } from "@/src/tenant-context";
 
 import { recordIn, type AuditActorType, type AuditResult } from "./audit";
-import {
-  ACTION_RISKS,
-  findAction,
-  nivelDeRisco,
-  type ActionCatalogEntry,
-  type ActionRisk,
-} from "./catalog";
+import { findAction, type ActionCatalogEntry } from "./catalog";
 import { criarPendencia, resolverPendencia } from "./pending-store";
+import { modoEfetivo, POLITICA_PADRAO, politicaValida, type ModoDaPolitica } from "./politica";
 import { findHandler } from "./tools";
 import type {
   ActionActor,
@@ -105,25 +100,31 @@ export function atorDaAuditoria(actor: ActionActor): {
  * a própria pessoa que pediu, e um passo que só pode terminar de um jeito não é
  * um controle, é um clique a mais.
  */
-async function exigeConfirmacao(
+/**
+ * F15-T01 (ADR-036 §1, D54 b): o modo da política da organização para esta
+ * ação e este executor. Humano nunca passa por aqui — a política é sobre a
+ * autonomia da IA e da automação (D40). Sem entrada da organização, o modo
+ * é o que D33 já dava (`by_risk` contra `actions.confirm_from_risk`): a
+ * organização que nunca abriu a tela continua como antes.
+ */
+async function modoDaPolitica(
   ctx: TenantCtx,
   entrada: ActionCatalogEntry,
   actor: ActionActor,
   deps: ExecuteDeps,
-): Promise<boolean> {
-  if (actor.kind === "human") return false;
-  if (entrada.confirmation === "none") return false;
-  if (entrada.confirmation === "always") return true;
-
-  const configurado = await getSetting(ctx, "actions.confirm_from_risk", {
-    pool: deps.pool,
-  });
-  // Setting fora do vocabulário é fail-closed: exigir confirmação é o lado
-  // seguro para errar quando não se sabe a partir de que risco confirmar.
-  if (typeof configurado !== "string" || !ACTION_RISKS.includes(configurado as ActionRisk)) {
-    return true;
-  }
-  return nivelDeRisco(entrada.risk) >= nivelDeRisco(configurado as ActionRisk);
+): Promise<ModoDaPolitica> {
+  if (actor.kind === "human") return "allow";
+  const [politica, confirmFromRisk] = await Promise.all([
+    getSetting(ctx, "actions.policy", { pool: deps.pool }),
+    getSetting(ctx, "actions.confirm_from_risk", { pool: deps.pool }),
+  ]);
+  const efetivo = modoEfetivo(
+    entrada.name,
+    actor.kind,
+    politicaValida(politica) ? politica : POLITICA_PADRAO,
+    confirmFromRisk,
+  );
+  return efetivo?.mode ?? "approve";
 }
 
 export async function minutosDeTimeout(
@@ -282,12 +283,63 @@ export async function execute(
     return negar(ctx, actor, entrada, name, "unknown_action", null, requestId, deps);
   }
 
-  if (await exigeConfirmacao(ctx, entrada, actor, deps)) {
+  const modo = await modoDaPolitica(ctx, entrada, actor, deps);
+  if (modo === "block") {
+    return negar(ctx, actor, entrada, name, "policy_blocked", null, requestId, deps);
+  }
+  if (modo === "transfer") {
+    return transferirPelaPolitica(ctx, actor, entrada, pedido, requestId, deps);
+  }
+  if (modo === "approve") {
     return pendurar(ctx, actor, entrada, pedido, requestId, deps);
   }
 
   const desfecho = await handler.run({ ctx, actor, deps, requestId }, pedido);
   return concluir(ctx, actor, entrada, requestId, desfecho, deps);
+}
+
+/**
+ * Modo `transfer` (D40 "transferir"): a ação NÃO executa; a conversa vai para
+ * a fila humana pelo próprio catálogo (`transfer_to_human`, motivo
+ * `tenant_rule` — "regra do tenant" de D19) e a recusa é auditada como
+ * `policy_transferred`. Sem `conversation_id` na entrada não há o que
+ * transferir: a recusa fica registrada com o detalhe, e ninguém finge.
+ */
+async function transferirPelaPolitica(
+  ctx: TenantCtx,
+  actor: ActionActor,
+  entrada: ActionCatalogEntry,
+  pedido: Record<string, unknown>,
+  requestId: string,
+  deps: ExecuteDeps,
+): Promise<ActionResult> {
+  const conversationId = pedido["conversation_id"];
+  if (typeof conversationId !== "string") {
+    return negar(ctx, actor, entrada, entrada.name, "policy_transferred", null, requestId, deps, "conversation_required_for_transfer");
+  }
+  const transferencia = await execute(
+    ctx,
+    actor,
+    "transfer_to_human",
+    {
+      conversation_id: conversationId,
+      reason: "tenant_rule",
+      summary: `A política da organização transfere a ação ${entrada.name} para uma pessoa.`,
+      pending_action: entrada.name,
+    },
+    deps,
+  );
+  return negar(
+    ctx,
+    actor,
+    entrada,
+    entrada.name,
+    "policy_transferred",
+    conversationId,
+    requestId,
+    deps,
+    transferencia.status === "executed" ? "transferred" : `transfer_${transferencia.status}:${transferencia.reason ?? ""}`,
+  );
 }
 
 /**

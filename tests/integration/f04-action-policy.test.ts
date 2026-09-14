@@ -278,11 +278,12 @@ function entradaDaTool(nome: string, org: string): Record<string, unknown> {
  * teste, escrita à mão de propósito — derivá-la do código faria o caso
  * concordar com qualquer comportamento.
  *
- * `create_task` = `denied` é LIMITE DECLARADO, não defeito escondido: o serviço
- * de tarefa da F02 (`executeLinkedTaskCommand`) exige executor humano com
- * sessão, e abrir a escrita do CRM a executor não-humano é decisão de §5.5 —
- * não desta task. A recusa é auditada como qualquer outra, e é por isso que ela
- * continua contando para `audit_rows`.
+ * `create_task` = `executed` desde a F15-T01 (ADR-036 §2, D54 b): até a F13
+ * era `denied` — LIMITE DECLARADO, não defeito escondido: o serviço de tarefa
+ * da F02 (`executeLinkedTaskCommand`) exigia executor humano com sessão, e
+ * abrir a escrita do CRM a executor não-humano era decisão de §5.5 (VARREDURA
+ * §B5/§C6). O proprietário decidiu abrir; a tarefa nasce com `actor_type=ai`
+ * nos recibos e eventos, e continua contando para `audit_rows`.
  */
 const ESPERADO_DA_IA: Readonly<Record<string, "executed" | "pending" | "denied">> = {
   get_customer: "executed",
@@ -290,7 +291,7 @@ const ESPERADO_DA_IA: Readonly<Record<string, "executed" | "pending" | "denied">
   get_orders: "executed",
   create_order: "pending",
   update_order_quantity: "pending",
-  create_task: "denied",
+  create_task: "executed",
   transfer_to_human: "executed",
   request_confirmation: "executed",
   send_message: "executed",

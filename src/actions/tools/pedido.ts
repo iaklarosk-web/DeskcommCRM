@@ -180,10 +180,22 @@ export const updateOrderQuantity: ToolRunner = bind(
   },
 );
 
+/**
+ * F15-T01 (ADR-036 §2 T01, D54 b): `create_task` aceita os três executores.
+ * A IA entra como `ai_agent` e a automação como `automation`, identificadas
+ * pelo `requestId` (o turno/a run); o domínio grava `actor_type` e o id nos
+ * recibos e eventos. Pedido continua humano (`executorDeDominio`).
+ */
+function executorDeTarefa(actor: ActionActor, requestId: string): TrustedCrmExecutor | null {
+  if (actor.kind === "ai") return { type: "ai_agent", agent_id: requestId };
+  if (actor.kind === "automation") return { type: "automation", run_id: requestId };
+  return executorDeDominio(actor);
+}
+
 export const createTask: ToolRunner = bind(
   createTaskInputSchema,
   async ({ ctx, actor, deps, requestId }, input) => {
-    const executor = executorDeDominio(actor);
+    const executor = executorDeTarefa(actor, requestId);
     if (executor === null) {
       return {
         ok: false,

@@ -3,6 +3,7 @@
  * uma frase de gente quando não serve — a frase vai para o erro da UI e para o
  * relatório do validateSeed, então ela diz O QUE se esperava, não só "inválido".
  */
+import { validarPolitica } from "@/src/actions/politica";
 import { validarDefinicoes } from "@/src/crm/campos/definicoes";
 
 import { REMINDER_DEFAULT, type SettingEntry } from "./schema";
@@ -53,6 +54,8 @@ export function validar(entry: SettingEntry, value: unknown): string | null {
       return validarReminder(value);
     case "custom_fields":
       return validarDefinicoes(value);
+    case "action_policy":
+      return validarPolitica(value);
   }
 }
 

@@ -481,6 +481,13 @@ export const AUDIT_ACTIONS = [
   "crm_opportunity.distributed",
   "crm_opportunity.claimed",
   "crm_opportunity.order_linked",
+  // F15 (ADR-036 §2): autonomia da IA por ação, limite diário e regras
+  // sobre o catálogo — a configuração comercial do agente.
+  "ai_autonomy.updated",
+  "ai_limits.updated",
+  "automation_rule.created",
+  "automation_rule.updated",
+  "automation_rule.deleted",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

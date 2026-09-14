@@ -327,8 +327,12 @@ describe("F05-T08 — reminder-reply: os três cenários de §7.6", () => {
     const doTenant = corte.por_tenant.find((t) => t.organization_id === ORG);
     expect(doTenant?.runs_cut, JSON.stringify(corte)).toBe(3);
     expect(doTenant?.notified).toBe(3);
-    expect(doTenant?.tasks_created, "o domínio aceitou create_task de automação — C6 foi decidida sem ninguém saber").toBe(0);
-    expect(doTenant?.tasks_denied).toBe(3);
+    // F15-T01 (ADR-036 §2, D54 b): C6 FOI decidida — `create_task` por
+    // automação passa pelo domínio com `actor_type=automation`. Os dois
+    // lembretes com pedido `draft` ganham tarefa; o sem pedido continua
+    // recusado por falta de a que vincular (`no_draft_order`).
+    expect(doTenant?.tasks_created, "create_task por automação deixou de ser aceito (D54 b)").toBe(2);
+    expect(doTenant?.tasks_denied).toBe(1);
     expect(segundo.runs_cut, "o corte rodou duas vezes sobre o mesmo lembrete").toBe(0);
     const avisosDepois = await contar(`select count(*)::int as v from public.notifications where organization_id = $1 and event = 'reminder.no_reply'`, [ORG]);
     expect(avisosDepois - avisosAntes).toBe(3);
@@ -337,28 +341,36 @@ describe("F05-T08 — reminder-reply: os três cenários de §7.6", () => {
     const run2 = await runDoContato(2);
     const run4 = await runDoContato(4);
     expect(run2.no_reply_notified_at).not.toBeNull();
-    expect(run2.task_id).toBeNull();
-    expect(run2.task_denied_code, "com pedido draft, a recusa tem de ser a do domínio (C6)").toBe("non_human_executor_denied");
+    expect(run2.task_id, "com pedido draft, a tarefa nasce (D54 b)").not.toBeNull();
+    expect(run2.task_denied_code).toBeNull();
     expect(run4.task_denied_code, "sem pedido draft não há a que vincular a tarefa").toBe("no_draft_order");
-    // ... e AUDITADA como recusa pelo catálogo, com executor automation.
-    const recusasAuditadas = await contar(
+    // ... e AUDITADA como execução pelo catálogo, com executor automation; a
+    // tarefa carrega o mesmo ator nos recibos e eventos do domínio.
+    const execucoesAuditadas = await contar(
       `select count(*)::int as v from public.audit_events
-        where organization_id = $1 and action_name = 'create_task' and actor_type = 'automation' and result = 'denied'`,
+        where organization_id = $1 and action_name = 'create_task' and actor_type = 'automation' and result = 'executed'`,
       [ORG],
     );
-    expect(recusasAuditadas).toBe(2);
+    expect(execucoesAuditadas).toBe(2);
+    const tarefaDaAutomacao = await contar(
+      `select count(*)::int as v from public.crm_task_events
+        where organization_id = $1 and task_id = $2 and event_type = 'created' and actor_type = 'automation'`,
+      [ORG, run2.task_id],
+    );
+    expect(tarefaDaAutomacao).toBe(1);
     // O aviso aponta para o lembrete, o cliente e o desfecho da tarefa — só ids e etiquetas.
     const aviso = await pool.query<{ payload: Record<string, unknown> }>(
       `select payload from public.notifications where organization_id = $1 and event = 'reminder.no_reply' and payload->>'customer_id' = $2`,
       [ORG, contato(2)],
     );
     expect(aviso.rows[0]?.payload["reminder_run_id"]).toBe(run2.id);
-    expect(aviso.rows[0]?.payload["task_denied_code"]).toBe("non_human_executor_denied");
+    expect(aviso.rows[0]?.payload["task_denied_code"]).toBeNull();
+    expect(aviso.rows[0]?.payload["task_id"]).toBe(run2.task_id);
     const jobs = await contar(`select count(*)::int as v from public.job_queue where organization_id = $1 and kind = 'recurring_reminder_cutoff'`, [ORG]);
     expect(jobs, "o corte abriu job sem ter o que cortar").toBe(1);
     passaram.push("S2");
     console.info(
-      `reminder-reply-s2: runs_cut=3/3 notified=3/3 tasks_created=0 tasks_denied=3/3 (non_human_executor_denied=2, no_draft_order=1) second_pass=0/0`,
+      `reminder-reply-s2: runs_cut=3/3 notified=3/3 tasks_created=2/2 tasks_denied=1/1 (no_draft_order=1) second_pass=0/0`,
     );
   });
 

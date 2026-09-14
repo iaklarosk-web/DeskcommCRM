@@ -24,7 +24,9 @@ export type TipoDeSetting =
   | "enum"
   | "reminder"
   /** F13-T01 (ADR-034): lista de definições de campo (`customFieldSchema`), ≤ 50, chaves únicas. */
-  | "custom_fields";
+  | "custom_fields"
+  /** F15-T01 (ADR-036): `{<ação do catálogo>: allow|approve|block|transfer}`. */
+  | "action_policy";
 
 export interface SettingEntry {
   key: string;
@@ -111,6 +113,10 @@ export const SETTINGS_SCHEMA: readonly SettingEntry[] = [
   { key: "ai.context_budget_tokens", tipo: "int", default: 6000, min: 1, max: 1_000_000 },
   // actions (§5.8)
   { key: "actions.confirm_from_risk", tipo: "enum", default: "medium", valores: ["low", "medium", "high"] },
+  // F15-T01 (ADR-036 §4, D54 b): política por ação para executores não
+  // humanos. Nasce VAZIA — o modo efetivo de cada ação sem entrada é o que
+  // D33 já decide; a organização sobrescreve pela tela.
+  { key: "actions.policy", tipo: "action_policy", default: {} },
   // conversation
   { key: "conversation.confirmation_timeout_minutes", tipo: "int", default: 60, min: 1, max: 10_080 },
   { key: "conversation.auto_resolve_hours", tipo: "int", default: 48, min: 1, max: 720 },

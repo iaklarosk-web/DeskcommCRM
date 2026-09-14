@@ -8631,6 +8631,28 @@ export const DICIONARIO: Traducoes = {
   "Tarefas vencidas": {"es":"Tareas vencidas"},
   "Valor ganho": {"es":"Valor ganado"},
   "Valor perdido": {"es":"Valor perdido"},
+  // F15-T01 (ADR-036): autonomia da IA por ação.
+  "Autonomia da IA": {"es":"Autonomía de la IA"},
+  "O que a IA pode fazer sozinha nesta organização, ação por ação: permitir, pedir aprovação de uma pessoa, bloquear ou transferir a conversa. Sem escolha sua, vale o padrão pelo risco da ação.": {"es":"Lo que la IA puede hacer sola en esta organización, acción por acción: permitir, pedir aprobación de una persona, bloquear o transferir la conversación. Sin elección suya, vale el estándar por el riesgo de la acción."},
+  "Ação por ação: permitir, pedir aprovação, bloquear ou transferir a uma pessoa.": {"es":"Acción por acción: permitir, pedir aprobación, bloquear o transferir a una persona."},
+  "Permitir": {"es":"Permitir"},
+  "Pedir aprovação": {"es":"Pedir aprobación"},
+  "Bloquear": {"es":"Bloquear"},
+  "Transferir a uma pessoa": {"es":"Transferir a una persona"},
+  "baixo": {"es":"bajo"},
+  "médio": {"es":"medio"},
+  "alto": {"es":"alto"},
+  "bloqueado": {"es":"bloqueado"},
+  "Autonomia salva.": {"es":"Autonomía guardada."},
+  "Não foi possível salvar a autonomia.": {"es":"No fue posible guardar la autonomía."},
+  "Não foi possível carregar a autonomia.": {"es":"No fue posible cargar la autonomía."},
+  "Ações do catálogo": {"es":"Acciones del catálogo"},
+  "com escolha da organização": {"es":"con elección de la organización"},
+  "Só uma pessoa faz isto": {"es":"Solo una persona hace esto"},
+  "escolha da organização": {"es":"elección de la organización"},
+  "padrão pelo risco": {"es":"estándar por el riesgo"},
+  "Voltar ao padrão": {"es":"Volver al estándar"},
+  "Pedir aprovação vale para ações feitas dentro de uma conversa (pedido, quantidade, mensagem); numa ação sem conversa, como criar tarefa, a IA é recusada em vez de esperar.": {"es":"Pedir aprobación vale para acciones hechas dentro de una conversación (pedido, cantidad, mensaje); en una acción sin conversación, como crear tarea, la IA es rechazada en vez de esperar."},
 };
 
 /**

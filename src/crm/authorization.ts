@@ -40,6 +40,29 @@ export async function authorizeCrmCommand(
   permission: CrmCommandPermission,
   options: { forbiddenCode?: string } = {},
 ): Promise<{ papel: PapelD15 }> {
+  // F15-T01 (ADR-036 §2 T01, D54 b; VARREDURA §B5/§C6): executor NÃO humano
+  // — a IA no turno (`ai_agent`) ou o motor de regras/cron (`automation`) —
+  // só para `tasks.create`, e só numa organização ativa. Não há sessão nem
+  // papel: quem autoriza é o catálogo (`executors`) e a política da
+  // organização (`actions.policy`), já conferidos em `execute()`; aqui fica a
+  // guarda de tenant e o alcance (o do `attendant`, que é quem `tasks.create`
+  // dá na matriz). Pedidos e notas continuam humanos.
+  if (executor.type !== "human") {
+    if (permission !== "tasks.create") {
+      throw new CrmAuthorizationError("non_human_executor_denied");
+    }
+    if (!ctx || !UUID.test(ctx.organization_id)) {
+      throw new CrmAuthorizationError("organization_context_required");
+    }
+    const org = await db.query<{ active: boolean }>(
+      `select (status = 'active') as active from public.organizations where id = $1 for share`,
+      [ctx.organization_id],
+    );
+    if (!org.rows[0]?.active) {
+      throw new CrmAuthorizationError(options.forbiddenCode ?? "organization_inactive");
+    }
+    return { papel: "attendant" };
+  }
   if (
     ctx?.source !== "session" ||
     !ctx.user_id ||
@@ -47,9 +70,6 @@ export async function authorizeCrmCommand(
     !UUID.test(ctx.user_id)
   ) {
     throw new CrmAuthorizationError("session_context_required");
-  }
-  if (executor.type !== "human") {
-    throw new CrmAuthorizationError("non_human_executor_denied");
   }
   if (!UUID.test(executor.user_id) || executor.user_id !== ctx.user_id) {
     throw new CrmAuthorizationError("executor_identity_mismatch");

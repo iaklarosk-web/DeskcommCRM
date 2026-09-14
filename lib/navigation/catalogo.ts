@@ -682,6 +682,18 @@ export const NAV_CATALOG = [
     minRole: "admin",
   },
   {
+    // F15-T01 (ADR-036 §2, D54 b): a AUTONOMIA fica ao lado do contrato do
+    // agente — o que ele pode fazer sozinho, ação por ação. Manager+ porque é
+    // configuração comercial da operação (mesmo corte de campos e fila).
+    href: "/app/settings/tenant/ia/autonomia",
+    label: "Autonomia da IA",
+    description: "Ação por ação: permitir, pedir aprovação, bloquear ou transferir a uma pessoa.",
+    icon: "Brain",
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "manager",
+  },
+  {
     // O USO fica ao lado do contrato do agente (F05-T09): tokens e custo
     // estimado por período, somados do registro de uso da própria empresa.
     href: "/app/settings/tenant/ia/uso",

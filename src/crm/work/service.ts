@@ -64,10 +64,37 @@ function sorted(value: unknown): unknown {
   return value;
 }
 
-function commandHash(command: LinkedTaskCommand, actorId: string): Buffer {
+/**
+ * F15-T01 (ADR-036 §2 T01, D54 b): quem escreve a tarefa. `user` continua o
+ * atendente com sessão; `ai` e `automation` são os executores não humanos
+ * que o catálogo e a política da organização autorizam para `create_task`.
+ * `id` é o usuário (user), o id do turno/run quando é uuid, ou null — as
+ * colunas `actor_type`/`actor_id` dos recibos e eventos já previam os três
+ * (`crm_task_command_receipts`, `crm_task_events`: CHECK user|ai|automation).
+ */
+type AtorDaTarefa = { readonly type: "user" | "ai" | "automation"; readonly id: string | null };
+
+const UUID_DO_ATOR = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function atorDe(executor: TrustedCrmExecutor): AtorDaTarefa {
+  if (executor.type === "human") return { type: "user", id: executor.user_id };
+  const bruto = executor.type === "ai_agent" ? executor.agent_id : executor.run_id;
+  return { type: executor.type === "ai_agent" ? "ai" : "automation", id: UUID_DO_ATOR.test(bruto) ? bruto : null };
+}
+
+/**
+ * A identidade que entra no recibo idempotente. Para o humano é a pessoa; para
+ * IA/automação é só o TIPO — o id do turno/run muda a cada tentativa, e um
+ * replay legítimo (mesmo `command_id`, mesmo corpo) tem de bater no recibo.
+ */
+function identidadeDoAtor(ator: AtorDaTarefa): string {
+  return ator.type === "user" ? `user:${ator.id ?? ""}` : ator.type;
+}
+
+function commandHash(command: LinkedTaskCommand, ator: AtorDaTarefa): Buffer {
   const { command_id: _id, ...body } = command;
   return createHash("sha256")
-    .update(JSON.stringify(sorted({ actor: actorId, body })))
+    .update(JSON.stringify(sorted({ actor: identidadeDoAtor(ator), body })))
     .digest();
 }
 
@@ -85,6 +112,22 @@ async function authorizeHumanWrite(
   );
   if (!support.rows[0]?.allowed) throw new CrmWorkServiceError("support_readonly", 403);
   return executor.user_id;
+}
+
+/**
+ * F15-T01: a escrita de TAREFA aceita os três executores. O humano passa pela
+ * guarda de suporte (sessão de acompanhamento é só leitura); o não humano
+ * não tem sessão de suporte — a guarda dele é `authorizeCrmCommand`
+ * (organização ativa, permissão `tasks.create`).
+ */
+async function authorizeTaskWrite(
+  db: TenantDb,
+  ctx: TenantCtx,
+  executor: TrustedCrmExecutor,
+): Promise<AtorDaTarefa> {
+  if (executor.type === "human") return { type: "user", id: await authorizeHumanWrite(db, ctx, executor, "tasks.create") };
+  await authorizeCrmCommand(db, ctx, executor, "tasks.create");
+  return atorDe(executor);
 }
 
 async function lockContact(db: TenantDb, org: string, contactId: string): Promise<boolean> {
@@ -136,7 +179,7 @@ async function replayTaskCommand(
   org: string,
   command: LinkedTaskCommand,
   hash: Buffer,
-  actorId: string,
+  ator: AtorDaTarefa,
 ): Promise<LinkedTaskCommandResult | null> {
   const prior = await db.query<{
     command_type: string;
@@ -163,8 +206,8 @@ async function replayTaskCommand(
   }
   if (
     receipt.command_type !== command.command ||
-    receipt.actor_type !== "user" ||
-    receipt.actor_id !== actorId ||
+    receipt.actor_type !== ator.type ||
+    (ator.type === "user" && receipt.actor_id !== ator.id) ||
     !receipt.request_hash.equals(hash)
   ) {
     throw new CrmWorkServiceError("idempotency_conflict", 409);
@@ -203,7 +246,7 @@ async function writeTaskReceiptAndEvent(
   org: string,
   command: LinkedTaskCommand,
   hash: Buffer,
-  actorId: string,
+  ator: AtorDaTarefa,
   task: TaskRow,
   eventType: "created" | "edited" | "status_changed",
   fromStatus: TaskStatus | null,
@@ -212,10 +255,10 @@ async function writeTaskReceiptAndEvent(
     `insert into public.crm_task_command_receipts
       (id,organization_id,command_type,request_hash,actor_type,actor_id,
        result_task_id,result_task_revision,result_status)
-     values ($1,$2,$3,$4,'user',$5,$6,$7,$8)
+     values ($1,$2,$3,$4,$9,$5,$6,$7,$8)
      on conflict (id) do nothing
      returning id`,
-    [command.command_id, org, command.command, hash, actorId, task.id, task.revision, task.status],
+    [command.command_id, org, command.command, hash, ator.id, task.id, task.revision, task.status, ator.type],
   );
   if (receipt.rowCount !== 1) {
     throw new CrmWorkServiceError("idempotency_conflict", 409);
@@ -224,7 +267,7 @@ async function writeTaskReceiptAndEvent(
     `insert into public.crm_task_events
       (id,organization_id,task_id,order_id,contact_id,task_revision,event_type,
        from_status,to_status,actor_type,actor_id)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,'user',$10)`,
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$11,$10)`,
     [
       command.command_id,
       org,
@@ -235,7 +278,8 @@ async function writeTaskReceiptAndEvent(
       eventType,
       fromStatus,
       task.status,
-      actorId,
+      ator.id,
+      ator.type,
     ],
   );
 }
@@ -244,7 +288,7 @@ async function writeAudit(
   db: TenantDb,
   input: {
     organizationId: string;
-    actorId: string;
+    actorId: string | null;
     action:
       "crm_task.created" | "crm_task.updated" | "crm_task.status_changed" | "crm_note.created";
     resourceType: "crm_tasks" | "crm_notes";
@@ -279,13 +323,16 @@ export async function executeLinkedTaskCommand(
   return withTenant(
     ctx,
     async (db) => {
-      const actorId = await authorizeHumanWrite(db, ctx, executor, "tasks.create");
+      const ator = await authorizeTaskWrite(db, ctx, executor);
+      // `actorId` humano: `created_by` (FK para auth.users), "quem se atribui a
+      // si mesmo não é avisado" e a auditoria da API; nulo para IA/automação.
+      const actorId = ator.type === "user" ? ator.id : null;
       const org = ctx.organization_id;
       const link = await linkedTaskContact(db, org, command);
       const contactAvailable = await lockContact(db, org, link.contactId);
       await commandMutex(db, org, command.command_id);
-      const hash = commandHash(command, actorId);
-      const replay = await replayTaskCommand(db, org, command, hash, actorId);
+      const hash = commandHash(command, ator);
+      const replay = await replayTaskCommand(db, org, command, hash, ator);
       if (replay) return { result: replay, replayed: true };
       if (!contactAvailable) throw new CrmWorkServiceError("contact_unavailable", 422);
 
@@ -392,7 +439,7 @@ export async function executeLinkedTaskCommand(
         org,
         command,
         hash,
-        actorId,
+        ator,
         task,
         eventType,
         beforeStatus,
@@ -411,6 +458,7 @@ export async function executeLinkedTaskCommand(
           order_id: task.order_id,
           contact_id: task.contact_id,
           assigned_by: actorId,
+          assigned_by_kind: ator.type,
           priority: task.priority,
         });
       }
@@ -433,6 +481,7 @@ export async function executeLinkedTaskCommand(
           contact_id: task.contact_id,
           revision: task.revision,
           status: task.status,
+          actor_kind: ator.type,
         },
       });
       return { result: resultOf(task), replayed: false };
