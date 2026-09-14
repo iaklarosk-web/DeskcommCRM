@@ -13,6 +13,17 @@ import { useT } from "@/lib/i18n/IdiomaProvider";
 import { formatCentsBRL } from "@/lib/money";
 import type { RelatorioComercial } from "@/src/crm/relatorio";
 
+function Numero({ id, valor, rotulo, dinheiro }: { id: string; valor: number; rotulo: string; dinheiro?: boolean }) {
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <p className="text-xs uppercase text-muted-foreground">{rotulo}</p>
+      <p className="text-xl font-semibold" data-testid={`relatorio-${id}`} data-value={valor}>
+        {dinheiro ? formatCentsBRL(valor) : valor}
+      </p>
+    </div>
+  );
+}
+
 function inicioDoPeriodo(dias: number): string {
   return new Date(Date.now() - dias * 86_400_000).toISOString();
 }
@@ -38,15 +49,6 @@ export function RelatorioComercialClient() {
   }
   const rel = consulta.data;
   if (!rel) return <p className="text-sm text-muted-foreground">{t("Carregando…")}</p>;
-
-  const Numero = ({ id, valor, rotulo, dinheiro }: { id: string; valor: number; rotulo: string; dinheiro?: boolean }) => (
-    <div className="rounded-lg border bg-card p-3">
-      <p className="text-xs uppercase text-muted-foreground">{rotulo}</p>
-      <p className="text-xl font-semibold" data-testid={`relatorio-${id}`} data-value={valor}>
-        {dinheiro ? formatCentsBRL(valor) : valor}
-      </p>
-    </div>
-  );
 
   return (
     <div className="space-y-6" data-testid="relatorio-comercial" data-from={rel.from} data-to={rel.to}>
