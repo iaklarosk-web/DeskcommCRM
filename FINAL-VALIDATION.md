@@ -18,9 +18,12 @@ histórica da F00 (`docs/migration/deskcomm-audit.md` §2, @ `c85f7d72`) contava
 atualizada — revisões registradas em ADR-008 (Action Policy CRIAR→ADAPTAR),
 ADR-021 (AI Agent REFAZER→ADAPTAR), ADR-025 (Handoff REFAZER→ADAPTAR), ADR-012
 (contrato de `orders` preservado: Nuvemshop deixa de ser REMOVER) e a linha
-"Lista do dia" criada na F02 — conta **`reutilizar=7 adaptar=16 refazer=0 criar=3 remover=0`**
-(26 linhas), a mesma da tabela "Módulos" do BUILD-STATE mais os módulos herdados
-sem correspondente na Fase 1.
+"Lista do dia" criada na F02 — contava **`reutilizar=7 adaptar=16 refazer=0 criar=3 remover=0`**
+(26 linhas) ao fechar a F07. A F11/F12 (ADR-030) mudou o wizard de REUTILIZAR para
+ADAPTAR e acrescentou duas linhas (administração/suporte ADAPTAR; planos e
+cobrança CRIAR): **`reutilizar=6 adaptar=18 refazer=0 criar=4 remover=0`** (28 linhas),
+a mesma da tabela "Módulos" do BUILD-STATE mais os módulos herdados sem
+correspondente na Fase 1.
 
 | Módulo (§5) | Classe vigente | Código | Fase |
 |---|---|---|---|
@@ -49,50 +52,60 @@ sem correspondente na Fase 1.
 | Nuvemshop / `orders` externo | REUTILIZAR sem tocar (REMOVER revogado) | contrato de `orders` preservado; pedidos operacionais em `crm_orders` (ADR-012, D46) | F02 |
 | LGPD herdada | REUTILIZAR | `export-collector.ts`, `redact-cascade.ts`, 7 rotas, 2 workers — usada pela F06-T03 | F06 |
 | Flywheel | REUTILIZAR sem tocar | `flywheel/live.ts`, `FLYWHEEL_INTERVAL_MS=0` (OFF) | — |
-| Onboarding wizard | REUTILIZAR sem tocar | 9 páginas; o loader do seed passou a gravar `onboarded_at` (ADR-029 §3 — a auditoria F00 previa isso para F01-T06 e só a F07 o fez) | F07 |
+| Onboarding wizard | ADAPTAR (era REUTILIZAR sem tocar) | 9 páginas; o loader grava `onboarded_at` (ADR-029 §3); F11-T05: passo do telefone conclui pelo canal de TESTE em `WHATSAPP_MODE=mock` (`conectarCanalMock`), e o wizard só abre com assinatura que permite uso (ADR-030 §1) | F07/F11 |
+| Administração da plataforma e suporte | ADAPTAR | `/admin` herdado + coluna de assinatura, `/admin/billing`; acompanhamento com motivo/escopo/vencimento só leitura (`fn_start_support_saas`, 9024; `rotaNoEscopo` no guarda) — ADR-030 §4 | F11 |
+| 5.3 Entitlement (planos) e cobrança | CRIAR | `src/billing/` (`plans`, `subscriptions`, `billing_events`, `invoices` — 9023; gateway mock, acesso, carência, conciliação) e `src/entitlement/plano.ts` (resolver por plano, D14) — ADR-030 §3 | F12 |
 
 ## 2. VERIFY SUMMARY final
 
 Bloco colado na íntegra, rodado DENTRO do staging (ADR-028 §2: navegador
 contra o Supabase do staging, unit/db/integration no Postgres efêmero), sobre
-`d7543c1463242b0fdc0b9fd5f8b0722ed9cb4532`, em `2026-09-13 09:27Z → 11:10Z (06:27 → 08:10 de Brasília)`, exit `0`, `6196` s. Log em
-`.verify-logs/f07-gate-07/` (não versionado; o gate 06, idêntico, em `.verify-logs/f07-gate-06/`); evidência versionada em
-[docs/migration/evidence/construction-f07-20260913.txt](docs/migration/evidence/construction-f07-20260913.txt).
+`1e13071d32f92d3d6daf507ff2adf3e901e53a74`, em `2026-09-13 23:17Z → 2026-09-14 01:01Z (20:17 → 22:01 de Brasília)`, exit `0`, `6261` s, com
+`current_phase: F12` (o inventário de F12 contém o de F11 — ADR-031 §1; o
+mesmo gate fecha as duas). Log em `.verify-logs/f12-gate-05/` (não
+versionado); evidência versionada em
+[docs/migration/evidence/construction-f11-f12-20260913.txt](docs/migration/evidence/construction-f11-f12-20260913.txt).
+O bloco da F07 (`d7543c14`, f07-gate-07) fica na evidência
+[construction-f07-20260913.txt](docs/migration/evidence/construction-f07-20260913.txt).
 
 ```text
 VERIFY SUMMARY
-scope=phase phase=F07 current_phase=F07 environment=staging
+scope=phase phase=F12 current_phase=F12 environment=staging
 build=ok lint=ok typecheck=ok shell=ok
-unit=8492/8492 integration=155/155 db=1651/1651 e2e=41/41 baseline_n0=8997
-baseline_comparable: scope=unit+db passed=10143 required=8738 full_n0=pending
-e2e_scope: F07-required passed=41/41 specs=10/10
-isolation: tables=135 ops=4 dirs=2 leaks=0 (material_cross_org=97/135)
-rls-coverage: tables_with_org_id=135 policies_found=116 missing=0 service_only_with_grant=0
+unit=8500/8500 integration=175/175 db=1660/1660 e2e=51/51 baseline_n0=8997
+baseline_comparable: scope=unit+db passed=10160 required=8738 full_n0=pending
+e2e_scope: F12-required passed=51/51 specs=12/12
+isolation: tables=138 ops=4 dirs=2 leaks=0 (material_cross_org=97/138)
+rls-coverage: tables_with_org_id=138 policies_found=116 missing=0 service_only_with_grant=0
 rbac: roles=3 denied_expected=19 denied_actual=19
 entitlement: usage_events_written=23
 ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0
 handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3 notify=3 notify_rows=6 msgs_after=3 provider_calls_after=0
 reminder: runs=2 sent=1 duplicates=0 tables_summed=3
 webhook: replay=2 stored=1 tables_checked=7
-logs: routes=270 routes_logged=270 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
-rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=270 routes_with_schema=270 routes_reading_input=143 validated=143
+logs: routes=278 routes_logged=278 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
+rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=278 routes_with_schema=278 routes_reading_input=148 validated=148
 lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2
-replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=41/41 demo2=41/41 specs=10/10 org_a=seed-replica)
-secrets: files_scanned=491 findings=0
-tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=56/56
+admin: tenants_listed=3/3 support_sessions=2 support_reason=2/2 support_scope_denied=25/32 support_writes_denied=5/5 full_mode_rejected=1/1 signup_awaiting_payment=1/1 orgs_without_subscription=0/3
+billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1/1 blocked_writes_denied=5/5 grace_days=7 reconciliation_mismatch=0/3 cancellations=1/1 data_preserved=7/7
+replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=51/51 demo2=51/51 specs=12/12 org_a=seed-replica)
+secrets: files_scanned=504 findings=0
+tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=61/61
 debt_known=0 skip_only_occurrences=15 violations=0
 STATUS: READY (staging)
 ```
 
-Fora do bloco, como §7.7/§8.1 mandam (provas de operação contra o container do staging):
+Fora do bloco, como §7.7/§8.1 mandam (provas de operação contra o container do staging, já com a imagem da F12):
 
 ```text
-restore: tables=179 tables_restored=179 rows=4027 rows_diff=0 dump=staging-20260913T071443Z.dump target=restore_20260913_071444 seconds=9 at=20260913T071444Z
-smoke: steps=6 pass=6/6 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 tenants=deka,demo2
-p95_ms: endpoints=3/3 health=25 contacts=409 conversations=623 samples=20 url=http://127.0.0.1:3200
-demo3: created=1 smoke=pass=6/6 e2e[demo3]=41/41 specs=10/10 removed=1 tenants=2
-from-scratch: steps=7 pass=7/7 verify_exit=0 status="READY (F07)" clone=~/projetos/.from-scratch-mPYH commit=d7543c14
+restore: tables=183 tables_restored=183 rows=7889 rows_diff=0 dump=staging-20260914T012353Z.dump target=restore_20260914_012354 seconds=13 at=20260914T012354Z
+smoke: steps=7 pass=7/7 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 owner_login=1/1 subscriptions[deka]=active/full subscriptions[demo2]=active/full orgs_without_subscription=0/2 tenants=deka,demo2
+p95_ms: endpoints=3/3 health=28 contacts=390 conversations=398 samples=20 url=http://127.0.0.1:3200
+staging: compose=crm-staging services_running=15/15 memory_mib=1449 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F12(1e13071d) up_sh_rerun=idempotent(rows_created=0 subscription=existing)
 ```
+
+O `demo3:` e o `from-scratch:` desta fase NÃO foram executados (ver §3); os da
+F07 estão na evidência da F07.
 
 Link do run de CI: o workflow `.github/workflows/verify.yml` (F06-T08) roda o
 `verify.sh` em todo PR; o PR em rascunho é
@@ -118,6 +131,11 @@ Cada item com a marcação e o dono humano (§8.6, D11, D12, D26).
 | Meta do piloto D27 (baseline, metas, duração, critério de invalidação) | não preenchida — `docs/ai-eval/pilot-queries.sql` mede três das seis quando houver dados reais | proprietário + Deka |
 | Firewall dos OUTROS stacks desta VPS (VARREDURA §B12) e persistência do swap (§B14) | descritos no runbook, não aplicados (portas 1-way) | proprietário |
 | Busca semântica sobre o FAQ do seed (7 pares num trecho só) | não medida — a ingestão foi contada, a busca não | F08+ com provedor real |
+| Cobrança REAL: gateway de pagamento, preço, nome dos planos, dias de carência, pró-rata, moeda | NOT VALIDATED (real) — gateway `mock` (`BILLING_GATEWAY=mock`), planos placeholder PLAN_A/B/C com preço 0 e limites declarados (ADR-030 §3, D14); `BILLING_GRACE_DAYS=7` é padrão, não decisão | proprietário (D14; gateway e contrato do provedor) |
+| Cadastro público REAL (e-mail de confirmação, WhatsApp real no wizard, IA real na entrada guiada) | NOT VALIDATED (real) — cadastro cria assinatura `pending_payment` e o wizard conecta um canal MOCK (`conectarCanalMock`); nenhuma mensagem a pessoa real | proprietário + Deka (número, aceite) |
+| Painel do dono e suporte com pessoa real: sessão de suporte usada por atendente humano, expiração observada no relógio | NOT VALIDATED — provado por integração e navegador com pessoas fictícias (`support_sessions=2`, `support_scope_denied=25/32`, TTL 1–60 min) | proprietário (teste visual, Tailscale) |
+| Tenant efêmero (`demo3`) e `from-scratch` nesta fase | não executados nesta sessão — foram executados na F07 (`d7543c14`) e o `from-scratch` prova o que está COMMITADO; a F12 acrescentou 3 migrations à baseline (9023/9024 com apêndices), provadas pelo `test:db` (1660/1660) e pelo `up.sh` idempotente do staging | agente na próxima fase (F08) |
+| Specs herdadas de suporte em MODO DE EDIÇÃO (`suporte-temporario.spec.ts`, `agenda-presenca-recuperacao.spec.ts`) | fora do inventário; descrevem um modo que a rota SaaS não oferece (VARREDURA §B16) | proprietário |
 
 ## 4. ADRs
 
@@ -154,6 +172,8 @@ Cada item com a marcação e o dono humano (§8.6, D11, D12, D26).
 | ADR-027 | Hosting do staging: esta VPS, Docker Compose com Supabase local, acesso por Tailscale (D50) |
 | ADR-028 | verify.sh v1.4 (`logs`, `rate-limit`, `lgpd`; ambiente `staging`) e o desenho do staging nesta VPS |
 | ADR-029 | verify.sh v1.5 (F07 no gate; `replicability` por tenant do seed), loader do seed completo (§B13) e tenant efêmero |
+| ADR-030 | F11+F12: tasks com critério numérico, modelo de assinatura (estados, acesso, gate de escrita), suporte com motivo/escopo/vencimento só leitura, defaults declarados (planos placeholder, gateway mock, carência 7) |
+| ADR-031 | verify.sh v1.6: F11/F12 no gate, campos `admin` e `billing`, duas specs no inventário, mutantes 60–64 |
 
 ## 5. Pendências para produção
 
@@ -244,13 +264,16 @@ P2 = degrada operação; P3 = melhoria. **P0 = 0, P1 = 0.**
 
 | # | Classe | Risco | Onde está | Mitigação vigente |
 |---|---|---|---|---|
-| 1 | P2 | Sentry herdado sem `SENTRY_DSN` envia erros para o projeto da comunidade | VARREDURA §B11 | staging com `SENTRY_DSN=off`; decisão do proprietário (item 6 de D12) |
+| 1 | P2 | Sentry herdado sem `SENTRY_DSN` envia erros para o projeto da comunidade | VARREDURA §B11 | **resolvido na F11-T00 (D51 d)**: sem DSN = desligado; comunidade só por `SENTRY_DSN=community` |
 | 2 | P2 | Portas publicadas em `0.0.0.0` por OUTROS stacks desta VPS atravessam o `ufw` | VARREDURA §B12 | o staging publica só em loopback/Tailscale; regra descrita no runbook (1-way) |
-| 3 | P2 | `up.sh` não é re-executável com `--fictional-fixtures` em staging já tocado pelo smoke da F06 | VARREDURA §B15 | loader rodado sem fixtures; instalação nova não é afetada (prova de integração) |
+| 3 | P2 | `up.sh` não é re-executável com `--fictional-fixtures` em staging já tocado pelo smoke da F06 | VARREDURA §B15 | **resolvido na F11-T00 (D51 d)**: rerun idempotente por id; reexecutado no staging em 13/09 (`rows_created=0`, sem erro) |
 | 4 | P2 | Swap de 2 GB sem persistência a reboot | VARREDURA §B14 | `swapon /swapfile` manual; fstab é 1-way |
 | 5 | P2 | `create_task` pela IA: o catálogo promete e o domínio nega (executor não-humano) | VARREDURA §B5/§C6 | recusa gravada e auditada; decisão do proprietário sobre D18 |
 | 6 | P2 | Conversa nova a partir de `archived` (D34) não entregue | ADR-019, §C5 | a fronteira herdada reabre a conversa; decisão do proprietário |
 | 7 | P3 | `products[].size` do seed não tem coluna no catálogo | ADR-029 §3 | **resolvido em D51/F11-T00**: `size` saiu de §5.21, dos seeds e do loader |
 | 8 | P3 | Capacidade: VPS de 2 núcleos/7,9 GB dividida; gate leva 100–150 min e falha por carga acima de load 12 | ADR-027 §5, evidências F05 | gate com a máquina ociosa; staging medido em ~1,2 GB |
 | 9 | P3 | `deka.seed.yaml` com 59 `TODO-DEKA` | D48 | a Deka preenche ao receber acesso; o loader não grava sentinela |
+| 10 | P2 | Specs herdadas do modo de EDIÇÃO do suporte descrevem um modo que a rota SaaS não oferece mais (só leitura, D51) | VARREDURA §B16 | fora do inventário do gate; preenchem o motivo e abrem; asserções de escrita são decisão do proprietário |
+| 11 | P3 | Planos `PLAN_A/B/C` com preço 0 e limites placeholder; carência 7 dias; gateway `mock` | ADR-030 §3 | tela do dono e do tenant rotulam "placeholder"; preço/nome/gateway/carência são do proprietário (D14, D44) |
+| 12 | P3 | Organização herdada sem assinatura é `legacy_without_subscription` (permitida) | ADR-030 §3 | todo caminho de criação grava assinatura; o smoke mede `orgs_without_subscription=0/N` no staging |
 | — | [DEFAULT] ainda não confirmados | D27 (meta do piloto), D28 (nome/domínio), D03 para produção (hosting de produção — o staging está decidido por D50) | §2.2 | pendências declaradas; nenhuma assumida |

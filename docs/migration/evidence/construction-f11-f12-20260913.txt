@@ -1,0 +1,86 @@
+F11+F12 — Administração da plataforma, entrada guiada e assinatura/cobrança (gateway mock). Evidência de construção.
+Fechamento: 2026-09-14 ~01:10Z (22:10 de Brasília, 13/09). Branch feat/F11-F12-admin-e-assinatura (a partir de cfb3c34a).
+Código validado: 1e13071d32f92d3d6daf507ff2adf3e901e53a74 (ADR-030 tasks T00–T08, verify v1.6 ADR-031, dois consertos de prova).
+Autorização: D51 (13/09/2026). Decisões da fase: ADR-030 (produto), ADR-031 (verificador). Só staging (D51 b); BLOCKER-PROD segue aberto.
+
+== GATE INTEGRAL — DENTRO DO STAGING (ADR-028 §2), current_phase=F12 (ADR-031 §1: o inventário de F12 contém o de F11) ==
+./scripts/verify.sh, WHATSAPP_MODE=mock AI_PROVIDER=mock CI=1, um worker, zero retries,
+VERIFY_ENVIRONMENT=staging F02_E2E_SANDBOX_ID=crm-staging E2E_PORT=3202: navegador DUAS vezes contra o Supabase
+do STAGING desta VPS (loopback 56421/56422, app do gate em 3202) — E2E_TENANT=deka e depois demo2, mesma árvore,
+sem commit entre elas; unit/db/integration no Postgres efêmero de scripts/test-db.sh.
+Execução f12-gate-05, 6261 s (104,4 min; 20:17:13 → 22:01:34 de Brasília, 13/09), exit 0, STATUS: READY (staging),
+violations=0, QUINTA tentativa. Etapas: typecheck 13 s, lint 92 s, build 206 s, shell 57 s, unit 1556 s,
+integration 93 s, db 904 s, e2e-deka 1048 s, e2e-demo2 1109 s, mutantes 61/61. inputs: files=3573 sha256
+2d0e9af7… antes = depois.
+
+Tentativas: 01 interrompida em unit (611 verdes) por TRÊS réguas reais — telas-sem-dado-de-mentira (índice de
+src/billing reexportava os módulos mock), suporte-cobertura-de-efeitos (rotas POST da cobrança sem
+requireSupportWrite; webhook fora de /api/v1/webhooks/), tailwind-tokens (`rounded` puro) — consertadas em f069760a;
+02 interrompida em integration (unit 8500/8500 verde em 1646 s) por UMA prova real — o roteiro de notificações da
+F05 cobre o enum inteiro, que cresceu de 6 para 9 (subscription.*) — consertada em 76b24bf1; 03 NOT READY:
+unit/integration/db verdes, demo2 51/51, deka 50/51 (timeout de 30 s em f02-support-readonly-api esperando `load`
+do /app/inbox sob load 12–13 de outros projetos), mutantes 59/61 (32 e 61 com alvo desatualizado pelos próprios
+refactors da fase — reapontados em ee258bc6); 04 interrompida em demo2: deka 50/51 pelo MESMO passo
+(waitForURL até `load`, agora na spec f11, sob load 11–12) — conserto de prova em 1e13071d (waitUntil:
+domcontentloaded nas navegações das specs f11/f12 e da f02-support, como as specs de F05 já faziam; nenhuma
+asserção mudou); 05 READY.
+
+VERIFY SUMMARY
+scope=phase phase=F12 current_phase=F12 environment=staging
+build=ok lint=ok typecheck=ok shell=ok
+unit=8500/8500 integration=175/175 db=1660/1660 e2e=51/51 baseline_n0=8997
+baseline_comparable: scope=unit+db passed=10160 required=8738 full_n0=pending
+e2e_scope: F12-required passed=51/51 specs=12/12
+isolation: tables=138 ops=4 dirs=2 leaks=0 (material_cross_org=97/138)
+rls-coverage: tables_with_org_id=138 policies_found=116 missing=0 service_only_with_grant=0
+rbac: roles=3 denied_expected=19 denied_actual=19
+entitlement: usage_events_written=23
+ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0
+handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3 notify=3 notify_rows=6 msgs_after=3 provider_calls_after=0
+reminder: runs=2 sent=1 duplicates=0 tables_summed=3
+webhook: replay=2 stored=1 tables_checked=7
+logs: routes=278 routes_logged=278 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
+rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=278 routes_with_schema=278 routes_reading_input=148 validated=148
+lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2
+admin: tenants_listed=3/3 support_sessions=2 support_reason=2/2 support_scope_denied=25/32 support_writes_denied=5/5 full_mode_rejected=1/1 signup_awaiting_payment=1/1 orgs_without_subscription=0/3
+billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1/1 blocked_writes_denied=5/5 grace_days=7 reconciliation_mismatch=0/3 cancellations=1/1 data_preserved=7/7
+replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=51/51 demo2=51/51 specs=12/12 org_a=seed-replica)
+secrets: files_scanned=504 findings=0
+tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=61/61
+debt_known=0 skip_only_occurrences=15 violations=0
+STATUS: READY (staging)
+
+== O QUE CADA CAMPO NOVO MEDE (ADR-031 §2) ==
+admin: 3 organizações da fixture de integração listáveis pelo dono; 2 sessões de suporte (uma por tenant), as 2 com
+motivo; 25 das 32 combinações (4 escopos × 8 rotas) negadas por escopo; 5/5 escritas negadas em só leitura
+(guarda + fn_support_write_allowed); modo full inexistente no caminho SaaS (1/1); cadastro nasce pending_payment
+(1/1); 0 das 3 organizações sem assinatura.
+billing: 3 planos placeholder; 6 eventos do gateway mock entregues, 1 duplicado e 1 fora de ordem sem ativar de
+novo; 1 ativação (pending→active) medida como 1/1; 5/5 escritas negadas com a assinatura bloqueada; carência de 7
+dias (default declarado); conciliação faturas×eventos 0 divergências em 3 faturas pagas; 1 cancelamento com 7/7
+linhas preservadas (contato + faturas + eventos).
+
+== SPECS NOVAS NO INVENTÁRIO (ADR-031 §1) ==
+tests/e2e/f11-admin-e-entrada.spec.ts — 6 testes: painel do dono ×2 (tela × banco), acompanhamento só leitura ×2
+(banner com motivo/escopo/vencimento, 403 escrita, 403 support_scope, linha auditada), cadastro pending →
+/app/billing e 402, wizard pelo canal de teste até onboarded_at. tests/e2e/f12-assinatura.spec.ts — 4 testes:
+tela × API × banco do uso ×2, cancelar → 402 → contratar → checkout mock → webhook ativa uma vez ×2.
+Conferidas antes do gate contra o staging com E2E_TENANT=demo2 (f12 4/4; f11 6/6 após dois defeitos de prova).
+
+== MUTANTES NOVOS (ADR-031 §4) == 60 admin obrigatório · 61 suporte sem escopo · 62 billing obrigatório ·
+63 duplicata reaplicada · 64 bloqueada escreve — todos mortos com asserção observada; total 61/61.
+
+== FORA DO BLOCO (§7.7/ADR-028 §1) == ver as linhas `smoke:`, `restore:`, `p95_ms:` e `staging:` no BUILD-STATE.
+
+== O QUE NÃO FOI VERIFICADO (D24/§8.6) ==
+Gateway de pagamento real, preço e nome dos planos, dias de carência e pro-rata (do proprietário, D14/D44);
+cobrança real e jornada paga real (NOT VALIDATED (real)); suporte sobre dados reais; número/IA/e-mail reais (D12);
+acesso do proprietário pelo navegador via Tailscale (humano, §8.6); asserções de MODO DE EDIÇÃO das specs
+herdadas de suporte, fora do inventário (VARREDURA §B16); run do verify.yml no GitHub (do proprietário).
+
+== Provas de operação contra o container do staging (imagem da F12, após scripts/staging/up.sh em 2026-09-14T01:08Z → 01:13Z, exit 0) ==
+up.sh: baseline aplicado (public=150 tabelas), seeds idempotentes: deka rows_created=0 subscription=existing plan=PLAN_A origin=seed; demo2 rows_created=0 subscription=existing; docker compose ps running=15/15
+restore: tables=183 tables_restored=183 rows=7889 rows_diff=0 dump=staging-20260914T012353Z.dump target=restore_20260914_012354 seconds=13 at=20260914T012354Z
+smoke: steps=7 pass=7/7 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 owner_login=1/1 subscriptions[deka]=active/full subscriptions[demo2]=active/full orgs_without_subscription=0/2 tenants=deka,demo2
+p95_ms: endpoints=3/3 health=28 contacts=390 conversations=398 samples=20 url=http://127.0.0.1:3200
+staging: compose=crm-staging services_running=15/15 memory_mib=1449 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F12(1e13071d) up_sh_rerun=idempotent(rows_created=0 subscription=existing)

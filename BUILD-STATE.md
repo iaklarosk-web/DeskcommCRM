@@ -1,49 +1,123 @@
 ---
-updated_at: 2026-09-13T15:40:00Z
-head_commit: d7543c1463242b0fdc0b9fd5f8b0722ed9cb4532   # código validado pelo gate f07-gate-07 (READY (staging), dentro do staging, campos de §8.4; bloco idêntico ao f07-gate-06 sobre 7632a058)
+updated_at: 2026-09-14T01:15:00Z
+head_commit: 1e13071d32f92d3d6daf507ff2adf3e901e53a74   # código validado pelo gate f12-gate-05 (READY (staging), dentro do staging, F11+F12 — ADR-030/031)
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
-plan_version: "2.5 (2026-09-11); D38–D50; ADR-006…029"
+plan_version: "2.6 (2026-09-13); D38–D51; ADR-006…031"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
-current_phase: F07
-next_task: F11-T00             # D51 (a): F11+F12 autorizadas em 13/09/2026; tasks e critérios em ADR-030; F08 fica para quando houver os itens de D12
+current_phase: F12
+next_task: F08-T00             # F11+F12 concluídas (READY (staging), f12-gate-05); F08 tem preparação em ~/projetos/CRM-OS/docs/f08/ e começa em branch nova a partir de 1e13071d, com nova mensagem do proprietário (D50 c)
 status: READY_STAGING          # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26)
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
 hosting_confirmed: yes         # D50 (11/09/2026): staging nesta VPS, Docker Compose com Supabase local, acesso só por Tailscale — ADR-027
 build_env: "Claude Code na VPS (4 núcleos/16 GB desde o reboot de 13/09 03:24Z; era 2/7,9 GB), worktree DeskcommCRM-v1.17.0; validação em serviços/bancos descartáveis e no staging; WHATSAPP_MODE=mock AI_PROVIDER=mock"
-verify_summary_last_context: "f07-gate-07 aprovado em 13/09/2026 sobre d7543c14, 6196 s, exit 0, DENTRO do staging (VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202); bloco idêntico ao f07-gate-06 (13/09, 5654 s, sobre 7632a058), rodado de novo porque a ADR-029 §5 tirou next-env.d.ts do snapshot de inputs (achado do from-scratch). Sete tentativas ao todo: 01 defeito real numa prova de PDF + duas falhas por carga; 02 e 03 banco estourando timeouts com a VPS de 2 núcleos em thrash por outras sessões; 04 defeito real numa prova de acervo; 05 duas provas shell herdadas truncadas por carga; 06 e 07 READY. replicability medido: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 (ADR-029). READY (staging) com os campos de §8.4 = marco técnico do piloto; não é aceite do proprietário (owner_validated em branco)."
+verify_summary_last_context: "f12-gate-05 aprovado em 13/09/2026 sobre 1e13071d, 6261 s, exit 0, DENTRO do staging (VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202), current_phase=F12 (o inventário de F12 contém o de F11 — ADR-031 §1). Cinco tentativas: 01 três réguas reais (mock no índice de src/billing, guarda de suporte nas rotas de cobrança, rounded), 02 uma prova real (roteiro de notificações da F05 com o enum de 9), 03 e 04 um timeout de 30 s no navegador (deka 50/51, mesma jornada verde em demo2) sob load 11–13 de outros projetos + dois mutantes com alvo desatualizado, 05 READY. admin e billing medidos pela primeira vez; mutants_killed=61/61. READY (staging) = verificado em staging; owner_validated em branco."
 verify_summary_last: |
   VERIFY SUMMARY
-  scope=phase phase=F07 current_phase=F07 environment=staging
+  scope=phase phase=F12 current_phase=F12 environment=staging
   build=ok lint=ok typecheck=ok shell=ok
-  unit=8492/8492 integration=155/155 db=1651/1651 e2e=41/41 baseline_n0=8997
-  baseline_comparable: scope=unit+db passed=10143 required=8738 full_n0=pending
-  e2e_scope: F07-required passed=41/41 specs=10/10
-  isolation: tables=135 ops=4 dirs=2 leaks=0 (material_cross_org=97/135)
-  rls-coverage: tables_with_org_id=135 policies_found=116 missing=0 service_only_with_grant=0
+  unit=8500/8500 integration=175/175 db=1660/1660 e2e=51/51 baseline_n0=8997
+  baseline_comparable: scope=unit+db passed=10160 required=8738 full_n0=pending
+  e2e_scope: F12-required passed=51/51 specs=12/12
+  isolation: tables=138 ops=4 dirs=2 leaks=0 (material_cross_org=97/138)
+  rls-coverage: tables_with_org_id=138 policies_found=116 missing=0 service_only_with_grant=0
   rbac: roles=3 denied_expected=19 denied_actual=19
   entitlement: usage_events_written=23
   ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0
   handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3 notify=3 notify_rows=6 msgs_after=3 provider_calls_after=0
   reminder: runs=2 sent=1 duplicates=0 tables_summed=3
   webhook: replay=2 stored=1 tables_checked=7
-  logs: routes=270 routes_logged=270 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
-  rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=270 routes_with_schema=270 routes_reading_input=143 validated=143
+  logs: routes=278 routes_logged=278 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
+  rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=278 routes_with_schema=278 routes_reading_input=148 validated=148
   lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2
-  replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=41/41 demo2=41/41 specs=10/10 org_a=seed-replica)
-  secrets: files_scanned=491 findings=0
-  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=56/56
+  admin: tenants_listed=3/3 support_sessions=2 support_reason=2/2 support_scope_denied=25/32 support_writes_denied=5/5 full_mode_rejected=1/1 signup_awaiting_payment=1/1 orgs_without_subscription=0/3
+  billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1/1 blocked_writes_denied=5/5 grace_days=7 reconciliation_mismatch=0/3 cancellations=1/1 data_preserved=7/7
+  replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=51/51 demo2=51/51 specs=12/12 org_a=seed-replica)
+  secrets: files_scanned=504 findings=0
+  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=61/61
   debt_known=0 skip_only_occurrences=15 violations=0
   STATUS: READY (staging)
-restore: tables=179 tables_restored=179 rows=4027 rows_diff=0 dump=staging-20260913T071443Z.dump target=restore_20260913_071444 seconds=9 at=20260913T071444Z
-smoke: steps=6 pass=6/6 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 tenants=deka,demo2   # 13/09 07:18Z; customers/products = seed + fixture fictícia (ADR-029 §3)
-p95_ms: endpoints=3/3 health=25 contacts=409 conversations=623 samples=20 url=http://127.0.0.1:3200
-staging: compose=crm-staging services_running=15/15 memory_mib=1457 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off
+restore: tables=183 tables_restored=183 rows=7889 rows_diff=0 dump=staging-20260914T012353Z.dump target=restore_20260914_012354 seconds=13 at=20260914T012354Z
+smoke: steps=7 pass=7/7 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 owner_login=1/1 subscriptions[deka]=active/full subscriptions[demo2]=active/full orgs_without_subscription=0/2 tenants=deka,demo2
+p95_ms: endpoints=3/3 health=28 contacts=390 conversations=398 samples=20 url=http://127.0.0.1:3200
+staging: compose=crm-staging services_running=15/15 memory_mib=1449 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F12(1e13071d) up_sh_rerun=idempotent(rows_created=0 subscription=existing)
 demo3: created=1 smoke=pass=6/6 e2e[demo3]=41/41 specs=10/10 removed=1 tenants=2   # F07-T03: scripts/verify/tenant-efemero.sh demo3 (13/09 06:57Z); smoke: customers[demo3]=1/1 products[demo3]=2/2 webhook_accepted=1/1 reminder_listed=1/1
 from-scratch: steps=7 pass=7/7 verify_exit=0 status="READY (F07)" clone=~/projetos/.from-scratch-mPYH commit=d7543c14   # F07-T04, tentativa 4 (13/09 11:22Z→13:04Z): clone 1 s · install 6 s · sandbox 43 s · env 3 s · seeds 5 s (deka 10, demo2 52, rerun 0/0) · verify 6033 s no clone (unit 8492/8492 integration 155/155 db 1651/1651 e2e[deka]=41/41 e2e[demo2]=41/41 mutantes 56/56 inputs 3529/3529) · down 3 s; clone removido
 ---
 
 # BUILD-STATE
+
+## Estado vigente — F11+F12 concluídas em 13/09/2026 (READY (staging), f12-gate-05); F08 aguarda o proprietário (D50 c)
+
+Construídas em 13/09/2026 na branch `feat/F11-F12-admin-e-assinatura` (a partir de
+`cfb3c34a`), com tasks e critérios em ADR-030 e o verificador v1.6 em ADR-031.
+Entregue (F11): §B11/§B15/`size` (T00); dono fictício do staging
+`owner@platform.staging.test` e coluna de assinatura em `/admin/tenants` (T01);
+acompanhamento com motivo (10–500), escopo (`all|inbox|crm|settings|billing`),
+vencimento (≤ 60 min) e SÓ leitura — migration 9024 `fn_start_support_saas`,
+`rotaNoEscopo` no guarda (403 `support_scope`), banner com os três campos (T02);
+empresa do admin nasce `active/operator` e convite passa por
+`entitlement(users.invite)` — 402 `limit_reached` (T03); cadastro nasce
+`pending_payment` com compensação, `/app` e `/onboarding` gateados
+(`billing_only` → `/app/billing`), `requireRole` nega escrita com 402 (T04);
+wizard conclui o telefone pelo canal de TESTE em `WHATSAPP_MODE=mock` (T05);
+spec `f11-admin-e-entrada` (6 testes), mutantes 60–61 (T06). Entregue (F12):
+migration 9023 `plans`/`subscriptions`/`billing_events`/`invoices` service_only,
+prova de RLS 8/8+4/4 por tabela, backfill declarado (T01); resolver do
+Entitlement por assinatura+plano+uso com `reason` enum (T02); checkout e webhook
+do gateway MOCK assinado, idempotente por `(gateway, event_ref)`, fora de ordem
+por `occurred_at`, ativa uma vez (T03); `/app/billing` e `GET/POST
+/api/v1/billing/*` (T04); mudança de plano sem pro-rata e cancelamento
+preservando dados (T05); inadimplência D44 — `past_due` com aviso,
+`BILLING_GRACE_DAYS=7` (default declarado), varredura por tenant no worker do
+lembrete → `blocked` só leitura, reativação pelo pagamento (T06); conciliação
+faturas × eventos e `/admin/billing` (T07); spec `f12-assinatura` (4 testes),
+mutantes 62–64, smoke com passo de cobrança (T08).
+
+Defaults DECLARADOS, nunca fato (D14/D44/D51): `PLAN_A/B/C` com `name = code`,
+`price_cents = 0`, `source = placeholder`, limites placeholder (A: 3 membros,
+500 `ai.reply`/mês; B: 10/5000; C: sem limite); carência 7 dias; gateway `mock`;
+ciclo 30 dias; sem pro-rata. Organização herdada sem assinatura =
+`legacy_without_subscription` (permitida, medida pelo smoke).
+
+Staging (13/09): baseline com 9023/9024 aplicado (`F12-T01 backfill: 2` — deka e
+demo2 `active/backfill/PLAN_A`), seeds reexecutados (`rows_created=0`, sem
+`fixture_existing_row_mismatch` — §B15 provado no staging tocado pelo smoke),
+`seed-users.sh` com o dono, `BILLING_MOCK_WEBHOOK_SECRET` em
+`/srv/secrets/crm-staging.env` (48 chars). Specs novas conferidas contra o
+staging antes do gate: `f12-assinatura` 4/4, `f11-admin-e-entrada` 6/6
+(`E2E_TENANT=demo2`; dois defeitos de prova consertados — corpo da resposta
+descartado pela navegação, usuário sem organização não cai em `/get-started`).
+
+`./scripts/verify.sh` com `VERIFY_ENVIRONMENT=staging` e `current_phase: F12` saiu 0
+com `STATUS: READY (staging)` sobre `1e13071d` (gate f12-gate-05, 6261 s), zero
+violações: unit 8500/8500, integração 175/175, banco 1660/1660, navegador 51/51
+em DOZE specs duas vezes (`E2E_TENANT=deka` 1048 s, `demo2` 1109 s, mesma árvore,
+`src_diff_lines=0`), mutantes 61/61, nenhum teste apagado, pulado ou pendente.
+Campos novos (ADR-031): `admin: tenants_listed=3/3 support_sessions=2
+support_reason=2/2 support_scope_denied=25/32 support_writes_denied=5/5
+full_mode_rejected=1/1 signup_awaiting_payment=1/1 orgs_without_subscription=0/3`
+e `billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1/1
+blocked_writes_denied=5/5 grace_days=7 reconciliation_mismatch=0/3
+cancellations=1/1 data_preserved=7/7`. `isolation` cresceu de 135 para 138
+tabelas (`subscriptions`, `billing_events`, `invoices`), leaks=0. Os 3.573
+arquivos de entrada conservaram o SHA-256. Quinta tentativa: 01 três réguas
+reais, 02 uma prova real, 03/04 timeouts de 30 s no navegador sob carga de
+outros projetos (deka 50/51 nos dois; a mesma jornada verde em demo2) mais dois
+mutantes com alvo desatualizado, 05 READY — detalhe na
+[evidência F11+F12](docs/migration/evidence/construction-f11-f12-20260913.txt).
+Fora do bloco: ver `restore:`, `smoke:` (7 passos, com o de cobrança) e
+`p95_ms:` no cabeçalho.
+
+Limites de F11/F12: gateway, preço, nome dos planos e dias de carência são do
+proprietário; nenhuma cobrança real, nenhum provedor real, nenhuma mensagem a
+pessoa (D11/D51); a jornada paga REAL e o suporte sobre dados reais continuam
+`NOT VALIDATED (real)`; as asserções de modo de edição das specs herdadas de
+suporte (fora do gate) são §B16; o acesso do proprietário pelo navegador via
+Tailscale não foi exercido (§8.6). A F08 tem preparação pronta FORA da árvore
+(`~/projetos/CRM-OS/docs/f08/DECOMPOSICAO-F08-20260913.md`, `/srv/secrets/crm-prod.env`,
+DNS `crm.kntecnologia.app`) e começa em branch nova a partir do HEAD final desta.
+
 
 ## Estado vigente — F07 concluída em 13/09/2026 (READY (staging) com os campos de §8.4); marco técnico do piloto; F08+ aguarda o proprietário (D50 c)
 
@@ -414,18 +488,18 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 | F05 | Adaptar handoff e notificações; criar regra de lembrete PJ sobre infraestrutura existente | done(verify=2026-09-12 5aa5de54) — T01–T10 concluídas; pausada antes de F06 (D50 c) |
 | F06 | Deploy de staging, mocks, segurança/observabilidade e smoke | done(verify=2026-09-12 270852a6) — READY (staging) dentro do staging; T01–T09 concluídas; pausada antes de F07 (D50 c) |
 | F07 | Validação técnica do piloto, replicabilidade deka/demo2 e abertura de BLOCKER-PROD | done(verify=2026-09-13 d7543c14) — READY (staging) com os campos de §8.4; T01–T09 concluídas; BLOCKER-PROD aberto; F08+ aguarda o proprietário (D50 c) |
-| F08 | Serviços reais e produção inicial: WAHA/IA, e-mail, domínio, orçamento, backup/retorno e onboarding configurável | pending |
+| F08 | Serviços reais e produção inicial: WAHA/IA, e-mail, domínio, orçamento, backup/retorno e onboarding configurável | pending — preparação FORA da árvore em `~/projetos/CRM-OS/docs/f08/DECOMPOSICAO-F08-20260913.md` (D12 itens 1,2,3,5,6,7 respondidos; `/srv/secrets/crm-prod.env`; DNS); começa em `feat/F08-producao-inicial` a partir de `1e13071d` |
 | F09 | Piloto Deka acompanhado, com baseline/metas, pedidos, separação, tempo e qualidade/custo da IA medidos | pending |
 | F10 | Segunda empresa real operando por configuração, com preço aceito; gate da expansão comercial | pending |
-| F11 | Administração da plataforma, empresas/equipes, suporte limitado e auditado, cadastro e entrada guiada | in_progress — D51 (a), 13/09/2026; tasks T00–T06 em ADR-030 §1; branch `feat/F11-F12-admin-e-assinatura` a partir de `cfb3c34a`; fecha junto com a F12 |
-| F12 | Planos/assinatura/cobrança, confirmação de pagamento, acesso, limites/uso, inadimplência e conciliação | in_progress — tasks T01–T08 em ADR-030 §2; gateway mock, planos placeholder (D14); fecha junto com a F11 |
+| F11 | Administração da plataforma, empresas/equipes, suporte limitado e auditado, cadastro e entrada guiada | done(verify=2026-09-13 1e13071d) — READY (staging) no f12-gate-05 (inventário de F12 contém o de F11, ADR-031); T00–T06 concluídas; `admin:` medido |
+| F12 | Planos/assinatura/cobrança, confirmação de pagamento, acesso, limites/uso, inadimplência e conciliação | done(verify=2026-09-13 1e13071d) — READY (staging) com gateway MOCK e planos placeholder (D14); T01–T08 concluídas; `billing:` medido; cobrança REAL é NOT VALIDATED (real) |
 | F13 | CRM comercial: funis/oportunidades, campos, papéis/filas, histórico, tarefas, pedidos e relatórios | pending |
 | F14 | WhatsApp, chat do site e agenda de clientes/equipe sincronizada com Google Agenda | pending |
 | F15 | Automações e autonomia de IA por empresa/ação, aprovação/handoff, limites, auditoria e conhecimento | pending |
 | F16 | Marca do SaaS e presets configuráveis; profundidade de templates, white-label e domínios por cliente a definir | pending |
 | F17 | Operação, capacidade/recuperação, suporte, atualização, regressão e aceite comercial pelo proprietário | pending |
 
-Dependência técnica: F00/F01 → F02 → F03 → F04 → F05 → F06 → F07. F11/F12 fecham juntas o onboarding pago; F13–F16 avançam com contratos definidos. F08 depende das entradas/autorização para serviços reais. D48 permite concluir a construção F11–F17 antes das evidências reais F09/F10; piloto e validação de mercado permanecem marcos separados, sem bloquear o software. F17 reúne a jornada comercial e os critérios de operação. Nenhuma fase futura recebe `done` por existir código equivalente no upstream.
+Dependência técnica: F00/F01 → F02 → F03 → F04 → F05 → F06 → F07 → (D51) F11+F12. F11/F12 fecharam juntas o onboarding pago em staging (13/09/2026); F13–F16 avançam com contratos definidos. F08 depende das entradas/autorização para serviços reais. D48 permite concluir a construção F11–F17 antes das evidências reais F09/F10; piloto e validação de mercado permanecem marcos separados, sem bloquear o software. F17 reúne a jornada comercial e os critérios de operação. Nenhuma fase futura recebe `done` por existir código equivalente no upstream.
 
 ## Módulos — orientação vigente e estado da integração
 
@@ -446,7 +520,7 @@ As classes abaixo expressam o destino aprovado, não uma nova medição de pront
 | Workers/filas e observabilidade | ADAPTAR | `event_log`, `job_queue`, `workers/`, `lib/audit/`; target-state §5.13/5.17 | Preservar infraestrutura e provar tenant, repetição segura, trabalhos antigos e rastreabilidade nas F03–F06 |
 | Notificações do contrato CRM-OS | CRIAR | target-state §5.16; canais/avisos herdados reaproveitáveis | Completar avisos por usuário e e-mail transacional com mocks na F05; entregas reais continuam pendentes |
 | Banco/RLS/migrations | ADAPTAR | `supabase/baseline.sql`, [MANIFEST](supabase/migrations/MANIFEST.md), ADR-010 | 225 arquivos SQL em migrations no checkpoint 03ec6a3b; instalação/upgrade pelo baseline e reaplicação provados em banco descartável. Gate F02: banco1585/1585, RLS127 tabelas, nenhuma dívida nominal; serviços reais pendentes |
-| Administração, onboarding e cobrança comerciais | ADAPTAR | D38/D39/D44; ADR-009; DIRETRIZ §7.9 | Reaproveitar módulos herdados e completar F11/F12; presença de telas não comprova jornada self-service paga |
+| Administração, onboarding e cobrança comerciais | ADAPTAR (+ `src/billing` CRIAR) | D38/D39/D44; ADR-009; ADR-030/031; DIRETRIZ §7.9 | F11/F12: painel do dono com estado da assinatura e `/admin/billing`; suporte com motivo/escopo/vencimento só leitura (9024); cadastro nasce `pending_payment`, `/app` e `/onboarding` gateados pela assinatura, `requireRole` nega escrita com 402; wizard conclui pelo canal de teste em mock; planos placeholder, gateway mock, carência 7 (declarados); jornada paga REAL continua `NOT VALIDATED (real)` (gateway, D12) |
 | Canais comerciais, agenda, automação e marca | ADAPTAR | D40/D41; ADR-009; DIRETRIZ §7.9 | Recorte confirmado para F14–F16; regras de sincronização, limites e profundidade de white-label ainda serão definidos |
 
 A [ADR-010](docs/decisions/ADR-010-rotulos-das-migrations-F01.md) resolve as colisões de rótulos F01 com o upstream. O mapa abaixo é de nomes de arquivo: **timestamps e todos os bytes SQL permanecem iguais**, inclusive os comentários antigos. Não se executa repair nem atualização de histórico em uso; o `name` antigo de uma versão aplicada pode permanecer informativo.
@@ -511,8 +585,8 @@ A integração e as provas com mocks/bancos descartáveis não comprovam as jorn
 | E-mail transacional | Entrega real de autenticação/cobrança e rastreio do provedor | |
 | Piloto Deka com dados reais | Operação autorizada, recorte de pedidos confirmado e indicadores com denominadores | |
 | Segunda empresa e preço aceito | Operação por configuração, sem código específico, e evidência comercial | |
-| Assinatura/pagamento/inadimplência | Confirmação confiável, conciliação, ativação, repetição/ordem de eventos, aviso/carência/bloqueio e cancelamento | |
-| Onboarding e suporte comerciais | Cadastro → contratação → acesso → conexão/configuração, com suporte limitado/auditado | |
+| Assinatura/pagamento/inadimplência | Confirmação confiável, conciliação, ativação, repetição/ordem de eventos, aviso/carência/bloqueio e cancelamento (F12: provado com gateway MOCK — `billing: duplicates=1 out_of_order=1 activations=1/1`; gateway real e cobrança real são humanos) | |
+| Onboarding e suporte comerciais | Cadastro → contratação → acesso → conexão/configuração, com suporte limitado/auditado (F11: provado em staging com WhatsApp/IA mock — `admin:`; número/IA reais são humanos) | |
 | Chat do site | Mensagens reais, identidade, isolamento e continuidade do atendimento | |
 | Agenda/Google Agenda | Criar/alterar/cancelar, disponibilidade/fuso, conflitos, reconexão e revogação reais | |
 | Produção | Aceite, deploy e smoke da versão com domínio, monitoração e operador definidos | |
