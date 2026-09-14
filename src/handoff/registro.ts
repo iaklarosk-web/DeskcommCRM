@@ -36,7 +36,7 @@ import {
   type TransitionEffect,
 } from "@/src/conversation";
 import { incrementCounter } from "@/src/obs/counters";
-import { papelD15DoHerdado, type PapelD15 } from "@/src/rbac/matrix";
+import { PAPEIS_D15, papelD15DoHerdado, type PapelD15 } from "@/src/rbac/matrix";
 import { getSetting } from "@/src/tenant-config/settings";
 import type { ServicePool } from "@/src/tenant-context/db";
 import { withTenant, type TenantCtx, type TenantDb } from "@/src/tenant-context";
@@ -179,7 +179,7 @@ export function papeisDaFila(valor: unknown): readonly PapelD15[] {
   const lidos = valor.filter(
     (item): item is PapelD15 =>
       typeof item === "string" &&
-      (["platform_admin", "tenant_admin", "attendant"] as readonly string[]).includes(item),
+      (PAPEIS_D15 as readonly string[]).includes(item),
   );
   // Lista configurada só com lixo NÃO vira "ninguém vê": a fila ficaria muda e
   // o handoff, invisível. Cai no default declarado de §5.2.

@@ -976,7 +976,7 @@ STATUS: READY (Fnn) | REVALIDATED (Fnn) | REVALIDATED WITH DEBT (Fnn) | NOT READ
 | `unit integration db e2e` | Sucessos funcionais/total por runner; expected failures separados | READY: passados=total. Revalidação: só dívida nominal. Comparar componentes correspondentes do baseline; E2E atual não executado permanece pending | F01 (`e2e` F02) |
 | `baseline_n0` | N0 gravado em F00 (D29); prova que nenhum teste sumiu | igual ao BUILD-STATE | F01 |
 | `isolation` | K = tabelas de `public` com `organization_id`, lido de `information_schema` na hora; tentativas K×4×2; `leaks` = tentativas com linha lida ou afetada | `leaks=0`, K = tabelas tenant-aware do target-state | F01 |
-| `rbac` | D = células "nega" da matriz em código; `denied_actual` = quantas retornaram 403 | `denied_actual=denied_expected`, `roles=3` | F01 |
+| `rbac` | D = células "nega" da matriz em código; `denied_actual` = quantas retornaram 403 | `denied_actual=denied_expected`, `roles=3` (`roles=4` a partir da F13 — papel `manager`, ADR-034/035) | F01 |
 | `entitlement` | linhas em `ai_usage_events` gravadas na execução | ≥2 em F01; ≥ casos normais do dataset de F04 em diante | F01 |
 | `ai_eval` | `pnpm ai:eval` sobre `docs/ai-eval/cases.yaml`; `pass` = casos cujo `expected` bateu; `provider_calls_at_zero_balance` = chamadas ao mock sob o dublê `allowed=false` | `cases≥30 pass=cases`, `unknown=6 injection=10 cross_tenant=5`, `provider_calls_at_zero_balance=0` com `attempts=3` no log | F04 |
 | `handoff` | sobre os H handoffs da suíte: mensagens de IA depois; resumo 7/7; responsável não nulo; notificações = H | `ai_msgs_after_handoff=0`, H ≥ 3 | F05 |

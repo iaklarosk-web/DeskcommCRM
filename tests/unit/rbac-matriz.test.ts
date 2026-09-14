@@ -23,14 +23,15 @@ import {
 const IDENTIDADE: Record<PapelD15, string> = {
   platform_admin: "linha em platform_admins (is_platform_admin=true)",
   tenant_admin: "user_organizations.role='admin'",
+  manager: "user_organizations.role='manager'",
   attendant: "user_organizations.role='agent'",
 };
 
 const PERMISSOES = Object.keys(MATRIZ) as Permissao[];
 
-describe("rbac — matriz D15 (roles=3)", () => {
-  it("roles=3 e toda permissão tem célula para os três papéis", () => {
-    expect(PAPEIS_D15).toHaveLength(3);
+describe("rbac — matriz D15 (roles=4 desde a F13, ADR-034)", () => {
+  it("roles=4 e toda permissão tem célula para os quatro papéis", () => {
+    expect(PAPEIS_D15).toHaveLength(4);
     for (const p of PERMISSOES) {
       for (const papel of PAPEIS_D15) {
         expect(typeof MATRIZ[p][papel], `${p} × ${papel}`).toBe("boolean");
@@ -64,7 +65,8 @@ describe("rbac — matriz D15 (roles=3)", () => {
 
     // Assert — a linha do VERIFY
     expect(deniedActual).toBe(deniedExpected);
-    const linha = `rbac: roles=3 denied_expected=${deniedExpected} denied_actual=${deniedActual}`;
+    // ADR-035 §3: o número de papéis vem da matriz, nunca de um literal.
+    const linha = `rbac: roles=${PAPEIS_D15.length} denied_expected=${deniedExpected} denied_actual=${deniedActual}`;
     console.log(linha);
     gravarLinhaDoVerify("rbac", linha);
     expect(deniedExpected).toBeGreaterThan(10);
@@ -85,8 +87,8 @@ describe("rbac — matriz D15 (roles=3)", () => {
     // leitura: herdado → D15
     expect(papelD15DoHerdado("admin")).toBe("tenant_admin");
     expect(papelD15DoHerdado("agent")).toBe("attendant");
-    expect(papelD15DoHerdado("manager"), "manager vira tenant_admin até a Fase 2 (ADR-003)").toBe(
-      "tenant_admin",
+    expect(papelD15DoHerdado("manager"), "manager é papel próprio desde a F13 (ADR-034 reabre ADR-003)").toBe(
+      "manager",
     );
     expect(papelD15DoHerdado("viewer"), "viewer é descartado na Fase 1").toBeNull();
     expect(papelD15DoHerdado(undefined)).toBeNull();
@@ -95,7 +97,23 @@ describe("rbac — matriz D15 (roles=3)", () => {
     );
     // gravação: D15 → herdado (o que o CHECK do banco aceita)
     expect(PAPEL_HERDADO.tenant_admin).toBe("admin");
+    expect(PAPEL_HERDADO.manager).toBe("manager");
     expect(PAPEL_HERDADO.attendant).toBe("agent");
+  });
+
+  it("F13-T02: manager tem tudo de attendant mais as quatro permissões comerciais, e nada da administração", () => {
+    const comerciais: Permissao[] = ["pipelines.manage", "fields.manage", "opportunities.assign", "reports.read"];
+    const administrativas: Permissao[] = ["settings.manage", "users.manage", "products.manage", "knowledge.manage"];
+    for (const p of PERMISSOES) {
+      if (MATRIZ[p].attendant) expect(MATRIZ[p].manager, `${p}: manager herda attendant`).toBe(true);
+    }
+    for (const p of comerciais) {
+      expect(MATRIZ[p].manager, p).toBe(true);
+      expect(MATRIZ[p].tenant_admin, p).toBe(true);
+      expect(MATRIZ[p].attendant, p).toBe(false);
+      expect(MATRIZ[p].platform_admin, p).toBe(false);
+    }
+    for (const p of administrativas) expect(MATRIZ[p].manager, p).toBe(false);
   });
 
   it("papel nenhum (viewer/sem membership) não pode NADA", () => {
