@@ -55,14 +55,14 @@ proprietário, e só ele.
 | **F08-T02** | `compose.prod.yml` + `scripts/prod/{up,down,status,backup,restore,prova}.sh`: Supabase local (db/auth/rest/storage/realtime/kong), app, 3 workers, redis, srh, scheduler, **waha real** no lugar do `waha-mock`, **sem mailpit** (GoTrue → Resend por SMTP); `env_file: /srv/secrets/crm-prod.env`; `mem_limit` em todo serviço; logs rotacionados; portas só em `127.0.0.1` + `PROD_BIND_IP` (3300/56431/56432) | `docker compose -p crm-prod ps`: running = declarados (N/N); `status.sh` mostra 0 portas em `0.0.0.0`; `restore: tables=T rows_diff=0` sobre um dump da própria produção | T01 |
 | **F08-T03** | Bloco `crm.kntecnologia.app` no `/etc/caddy/Caddyfile` (rascunho da preparação) + `systemctl reload caddy`; robots privado; cabeçalhos | `curl -sI https://crm.kntecnologia.app/api/v1/health` = 200 com `strict-transport-security` (1/1); certificado emitido (1/1); os outros vhosts continuam 200 (K/K antes e depois) | T02 |
 | **F08-T04** | `platform_admin` real: `scripts/bootstrap-owner.ts` DENTRO do container do app (env já resolvido pelo compose — §3 aspas); organização "KN Tecnologia" com assinatura `active/operator` PLAN_C; idioma pt-BR | Login pelo domínio com `OWNER_EMAIL` (1/1); `platform_admins=1`, `organizations=1`, `orgs_without_subscription=0/1` no banco de produção; senha nunca impressa | T03 |
-| **F08-T05** | IA real: `AI_PROVIDER=anthropic` (registro real; a organização decide o vendor), embedding pela OpenAI | 1 turno real respondido (1/1, transcript sem PII na evidência), 1 documento indexado com `vector(1536)` (1/1), custo do turno em `ai_usage_events` (1/1) | T04 |
+| **F08-T05** | IA real: `AI_PROVIDER=anthropic` (registro real; a organização decide o vendor), embedding pela OpenAI | 1 turno real respondido pelo ensaio do agente (dry run da versão em rascunho — publicar exige canal WORKING; 1/1, dentro da janela de envio 7h–22h do pacing), 1 material (FAQ) indexado com `vector(1536)` em `ai_chunks` (1/1), chamadas ao modelo em `ai_usage_events` (≥ 1) | T04 |
 | **F08-T06** | E-mail real pela Resend (reset de senha do dono) | 1 e-mail entregue em `OWNER_EMAIL` (1/1) com `From: crm@mail.kntecnologia.app` — evidência = id da Resend, nunca o corpo | T04 |
 | **F08-T07** | Sentry com DSN próprio (`isCommunityDsn=false`) | 1 evento de teste no projeto `crm-os` (1/1, id do evento); 0 campos de PII no payload (allowlist de `src/obs/erros.ts`) | T02 |
-| **F08-T08** | WAHA real de pé, sessão NÃO criada (sem número), webhook assinado exigido | `health=1/1` do container; jornada `whatsapp=NOT VALIDATED (real)` — com número de teste do proprietário: 1 recebida + 1 enviada ao PRÓPRIO número (2/2), fase posterior | T03 |
+| **F08-T08** | WAHA real de pé; a sessão do canal nasce pelo `POST /api/v1/onboarding/whatsapp/session` (a linha em `channel_sessions` + a sessão no WAHA, que espera o QR e cai em `FAILED` em ~2 min sem leitura — reparar é a tela de Conexões); assinatura HMAC conferida quando presente (`WAHA_WEBHOOK_REQUIRE_SIGNATURE` fica no default: o WAHA Core não assina — medido em `lib/env.ts`) | `health=1/1` do container; `whatsapp_session: row` no log de jornadas; jornada `whatsapp=health_only` até o número — com número de teste do proprietário: 1 recebida + 1 enviada ao PRÓPRIO número (2/2), fase posterior | T03 |
 | **F08-T09** | Operação: `~/bin/backup-crm-os` no cron (03:20) → `gdrive-crypt:crm-os/db`, marcador de sucesso; runbook `docs/ops/prod.md` (subir/derrubar/rotacionar/restaurar, 4/4 com comando); orçamento mensal declarado | 1 backup confirmado no remoto com o mesmo tamanho (1/1); restore desse backup `rows_diff=0` (1/1) | T02 |
 | **F08-T10** | Fechamento: `prova.sh` grava a linha `prod:` (§4); smoke pelo domínio; gate v1.7 `READY (staging)` sobre o commit final; FINAL-VALIDATION §2/§3; BUILD-STATE; COMECE-AQUI; custo. **BLOCKER-PROD continua aberto** até o proprietário escrever `BLOCKER-PROD: liberado por <nome> em <data>, sha <hash>` (D13) | `prod:` com todos os campos medidos; `smoke: steps=k pass=k/k` contra `https://crm.kntecnologia.app` | T03–T09 |
 
-### 3. Três achados da preparação, resolvidos aqui
+### 3. Quatro achados, resolvidos aqui (três da preparação, um da primeira conexão real)
 
 - **Aspas do `segredo`.** `~/bin/segredo` grava `NOME='valor'`; `loadEnv` de
   `scripts/bootstrap-owner.ts` só tirava aspas duplas. Decisão: `loadEnv`
@@ -99,8 +99,8 @@ prod: compose=crm-prod services_running=N/N config_vars=V/V placeholders=0/V pub
 
 `config_vars=V/V`: cada variável de `scripts/prod/vars-obrigatorias.txt`
 existe no env e tem tamanho > 0; `placeholders=0/V`: nenhuma contém
-`placeholder`, `changeme`, `example` ou `staging`. `WAHA_API_KEY` não está na
-lista obrigatória (D12-4) e a linha diz `whatsapp=health_only` até o número.
+`placeholder`, `changeme`, `example` ou `staging`. `WAHA_API_KEY` é gerada por `scripts/prod/secrets.sh` (chave interna app ↔
+WAHA) e não está na lista obrigatória; a linha diz `whatsapp=health_only` até o número (D12-4).
 Cada `1/1` é uma jornada real executada UMA vez com evidência (id do provedor),
 nunca o corpo. `email=1/1` é o reset de senha do próprio dono.
 

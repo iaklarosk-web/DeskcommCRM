@@ -46,7 +46,7 @@ workers com `WHATSAPP_MODE=waha`, `AI_PROVIDER=anthropic`, `APP_NAME=${PLATFORM_
 `environment` com `mock|placeholder|staging|example.test|localhost|mailpit`;
 GoTrue pela Resend por SMTP e `GOTRUE_DISABLE_SIGNUP=true` enquanto o
 BLOCKER-PROD estiver aberto (D13); WAHA com tag pinada, dashboard desligado,
-HMAC e chave hasheada; e os 17 arquivos que o compose/runbook citam existem
+HMAC e chave hasheada; e os 18 arquivos que o compose/runbook citam existem
 (`documentacao-aponta-para-o-que-existe`).
 
 Mutante 65 (`tests/mutants/65-f08-compose-de-producao-com-mock.sh`): troca
