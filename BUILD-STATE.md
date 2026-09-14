@@ -2,10 +2,10 @@
 updated_at: 2026-09-14T08:00:00Z
 head_commit: dc39424a46667c284856083e7662b375ee5aad29   # código validado pelo gate f08-gate-03 (READY (staging), dentro do staging, F08 — ADR-032/033); produção inicial de pé (linha prod:)
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
-plan_version: "2.7 (2026-09-14); D38–D52; ADR-006…033"
+plan_version: "2.7 (2026-09-14); D38–D53; ADR-006…033"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
 current_phase: F08
-next_task: F09-T00             # F08 concluída (READY (staging) + prod:, f08-gate-03); F09+ só com nova mensagem do proprietário (D50 c); antes: liberação do BLOCKER-PROD (D13), número de WhatsApp (D12-4), Stripe (D52)
+next_task: F13-T00             # F08 concluída; D53: tenant Deka criado, WhatsApp adiado, nenhuma fase sem nova mensagem (D50 c); sugestão de próxima fase: F13 (CRM comercial completo) — não depende de número nem de liberação geral
 status: READY_STAGING          # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26)
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
@@ -42,6 +42,7 @@ smoke: steps=7 pass=7/7 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 log
 p95_ms: endpoints=3/3 health=38 contacts=469 conversations=468 samples=20 url=http://127.0.0.1:3200
 staging: compose=crm-staging services_running=15/15 memory_mib=1449 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F12(1e13071d)+9025
 prod: compose=crm-prod services_running=14/14 config_vars=27/27 placeholders=0/27 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=1 orgs_without_subscription=0/1 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only backup=1/1 restore_rows_diff=0 sha=dc39424a
+tenant_deka: created=1 plan=PLAN_C subscription=active origin=operator admin=platform_admin invites_sent=0/0 orgs=2 orgs_without_subscription=0/2 (D53, 14/09/2026 10:40Z)
 prod_stack: compose=crm-prod services_running=14/14 memory_mib=1962 ports=127.0.0.1+tailscale(3300,56431,56432) public_ports=0
 restore_prod: tables=183 tables_restored=183 rows=207 rows_diff=0 dump=prod-20260914T023429Z.dump target=restore_20260914_023430 seconds=11 at=20260914T023430Z
 demo3: created=1 smoke=pass=6/6 e2e[demo3]=41/41 specs=10/10 removed=1 tenants=2   # F07-T03: scripts/verify/tenant-efemero.sh demo3 (13/09 06:57Z); smoke: customers[demo3]=1/1 products[demo3]=2/2 webhook_accepted=1/1 reminder_listed=1/1
@@ -582,7 +583,7 @@ A [ADR-010](docs/decisions/ADR-010-rotulos-das-migrations-F01.md) resolve as col
 
 | Id | Tipo (D11) | O que precisa | Desde | Branch |
 |---|---|---|---|---|
-| **BLOCKER-PROD** | `production` (+ `real_message`, `real_data`) | Aprovação escrita do proprietário para LIBERAR a produção e criar o tenant Deka real (D13, D26, D04). Os 7 itens de D12 estão fornecidos e aplicados na F08 (D52), exceto o número de WhatsApp (adiado pelo proprietário): produção inicial DE PÉ em `crm.kntecnologia.app` com cadastro público desligado. Liberar = escrever `BLOCKER-PROD: liberado por <nome> em <data>, sha <hash>` nos registros humanos → `GOTRUE_DISABLE_SIGNUP=false` por ADR → tenant Deka. Não muda `status` para BLOCKED (§8.9, D26) | 2026-09-13 (F07-T07); revisto 2026-09-14 (F08) | `blocker/PROD` |
+| **BLOCKER-PROD** | `production` (+ `real_message`, `real_data`) | Aprovação escrita do proprietário para LIBERAR a produção e criar o tenant Deka real (D13, D26, D04). Os 7 itens de D12 estão fornecidos e aplicados na F08 (D52), exceto o número de WhatsApp (adiado pelo proprietário): produção inicial DE PÉ em `crm.kntecnologia.app` com cadastro público desligado; **D53 (14/09)**: liberado SÓ para o tenant Deka — organização `deka` criada pelo painel do dono (PLAN_C, admin = proprietário, 0 e-mails a terceiros). Liberar = escrever `BLOCKER-PROD: liberado por <nome> em <data>, sha <hash>` nos registros humanos → `GOTRUE_DISABLE_SIGNUP=false` por ADR → tenant Deka. Não muda `status` para BLOCKED (§8.9, D26) | 2026-09-13 (F07-T07); revisto 2026-09-14 (F08) | `blocker/PROD` |
 
 Tipos: `credential_real`, `commercial`, `cost`, `production`, `real_message`, `restore_prod`, `real_data`, `contradiction_b`, `awaiting_owner`. `BLOCKER-PROD` é o único bloqueio aberto (F07-T07); nenhum bloqueio de engenharia está ativo. Produção continua sem autorização nesta revisão; o proprietário fecha o BLOCKER-PROD por escrito (D13, D26) e os sete itens viram evidência real (F08).
 
@@ -593,6 +594,7 @@ Tipos: `credential_real`, `commercial`, `cost`, `production`, `real_message`, `r
 | `restore_prod:` | (tables=T rows_diff=0) | |
 | `deploy_prod:` | (commit) | |
 | `channel_account:` | (deka real; aceite recebido em <data>, por <nome>) | |
+| `BLOCKER-PROD:` | (liberado por <nome> em <data>, sha <hash> — a liberação GERAL; a parcial para o tenant Deka está em D53) | |
 | `owner_validated:` | | |
 | `pilot_read:` | (leitura da meta D27) | |
 | `verify_sh_frozen:` | (sha do verify.sh revisado — Etapa 9) | |

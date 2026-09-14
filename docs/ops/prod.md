@@ -121,7 +121,19 @@ se qualquer campo ficar fora do denominador.
 | WAHA | Core (gratuito) | 0 |
 | VPS | já paga (dividida com os outros OS) | 0 adicional |
 
-## Liberar o BLOCKER-PROD (é do proprietário, D13)
+## Criar uma empresa (tenant) na produção pelo painel do dono
+
+```bash
+node scripts/prod/criar-tenant.mjs <slug> "<nome>" [PLAN_A|PLAN_B|PLAN_C]   # idempotente pelo slug; admin = o proprietário; 0 e-mails a terceiros
+```
+
+É o `POST /api/v1/admin/tenants` da tela `/admin/tenants` (F11-T03): a
+organização nasce `active/operator` no plano pedido. Convidar a equipe da
+empresa é pelo painel (`/admin/tenants` → equipe), quando o proprietário
+decidir. Feito em 14/09/2026 para `deka` ("Deka Sucos", PLAN_C) — D53. A busca
+por texto do painel (`?q=`) responde 500 (VARREDURA §B17); a lista sem `q` funciona.
+
+## Liberar o BLOCKER-PROD geral (é do proprietário, D13)
 
 Texto no BUILD-STATE: `BLOCKER-PROD: liberado por <nome> em <data>, sha <hash>`.
 Só então: `GOTRUE_DISABLE_SIGNUP: "false"` no compose (por ADR), `up.sh`, e o

@@ -278,6 +278,17 @@ comparação byte a byte para a primeira gravação; ou `up.sh --no-seed` como
 padrão em staging já semeado. Custo: baixo. Decisão do proprietário: muda o
 contrato de "fixture imutável" da F02-T07.
 
+### B17. Busca por texto de `/api/v1/admin/tenants?q=` responde 500 em produção (F08, 14/09/2026)
+`app/api/v1/admin/tenants/route.ts` monta `query.or("display_name.ilike.%q%,slug::text.ilike.%q%,cnpj.ilike.%q%")`;
+o PostgREST v16 da produção (o mesmo do staging) recusa o `::text` dentro do
+`or` — `"failed to parse logic tree (...)" (line 1, column 34)` — e a rota
+devolve `internal_error` 500. Sem `q` a lista funciona (é o que `scripts/prod/criar-tenant.mjs`
+usa). O gate não pega porque nenhuma spec exercita a busca por texto do painel
+do dono. Conserto provável: `slug.ilike.%q%` (o domínio do slug é texto) + um
+caso de spec em `f11-admin-e-entrada`. **Não consertado na F08** (código
+validado pelo gate é `dc39424a`; mudar a rota exigiria novo gate) — entra na
+próxima fase que tocar o painel do dono, por ADR.
+
 ### B16. Specs herdadas do modo de EDIÇÃO do suporte ficaram sem produto (F11-T02, D51)
 `tests/e2e/suporte-temporario.spec.ts` e o trecho de acompanhamento de
 `tests/e2e/agenda-presenca-recuperacao.spec.ts` (fora do inventário do gate,
