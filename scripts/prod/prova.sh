@@ -68,12 +68,14 @@ ORGS=$(q "select count(*) from public.organizations")
 ORGS_SEM=$(q "select count(*) from public.organizations o where not exists (select 1 from public.subscriptions s where s.organization_id = o.id)")
 [ "$PLATFORM_ADMINS" -ge 1 ] || falha "platform_admins=$PLATFORM_ADMINS"
 [ "$ORGS_SEM" = 0 ] || falha "orgs sem assinatura: $ORGS_SEM/$ORGS"
-# Jornadas reais que deixam rastro no banco (recordUsage, §5.3): um turno de
-# chat e uma indexação com embedding do provedor real.
+# Jornadas reais que deixam rastro no banco: um turno de chat gravado por
+# run-model-call em `ai_usage_events` (§5.3) e um material indexado pelo
+# rag-indexer com `ai_chunks.embedding vector(1536)` do provedor real
+# (ADR-002: o acervo do SaaS usa embedding determinístico; o real é o herdado).
 AI_TURNS=$(q "select count(*) from public.ai_usage_events where operation = 'chat' and model not ilike '%mock%'")
-EMBEDDINGS=$(q "select count(*) from public.ai_usage_events where operation = 'embedding' and model not ilike '%mock%'")
+CHUNKS=$(q "select count(*) from public.ai_chunks c join public.ai_knowledge_sources s on s.id = c.knowledge_source_id where s.last_index_status = 'ok'")
 AI_TURN=$([ "$AI_TURNS" -ge 1 ] && echo 1 || echo 0); [ "$AI_TURN" = 1 ] || falha "nenhum turno real de IA em ai_usage_events"
-EMBEDDING=$([ "$EMBEDDINGS" -ge 1 ] && echo 1 || echo 0); [ "$EMBEDDING" = 1 ] || falha "nenhum embedding real em ai_usage_events"
+EMBEDDING=$([ "$CHUNKS" -ge 1 ] && echo 1 || echo 0); [ "$EMBEDDING" = 1 ] || falha "nenhum material indexado com embedding real (ai_chunks)"
 
 # ─── jornadas com id do provedor (log versionado, sem corpo) ─────────────────
 EMAIL=0; SENTRY=0

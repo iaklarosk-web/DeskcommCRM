@@ -140,7 +140,8 @@ describe("F08-T01 — compose.prod.yml: sem dublê, sem porta pública, com teto
     const esperados = [
       "scripts/prod/_env.sh", "scripts/prod/secrets.sh", "scripts/prod/up.sh", "scripts/prod/down.sh", "scripts/prod/status.sh",
       "scripts/prod/backup.sh", "scripts/prod/restore.sh", "scripts/prod/prova.sh", "scripts/prod/bootstrap-owner.sh",
-      "scripts/prod/backup-diario.sh", "scripts/staging/Dockerfile.staging", "scripts/staging/kong.template.yml", "docs/ops/prod.md",
+      "scripts/prod/backup-diario.sh", "scripts/prod/jornada-sentry.ts", "scripts/prod/jornada-ia.mjs", "scripts/prod/jornada-email.sh",
+      "scripts/prod/vars-obrigatorias.txt", "scripts/staging/Dockerfile.staging", "scripts/staging/kong.template.yml", "docs/ops/prod.md",
     ];
     const faltam = esperados.filter((f) => !existsSync(path.join(RAIZ, f)));
     expect(faltam, faltam.join(", ")).toEqual([]);
@@ -148,6 +149,6 @@ describe("F08-T01 — compose.prod.yml: sem dublê, sem porta pública, com teto
     for (const s of ["scripts/prod/up.sh", "scripts/prod/down.sh", "scripts/prod/backup.sh", "scripts/prod/restore.sh", "scripts/prod/prova.sh", "scripts/prod/bootstrap-owner.sh"]) {
       expect(runbook, `runbook não cita ${s}`).toContain(s);
     }
-    expect(`${esperados.length - faltam.length}/${esperados.length}`).toBe("13/13");
+    expect(`${esperados.length - faltam.length}/${esperados.length}`).toBe("17/17");
   });
 });

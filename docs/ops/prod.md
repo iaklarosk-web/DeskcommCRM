@@ -10,7 +10,7 @@ proprietário; o cadastro público está DESLIGADO no GoTrue até lá.
 | Coisa | Onde |
 |---|---|
 | Compose | `compose.prod.yml`, projeto `crm-prod`, rede `crm-prod` |
-| Scripts | `scripts/prod/{secrets,up,down,status,bootstrap-owner,backup,restore,backup-diario,prova}.sh` |
+| Scripts | `scripts/prod/{secrets,up,down,status,bootstrap-owner,backup,restore,backup-diario,prova}.sh`; jornadas reais: `jornada-sentry.ts`, `jornada-ia.mjs`, `jornada-email.sh` (rodam UMA vez, gravam `docs/ops/prod-jornadas.log`) |
 | Segredos | `/srv/secrets/crm-prod.env` (root:klarosk 640; nunca em chat/commit) |
 | Domínio | `https://crm.kntecnologia.app` (Caddy do host → app 3300; `/auth/v1`, `/rest/v1`, `/storage/v1`, `/realtime/v1` → kong 56431) |
 | App na VPS | `http://127.0.0.1:3300` (e o IP do Tailscale) |
@@ -83,6 +83,18 @@ HSTS/nosniff/DENY/referrer, `robots.txt` privado, `reverse_proxy 127.0.0.1:3300`
 para o app e `127.0.0.1:56431` para `/auth/v1*`, `/rest/v1*`, `/storage/v1*`,
 `/realtime/v1*`). Aplicar = `sudo caddy validate --config /etc/caddy/Caddyfile`
 → `sudo systemctl reload caddy` (reload liberado pelo proprietário, D52).
+
+## Jornadas reais (F08-T05/T06/T07) — uma vez cada, com o proprietário como único destinatário
+
+```bash
+docker cp scripts/prod/jornada-sentry.ts crm-prod-worker:/app/scripts/prod-jornada-sentry.ts && \
+  docker exec -w /app crm-prod-worker sh -c 'TSX_TSCONFIG_PATH=/app/tsconfig.json node --import /app/node_modules/tsx/dist/loader.mjs /app/scripts/prod-jornada-sentry.ts'   # sentry: ok id=…
+node scripts/prod/jornada-ia.mjs      # ai_turn: ok … / embedding: ok … (agente + FAQ do dono, reaproveitados pelo nome)
+bash scripts/prod/jornada-email.sh    # email: ok id=… (reset de senha do dono pela Resend)
+```
+
+Cada linha `… : ok` vai para `docs/ops/prod-jornadas.log` (versionado; id do
+provedor, nunca corpo), que `prova.sh` lê.
 
 ## Prova (a linha `prod:` do BUILD-STATE)
 
