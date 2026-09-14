@@ -1,24 +1,24 @@
 ---
-updated_at: 2026-09-14T01:15:00Z
-head_commit: 1e13071d32f92d3d6daf507ff2adf3e901e53a74   # código validado pelo gate f12-gate-05 (READY (staging), dentro do staging, F11+F12 — ADR-030/031)
+updated_at: 2026-09-14T08:00:00Z
+head_commit: dc39424a46667c284856083e7662b375ee5aad29   # código validado pelo gate f08-gate-03 (READY (staging), dentro do staging, F08 — ADR-032/033); produção inicial de pé (linha prod:)
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
-plan_version: "2.7 (2026-09-14); D38–D52; ADR-006…032"
+plan_version: "2.7 (2026-09-14); D38–D52; ADR-006…033"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
-current_phase: F12
-next_task: F08-T01             # F08 autorizada pelo proprietário em 14/09 (D52, ADR-032); branch feat/F08-producao-inicial a partir de dc45a638; F08-T00 feita fora da árvore em 13/09
+current_phase: F08
+next_task: F09-T00             # F08 concluída (READY (staging) + prod:, f08-gate-03); F09+ só com nova mensagem do proprietário (D50 c); antes: liberação do BLOCKER-PROD (D13), número de WhatsApp (D12-4), Stripe (D52)
 status: READY_STAGING          # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26)
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
 hosting_confirmed: yes         # D50 (11/09/2026): staging nesta VPS, Docker Compose com Supabase local, acesso só por Tailscale — ADR-027
 build_env: "Claude Code na VPS (4 núcleos/16 GB desde o reboot de 13/09 03:24Z; era 2/7,9 GB), worktree DeskcommCRM-v1.17.0; validação em serviços/bancos descartáveis e no staging; WHATSAPP_MODE=mock AI_PROVIDER=mock"
-verify_summary_last_context: "f12-gate-05 aprovado em 13/09/2026 sobre 1e13071d, 6261 s, exit 0, DENTRO do staging (VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202), current_phase=F12 (o inventário de F12 contém o de F11 — ADR-031 §1). Cinco tentativas: 01 três réguas reais (mock no índice de src/billing, guarda de suporte nas rotas de cobrança, rounded), 02 uma prova real (roteiro de notificações da F05 com o enum de 9), 03 e 04 um timeout de 30 s no navegador (deka 50/51, mesma jornada verde em demo2) sob load 11–13 de outros projetos + dois mutantes com alvo desatualizado, 05 READY. admin e billing medidos pela primeira vez; mutants_killed=61/61. READY (staging) = verificado em staging; owner_validated em branco."
+verify_summary_last_context: "f08-gate-03 aprovado em 14/09/2026 sobre dc39424a, 6007 s, exit 0, DENTRO do staging (VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202), current_phase=F08 com o inventário de F12 (ADR-033 §1; a produção fica FORA do bloco: linhas prod:/prod_stack: abaixo). Três tentativas: 01 uma régua real (namespace-das-imagens num comentário do compose.prod.yml), 02 uma prova sob carga (auditoria fire-and-forget contada antes de assentar, e2e-deka 50/51 com load 10), 03 READY com load 10–13 de outros projetos durante o navegador. mutants_killed=62/62. READY (staging) = verificado em staging; produção inicial medida por scripts/prod/prova.sh; owner_validated em branco; BLOCKER-PROD aberto."
 verify_summary_last: |
   VERIFY SUMMARY
-  scope=phase phase=F12 current_phase=F12 environment=staging
+  scope=phase phase=F08 current_phase=F08 environment=staging
   build=ok lint=ok typecheck=ok shell=ok
-  unit=8500/8500 integration=175/175 db=1660/1660 e2e=51/51 baseline_n0=8997
-  baseline_comparable: scope=unit+db passed=10160 required=8738 full_n0=pending
-  e2e_scope: F12-required passed=51/51 specs=12/12
+  unit=8508/8508 integration=175/175 db=1661/1661 e2e=51/51 baseline_n0=8997
+  baseline_comparable: scope=unit+db passed=10169 required=8738 full_n0=pending
+  e2e_scope: F08-required passed=51/51 specs=12/12
   isolation: tables=138 ops=4 dirs=2 leaks=0 (material_cross_org=97/138)
   rls-coverage: tables_with_org_id=138 policies_found=116 missing=0 service_only_with_grant=0
   rbac: roles=3 denied_expected=19 denied_actual=19
@@ -33,21 +33,66 @@ verify_summary_last: |
   admin: tenants_listed=3/3 support_sessions=2 support_reason=2/2 support_scope_denied=25/32 support_writes_denied=5/5 full_mode_rejected=1/1 signup_awaiting_payment=1/1 orgs_without_subscription=0/3
   billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1/1 blocked_writes_denied=5/5 grace_days=7 reconciliation_mismatch=0/3 cancellations=1/1 data_preserved=7/7
   replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=51/51 demo2=51/51 specs=12/12 org_a=seed-replica)
-  secrets: files_scanned=504 findings=0
-  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=61/61
+  secrets: files_scanned=520 findings=0
+  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=62/62
   debt_known=0 skip_only_occurrences=15 violations=0
   STATUS: READY (staging)
-restore: tables=183 tables_restored=183 rows=7889 rows_diff=0 dump=staging-20260914T012353Z.dump target=restore_20260914_012354 seconds=13 at=20260914T012354Z
+restore: tables=183 tables_restored=183 rows=9570 rows_diff=0 dump=staging-20260914T073055Z.dump target=restore_20260914_073056 seconds=12 at=20260914T073056Z
 smoke: steps=7 pass=7/7 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 owner_login=1/1 subscriptions[deka]=active/full subscriptions[demo2]=active/full orgs_without_subscription=0/2 tenants=deka,demo2
-p95_ms: endpoints=3/3 health=28 contacts=390 conversations=398 samples=20 url=http://127.0.0.1:3200
-staging: compose=crm-staging services_running=15/15 memory_mib=1449 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F12(1e13071d) up_sh_rerun=idempotent(rows_created=0 subscription=existing)
+p95_ms: endpoints=3/3 health=38 contacts=469 conversations=468 samples=20 url=http://127.0.0.1:3200
+staging: compose=crm-staging services_running=15/15 memory_mib=1449 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F12(1e13071d)+9025
+prod: compose=crm-prod services_running=14/14 config_vars=27/27 placeholders=0/27 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=1 orgs_without_subscription=0/1 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only backup=1/1 restore_rows_diff=0 sha=dc39424a
+prod_stack: compose=crm-prod services_running=14/14 memory_mib=1962 ports=127.0.0.1+tailscale(3300,56431,56432) public_ports=0
+restore_prod: tables=183 tables_restored=183 rows=207 rows_diff=0 dump=prod-20260914T023429Z.dump target=restore_20260914_023430 seconds=11 at=20260914T023430Z
 demo3: created=1 smoke=pass=6/6 e2e[demo3]=41/41 specs=10/10 removed=1 tenants=2   # F07-T03: scripts/verify/tenant-efemero.sh demo3 (13/09 06:57Z); smoke: customers[demo3]=1/1 products[demo3]=2/2 webhook_accepted=1/1 reminder_listed=1/1
 from-scratch: steps=7 pass=7/7 verify_exit=0 status="READY (F07)" clone=~/projetos/.from-scratch-mPYH commit=d7543c14   # F07-T04, tentativa 4 (13/09 11:22Z→13:04Z): clone 1 s · install 6 s · sandbox 43 s · env 3 s · seeds 5 s (deka 10, demo2 52, rerun 0/0) · verify 6033 s no clone (unit 8492/8492 integration 155/155 db 1651/1651 e2e[deka]=41/41 e2e[demo2]=41/41 mutantes 56/56 inputs 3529/3529) · down 3 s; clone removido
 ---
 
 # BUILD-STATE
 
-## Estado vigente — F11+F12 concluídas em 13/09/2026 (READY (staging), f12-gate-05); F08 aguarda o proprietário (D50 c)
+## Estado vigente — F08 concluída em 14/09/2026 (READY (staging) + produção inicial de pé, f08-gate-03); F09+ aguarda o proprietário (D50 c)
+
+Construída em 14/09/2026 na branch `feat/F08-producao-inicial` (a partir de
+`dc45a638`), com tasks e critérios em ADR-032 e o verificador v1.7 em ADR-033,
+autorizada por D52. Entregue: `compose.prod.yml` — stack `crm-prod` (14
+serviços: Supabase local serviço a serviço, WAHA REAL no lugar do dublê, sem
+mailpit — GoTrue pela Resend por SMTP, `AI_PROVIDER=anthropic`, Sentry próprio,
+`mem_limit` em todos, portas só em `127.0.0.1` + Tailscale 3300/56431/56432,
+`GOTRUE_DISABLE_SIGNUP=true` enquanto o BLOCKER-PROD estiver aberto) +
+`scripts/prod/{secrets,up,down,status,bootstrap-owner,backup,restore,backup-diario,prova}.sh`
+e as três jornadas versionadas (T02); domínio `crm.kntecnologia.app` no Caddy
+do host — HTTPS/HSTS, robots privado, `/auth/v1`…`/realtime/v1` → kong (T03);
+`platform_admin` real criado pelo proprietário (organização "KN Tecnologia",
+PLAN_C `active/operator`) (T04); turno de IA pela Anthropic (`claude-haiku-4-5`,
+5 chamadas por turno em `ai_usage_events`) e FAQ indexado com embedding da OpenAI
+(`ai_chunks` 3/3, `vector(1536)`) (T05); e-mail real ao dono pela API do produto
+(id da Resend) + recuperação de senha pelo GoTrue (T06); 1 evento no Sentry
+próprio, `community=false`, 0/4 campos de PII (T07); WAHA real de pé, sessão
+criada pelo produto aguardando QR (T08); backup diário 03:20 → Drive (1/1
+confirmado), restore `rows_diff=0`, runbook `docs/ops/prod.md`, orçamento
+declarado (T09); linha `prod:` por `scripts/prod/prova.sh` (T10). Achado da
+primeira conexão real: o nome da sessão gerado pela reserva herdada (69 chars)
+era recusado pelo WAHA 2026.7.2 (> 54) — migration 9025 conserta (ADR-032 §3).
+
+`./scripts/verify.sh` com `VERIFY_ENVIRONMENT=staging` e `current_phase: F08` saiu 0
+com `STATUS: READY (staging)` sobre `dc39424a` (gate f08-gate-03, 6007 s), zero
+violações: unit 8508/8508, integração 175/175, banco 1661/1661 (com a prova da
+9025), navegador 51/51 em DOZE specs duas vezes (`E2E_TENANT=deka` 1190 s,
+`demo2` 1190 s, mesma árvore, `src_diff_lines=0`), mutantes 62/62, nenhum
+teste apagado, pulado ou pendente. Nenhum campo novo no bloco (ADR-033). Fora
+do bloco: `restore:`/`smoke:`/`p95_ms:`/`staging:` (staging) e `prod:`/
+`prod_stack:`/`restore_prod:` (produção) no cabeçalho. Tentativas: 01 uma
+régua real (comentário do compose), 02 uma prova sob carga (auditoria
+fire-and-forget), 03 READY — detalhe na
+[evidência F08](docs/migration/evidence/construction-f08-20260914.txt).
+
+O que NÃO é fato: produção LIBERADA (D13 — o texto é do proprietário),
+WhatsApp com número (D12-4), Stripe (D52, fase própria), a caixa de entrada
+do proprietário, o cron do backup (primeira execução agendada), `demo3`/
+`from-scratch` nesta fase. Cadastro público DESLIGADO no GoTrue até a
+liberação.
+
+## Estado vigente — F11+F12 concluídas em 13/09/2026 (READY (staging), f12-gate-05); histórico
 
 Construídas em 13/09/2026 na branch `feat/F11-F12-admin-e-assinatura` (a partir de
 `cfb3c34a`), com tasks e critérios em ADR-030 e o verificador v1.6 em ADR-031.
@@ -488,7 +533,7 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 | F05 | Adaptar handoff e notificações; criar regra de lembrete PJ sobre infraestrutura existente | done(verify=2026-09-12 5aa5de54) — T01–T10 concluídas; pausada antes de F06 (D50 c) |
 | F06 | Deploy de staging, mocks, segurança/observabilidade e smoke | done(verify=2026-09-12 270852a6) — READY (staging) dentro do staging; T01–T09 concluídas; pausada antes de F07 (D50 c) |
 | F07 | Validação técnica do piloto, replicabilidade deka/demo2 e abertura de BLOCKER-PROD | done(verify=2026-09-13 d7543c14) — READY (staging) com os campos de §8.4; T01–T09 concluídas; BLOCKER-PROD aberto; F08+ aguarda o proprietário (D50 c) |
-| F08 | Serviços reais e produção inicial: WAHA/IA, e-mail, domínio, orçamento, backup/retorno e onboarding configurável | in_progress — D52 (14/09/2026), tasks T01–T10 em ADR-032; branch `feat/F08-producao-inicial` a partir de `dc45a638`; T00 feita fora da árvore em 13/09 (`~/projetos/CRM-OS/docs/f08/`); BLOCKER-PROD segue aberto (D13) |
+| F08 | Serviços reais e produção inicial: WAHA/IA, e-mail, domínio, orçamento, backup/retorno e onboarding configurável | done(verify=2026-09-14 dc39424a) — READY (staging) no f08-gate-03 (inventário de F12, ADR-033) + produção inicial DE PÉ em `https://crm.kntecnologia.app` medida pela linha `prod:` (ADR-032 §4); T00–T10 concluídas; WhatsApp `health_only` (D12-4); BLOCKER-PROD segue aberto (D13) |
 | F09 | Piloto Deka acompanhado, com baseline/metas, pedidos, separação, tempo e qualidade/custo da IA medidos | pending |
 | F10 | Segunda empresa real operando por configuração, com preço aceito; gate da expansão comercial | pending |
 | F11 | Administração da plataforma, empresas/equipes, suporte limitado e auditado, cadastro e entrada guiada | done(verify=2026-09-13 1e13071d) — READY (staging) no f12-gate-05 (inventário de F12 contém o de F11, ADR-031); T00–T06 concluídas; `admin:` medido |
@@ -522,6 +567,7 @@ As classes abaixo expressam o destino aprovado, não uma nova medição de pront
 | Banco/RLS/migrations | ADAPTAR | `supabase/baseline.sql`, [MANIFEST](supabase/migrations/MANIFEST.md), ADR-010 | 225 arquivos SQL em migrations no checkpoint 03ec6a3b; instalação/upgrade pelo baseline e reaplicação provados em banco descartável. Gate F02: banco1585/1585, RLS127 tabelas, nenhuma dívida nominal; serviços reais pendentes |
 | Administração, onboarding e cobrança comerciais | ADAPTAR (+ `src/billing` CRIAR) | D38/D39/D44; ADR-009; ADR-030/031; DIRETRIZ §7.9 | F11/F12: painel do dono com estado da assinatura e `/admin/billing`; suporte com motivo/escopo/vencimento só leitura (9024); cadastro nasce `pending_payment`, `/app` e `/onboarding` gateados pela assinatura, `requireRole` nega escrita com 402; wizard conclui pelo canal de teste em mock; planos placeholder, gateway mock, carência 7 (declarados); jornada paga REAL continua `NOT VALIDATED (real)` (gateway, D12) |
 | Canais comerciais, agenda, automação e marca | ADAPTAR | D40/D41; ADR-009; DIRETRIZ §7.9 | Recorte confirmado para F14–F16; regras de sincronização, limites e profundidade de white-label ainda serão definidos |
+| Produção inicial nesta VPS | CRIAR | `compose.prod.yml`, `scripts/prod/*`, `docs/ops/prod.md`; ADR-032/033; D52 | F08 concluída (14/09): stack `crm-prod` de pé com provedores reais, domínio, dono real, backup diário, linha `prod:`; falta: liberação do BLOCKER-PROD (D13), número de WhatsApp (D12-4), Stripe (D52) |
 
 A [ADR-010](docs/decisions/ADR-010-rotulos-das-migrations-F01.md) resolve as colisões de rótulos F01 com o upstream. O mapa abaixo é de nomes de arquivo: **timestamps e todos os bytes SQL permanecem iguais**, inclusive os comentários antigos. Não se executa repair nem atualização de histórico em uso; o `name` antigo de uma versão aplicada pode permanecer informativo.
 
@@ -536,7 +582,7 @@ A [ADR-010](docs/decisions/ADR-010-rotulos-das-migrations-F01.md) resolve as col
 
 | Id | Tipo (D11) | O que precisa | Desde | Branch |
 |---|---|---|---|---|
-| **BLOCKER-PROD** | `production` (+ `credential_real`, `real_message`, `real_data`, `cost`) | Aprovação escrita do proprietário para produção e criação do tenant Deka real (D13, D26), com os 7 itens de D12 fechados: (1) domínio da plataforma e `PLATFORM_NAME` (D28); (2) Supabase de produção; (3) chave OpenAI com orçamento; (4) número de WhatsApp da Deka no WAHA + aceite escrito do risco de ban (D04); (5) e-mail transacional; (6) Sentry com DSN próprio (VARREDURA §B11); (7) usuário `platform_admin` de produção. Nenhum fechado pelo agente. Não muda `status` para BLOCKED (§8.9, D26): a F07 termina em staging com este bloqueio aberto por desenho; F08+ só com nova mensagem do proprietário (D50 c) | 2026-09-13 (F07-T07) | `blocker/PROD` |
+| **BLOCKER-PROD** | `production` (+ `real_message`, `real_data`) | Aprovação escrita do proprietário para LIBERAR a produção e criar o tenant Deka real (D13, D26, D04). Os 7 itens de D12 estão fornecidos e aplicados na F08 (D52), exceto o número de WhatsApp (adiado pelo proprietário): produção inicial DE PÉ em `crm.kntecnologia.app` com cadastro público desligado. Liberar = escrever `BLOCKER-PROD: liberado por <nome> em <data>, sha <hash>` nos registros humanos → `GOTRUE_DISABLE_SIGNUP=false` por ADR → tenant Deka. Não muda `status` para BLOCKED (§8.9, D26) | 2026-09-13 (F07-T07); revisto 2026-09-14 (F08) | `blocker/PROD` |
 
 Tipos: `credential_real`, `commercial`, `cost`, `production`, `real_message`, `restore_prod`, `real_data`, `contradiction_b`, `awaiting_owner`. `BLOCKER-PROD` é o único bloqueio aberto (F07-T07); nenhum bloqueio de engenharia está ativo. Produção continua sem autorização nesta revisão; o proprietário fecha o BLOCKER-PROD por escrito (D13, D26) e os sete itens viram evidência real (F08).
 

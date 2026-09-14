@@ -21,9 +21,11 @@ ADR-021 (AI Agent REFAZER→ADAPTAR), ADR-025 (Handoff REFAZER→ADAPTAR), ADR-0
 "Lista do dia" criada na F02 — contava **`reutilizar=7 adaptar=16 refazer=0 criar=3 remover=0`**
 (26 linhas) ao fechar a F07. A F11/F12 (ADR-030) mudou o wizard de REUTILIZAR para
 ADAPTAR e acrescentou duas linhas (administração/suporte ADAPTAR; planos e
-cobrança CRIAR): **`reutilizar=6 adaptar=18 refazer=0 criar=4 remover=0`** (28 linhas),
-a mesma da tabela "Módulos" do BUILD-STATE mais os módulos herdados sem
-correspondente na Fase 1.
+cobrança CRIAR): `reutilizar=6 adaptar=18 refazer=0 criar=4 remover=0` (28 linhas).
+A F08 (ADR-032) acrescentou a linha da produção inicial (CRIAR):
+**`reutilizar=6 adaptar=18 refazer=0 criar=5 remover=0`** (29 linhas), a mesma da
+tabela "Módulos" do BUILD-STATE mais os módulos herdados sem correspondente na
+Fase 1.
 
 | Módulo (§5) | Classe vigente | Código | Fase |
 |---|---|---|---|
@@ -55,26 +57,28 @@ correspondente na Fase 1.
 | Onboarding wizard | ADAPTAR (era REUTILIZAR sem tocar) | 9 páginas; o loader grava `onboarded_at` (ADR-029 §3); F11-T05: passo do telefone conclui pelo canal de TESTE em `WHATSAPP_MODE=mock` (`conectarCanalMock`), e o wizard só abre com assinatura que permite uso (ADR-030 §1) | F07/F11 |
 | Administração da plataforma e suporte | ADAPTAR | `/admin` herdado + coluna de assinatura, `/admin/billing`; acompanhamento com motivo/escopo/vencimento só leitura (`fn_start_support_saas`, 9024; `rotaNoEscopo` no guarda) — ADR-030 §4 | F11 |
 | 5.3 Entitlement (planos) e cobrança | CRIAR | `src/billing/` (`plans`, `subscriptions`, `billing_events`, `invoices` — 9023; gateway mock, acesso, carência, conciliação) e `src/entitlement/plano.ts` (resolver por plano, D14) — ADR-030 §3 | F12 |
+| Produção inicial nesta VPS | CRIAR | `compose.prod.yml` (stack `crm-prod`: Supabase local, WAHA real, Resend, Sentry próprio, sem dublê), `scripts/prod/*` (secrets/up/down/status/bootstrap-owner/backup/restore/backup-diario/prova + jornadas reais), `docs/ops/prod.md`; domínio `crm.kntecnologia.app` no Caddy do host (ADR-032) | F08 |
 
 ## 2. VERIFY SUMMARY final
 
 Bloco colado na íntegra, rodado DENTRO do staging (ADR-028 §2: navegador
 contra o Supabase do staging, unit/db/integration no Postgres efêmero), sobre
-`1e13071d32f92d3d6daf507ff2adf3e901e53a74`, em `2026-09-13 23:17Z → 2026-09-14 01:01Z (20:17 → 22:01 de Brasília)`, exit `0`, `6261` s, com
-`current_phase: F12` (o inventário de F12 contém o de F11 — ADR-031 §1; o
-mesmo gate fecha as duas). Log em `.verify-logs/f12-gate-05/` (não
-versionado); evidência versionada em
-[docs/migration/evidence/construction-f11-f12-20260913.txt](docs/migration/evidence/construction-f11-f12-20260913.txt).
-O bloco da F07 (`d7543c14`, f07-gate-07) fica na evidência
-[construction-f07-20260913.txt](docs/migration/evidence/construction-f07-20260913.txt).
+`dc39424a46667c284856083e7662b375ee5aad29`, em `2026-09-14 05:49Z → 07:29Z (02:49 → 04:29 de Brasília)`, exit `0`, `6007` s, com
+`current_phase: F08` (inventário de F12 — ADR-033 §1; a produção NÃO entra no
+bloco: é a linha `prod:` abaixo, ADR-032 §4). Log em `.verify-logs/f08-gate-03/`
+(não versionado); evidência versionada em
+[docs/migration/evidence/construction-f08-20260914.txt](docs/migration/evidence/construction-f08-20260914.txt).
+Os blocos anteriores (F07 `d7543c14`, F11+F12 `1e13071d`) ficam nas evidências
+[construction-f07-20260913.txt](docs/migration/evidence/construction-f07-20260913.txt) e
+[construction-f11-f12-20260913.txt](docs/migration/evidence/construction-f11-f12-20260913.txt).
 
 ```text
 VERIFY SUMMARY
-scope=phase phase=F12 current_phase=F12 environment=staging
+scope=phase phase=F08 current_phase=F08 environment=staging
 build=ok lint=ok typecheck=ok shell=ok
-unit=8500/8500 integration=175/175 db=1660/1660 e2e=51/51 baseline_n0=8997
-baseline_comparable: scope=unit+db passed=10160 required=8738 full_n0=pending
-e2e_scope: F12-required passed=51/51 specs=12/12
+unit=8508/8508 integration=175/175 db=1661/1661 e2e=51/51 baseline_n0=8997
+baseline_comparable: scope=unit+db passed=10169 required=8738 full_n0=pending
+e2e_scope: F08-required passed=51/51 specs=12/12
 isolation: tables=138 ops=4 dirs=2 leaks=0 (material_cross_org=97/138)
 rls-coverage: tables_with_org_id=138 policies_found=116 missing=0 service_only_with_grant=0
 rbac: roles=3 denied_expected=19 denied_actual=19
@@ -89,29 +93,39 @@ lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2
 admin: tenants_listed=3/3 support_sessions=2 support_reason=2/2 support_scope_denied=25/32 support_writes_denied=5/5 full_mode_rejected=1/1 signup_awaiting_payment=1/1 orgs_without_subscription=0/3
 billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1/1 blocked_writes_denied=5/5 grace_days=7 reconciliation_mismatch=0/3 cancellations=1/1 data_preserved=7/7
 replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=51/51 demo2=51/51 specs=12/12 org_a=seed-replica)
-secrets: files_scanned=504 findings=0
-tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=61/61
+secrets: files_scanned=520 findings=0
+tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=62/62
 debt_known=0 skip_only_occurrences=15 violations=0
 STATUS: READY (staging)
 ```
 
-Fora do bloco, como §7.7/§8.1 mandam (provas de operação contra o container do staging, já com a imagem da F12):
+Fora do bloco, como §7.7/§8.1 mandam. Staging (provas de operação contra o
+container `crm-staging`):
 
 ```text
-restore: tables=183 tables_restored=183 rows=7889 rows_diff=0 dump=staging-20260914T012353Z.dump target=restore_20260914_012354 seconds=13 at=20260914T012354Z
+restore: tables=183 tables_restored=183 rows=9570 rows_diff=0 dump=staging-20260914T073055Z.dump target=restore_20260914_073056 seconds=12 at=20260914T073056Z
 smoke: steps=7 pass=7/7 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 owner_login=1/1 subscriptions[deka]=active/full subscriptions[demo2]=active/full orgs_without_subscription=0/2 tenants=deka,demo2
-p95_ms: endpoints=3/3 health=28 contacts=390 conversations=398 samples=20 url=http://127.0.0.1:3200
-staging: compose=crm-staging services_running=15/15 memory_mib=1449 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F12(1e13071d) up_sh_rerun=idempotent(rows_created=0 subscription=existing)
+p95_ms: endpoints=3/3 health=38 contacts=469 conversations=468 samples=20 url=http://127.0.0.1:3200
+staging: compose=crm-staging services_running=15/15 memory_mib=1449 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F12(1e13071d)+9025
 ```
 
-O `demo3:` e o `from-scratch:` desta fase NÃO foram executados (ver §3); os da
-F07 estão na evidência da F07.
+Produção inicial (F08, contra o stack `crm-prod` de pé e o domínio — medida por
+`scripts/prod/prova.sh` e `scripts/prod/status.sh`, ADR-032 §4):
 
-Link do run de CI: o workflow `.github/workflows/verify.yml` (F06-T08) roda o
-`verify.sh` em todo PR; o PR em rascunho é
-[iaklarosk-web/DeskcommCRM#3](https://github.com/iaklarosk-web/DeskcommCRM/pull/3).
-O run do GitHub e o link do run são do proprietário (§7.7 T08) — o agente não
-o executou nem o leu nesta sessão: **link do run: pendente do proprietário**.
+```text
+prod: compose=crm-prod services_running=14/14 config_vars=27/27 placeholders=0/27 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=1 orgs_without_subscription=0/1 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only backup=1/1 restore_rows_diff=0 sha=dc39424a
+prod_stack: compose=crm-prod services_running=14/14 memory_mib=1962 ports=127.0.0.1+tailscale(3300,56431,56432) public_ports=0
+restore_prod: tables=183 tables_restored=183 rows=207 rows_diff=0 dump=prod-20260914T023429Z.dump target=restore_20260914_023430 seconds=11 at=20260914T023430Z
+```
+
+Jornadas reais (uma vez cada, proprietário como único destinatário —
+`docs/ops/prod-jornadas.log`): Sentry próprio `id=a4514e84e77a4005b082a8cc9be0e4e0`
+(`community=false`, `pii_fields=0/4`); e-mail pela Resend `id=400d30d4-4953-4aca-8065-ecffefe7d343`
+(+ recuperação de senha do dono pelo GoTrue via SMTP, `recovery_audit=1/1`);
+FAQ indexado `chunks=3` com `vector(1536)` da OpenAI; turno de IA pela
+Anthropic (``claude-haiku-4-5`, 5 chamadas por turno em `ai_usage_events`, resposta de 231 caracteres no ensaio da versão em rascunho, dentro da janela 7h–22h`); sessão do WAHA real criada e aguardando QR
+(`whatsapp=health_only`, D12-4). `demo3:` e `from-scratch:` desta fase NÃO
+foram executados (ver §3).
 
 ## 3. O que NÃO foi verificado
 
@@ -119,14 +133,14 @@ Cada item com a marcação e o dono humano (§8.6, D11, D12, D26).
 
 | Item | Marcação | Dono humano |
 |---|---|---|
-| Provedor real de IA (chat e embedding): casos contra o provedor, custo real, limites | NOT VALIDATED (real) — `AI_PROVIDER=mock`, embedding determinístico (ADR-002) | proprietário (chave OpenAI com orçamento, D12) |
-| WAHA real: conectar número, receber/enviar, reconectar, ausência de duplicação | NOT VALIDATED (real) — adapter mock; `waha-mock` só responde ao health | proprietário + Deka (número, aceite de risco de ban, D04) |
-| E-mail transacional real (autenticação, notificações) | NOT VALIDATED (real) — mailpit | proprietário (provedor de e-mail, D12) |
-| Produção: domínio, Supabase de produção, deploy, smoke contra a URL de produção | NOT VALIDATED (real) — só staging (D13) | proprietário (BLOCKER-PROD, §8.6) |
+| Provedor real de IA com CLIENTES: casos do ai-eval contra o provedor, custo real em volume, limites | PARCIAL — F08-T05 mediu 1 turno real (Anthropic, `claude-haiku-4-5`, 5 chamadas por turno em `ai_usage_events`) e 1 FAQ indexado (OpenAI, `ai_chunks` 3/3) na organização do dono; os 30 casos do ai-eval continuam medidos com `AI_PROVIDER=mock` no gate (D12) | proprietário + Deka (piloto D27) |
+| WAHA real: parear número, receber/enviar, reconectar, ausência de duplicação | NOT VALIDATED (real) — container real de pé (`health_only`), sessão criada pelo produto e aguardando QR (cai em FAILED sem leitura); número é do proprietário (D12-4); achado: nome de sessão > 54 chars consertado (9025) | proprietário + Deka (número, aceite D04) |
+| E-mail transacional real para TERCEIROS (convites, avisos) | PARCIAL — F08-T06: 1 e-mail pela API do produto (`lib/email/resend.ts`, id da Resend) e 1 recuperação de senha pelo GoTrue via SMTP, ambos ao proprietário; nenhum terceiro recebeu nada (regra da casa) | proprietário |
+| Produção LIBERADA: tenant real, clientes reais, `GOTRUE_DISABLE_SIGNUP=false` | NOT VALIDATED (real) — o stack `crm-prod` está de pé em `https://crm.kntecnologia.app` (F08: 14/14 serviços, HTTPS/HSTS, dono logando, backup diário), mas o BLOCKER-PROD segue aberto (D13): cadastro público desligado, nenhum tenant além da organização-plataforma | proprietário (`BLOCKER-PROD: liberado por … sha …`) |
 | Dados reais de clientes; tenant Deka real; seed do deka preenchido (59 `TODO-DEKA`) | NOT VALIDATED (real) — fictícios; deka com placeholders (D48) | proprietário + Deka (Etapa 7) |
-| Restore em produção | NOT VALIDATED (real) — restore só em banco VAZIO de staging (`tables=179 rows_diff=0`, D36) | proprietário (`docs/ops/restore-prod.log`) |
+| Restore SOBRE o banco em uso (produção) | NOT VALIDATED (real) — restore só em banco VAZIO novo: staging `tables=183 rows_diff=0`, produção `tables=183 rows=207 rows_diff=0` (D36) | proprietário (`docs/ops/restore-prod.log`) |
 | Teste visual e no celular (7 telas × 2 dispositivos) | NOT VALIDATED — não há navegador humano nesta sessão; acesso via Tailscale não exercido | proprietário + 1 atendente (`visual: 14/14`) |
-| Sentry real | NOT VALIDATED (real) — `SENTRY_DSN=off`; o padrão herdado sem DSN aponta para o Sentry da comunidade (VARREDURA §B11) | proprietário |
+| Sentry real sob erro de usuário | PARCIAL — F08-T07: 1 evento de teste no projeto próprio (`community=false`, allowlist 4/8 campos, 0/4 PII); erro real de tela/worker ainda não aconteceu | proprietário |
 | Run do `verify.yml` no GitHub | NOT VALIDATED — o workflow existe e foi lido; o run e o link são do proprietário | proprietário |
 | Meta do piloto D27 (baseline, metas, duração, critério de invalidação) | não preenchida — `docs/ai-eval/pilot-queries.sql` mede três das seis quando houver dados reais | proprietário + Deka |
 | Firewall dos OUTROS stacks desta VPS (VARREDURA §B12) e persistência do swap (§B14) | descritos no runbook, não aplicados (portas 1-way) | proprietário |
@@ -134,8 +148,11 @@ Cada item com a marcação e o dono humano (§8.6, D11, D12, D26).
 | Cobrança REAL: gateway de pagamento, preço, nome dos planos, dias de carência, pró-rata, moeda | NOT VALIDATED (real) — gateway `mock` (`BILLING_GATEWAY=mock`), planos placeholder PLAN_A/B/C com preço 0 e limites declarados (ADR-030 §3, D14); `BILLING_GRACE_DAYS=7` é padrão, não decisão | proprietário (D14; gateway e contrato do provedor) |
 | Cadastro público REAL (e-mail de confirmação, WhatsApp real no wizard, IA real na entrada guiada) | NOT VALIDATED (real) — cadastro cria assinatura `pending_payment` e o wizard conecta um canal MOCK (`conectarCanalMock`); nenhuma mensagem a pessoa real | proprietário + Deka (número, aceite) |
 | Painel do dono e suporte com pessoa real: sessão de suporte usada por atendente humano, expiração observada no relógio | NOT VALIDATED — provado por integração e navegador com pessoas fictícias (`support_sessions=2`, `support_scope_denied=25/32`, TTL 1–60 min) | proprietário (teste visual, Tailscale) |
-| Tenant efêmero (`demo3`) e `from-scratch` nesta fase | não executados nesta sessão — foram executados na F07 (`d7543c14`) e o `from-scratch` prova o que está COMMITADO; a F12 acrescentou 3 migrations à baseline (9023/9024 com apêndices), provadas pelo `test:db` (1660/1660) e pelo `up.sh` idempotente do staging | agente na próxima fase (F08) |
+| Tenant efêmero (`demo3`) e `from-scratch` na F11/F12/F08 | não executados desde a F07 (`d7543c14`) — a F08 acrescentou a migration 9025 e o `compose.prod.yml`; o `up.sh` de produção subiu de clone-limpo-equivalente (build no host + baseline) e o `test:db` parcial provou a baseline nova | agente na próxima fase |
 | Specs herdadas de suporte em MODO DE EDIÇÃO (`suporte-temporario.spec.ts`, `agenda-presenca-recuperacao.spec.ts`) | fora do inventário; descrevem um modo que a rota SaaS não oferece (VARREDURA §B16) | proprietário |
+| Turno de IA dentro da janela de envio (7h–22h, pacing do canal) | VALIDADO — `ai_turn: ok` às 07:01 BRT (231 chars, dry run da versão em rascunho); fora da janela o turno roda e a resposta fica agendada (`ai_turn: window`, 04:14 BRT) | agente/proprietário |
+| Caixa de entrada do proprietário (os dois e-mails de F08-T06 chegaram?) | NOT VALIDATED — o agente vê o id da Resend e o audit do GoTrue, não a caixa | proprietário |
+| Backup diário pelo cron (03:20) — a primeira execução agendada | NOT VALIDATED — o script rodou à mão (1/1 confirmado no remoto); o cron ainda não disparou | proprietário (`~/backup.log`, marcador `/var/tmp/crm-os-backup-success.marker`) |
 
 ## 4. ADRs
 
@@ -174,21 +191,24 @@ Cada item com a marcação e o dono humano (§8.6, D11, D12, D26).
 | ADR-029 | verify.sh v1.5 (F07 no gate; `replicability` por tenant do seed), loader do seed completo (§B13) e tenant efêmero |
 | ADR-030 | F11+F12: tasks com critério numérico, modelo de assinatura (estados, acesso, gate de escrita), suporte com motivo/escopo/vencimento só leitura, defaults declarados (planos placeholder, gateway mock, carência 7) |
 | ADR-031 | verify.sh v1.6: F11/F12 no gate, campos `admin` e `billing`, duas specs no inventário, mutantes 60–64 |
+| ADR-032 | F08: produção inicial nesta VPS (stack `crm-prod`, domínio, provedores reais), decisões D12/D52 (Stripe depois; planos placeholder; carência 7 dias sem pró-rata), quatro achados (aspas do `segredo`, `PLATFORM_NAME`→`APP_NAME`, compose herdado não serve, nome da sessão do WAHA > 54), linha `prod:` fora do bloco |
+| ADR-033 | verify.sh v1.7: F08 no gate com o inventário de F12, `admin`/`billing` pela ordem de fechamento, régua do compose de produção, mutante 65 |
 
 ## 5. Pendências para produção
 
-Os sete itens de D12, com o estado e o dono — **7/7 com dono**; nenhum fechado
-pelo agente. Referenciados no `BLOCKER-PROD` do BUILD-STATE (branch `blocker/PROD`).
+Os sete itens de D12, com o estado e o dono — **7/7 com dono; 6/7 fornecidos
+e aplicados na F08 (D52)**, 1 adiado pelo proprietário (WhatsApp). O
+BLOCKER-PROD continua aberto (D13): produção inicial de pé, não liberada.
 
 | # | Item (D12) | Estado | Dono |
 |---|---|---|---|
-| 1 | Domínio da plataforma (e `PLATFORM_NAME`, D28) | não escolhido | proprietário |
-| 2 | Supabase de produção (projeto/servidor, senhas, backup) | não existe; staging usa Supabase local desta VPS | proprietário |
-| 3 | Chave OpenAI com orçamento (`AI_CHAT_MODEL`, `AI_EMBEDDING_MODEL`) | não fornecida; `AI_PROVIDER=mock` | proprietário |
-| 4 | Número de WhatsApp + aceite escrito do risco de ban da Deka (WAHA, D04) | não fornecido; adapter mock | proprietário + Deka |
-| 5 | E-mail transacional (provedor e remetente) | não configurado; mailpit | proprietário |
-| 6 | Sentry (DSN próprio — não o da comunidade, §B11) | `SENTRY_DSN=off` no staging | proprietário |
-| 7 | Usuário `platform_admin` de produção | não criado | proprietário |
+| 1 | Domínio da plataforma (e `PLATFORM_NAME`, D28) | `crm.kntecnologia.app` no Caddy do host (HTTPS/HSTS); `PLATFORM_NAME="CRM OS"` → `APP_NAME` | proprietário ✔ (F08-T03) |
+| 2 | Supabase de produção (projeto/servidor, senhas, backup) | compose local `crm-prod` (56431/56432, só loopback + Tailscale); backup diário → Drive; restore `rows_diff=0` | proprietário ✔ (F08-T02/T09) |
+| 3 | IA real (chat + embedding) | `AI_PROVIDER=anthropic` (chave da KN) + `OPENAI_API_KEY` com teto; 1 turno e 1 FAQ medidos | proprietário ✔ (F08-T05) |
+| 4 | Número de WhatsApp + aceite escrito do risco de ban da Deka (WAHA, D04) | **adiado pelo proprietário**; container WAHA real de pé, sessão aguardando QR | proprietário + Deka |
+| 5 | E-mail transacional (provedor e remetente) | Resend da KN, `crm@mail.kntecnologia.app` (SMTP no GoTrue, API no app); 1 envio medido | proprietário ✔ (F08-T06) |
+| 6 | Sentry (DSN próprio — não o da comunidade, §B11) | projeto `crm-os`, `community=false`, 1 evento medido | proprietário ✔ (F08-T07) |
+| 7 | Usuário `platform_admin` de produção | criado pelo proprietário (`scripts/prod/bootstrap-owner.sh`): 1 usuário, organização "KN Tecnologia", assinatura PLAN_C `active/operator` | proprietário ✔ (F08-T04) |
 
 Também antes de produção, fora de D12: aprovação escrita de produção (D13),
 regra de firewall dos outros stacks (§B12), swap persistente (§B14), decisão
@@ -252,10 +272,13 @@ a linha `from-scratch:` de §2: `steps=7 pass=7/7 verify_exit=0 status="READY (F
    `VERIFY_ENVIRONMENT=staging`, → `READY (staging)`).
 7. `bash scripts/verify/sandbox.sh down`.
 
-Compose de staging/produção: `compose.staging.yml` + `scripts/staging/up.sh`
-(build no host, camada Supabase local, baseline, seeds, produto) — runbook em
-[docs/ops/staging.md](docs/ops/staging.md); o self-host single-tenant herdado
-continua em `docker-compose.prod.yml` + `hostgator-setup-kit/`.
+Compose de staging: `compose.staging.yml` + `scripts/staging/up.sh` (build no
+host, camada Supabase local, baseline, seeds, produto) — runbook em
+[docs/ops/staging.md](docs/ops/staging.md). Produção inicial (F08):
+`compose.prod.yml` + `scripts/prod/up.sh` (mesma receita, SEM seeds, provedores
+reais) + `scripts/prod/bootstrap-owner.sh` — runbook em [docs/ops/prod.md](docs/ops/prod.md).
+O self-host single-tenant herdado continua em `docker-compose.prod.yml` +
+`hostgator-setup-kit/` (não usado pela produção do SaaS — ADR-032 §3).
 
 ## 8. Riscos conhecidos
 
@@ -276,4 +299,8 @@ P2 = degrada operação; P3 = melhoria. **P0 = 0, P1 = 0.**
 | 10 | P2 | Specs herdadas do modo de EDIÇÃO do suporte descrevem um modo que a rota SaaS não oferece mais (só leitura, D51) | VARREDURA §B16 | fora do inventário do gate; preenchem o motivo e abrem; asserções de escrita são decisão do proprietário |
 | 11 | P3 | Planos `PLAN_A/B/C` com preço 0 e limites placeholder; carência 7 dias; gateway `mock` | ADR-030 §3 | tela do dono e do tenant rotulam "placeholder"; preço/nome/gateway/carência são do proprietário (D14, D44) |
 | 12 | P3 | Organização herdada sem assinatura é `legacy_without_subscription` (permitida) | ADR-030 §3 | todo caminho de criação grava assinatura; o smoke mede `orgs_without_subscription=0/N` no staging |
+| 13 | P1 | O nome da sessão do WAHA gerado pela reserva herdada (69 chars) era recusado pelo WAHA 2026.7.2 (> 54): nenhuma instalação conectava número | ADR-032 §3, migration 9025 | **resolvido na F08-T05**: sufixo em 16 hex (53 chars), linhas existentes encurtadas, prova em `tests/invariants/f08-t05-nome-de-sessao-do-waha.test.ts` |
+| 14 | P2 | A janela de envio do pacing (7h–22h, `America/Sao_Paulo`) vale também para o ENSAIO do agente: fora dela o turno roda (custa tokens) e a resposta fica agendada, não exposta | `lib/agent-engine/pacing/engine.ts`, F08-T05 | conhecido e documentado; a jornada de F08 repete dentro da janela; o proprietário ajusta a janela por canal se quiser |
+| 15 | P2 | Cadastro público DESLIGADO em produção (`GOTRUE_DISABLE_SIGNUP=true`) enquanto o BLOCKER-PROD estiver aberto | compose.prod.yml, D13 | ligar exige ADR + `up.sh` depois da liberação escrita; convites do dono continuam pelo admin API |
+| 16 | P2 | Dois stacks nesta VPS (staging 1,4 GB + produção 2,1 GB) somam ~3,5 GB residentes; o gate precisa de ≥ 3 GB livres | ADR-032 Consequências | medir `free -m` antes do gate; derrubar o staging (`scripts/staging/down.sh`, volumes ficam) é 2-way se faltar memória |
 | — | [DEFAULT] ainda não confirmados | D27 (meta do piloto), D28 (nome/domínio), D03 para produção (hosting de produção — o staging está decidido por D50) | §2.2 | pendências declaradas; nenhuma assumida |

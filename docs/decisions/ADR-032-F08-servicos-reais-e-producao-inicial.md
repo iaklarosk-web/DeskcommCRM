@@ -137,6 +137,11 @@ e-mail de teste continuam 1-way.
 - Documentação: `docs/ops/prod.md` (runbook), FINAL-VALIDATION §2 com a linha
   `prod:` e §3 com o que segue NOT VALIDATED (WhatsApp real, tenant Deka,
   Stripe, BLOCKER-PROD).
+- O "smoke pelo domínio" de T10 É a linha `prod:` (`scripts/prod/prova.sh`):
+  produção não tem tenant fictício nem usuário de smoke, então o
+  `scripts/smoke.sh` (que compara com os seeds) continua sendo o do staging;
+  em produção o que se mede é o dono logando pelo domínio, HTTPS/HSTS, os
+  vhosts vizinhos, as jornadas reais e o backup — com denominador.
 
 ## Data
 
