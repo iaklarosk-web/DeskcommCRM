@@ -23,7 +23,9 @@ ADR-021 (AI Agent REFAZER→ADAPTAR), ADR-025 (Handoff REFAZER→ADAPTAR), ADR-0
 ADAPTAR e acrescentou duas linhas (administração/suporte ADAPTAR; planos e
 cobrança CRIAR): `reutilizar=6 adaptar=18 refazer=0 criar=4 remover=0` (28 linhas).
 A F08 (ADR-032) acrescentou a linha da produção inicial (CRIAR):
-**`reutilizar=6 adaptar=18 refazer=0 criar=5 remover=0`** (29 linhas), a mesma da
+`reutilizar=6 adaptar=18 refazer=0 criar=5 remover=0` (29 linhas). A F13
+(ADR-034) acrescentou a linha do CRM comercial (CRIAR sobre o herdado):
+**`reutilizar=6 adaptar=18 refazer=0 criar=6 remover=0`** (30 linhas), a mesma da
 tabela "Módulos" do BUILD-STATE mais os módulos herdados sem correspondente na
 Fase 1.
 
@@ -32,8 +34,9 @@ Fase 1.
 | 5.1 TenantContext | ADAPTAR | `src/tenant-context/` (`fromSession`, `fromJob`, `fromWebhook`, `withTenant`) sobre `lib/supabase/admin.ts` | F01 |
 | 5.2 TenantConfiguration | ADAPTAR | `src/tenant-config/` (`schema.ts`, `validate-seed.ts`, `canonical-seed.ts`) sobre `organizations.settings` + `tenant_settings` | F01/F02 |
 | 5.3 Entitlement | ADAPTAR | `src/entitlement/` sobre `lib/ai/budget/`, `llm_calls` → `ai_usage_events` (ADR-023) | F01/F04 |
-| 5.4 Identity & RBAC | ADAPTAR | `src/rbac/matrix.ts` sobre `lib/auth/require-role.ts` (ADR-003) | F01 |
+| 5.4 Identity & RBAC | ADAPTAR | `src/rbac/matrix.ts` sobre `lib/auth/require-role.ts` (ADR-003; quarto papel `manager` na F13, ADR-034) | F01, F13 |
 | 5.5 CRM Core | ADAPTAR (+ pedidos criados) | `contacts`/`catalog_products`/`crm_tasks` preservados; `src/crm/` com `crm_companies`, `crm_orders`, `crm_order_items` (ADR-012/013) | F02 |
+| 5.5 CRM comercial (§7.9 F13) | CRIAR sobre o herdado | `src/crm/{campos,oportunidades,relatorio}`, `src/rbac/matrix.ts` (papel `manager`), migration 9026 (`crm_companies.custom_fields`, `fn_crm_report`), rotas `/api/v1/crm/opportunities/*`, `/api/v1/settings/{crm,crm-fields}`, `/api/v1/reports/crm`, telas `/app/settings/tenant/crm-fields`, `/app/crm/fila`, `/app/reports/crm` (ADR-034/035) | F13 |
 | Lista do dia, impressão e conferência | CRIAR | `src/crm/daily/`, `app/app/orders/daily/` (desenho F02) | F02 |
 | 5.6 Conversation | ADAPTAR | `src/conversation/` (D16 sobre `lib/inbox/comando-da-conversa.ts`, ADR-016) | F03 |
 | 5.7 Channel Adapter | ADAPTAR | `src/channels/` sobre `lib/channels/` + `lib/waha/ingest.ts`; adapter mock (ADR-017) | F03 |
@@ -63,38 +66,40 @@ Fase 1.
 
 Bloco colado na íntegra, rodado DENTRO do staging (ADR-028 §2: navegador
 contra o Supabase do staging, unit/db/integration no Postgres efêmero), sobre
-`dc39424a46667c284856083e7662b375ee5aad29`, em `2026-09-14 05:49Z → 07:29Z (02:49 → 04:29 de Brasília)`, exit `0`, `6007` s, com
-`current_phase: F08` (inventário de F12 — ADR-033 §1; a produção NÃO entra no
-bloco: é a linha `prod:` abaixo, ADR-032 §4). Log em `.verify-logs/f08-gate-03/`
-(não versionado); evidência versionada em
-[docs/migration/evidence/construction-f08-20260914.txt](docs/migration/evidence/construction-f08-20260914.txt).
-Os blocos anteriores (F07 `d7543c14`, F11+F12 `1e13071d`) ficam nas evidências
-[construction-f07-20260913.txt](docs/migration/evidence/construction-f07-20260913.txt) e
-[construction-f11-f12-20260913.txt](docs/migration/evidence/construction-f11-f12-20260913.txt).
+`767d22a66d167fb28440d41a3b9a7b55237b6b07`, em `2026-09-14 17:25Z → 19:24Z (14:25 → 16:24 de Brasília)`, exit `0`, `7111` s, com
+`current_phase: F13` (inventário de F12 + `f13-crm-comercial` = 13 specs, 58
+testes; linha `crm:`; `rbac: roles=4` — ADR-035). Log em
+`.verify-logs/f13-gate-05/` (não versionado); evidência versionada em
+[docs/migration/evidence/construction-f13-20260914.txt](docs/migration/evidence/construction-f13-20260914.txt).
+Os blocos anteriores (F07 `d7543c14`, F11+F12 `1e13071d`, F08 `dc39424a`) ficam nas evidências
+[construction-f07-20260913.txt](docs/migration/evidence/construction-f07-20260913.txt),
+[construction-f11-f12-20260913.txt](docs/migration/evidence/construction-f11-f12-20260913.txt) e
+[construction-f08-20260914.txt](docs/migration/evidence/construction-f08-20260914.txt).
 
 ```text
 VERIFY SUMMARY
-scope=phase phase=F08 current_phase=F08 environment=staging
+scope=phase phase=F13 current_phase=F13 environment=staging
 build=ok lint=ok typecheck=ok shell=ok
-unit=8508/8508 integration=175/175 db=1661/1661 e2e=51/51 baseline_n0=8997
-baseline_comparable: scope=unit+db passed=10169 required=8738 full_n0=pending
-e2e_scope: F08-required passed=51/51 specs=12/12
+unit=8521/8521 integration=186/186 db=1666/1666 e2e=58/58 baseline_n0=8997
+baseline_comparable: scope=unit+db passed=10187 required=8738 full_n0=pending
+e2e_scope: F13-required passed=58/58 specs=13/13
 isolation: tables=138 ops=4 dirs=2 leaks=0 (material_cross_org=97/138)
 rls-coverage: tables_with_org_id=138 policies_found=116 missing=0 service_only_with_grant=0
-rbac: roles=3 denied_expected=19 denied_actual=19
+rbac: roles=4 denied_expected=32 denied_actual=32
 entitlement: usage_events_written=23
 ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0
 handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3 notify=3 notify_rows=6 msgs_after=3 provider_calls_after=0
 reminder: runs=2 sent=1 duplicates=0 tables_summed=3
 webhook: replay=2 stored=1 tables_checked=7
-logs: routes=278 routes_logged=278 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
-rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=278 routes_with_schema=278 routes_reading_input=148 validated=148
+logs: routes=285 routes_logged=285 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
+rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=285 routes_with_schema=285 routes_reading_input=154 validated=154
 lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2
 admin: tenants_listed=3/3 support_sessions=2 support_reason=2/2 support_scope_denied=25/32 support_writes_denied=5/5 full_mode_rejected=1/1 signup_awaiting_payment=1/1 orgs_without_subscription=0/3
 billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1/1 blocked_writes_denied=5/5 grace_days=7 reconciliation_mismatch=0/3 cancellations=1/1 data_preserved=7/7
-replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=51/51 demo2=51/51 specs=12/12 org_a=seed-replica)
-secrets: files_scanned=520 findings=0
-tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=62/62
+crm: fields_defined=6 values_rejected=3/3 values_preserved=4/4 queue_size=5 distributed=5/5 balanced=1 second_claim_rejected=1/1 history_types=3 orders_linked=1/1 cross_org_link_denied=1/1 report_indicators=14/14 roles_denied=3/3
+replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=58/58 demo2=58/58 specs=13/13 org_a=seed-replica)
+secrets: files_scanned=529 findings=0
+tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=65/65
 debt_known=0 skip_only_occurrences=15 violations=0
 STATUS: READY (staging)
 ```
@@ -148,7 +153,9 @@ Cada item com a marcação e o dono humano (§8.6, D11, D12, D26).
 | Cobrança REAL: gateway de pagamento, preço, nome dos planos, dias de carência, pró-rata, moeda | NOT VALIDATED (real) — gateway `mock` (`BILLING_GATEWAY=mock`), planos placeholder PLAN_A/B/C com preço 0 e limites declarados (ADR-030 §3, D14); `BILLING_GRACE_DAYS=7` é padrão, não decisão | proprietário (D14; gateway e contrato do provedor) |
 | Cadastro público REAL (e-mail de confirmação, WhatsApp real no wizard, IA real na entrada guiada) | NOT VALIDATED (real) — cadastro cria assinatura `pending_payment` e o wizard conecta um canal MOCK (`conectarCanalMock`); nenhuma mensagem a pessoa real | proprietário + Deka (número, aceite) |
 | Painel do dono e suporte com pessoa real: sessão de suporte usada por atendente humano, expiração observada no relógio | NOT VALIDATED — provado por integração e navegador com pessoas fictícias (`support_sessions=2`, `support_scope_denied=25/32`, TTL 1–60 min) | proprietário (teste visual, Tailscale) |
-| Tenant efêmero (`demo3`) e `from-scratch` na F11/F12/F08 | não executados desde a F07 (`d7543c14`) — a F08 acrescentou a migration 9025 e o `compose.prod.yml`; o `up.sh` de produção subiu de clone-limpo-equivalente (build no host + baseline) e o `test:db` parcial provou a baseline nova | agente na próxima fase |
+| Teste visual das telas novas da F13 (`/app/settings/tenant/crm-fields`, `/app/crm/fila`, `/app/reports/crm`) e relatório comercial com dados REAIS | NOT VALIDATED — provadas por navegador com organizações fictícias e do seed (7 testes × 2 tenants); a Deka ainda não tem oportunidade, campo ou pedido real | proprietário + Deka |
+| Campos configuráveis de OPORTUNIDADE por organização; papéis personalizados (D15); `handoff.assignment=round_robin` | não construídos na F13 (ADR-034: oportunidade continua por funil; papéis personalizados sem cliente que peça; rodízio de handoff é F15) | fases posteriores |
+| Tenant efêmero (`demo3`) e `from-scratch` na F11/F12/F08/F13 | não executados desde a F07 (`d7543c14`) — F08 (9025, compose.prod.yml) e F13 (9026) acrescentaram migrations; os `up.sh` de staging e produção reaplicaram o baseline com os apêndices e o `test:db` integral do gate (1666/1666) provou a baseline nova | agente na próxima fase |
 | Specs herdadas de suporte em MODO DE EDIÇÃO (`suporte-temporario.spec.ts`, `agenda-presenca-recuperacao.spec.ts`) | fora do inventário; descrevem um modo que a rota SaaS não oferece (VARREDURA §B16) | proprietário |
 | Turno de IA dentro da janela de envio (7h–22h, pacing do canal) | VALIDADO — `ai_turn: ok` às 07:01 BRT (231 chars, dry run da versão em rascunho); fora da janela o turno roda e a resposta fica agendada (`ai_turn: window`, 04:14 BRT) | agente/proprietário |
 | Caixa de entrada do proprietário (os dois e-mails de F08-T06 chegaram?) | NOT VALIDATED — o agente vê o id da Resend e o audit do GoTrue, não a caixa | proprietário |
@@ -156,7 +163,7 @@ Cada item com a marcação e o dono humano (§8.6, D11, D12, D26).
 
 ## 4. ADRs
 
-29 arquivos em `docs/decisions/` (`ls docs/decisions | wc -l` = 29), uma linha por decisão:
+35 arquivos em `docs/decisions/` (`ls docs/decisions | wc -l` = 35), uma linha por decisão:
 
 | ADR | Decisão |
 |---|---|
@@ -193,6 +200,8 @@ Cada item com a marcação e o dono humano (§8.6, D11, D12, D26).
 | ADR-031 | verify.sh v1.6: F11/F12 no gate, campos `admin` e `billing`, duas specs no inventário, mutantes 60–64 |
 | ADR-032 | F08: produção inicial nesta VPS (D53: tenant Deka criado na produção em 14/09, WhatsApp adiado) (stack `crm-prod`, domínio, provedores reais), decisões D12/D52 (Stripe depois; planos placeholder; carência 7 dias sem pró-rata), quatro achados (aspas do `segredo`, `PLATFORM_NAME`→`APP_NAME`, compose herdado não serve, nome da sessão do WAHA > 54), linha `prod:` fora do bloco |
 | ADR-033 | verify.sh v1.7: F08 no gate com o inventário de F12, `admin`/`billing` pela ordem de fechamento, régua do compose de produção, mutante 65 |
+| ADR-034 | F13: CRM comercial sobre a base herdada — tasks T00–T06, campos por organização em `tenant_settings`, papel `manager` (ADR-003 reaberta), fila de oportunidades por rodízio, vínculo com pedido, relatório conferido com a origem, §B17 |
+| ADR-035 | verify.sh v1.8: F13 no gate com a spec `f13-crm-comercial`, linha `crm:` (12 campos), `rbac: roles=4` pela fase ativa da árvore, mutantes 66–68 |
 
 ## 5. Pendências para produção
 
@@ -303,5 +312,7 @@ P2 = degrada operação; P3 = melhoria. **P0 = 0, P1 = 0.**
 | 14 | P2 | A janela de envio do pacing (7h–22h, `America/Sao_Paulo`) vale também para o ENSAIO do agente: fora dela o turno roda (custa tokens) e a resposta fica agendada, não exposta | `lib/agent-engine/pacing/engine.ts`, F08-T05 | conhecido e documentado; a jornada de F08 repete dentro da janela; o proprietário ajusta a janela por canal se quiser |
 | 15 | P2 | Cadastro público DESLIGADO em produção (`GOTRUE_DISABLE_SIGNUP=true`) enquanto o BLOCKER-PROD estiver aberto | compose.prod.yml, D13 | ligar exige ADR + `up.sh` depois da liberação escrita; convites do dono continuam pelo admin API |
 | 16 | P2 | Dois stacks nesta VPS (staging 1,4 GB + produção 2,1 GB) somam ~3,5 GB residentes; o gate precisa de ≥ 3 GB livres | ADR-032 Consequências | medir `free -m` antes do gate; derrubar o staging (`scripts/staging/down.sh`, volumes ficam) é 2-way se faltar memória |
-| 17 | P2 | `GET /api/v1/admin/tenants?q=` (busca por texto do painel do dono) responde 500 no PostgREST real (`slug::text` dentro do `or`) | VARREDURA §B17, F08 | sem `q` a lista funciona; conserto (`slug.ilike`) + caso de spec na próxima fase que tocar o painel, por ADR |
+| 17 | P2 | `GET /api/v1/admin/tenants?q=` (busca por texto do painel do dono) responde 500 no PostgREST real (`slug::text` dentro do `or`) | VARREDURA §B17 → §A11 | **resolvido na F13-T00 (ADR-034 §4)**: `slug.ilike`; caso de spec em `f13-crm-comercial` (por slug e por nome, 200 com A sem B) |
+| 18 | P3 | `manager` passou a papel D15 próprio (F13): instalação herdada com membros `manager` deixa de tratá-los como `tenant_admin` — eles perdem usuários/produtos/acervo e mantêm configuração comercial, funil, campos, fila e relatório | ADR-034 §2 T02, `src/rbac/matrix.ts` | por desenho (ADR-003 previa reabrir); nenhuma instalação desta base tem `manager` além das fixtures; o `tenant_admin` promove pelo painel de equipe |
+| 19 | P3 | `crm.distribution=manual` por default: a fila existe, mas ninguém distribui até a organização ligar o rodízio na tela da fila | ADR-034 §5 | declarado, não fato; o manager liga pela tela (`PATCH /api/v1/settings/crm`) |
 | — | [DEFAULT] ainda não confirmados | D27 (meta do piloto), D28 (nome/domínio), D03 para produção (hosting de produção — o staging está decidido por D50) | §2.2 | pendências declaradas; nenhuma assumida |

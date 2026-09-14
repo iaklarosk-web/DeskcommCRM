@@ -68,6 +68,12 @@ fixture negativa não era pega; o `[ -lt 2 ]` reclamava de inteiro e o script
 saía 0 — um scanner com padrão quebrado passava no gate e no CI. Achado pelo
 mutante 56 (F06-T04), que VIVIA antes do conserto. Commit `7d84ca81`.
 
+### A11. Busca por texto do painel do dono respondia 500 (era o §B17)
+`app/api/v1/admin/tenants/route.ts` montava `slug::text.ilike` dentro do `or`
+e o PostgREST recusava o cast. Consertado na F13-T00 (ADR-034 §4): `slug.ilike`;
+caso de spec na `f13-crm-comercial` (o dono busca por slug e por nome, 200 com A
+e sem B). Achado em produção em 14/09 (F08/D53). Commit `ee540a1f`.
+
 ### A8. Sandbox do gate não era reproduzível
 A receita do ambiente de navegador só existia como cópia de `config.toml` na
 evidência da F02. Virou `scripts/verify/sandbox.sh`, que a deriva do config
@@ -278,7 +284,9 @@ comparação byte a byte para a primeira gravação; ou `up.sh --no-seed` como
 padrão em staging já semeado. Custo: baixo. Decisão do proprietário: muda o
 contrato de "fixture imutável" da F02-T07.
 
-### B17. Busca por texto de `/api/v1/admin/tenants?q=` responde 500 em produção (F08, 14/09/2026)
+### B17. Busca por texto de `/api/v1/admin/tenants?q=` responde 500 em produção (F08, 14/09/2026) — **RESOLVIDO na F13-T00 (ver §A11)**
+Texto original preservado abaixo.
+
 `app/api/v1/admin/tenants/route.ts` monta `query.or("display_name.ilike.%q%,slug::text.ilike.%q%,cnpj.ilike.%q%")`;
 o PostgREST v16 da produção (o mesmo do staging) recusa o `::text` dentro do
 `or` — `"failed to parse logic tree (...)" (line 1, column 34)` — e a rota
