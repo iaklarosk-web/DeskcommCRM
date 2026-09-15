@@ -1,24 +1,24 @@
 ---
-updated_at: 2026-09-14T22:11:34Z
-head_commit: 767d22a66d167fb28440d41a3b9a7b55237b6b07   # código validado pelo gate f13-gate-05 (READY (staging), dentro do staging, F13 — ADR-034/035); produção com o código da F13 (linha prod:)
+updated_at: 2026-09-15T19:26:02Z
+head_commit: d2a66fb8eec4b842270673715dbd455024e8631d   # d2a66fb8 = 4c7bfcdf + conserto do scripts/from-scratch.sh (fase ativa em vez de F07 fixo); código VALIDADO pelo gate f15-gate-03 (READY (staging), dentro do staging, F15 — ADR-036/037) = 4c7bfcdf; a única diferença é a prova do zero, validada pela própria linha from-scratch: (verify inteiro no clone de d2a66fb8)
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
-plan_version: "2.9 (2026-09-14); D38–D54; ADR-006…037"
+plan_version: "2.9 (2026-09-15); D38–D54; ADR-006…037"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
 current_phase: F15
-next_task: F15-T06             # F15 (D54): T00–T05 concluídas (política; limite; round_robin; regras; reindex incremental + proveniência); T06 = spec, linha autonomy:, gate, demo3/from-scratch, ai_real:, fechamento
-status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26)
+next_task: F16-T00             # F15 concluída (READY (staging) f15-gate-03, produção com o código da F15); nenhuma fase começa sem nova mensagem (D50 c/D53 c/D54); F14 (agenda herdada + chat do site + WhatsApp real), F16, F17, Stripe e F09/F10 são escolha do proprietário
+status: READY_STAGING          # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26)
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
 hosting_confirmed: yes         # D50 (11/09/2026): staging nesta VPS, Docker Compose com Supabase local, acesso só por Tailscale — ADR-027
-build_env: "Claude Code na VPS (4 núcleos/16 GB desde o reboot de 13/09 03:24Z; era 2/7,9 GB), worktree DeskcommCRM-v1.17.0; validação em serviços/bancos descartáveis e no staging; WHATSAPP_MODE=mock AI_PROVIDER=mock"
-verify_summary_last_context: "f13-gate-05 aprovado em 14/09/2026 sobre 767d22a6, 7111 s, exit 0, DENTRO do staging (VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202), current_phase=F13 com a spec f13-crm-comercial (13 specs, 58 testes, ADR-035 §1) e a linha crm: (ADR-035 §2); rbac: roles=4 (papel manager, ADR-034). Cinco tentativas: 01 typecheck (tests/ fora do tsc que o agente rodou) + 4 suítes herdadas (formulário da empresa, rotas de empresa, ficha do contato, resourceId de auditoria); 02 prova shell herdada do kit HostGator sob carga (isolada 3/3); 03 typecheck (os mesmos 8 erros, agora vistos); 04 commercial-settings (manager perdeu settings.manage — regressão consertada); 05 READY. mutants_killed=65/65. Produção recebeu o código DEPOIS do READY (scripts/prod/up.sh + prova.sh, linha prod:). READY (staging) = verificado em staging; owner_validated em branco; BLOCKER-PROD aberto (liberado só para o tenant Deka, D53)."
+build_env: "Claude Code na VPS (4 núcleos/16 GB), worktree DeskcommCRM-v1.17.0; validação em serviços/bancos descartáveis e no staging; WHATSAPP_MODE=mock AI_PROVIDER=mock; F15: 3 chamadas reais à Anthropic na organização do dono (linha ai_real:)"
+verify_summary_last_context: "f15-gate-03 aprovado em 15/09/2026 sobre 4c7bfcdf, ≈7420 s, exit 0, DENTRO do staging (VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202), current_phase=F15 com a spec f15-automacao-e-autonomia (14 specs, 65 testes, ADR-037 §1) e a linha autonomy: (ADR-037 §2). Três tentativas: 01 ciclo de import que matava o CLI create-tenant sem lib/env + constraints de evento reconstruídas 2× no baseline + spec sem dispensa na régua da janela; 02 tudo verde com mutants_killed=68/69 (mutante 40 com alvo desatualizado, reapontado); 03 READY. mutants_killed=69/69. Produção recebeu o código DEPOIS do READY (scripts/prod/up.sh + prova.sh, linha prod:); ai_real: 3 chamadas reais na organização do dono (D54 g). READY (staging) = verificado em staging; owner_validated em branco; BLOCKER-PROD aberto (liberado só para o tenant Deka, D53)."
 verify_summary_last: |
   VERIFY SUMMARY
-  scope=phase phase=F13 current_phase=F13 environment=staging
+  scope=phase phase=F15 current_phase=F15 environment=staging
   build=ok lint=ok typecheck=ok shell=ok
-  unit=8521/8521 integration=186/186 db=1666/1666 e2e=58/58 baseline_n0=8997
-  baseline_comparable: scope=unit+db passed=10187 required=8738 full_n0=pending
-  e2e_scope: F13-required passed=58/58 specs=13/13
+  unit=8536/8536 integration=208/208 db=1670/1670 e2e=65/65 baseline_n0=8997
+  baseline_comparable: scope=unit+db passed=10206 required=8738 full_n0=pending
+  e2e_scope: F15-required passed=65/65 specs=14/14
   isolation: tables=138 ops=4 dirs=2 leaks=0 (material_cross_org=97/138)
   rls-coverage: tables_with_org_id=138 policies_found=116 missing=0 service_only_with_grant=0
   rbac: roles=4 denied_expected=32 denied_actual=32
@@ -27,30 +27,96 @@ verify_summary_last: |
   handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3 notify=3 notify_rows=6 msgs_after=3 provider_calls_after=0
   reminder: runs=2 sent=1 duplicates=0 tables_summed=3
   webhook: replay=2 stored=1 tables_checked=7
-  logs: routes=285 routes_logged=285 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
-  rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=285 routes_with_schema=285 routes_reading_input=154 validated=154
+  logs: routes=286 routes_logged=286 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
+  rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=286 routes_with_schema=286 routes_reading_input=155 validated=155
   lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2
   admin: tenants_listed=3/3 support_sessions=2 support_reason=2/2 support_scope_denied=25/32 support_writes_denied=5/5 full_mode_rejected=1/1 signup_awaiting_payment=1/1 orgs_without_subscription=0/3
   billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1/1 blocked_writes_denied=5/5 grace_days=7 reconciliation_mismatch=0/3 cancellations=1/1 data_preserved=7/7
   crm: fields_defined=6 values_rejected=3/3 values_preserved=4/4 queue_size=5 distributed=5/5 balanced=1 second_claim_rejected=1/1 history_types=3 orders_linked=1/1 cross_org_link_denied=1/1 report_indicators=14/14 roles_denied=3/3
-  replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=58/58 demo2=58/58 specs=13/13 org_a=seed-replica)
-  secrets: files_scanned=529 findings=0
-  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=65/65
+  autonomy: policy_modes=4/4 ai_task_created=1/1 limit_hits=1/1 calls_after_limit=0/3 paused=1/1 resumed=1/1 handoffs=4 balanced=1 assignees_distinct=3 rules=4 runs=4/4 replays=4 duplicate_runs=0 outside_catalog_denied=1/1 reindexed=2/2 unchanged_skipped=4/4 sources_cited=1/1 roles_denied=3/3
+  replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=65/65 demo2=65/65 specs=14/14 org_a=seed-replica)
+  secrets: files_scanned=543 findings=0
+  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=69/69
   debt_known=0 skip_only_occurrences=15 violations=0
   STATUS: READY (staging)
-restore: tables=183 tables_restored=183 rows=11450 rows_diff=0 dump=staging-20260914T193108Z.dump target=restore_20260914_193109 seconds=14 at=20260914T193109Z
+restore: tables=183 tables_restored=183 rows=14873 rows_diff=0 dump=staging-20260915T034953Z.dump target=restore_20260915_034954 seconds=15 at=20260915T034954Z
 smoke: steps=7 pass=7/7 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 owner_login=1/1 subscriptions[deka]=active/full subscriptions[demo2]=active/full orgs_without_subscription=0/2 tenants=deka,demo2
-p95_ms: endpoints=3/3 health=30 contacts=447 conversations=426 samples=20 url=http://127.0.0.1:3200
-staging: compose=crm-staging services_running=15/15 memory_mib=1484 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F13(767d22a6)
-prod: compose=crm-prod services_running=14/14 config_vars=27/27 placeholders=0/27 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=2 orgs_without_subscription=0/2 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only backup=1/1 restore_rows_diff=0 sha=767d22a6
+p95_ms: endpoints=3/3 health=25 contacts=375 conversations=392 samples=20 url=http://127.0.0.1:3200
+staging: compose=crm-staging services_running=15/15 memory_mib=2064 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F15(4c7bfcdf)
+prod: compose=crm-prod services_running=14/14 config_vars=27/27 placeholders=0/27 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=2 orgs_without_subscription=0/2 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only backup=1/1 restore_rows_diff=0 sha=4c7bfcdf
 tenant_deka: created=1 plan=PLAN_C subscription=active origin=operator admin=platform_admin invites_sent=0/0 orgs=2 orgs_without_subscription=0/2 (D53, 14/09/2026 10:40Z)
-prod_stack: compose=crm-prod services_running=14/14 memory_mib=2051 ports=127.0.0.1+tailscale(3300,56431,56432) public_ports=0   # F13: scripts/prod/up.sh (rebuild + baseline com o apêndice 9026) em 315 s, 14/09 19:33Z→19:38Z, DEPOIS do READY (ADR-034 §2 T06); crm_companies.custom_fields=1/1 fn_crm_report=1/1 no banco de produção
-restore_prod: tables=183 tables_restored=183 rows=449 rows_diff=0 dump=prod-20260914T193845Z.dump target=restore_20260914_193846 seconds=11 at=20260914T193846Z
-demo3: created=1 smoke=pass=6/6 e2e[demo3]=41/41 specs=10/10 removed=1 tenants=2   # F07-T03: scripts/verify/tenant-efemero.sh demo3 (13/09 06:57Z); smoke: customers[demo3]=1/1 products[demo3]=2/2 webhook_accepted=1/1 reminder_listed=1/1
-from-scratch: steps=7 pass=7/7 verify_exit=0 status="READY (F07)" clone=~/projetos/.from-scratch-mPYH commit=d7543c14   # F07-T04, tentativa 4 (13/09 11:22Z→13:04Z): clone 1 s · install 6 s · sandbox 43 s · env 3 s · seeds 5 s (deka 10, demo2 52, rerun 0/0) · verify 6033 s no clone (unit 8492/8492 integration 155/155 db 1651/1651 e2e[deka]=41/41 e2e[demo2]=41/41 mutantes 56/56 inputs 3529/3529) · down 3 s; clone removido
+prod_stack: compose=crm-prod services_running=14/14 memory_mib=1885 ports=127.0.0.1+tailscale(3300,56431,56432) public_ports=0   # F15: scripts/prod/up.sh (rebuild + baseline com os apêndices 9027–9029) em 255 s, 15/09 03:50Z→03:54Z, DEPOIS do READY (ADR-036 §2 T06); índice 9027, CHECK 9028 e colunas 9029 no banco de produção 1/1 cada
+restore_prod: tables=183 tables_restored=183 rows=461 rows_diff=0 dump=prod-20260915T035537Z.dump target=restore_20260915_035538 seconds=7 at=20260915T035538Z
+ai_real: turns=3/3 usage_delta=3/3 provider=anthropic model=claude-haiku-4-5 cost_cents=0.0162 limit_hit=1/1 denied=3/3 calls_after_limit=0/3 paused=1/1 notified=1 limit_restored=1/1 day=2026-09-15 at=2026-09-15T03:56:08Z   # F15-T06 (ADR-036 §3, D54 g): scripts/prod/jornada-limite-ia.ts no crm-prod-worker, organização do dono, FORA do bloco (o verify força mock)
+demo3: created=1 smoke=pass=7/7 e2e[demo3]=41/41 specs=10/10 removed=1 tenants=2   # F15 fechamento, 15/09 03:56Z→04:11Z, staging com o código da F15 (scripts/verify/tenant-efemero.sh: inventário fixo da F07 = 10 specs; a fixture demo3 nasce do seed, roda, é removida; o staging volta a 2 tenants)
+from-scratch: steps=7 pass=7/7 verify_exit=0 status="READY (F15)" clone=.from-scratch-phto commit=d2a66fb8   # F15 fechamento, 15/09 17:21Z→19:24Z (verify 7360 s no clone, fase=F15 lida da origem; e2e 65/65 em 14 specs 2×; mutants 69/69); terceira tentativa: 01 fase fixa F07 no script (RBAC 4≠3 — consertado em d2a66fb8), 02 suíte herdada agenda-google-reconciliacao sob load 11 (isolada 3/3 verde)
 ---
 
 # BUILD-STATE
+
+## Estado vigente — F15 concluída em 15/09/2026 (READY (staging), f15-gate-03); produção com o código da F15; F14/F16+ aguarda o proprietário (D50 c)
+
+Construída em 14–15/09/2026 na branch `feat/F15-automacao-e-autonomia` (a
+partir de `426d011c`), com tasks e critérios em ADR-036 e o verificador v1.9 em
+ADR-037, autorizada por D54. Entregue: **emissores** `conversation.resolved`,
+`order.confirmed` e `task.overdue` por `public.emit_event` (varredura idempotente
+de tarefas vencidas no lembrete-worker) e o índice único 9027 que impede run
+duplicada por (regra, evento) (T00); **política por ação**
+(`actions.policy` — allow|approve|block|transfer por nome do catálogo, sobre o
+D33 como piso; `assign_owner` entra no catálogo = 13 ações; `create_task` pela IA
+permitido com executor `ai` auditado — fecha §B5/§C6; rota
+`/api/v1/settings/ai-autonomy` e tela `/app/settings/tenant/ia/autonomia` para
+`tenant_admin` e `manager`) (T01); **limite diário de turnos**
+(`ai.limits.daily_turns`, contado em `ai_usage_events` no fuso da organização;
+`EntitlementDenied(daily_limit_reached)` ANTES do provedor; pausa
+automática/manual; aviso `ai.limit_reached` uma vez ao dia — migration 9028)
+(T02); **handoff por rodízio** (`handoff.assignment=round_robin`,
+`handoffs.assigned_to/assigned_at` — migration 9029, CHECK de coerência) (T03);
+**regras 5×4 sobre o catálogo** (gatilhos lead.created, lead.stage_changed,
+conversation.resolved, order.confirmed, task.overdue × send_message,
+create_task, transfer_to_human, assign_owner; motor `src/automation/motor.ts`
+sobre pg com run reservada+comprometida; ação fora do catálogo = 422
+`outside_catalog`; tela `/app/settings/tenant/automation-rules`) (T04);
+**reindexação incremental e fonte citada** (`reindexarDocumento` pula
+documento sem mudança; `fontes_citadas` na resposta e `metadata.ai_sources`)
+(T05); spec `f15-automacao-e-autonomia` (7 testes), linha `autonomy:`, §B16
+reescrito para só-leitura e medido, mutantes 69–72 (T06).
+
+`./scripts/verify.sh` com `VERIFY_ENVIRONMENT=staging` e `current_phase: F15` saiu 0
+com `STATUS: READY (staging)` sobre `4c7bfcdf` (gate f15-gate-03, ≈7420 s), zero
+violações: unit 8536/8536, integração 208/208, banco 1670/1670, navegador 65/65
+em CATORZE specs duas vezes (`E2E_TENANT=deka` e `demo2`, mesma árvore,
+`src_diff_lines=0`), mutantes 69/69, `rbac: roles=4 denied_expected=32
+denied_actual=32`, `crm:` inalterada, linha nova `autonomy: policy_modes=4/4
+ai_task_created=1/1 limit_hits=1/1 calls_after_limit=0/3 paused=1/1 resumed=1/1
+handoffs=4 balanced=1 assignees_distinct=3 rules=4 runs=4/4 replays=4
+duplicate_runs=0 outside_catalog_denied=1/1 reindexed=2/2 unchanged_skipped=4/4
+sources_cited=1/1 roles_denied=3/3`. Os 3.657 arquivos de entrada conservaram
+o SHA-256. Terceira tentativa: 01 ciclo de import (o CLI `create-tenant`
+carregava `lib/env` pelo catálogo) + constraints de evento reconstruídas 2× no
+baseline + spec sem dispensa na régua da janela; 02 mutante 40 com alvo
+desatualizado (68/69); 03 READY — detalhe na
+[evidência F15](docs/migration/evidence/construction-f15-20260915.txt). Fora
+do bloco: `restore:`/`smoke:`/`p95_ms:`/`staging:` (staging com a imagem da
+F15), `prod:`/`prod_stack:`/`restore_prod:` (produção com o código da F15,
+subida DEPOIS do READY), `ai_real:` (3 chamadas reais `claude-haiku-4-5` na
+organização do dono, US$ 0,00016; limite batido, 3 negadas antes do provedor,
+1 aviso, limite restaurado — D54 g), `demo3:` (41/41 no inventário fixo da F07) e
+`from-scratch:` (READY (F15) no clone de `d2a66fb8`, terceira tentativa: o script
+gravava `current_phase: F07` fixo — consertado em `d2a66fb8`, único commit depois do
+READY, só a prova do zero; depois uma suíte herdada de agenda sob load 11, verde 3/3
+isolada) no cabeçalho — primeira execução das duas provas desde a F07.
+
+Defaults declarados, nunca fato (ADR-036 §4): `actions.policy={}` (o D33 vale
+como está), `ai.limits.daily_turns=0` (sem teto), `handoff.assignment=queue`,
+nenhuma regra nasce criada, reindexação só ao salvar documento.
+
+O que NÃO é fato: teste visual das duas telas novas (proprietário); condições
+(filtros) na tela de regras do SaaS (o motor aceita `conditions`, a tela não
+edita); `approve` sem conversa vinculada nega em vez de pendurar (ADR-036 §2
+T01); ingestão de conhecimento por URL/upload (fora por D54 f); realtime do
+inbox nas specs herdadas (fora do CI); papéis personalizados (D15); WhatsApp
+real, liberação geral, Stripe (D12-4, D13, D52).
 
 ## Estado vigente — F13 concluída em 14/09/2026 (READY (staging), f13-gate-05); produção com o código da F13; F14+ aguarda o proprietário (D50 c)
 
@@ -596,11 +662,11 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 | F12 | Planos/assinatura/cobrança, confirmação de pagamento, acesso, limites/uso, inadimplência e conciliação | done(verify=2026-09-13 1e13071d) — READY (staging) com gateway MOCK e planos placeholder (D14); T01–T08 concluídas; `billing:` medido; cobrança REAL é NOT VALIDATED (real) |
 | F13 | CRM comercial: funis/oportunidades, campos, papéis/filas, histórico, tarefas, pedidos e relatórios | done(verify=2026-09-14 767d22a6) — READY (staging) no f13-gate-05 (13 specs, linha `crm:`, `roles=4`; ADR-034/035); T00–T06 concluídas; produção com o código da F13 (linha `prod:`); §B17 consertado |
 | F14 | WhatsApp, chat do site e agenda de clientes/equipe sincronizada com Google Agenda | pending |
-| F15 | Automações e autonomia de IA por empresa/ação, aprovação/handoff, limites, auditoria e conhecimento | in_progress (D54, 14/09/2026; ADR-036/037; T00 concluída) |
+| F15 | Automações e autonomia de IA por empresa/ação, aprovação/handoff, limites, auditoria e conhecimento | done(verify=2026-09-15 4c7bfcdf) — READY (staging) no f15-gate-03 (14 specs, linha `autonomy:`; ADR-036/037); T00–T06 concluídas; produção com o código da F15 (linhas `prod:`/`ai_real:`); §B16 reescrito e medido; §B5/§C6 fechados |
 | F16 | Marca do SaaS e presets configuráveis; profundidade de templates, white-label e domínios por cliente a definir | pending |
 | F17 | Operação, capacidade/recuperação, suporte, atualização, regressão e aceite comercial pelo proprietário | pending |
 
-Dependência técnica: F00/F01 → F02 → F03 → F04 → F05 → F06 → F07 → (D51) F11+F12. F11/F12 fecharam juntas o onboarding pago em staging (13/09/2026); F13 fechou em 14/09/2026; F14–F16 avançam com contratos definidos. F08 depende das entradas/autorização para serviços reais. D48 permite concluir a construção F11–F17 antes das evidências reais F09/F10; piloto e validação de mercado permanecem marcos separados, sem bloquear o software. F17 reúne a jornada comercial e os critérios de operação. Nenhuma fase futura recebe `done` por existir código equivalente no upstream.
+Dependência técnica: F00/F01 → F02 → F03 → F04 → F05 → F06 → F07 → (D51) F11+F12. F11/F12 fecharam juntas o onboarding pago em staging (13/09/2026); F13 fechou em 14/09/2026; F15 fechou em 15/09/2026 (D54); F14 e F16 avançam com contratos definidos. F08 depende das entradas/autorização para serviços reais. D48 permite concluir a construção F11–F17 antes das evidências reais F09/F10; piloto e validação de mercado permanecem marcos separados, sem bloquear o software. F17 reúne a jornada comercial e os critérios de operação. Nenhuma fase futura recebe `done` por existir código equivalente no upstream.
 
 ## Módulos — orientação vigente e estado da integração
 
@@ -614,6 +680,7 @@ As classes abaixo expressam o destino aprovado, não uma nova medição de pront
 | Inbox/conversas | ADAPTAR | `lib/inbox/comando-da-conversa.ts`, `lib/atendimento/fronteira.ts`; ADR-006/008 | Preservar conversas, demandas, revisões, ServiceBoundary e silêncio. Conciliar transições sem segunda máquina concorrente na F03 |
 | Motor de IA e RAG | ADAPTAR | `lib/agent-engine/`, `lib/ai/embeddings/`; ADR-002/006/008 | Reutilizar motor único e proveniência; completar contexto/ferramentas de pedido, provedor/mock, conhecimento e contabilização de uso na F04 |
 | CRM comercial (F13) | CRIAR sobre o herdado | `src/crm/{campos,oportunidades,relatorio}`, `src/rbac/matrix.ts` (manager), migration 9026, telas `/app/settings/tenant/crm-fields`, `/app/crm/fila`, `/app/reports/crm`; ADR-034/035 | F13 concluída (14/09): campos por organização, fila por rodízio, vínculo com pedido, relatório conferido com a origem; oportunidade continua sendo `crm_leads` (D22), pedido continua ADR-012 |
+| Automação e autonomia de IA (F15) | CRIAR sobre o herdado | `src/actions/{politica,nomes}.ts`, `src/ai/limite.ts`, `src/handoff/rodizio.ts`, `src/automation/{regras,motor}.ts`, `src/events/emitir.ts`, `src/knowledge/reindexacao.ts`, migrations 9027–9029, telas `/app/settings/tenant/ia/autonomia` e `/app/settings/tenant/automation-rules`; ADR-036/037 | F15 concluída (15/09): política por ação sobre o D33, limite diário com pausa, rodízio no handoff, regras 5×4 sobre o catálogo em motor pg (o `lib/automation/engine.ts` herdado fica só como validador), reindexação incremental com fonte citada |
 | CRM existente | ADAPTAR | `contacts`, `catalog_products`, `crm_tasks` e contrato herdado de `orders`; ADR-008/desenho F02 | F02 concluída: IDs e contrato externo preservados; empresas, catálogo, pedidos/itens, notas/tarefas e histórico integrados e validados. Inventário e provas em T04/T09/T13 |
 | Lista do dia, impressão e conferência | CRIAR | [Desenho F02](docs/design/F02-pedidos-do-dia.md), DIRETRIZ §7.3 | F02-T10…T13 concluídas: uma fonte para lista/totais/impressão completa, revisão e conferência rastreável. Data/critério explícitos; regras Deka são configuração futura, sem bloquear engenharia |
 | Action Policy | ADAPTAR | Política/preview e executores do motor; target-state §5.8 | Completar catálogo, aprovação e auditoria no mesmo caminho de execução. Aprovação de texto não confirma pedido |
