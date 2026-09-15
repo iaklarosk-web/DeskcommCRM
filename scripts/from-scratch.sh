@@ -5,7 +5,7 @@
 # descartável (o banco também nasce do zero — por isso não é o staging).
 #
 # Saída (a linha que o BUILD-STATE e o FINAL-VALIDATION citam):
-#   from-scratch: steps=7 pass=7/7 verify_exit=0 status="READY (F07)" clone=<dir> commit=<sha>
+#   from-scratch: steps=7 pass=7/7 verify_exit=0 status="READY (Fnn)" clone=<dir> commit=<sha>
 #
 # Passos, cada um com exit próprio no log:
 #   1 clone        git clone --branch <branch> <origem> <destino>
@@ -16,7 +16,7 @@
 #   6 verify       VERIFY_LOG_DIR=<log> bash scripts/verify.sh   → STATUS e exit
 #   7 down         scripts/verify/sandbox.sh down
 #
-# Uso: bash scripts/from-scratch.sh [destino] [origem] [branch]
+# Uso: [FROM_SCRATCH_PHASE=Fnn] bash scripts/from-scratch.sh [destino] [origem] [branch]
 #   destino: diretório NOVO (padrão: mktemp em $HOME/projetos/.from-scratch-XXXX)
 #   origem : repositório a clonar (padrão: este checkout — prova o que está commitado)
 #   branch : (padrão: a branch corrente)
@@ -83,8 +83,14 @@ seeds() {
 }
 passo seeds seeds
 
-# 6. o gate inteiro, no clone, contra o sandbox (READY (F07) — prova de código do zero)
-sed -i 's/^current_phase: .*/current_phase: F07/' BUILD-STATE.md
+# 6. o gate inteiro, no clone, contra o sandbox (READY (Fnn) — prova de código do zero).
+# A fase ativa é a da ORIGEM (ou FROM_SCRATCH_PHASE): o verify mede a matriz
+# D15 e as linhas obrigatórias pela fase ativa da árvore (ADR-035 §3, ADR-037),
+# e um valor fixo (F07, até a F15) reprovava a árvore por "RBAC fora do contrato".
+FASE="${FROM_SCRATCH_PHASE:-$(sed -n 's/^current_phase: *\(F[0-9][0-9]\).*/\1/p' "$ORIGEM_RAIZ/BUILD-STATE.md" | head -1)}"
+[ -n "$FASE" ] || { echo "[from-scratch] fase ativa não encontrada na origem" >&2; exit 2; }
+sed -i "s/^current_phase: .*/current_phase: $FASE/" BUILD-STATE.md
+echo "[from-scratch] fase=$FASE" >&2
 passo verify env F02_E2E_SANDBOX_ID=f02-crm-cadastros-disposable E2E_PORT=3102 VERIFY_LOG_DIR="$LOG_DIR/verify" bash scripts/verify.sh
 verify_exit=$(cat "$LOG_DIR/verify.exit")
 status=$(grep -E '^STATUS: ' "$LOG_DIR/verify.log" | tail -1 | sed 's/^STATUS: //')
