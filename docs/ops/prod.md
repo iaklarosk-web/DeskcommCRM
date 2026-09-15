@@ -90,6 +90,9 @@ para o app e `127.0.0.1:56431` para `/auth/v1*`, `/rest/v1*`, `/storage/v1*`,
 docker cp scripts/prod/jornada-sentry.ts crm-prod-worker:/app/scripts/prod-jornada-sentry.ts && \
   docker exec -w /app crm-prod-worker sh -c 'TSX_TSCONFIG_PATH=/app/tsconfig.json node --import /app/node_modules/tsx/dist/loader.mjs /app/scripts/prod-jornada-sentry.ts'   # sentry: ok id=…
 node scripts/prod/jornada-ia.mjs      # ai_turn: ok … / embedding: ok … (agente + FAQ do dono, reaproveitados pelo nome)
+# F15-T06 (ADR-036 §3): o limite diário com o provedor REAL, na organização do dono, ≤ 20 turnos (D54 g) — a linha `ai_real:` do BUILD-STATE
+docker cp scripts/prod/jornada-limite-ia.ts crm-prod-worker:/app/scripts/prod-jornada-limite-ia.ts && \
+  docker exec -w /app crm-prod-worker sh -c 'TSX_TSCONFIG_PATH=/app/tsconfig.json node --import /app/node_modules/tsx/dist/loader.mjs /app/scripts/prod-jornada-limite-ia.ts'   # ai_real: turns=3/3 … calls_after_limit=0/3 …
 bash scripts/prod/jornada-email.sh    # email: ok id=… (reset de senha do dono pela Resend)
 ```
 

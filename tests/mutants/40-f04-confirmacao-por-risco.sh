@@ -4,12 +4,15 @@
 # aprovar. A prova de F04-T02 tem de ficar VERMELHA na asserção NOMINAL
 # (`status=executed`, esperado `pending`).
 #
-# ─── Por que o alvo é o `if`, e não `exigeConfirmacao` ────────────────────
+# ─── Por que o alvo é o `if`, e não a função que decide ─────────────────
 #
-# `exigeConfirmacao` responde "este risco pede confirmação?"; o `if` é quem
-# OBEDECE à resposta. Sabotar a função provaria a leitura do Setting; sabotar o
-# desvio prova o CONTRATO — que é o que o cliente sente, porque é ele que decide
-# se um pedido nasce por decisão de uma pessoa ou por decisão de um modelo.
+# A função (`exigeConfirmacao` até a F13; `modoDaPolitica`, F15-T01, desde
+# então — D33 continua sendo o modo efetivo sem entrada da organização)
+# responde "este risco pede confirmação?"; o `if` é quem OBEDECE à resposta.
+# Sabotar a função provaria a leitura do Setting; sabotar o desvio prova o
+# CONTRATO — que é o que o cliente sente, porque é ele que decide se um pedido
+# nasce por decisão de uma pessoa ou por decisão de um modelo. Reapontado na
+# F15 (f15-gate-02: alvo desatualizado = mutante vivo).
 #
 # O desfecho sabotado é sutil de propósito: `execute()` continua devolvendo
 # sucesso, a auditoria continua ganhando linha, e o único sinal é o `status` que
@@ -26,8 +29,8 @@ scratch=$(mktemp -d "$RAIZ/.verify-logs/f04-confirmacao-por-risco-mutant.XXXXXXX
 trap 'rm -rf "$scratch"' EXIT
 
 ALVO="src/actions/execute.ts"
-DE="  if (await exigeConfirmacao(ctx, entrada, actor, deps)) {"
-PARA="  if (false && (await exigeConfirmacao(ctx, entrada, actor, deps))) {"
+DE='  if (modo === "approve") {'
+PARA='  if (false && modo === "approve") {'
 TITULO="aprovar: a ação pendente EXECUTA antes, e a conversa volta para ai_handling"
 
 node --input-type=module - "$scratch" "$RAIZ" "$ALVO" "$DE" "$PARA" <<'JS'
