@@ -39,6 +39,9 @@ export interface Tarefa {
   status: SituacaoDaTarefa;
   lead_id: string | null;
   contact_id: string | null;
+  /** Presente na leitura operacional; omitido em contratos/fixtures legados. */
+  order_id?: string | null;
+  revision?: number;
   assigned_to: string | null;
   created_by: string | null;
   created_at: string;

@@ -49,6 +49,11 @@ export async function GET(req: NextRequest): Promise<Response> {
     // Agora `tests/unit/rota-le-todo-filtro-do-schema.test.ts` reprova o próximo
     // esquecimento, em vez de este comentário pedir atenção.
     comando: url.searchParams.get("comando") ?? undefined,
+    // O ESTADO D16 (F03-T09). Mesma cadeia de quatro peças do `comando` acima —
+    // schema, hook, handler e esta linha — e o mesmo modo de falha silencioso se
+    // faltar aqui: a lista volta inteira enquanto o filtro na tela diz o
+    // contrário. `tests/unit/rota-le-todo-filtro-do-schema.test.ts` cobra.
+    saas_state: url.searchParams.get("saas_state") ?? undefined,
     // O `tag` era o único param que o schema aceitava, o hook serializava e o
     // handler implementava — e que esta linha não lia. A cadeia rompia AQUI, no
     // meio: `InboxFilters` mostra o select "Filtrar por tag" sempre que a org tem

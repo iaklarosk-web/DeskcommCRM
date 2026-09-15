@@ -18,6 +18,8 @@ export interface AdminTenantRow {
   created_at: string;
   user_count: Array<{ count: number }> | null;
   conversations_count: Array<{ count: number }> | null;
+  /** F11-T01: estado da assinatura (F12); `null` = organização herdada sem linha. */
+  subscription: { status: string; plan_code: string; grace_until: string | null } | null;
 }
 
 export interface AdminTenantsFilters {

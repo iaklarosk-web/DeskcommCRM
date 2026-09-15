@@ -18,6 +18,7 @@ import { z } from "zod";
 import { runAgent } from "@/lib/ai/runtime/agent";
 import { ok, fail } from "@/lib/api/wrappers";
 import { env } from "@/lib/env";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -65,6 +66,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       details: { meta: { requestId } },
     });
   }
+  registrarRequisicaoDe(req, { scope: "cron", outcome: "allowed", request_id: requestId, status: 200 }); // F06-T01
 
   let raw: unknown;
   try {

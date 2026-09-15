@@ -1,0 +1,81 @@
+name: verify
+
+# F06-T08 (§7.7): o gate integral — `scripts/verify.sh` — em todo pull request.
+# Exit ≠ 0 reprova o check, e o check é o que bloqueia o merge (regra de branch
+# do proprietário, fora deste arquivo). O bloco VERIFY SUMMARY fica no log do
+# job e em `.verify-logs/`, publicado como artefato para ser colado no
+# BUILD-STATE junto do link do run.
+#
+# O ambiente é o MESMO do gate local: sandbox descartável
+# (`scripts/verify/sandbox.sh`, Supabase local em 5542x, app em 3102),
+# WHATSAPP_MODE=mock e AI_PROVIDER=mock forçados pelo próprio verify.sh, um
+# worker de navegador, sem repetição. Nada aqui é mais brando que a máquina do
+# agente: é a mesma receita, no runner.
+#
+# Custo declarado: 65–130 min numa máquina de 2 núcleos (medido nos gates de
+# F03–F05 nesta VPS). O runner `ubuntu-latest` tem 4 vCPU e 16 GB; o teto de
+# 240 min cobre o pior caso observado com folga sem deixar um run travado
+# consumir o dia.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      # O marcador que `scripts/verify/f02-e2e.mjs` exige para aceitar o
+      # ambiente como o sandbox descartável — e as portas que ele confere.
+      F02_E2E_SANDBOX_ID: f02-crm-cadastros-disposable
+      E2E_PORT: "3102"
+      SUPABASE_WORKDIR: .verify-logs/sandbox-workdir
+      VERIFY_LOG_DIR: .verify-logs/ci
+      NEXT_TELEMETRY_DISABLED: "1"
+      SENTRY_DSN: "off"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/preparar-node
+        # O teto do preâmbulo mora aqui porque passo de composite action não
+        # aceita `timeout-minutes`. Razão e medições: o cabeçalho da action.
+        timeout-minutes: 5
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: latest
+
+      - name: Subir o sandbox descartável (baseline aplicado, extensões criadas)
+        run: bash scripts/verify/sandbox.sh up
+
+      - name: Gerar o .env.e2e a partir do sandbox
+        run: pnpm e2e:env
+
+      - name: Instalar o browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Gate integral (scripts/verify.sh)
+        run: bash scripts/verify.sh
+
+      - name: Publicar a evidência do gate
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-logs-${{ github.run_id }}
+          path: |
+            .verify-logs/ci/**
+            !.verify-logs/ci/**/node_modules/**
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Derrubar o sandbox
+        if: always()
+        run: bash scripts/verify/sandbox.sh down

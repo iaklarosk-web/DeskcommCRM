@@ -14,6 +14,9 @@ export const PUBLIC_PATHS: RegExp[] = [
   /^\/503$/,
   /^\/api\/v1\/health$/,
   /^\/api\/v1\/webhooks\//,
+  // (O webhook do gateway de cobrança, F12-T03, mora em /api/v1/webhooks/billing-mock
+  // e entra pela linha acima: a autoridade é a assinatura HMAC conferida
+  // DENTRO da rota, `src/billing/webhook-mock.ts`.)
   /^\/api\/v1\/cron\//,
   // Heartbeat do agente do host (bearer INTERNAL_SECRET/INTERNAL_CRON_SECRET,
   // checado dentro da própria rota) — sem cookie de sessão, igual /cron/.

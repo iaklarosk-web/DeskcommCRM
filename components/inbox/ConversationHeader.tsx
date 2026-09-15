@@ -9,12 +9,13 @@ import { Phone, ArrowRight } from "@/lib/ui/icons";
 import { useAuth } from "@/hooks/auth/AuthProvider";
 import { useClaimConversation } from "@/hooks/inbox/useClaimConversation";
 import { useReleaseConversation } from "@/hooks/inbox/useReleaseConversation";
-import { useCloseConversation } from "@/hooks/inbox/useCloseConversation";
+import { useCloseConversation, useReopenConversation } from "@/hooks/inbox/useCloseConversation";
 import { useResumeAiAttendance } from "@/hooks/inbox/useResumeAiAttendance";
 import { usePauseAiAttendance } from "@/hooks/inbox/usePauseAiAttendance";
 import { useAutomaticoAtivo } from "@/hooks/ai/useAutomaticoAtivo";
 import { OwnerBadge } from "@/components/kanban/OwnerBadge";
 import { comandoDaConversa, ROTULO_DO_MOTIVO } from "@/lib/inbox/comando-da-conversa";
+import { rotuloDoEstadoD16 } from "@/lib/inbox/estado-d16";
 import { ReassignDialog } from "@/components/inbox/ReassignDialog";
 import { SnoozeButton } from "@/components/inbox/SnoozeButton";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
@@ -57,6 +58,7 @@ export function ConversationHeader({ conversation }: Props) {
   const claim = useClaimConversation();
   const release = useReleaseConversation();
   const close = useCloseConversation();
+  const reopen = useReopenConversation();
   const retomar = useResumeAiAttendance();
   const pausar = usePauseAiAttendance();
   // "Existe automático nesta org?" — sem isto o selo afirmava que o robô estava
@@ -68,6 +70,7 @@ export function ConversationHeader({ conversation }: Props) {
   const displayName = rotuloDoContato(c, t);
   const phone = c?.phone_number ? phoneForDisplay(c.phone_number) : null;
   const status = conversation.status;
+  const rotuloDoEstado = rotuloDoEstadoD16(conversation.saas_state);
   const isMineAssigned = conversation.assigned_to_user_id === user.id;
   const isOpen = status === "open" || conversation.assigned_to_user_id == null;
 
@@ -92,7 +95,7 @@ export function ConversationHeader({ conversation }: Props) {
     automaticoDaOrg: automaticoDaOrg.data,
   });
 
-  const encerrada = status === "closed" || status === "archived";
+  const encerrada = status === "closed" || status === "archived" || status === "resolved";
   /**
    * A VOLTA aparece sempre que há algo a devolver — inclusive em conversa
    * ENCERRADA. Antes ela era condicionada a `status !== "closed"`, e o resultado
@@ -125,6 +128,9 @@ export function ConversationHeader({ conversation }: Props) {
   const podePausar =
     automaticoAtivo && !encerrada && conversation.assigned_to_user_id !== null;
 
+  if (user.support?.access_mode === "support_readonly") return <header className="flex items-center justify-between border-b p-4">
+    <strong>{displayName}</strong><span className="text-sm text-muted-foreground">{STATUS_LABEL[status] ?? status} · Somente leitura</span>
+  </header>;
   return (
     // `flex-wrap` porque este header travava a LARGURA DA TELA INTEIRA. Ele
     // media 707px de `min-content` — a identidade do contato encolhia bem
@@ -144,6 +150,21 @@ export function ConversationHeader({ conversation }: Props) {
           <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
             {t(STATUS_LABEL[status] ?? status)}
           </Badge>
+          {/* O ESTADO D16 (F03-T09, §7.4: "estado exibido … no cabeçalho").
+              Ao LADO do chip herdado, não no lugar dele: aquele nomeia o ciclo
+              legado que `fn_service_status` escreve, este nomeia o vocabulário de
+              §5.6 que `transition()` escreve. São duas colunas de verdade, e
+              fundi-las numa só esconderia justamente a divergência que a
+              projeção existe para tornar impossível. */}
+          {rotuloDoEstado && (
+            <Badge
+              variant="outline"
+              data-testid="estado-d16-cabecalho"
+              className="h-4 px-1.5 text-[10px] font-normal"
+            >
+              {t(rotuloDoEstado)}
+            </Badge>
+          )}
           {/* Ao lado do estado, não escondido num painel: a pergunta "dá para
               escrever agora?" se faz ANTES de digitar, não depois de receber um
               `failed` com um código de cinco dígitos. */}
@@ -275,31 +296,35 @@ export function ConversationHeader({ conversation }: Props) {
             {pausar.isPending ? t("Pausando...") : t("Pausar o automático")}
           </Button>
         )}
-        {status !== "closed" && status !== "archived" && (
+        {!encerrada && (
           <Button size="sm" variant="outline" onClick={() => setReassignOpen(true)}>
             {t("Transferir")}
           </Button>
         )}
-        {status !== "closed" && status !== "archived" && (
+        {!encerrada && (
           <SnoozeButton
             conversationId={conversation.id}
             snoozeUntil={conversation.snooze_until ?? null}
           />
         )}
-        {status !== "closed" && status !== "archived" && (
+        {!encerrada && (
           <Button
             size="sm"
             variant="outline"
             disabled={close.isPending}
             onClick={() => {
               if (confirm(t("Fechar esta conversa?"))) {
-                close.mutate({ conversation_id: conversation.id });
+                close.mutate({ conversation_id: conversation.id, expected_revision: conversation.service_revision });
               }
             }}
           >
             {t("Fechar")}
           </Button>
         )}
+        {encerrada && <Button size="sm" variant="outline" disabled={reopen.isPending}
+          onClick={() => reopen.mutate({ conversation_id: conversation.id, expected_revision: conversation.service_revision })}>
+          {t("Reabrir")}
+        </Button>}
         {/* `xl:hidden` porque a partir de 1280px o painel lateral de CRM entra
             na tela — e ele já tem um "Ver contato", para o MESMO contato, a um
             palmo de distância. Duas portas idênticas na mesma tela não são

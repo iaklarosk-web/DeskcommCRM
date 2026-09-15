@@ -77,7 +77,12 @@ TEMPLATE="inv_baseline"
 # Esta forma é idêntica nos dois: caminho completo, seis X, sem depender de como
 # cada `mktemp` interpreta `-t`.
 CARIMBO="$(mktemp "${TMPDIR:-/tmp}/deskcomm-test-db-carimbo.XXXXXX")"
-MEDIDOS=("$BASELINE" "$ROOT/tests/invariants" "$ROOT/scripts/test-db.sh" "$ROOT/vitest.db.config.ts")
+# Parametrização (F01-T02): scripts/test-integration.sh reusa ESTA máquina toda
+# (container efêmero, molde, banco por arquivo, detector de árvore viva) trocando
+# só a suíte e a config. Sem os envs, o comportamento é o test:db de sempre.
+SUITE_DIR="${TEST_DB_SUITE_DIR:-$ROOT/tests/invariants}"
+VITEST_CONFIG="${TEST_DB_VITEST_CONFIG:-vitest.db.config.ts}"
+MEDIDOS=("$BASELINE" "$SUITE_DIR" "$ROOT/scripts/test-db.sh" "$ROOT/$VITEST_CONFIG")
 
 arvore_mexeu() {
   find "${MEDIDOS[@]}" -type f -newer "$CARIMBO" 2>/dev/null | head -20
@@ -242,6 +247,18 @@ create table if not exists auth.users (
   created_at timestamptz not null default now()
 );
 
+-- Contrato Supabase usado pelo suporte: sessão é do Auth, nunca do produto.
+create table if not exists auth.sessions (
+ id uuid primary key, user_id uuid not null references auth.users(id),
+ aal text, not_after timestamptz
+);
+create table if not exists auth.mfa_factors (
+ id uuid primary key, user_id uuid not null references auth.users(id), status text, factor_type text default 'totp'
+);
+create or replace function auth.jwt() returns jsonb language sql stable as $$
+ select coalesce(nullif(current_setting('request.jwt.claim',true),''),nullif(current_setting('request.jwt.claims',true),''))::jsonb;
+$$;
+
 -- Stub de auth.uid() lendo o claim `sub` de request.jwt.claims (mesmo contrato
 -- do Supabase; os testes simulam o JWT via set_config).
 --
@@ -339,6 +356,15 @@ echo "==> modo UPDATE: re-aplicando baseline.sql COM ON_ERROR_STOP=1 (idempotên
 psql_install < "$BASELINE"
 echo "    ✓ update ok (zero erro na re-aplicação)"
 
+# Gancho de SABOTAGEM (F01-T11, G-38): os mutantes de tests/mutants/ aplicam um
+# SQL no MOLDE depois do baseline (ex.: policy `using (true)`) e esperam a
+# suíte ficar VERMELHA — gate que não fica vermelho com policy sabotada não
+# prova isolamento nenhum. Sem o env, nada muda.
+if [ -n "${TEST_DB_POS_BASELINE_SQL:-}" ]; then
+  echo "==> SABOTAGEM: aplicando ${TEST_DB_POS_BASELINE_SQL} ao molde (mutante — o verde aqui deve virar vermelho na suíte)"
+  psql_install < "$TEST_DB_POS_BASELINE_SQL"
+fi
+
 echo "==> banco \`postgres\` a partir do molde (o setupFile o recria a cada arquivo)"
 # Criar aqui, ALÉM do reset por arquivo, tem dois motivos medidos:
 #  - `docker exec … psql -d postgres` (o que se digita para depurar o container)
@@ -353,12 +379,12 @@ drop database if exists postgres with (force);
 create database postgres template $TEMPLATE;
 SQL
 
-echo "==> invariantes: vitest (tests/invariants) — banco novo por ARQUIVO, ordem sorteada"
+echo "==> suíte: vitest ($SUITE_DIR via $VITEST_CONFIG) — banco novo por ARQUIVO, ordem sorteada"
 # `--sequence.shuffle.files`: com o isolamento por arquivo a ordem deixa de ser
 # variável escondida, e sortear é o que impede a próxima colisão de fixture de
 # ficar dormente até alguém renomear um arquivo.
 TEST_DB_CONTAINER="$CONTAINER" TEST_DB_TEMPLATE="$TEMPLATE" TEST_DB_PORT="$PORT" \
-  vitest run --config vitest.db.config.ts --sequence.shuffle.files=true "$@"
+  vitest run --config "$VITEST_CONFIG" --sequence.shuffle.files=true "$@"
 
 # A RECUSA. Vem depois do vitest e ANTES da palavra "verde", porque o que se
 # recusa aqui é o próprio resultado — inclusive um resultado que passou.

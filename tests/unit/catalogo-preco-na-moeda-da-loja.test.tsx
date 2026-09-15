@@ -51,6 +51,7 @@ function produto(over: Partial<Produto> = {}): Produto {
     preco_cents: 24990,
     moeda: "BRL",
     custo_cents: null,
+    sale_unit: null,
     controla_estoque: false,
     quantidade: 0,
     ativo: true,
@@ -105,5 +106,15 @@ describe("o preço do catálogo na moeda da loja", () => {
 
     expect(precoNaTela("BR1")).toBe("R$ 249,90");
     expect(precoNaTela("MX1")).toBe("$249.90");
+  });
+
+  it("mostra a unidade configurada e nomeia a ausência do legado", () => {
+    montar([
+      produto({ id: "a", codigo: "SEM", sale_unit: null }),
+      produto({ id: "b", codigo: "CX", sale_unit: "caixa" }),
+    ]);
+
+    expect(screen.getByTestId("produto-SEM")).toHaveTextContent("Unidade não definida");
+    expect(screen.getByTestId("produto-CX")).toHaveTextContent("caixa");
   });
 });

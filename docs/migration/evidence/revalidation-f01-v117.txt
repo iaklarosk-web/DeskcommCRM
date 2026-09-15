@@ -1,0 +1,155 @@
+Revalidação F01 após integração da v1.17.0 — evidência observada
+Consolidação UTC: 2026-09-08T22:44:25Z
+Commit de código: a86ca7c4234722d8422e833dbefcaf986fad1797
+Release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d
+Origem F01: 960a46907449fcd4a7e773e40016742c25c0a09d
+Evidência local composta: /home/klarosk/projetos/DeskcommCRM-v1.17.0/.verify-logs/composed.7f1h17bi
+Ambiente: Node22.23.2; pnpm9.15.9; mock para IA/WhatsApp; bancos descartáveis.
+
+RESULTADO DO AGREGADOR (exit0)
+VERIFY SUMMARY
+scope=revalidation phase=F01 current_phase=F02
+build=ok lint=ok typecheck=ok shell=ok
+unit=7965/7966 integration=6/6 db=1499/1501 e2e=pending baseline_n0=8997
+baseline_comparable: scope=unit+db passed=9464 required=8738 full_n0=pending
+isolation: tables=117 ops=4 dirs=2 leaks=0 (material_cross_org=90/117)
+rls-coverage: tables_with_org_id=117 policies_found=109 missing=0 service_only_with_grant=0
+rbac: roles=3 denied_expected=17 denied_actual=17
+entitlement: usage_events_written=2
+ai_eval: cases=pending pass=pending unknown=pending injection=pending cross_tenant=pending provider_calls_at_zero_balance=pending
+handoff: ai_msgs_after_handoff=pending summary=pending assignee=pending notify=pending
+reminder: runs=pending sent=pending duplicates=pending
+webhook: replay=pending stored=pending tables_checked=pending
+replicability: e2e[deka]=pending e2e[demo2]=pending src_diff_lines=pending grep_deka_in_src=0
+secrets: files_scanned=361 findings=0
+tests_deleted=0 tests_skipped=1 expected_failures=2 tests_failed=0 tests_pending=0 mutants_killed=2/2
+debt_known=3 skip_only_occurrences=16 violations=0
+debt: unit expected_failure tests/unit/agenda-separar-historico.test.tsx :: o compromisso EM ANDAMENTO ainda é Próximos — começou, mas não terminou
+debt: db expected_failure tests/invariants/followup-reactivity.test.ts :: STOP alcança também o enrollment PAUSADO MANUALMENTE — opt-out não abre exceção de estado
+debt: db skipped tests/invariants/webhooks-inbound.test.ts :: rate limit 429 após estourar a janela — coberto por unit test do fallback in-memory
+STATUS: REVALIDATED WITH DEBT (F01)
+
+ESCOPO E PROVENIÊNCIA
+A execução inicial foi NOT READY. Esta evidência compõe etapas concluídas; não afirma uma corrida única totalmente verde.
+Tentativas originais preservadas integralmente em .verify-logs/run.A4cdyiSi e copiadas com sufixos initial-failed/initial-passed na composição.
+Correções de fixtures e regra de repetição: ADR-007. Rótulos das migrations: ADR-010; SQL e timestamp imutáveis.
+A fixture agenda foi corrigida antes de ser carregada na repetição completa e passou4/4 nessa repetição; não foram somados testes focais ao denominador.
+O suplemento typecheck sem heap4GB falhou exit134 por memória; repetição com4GB terminou exit0.
+Lint/build/integração e métricas iniciais conservados: as correções posteriores atingem fixtures ou rótulos de arquivo, sem mudar aplicação/schema. Banco completo iniciou após estabilizar seus inputs.
+RBAC e entitlement conservados da execução inicial e conferidos literalmente no stdout da repetição completa. Pasta global de métricas não foi usada.
+350/350 verificações shell sinalizadas como aprovadas, exit0. Todos os744 arquivos unitários e188 arquivos DB passaram no runner, ressalvadas as dívidas nominais do resumo.
+Upgrade/reaplicação: 25/25 registros sintéticos preservados; única adição permitida: default canonical_conversation_tags quando ausente. Evidência: upgrade-f01-v117.txt.
+Rotulagem: quatro SQLs idênticos byte a byte;216 rótulos de quatro dígitos únicos e217 versões únicas incluindo bootstrap. Evidência: f01-migration-labels.txt.
+Prontidão não validada: E2E da combinação, F02+, staging/produção, provedores/cobrança reais, aceite visual e operacional. Não aplicada em banco existente.
+
+RESULTADO INICIAL (exit1)
+[verify] evidence=/home/klarosk/projetos/DeskcommCRM-v1.17.0/.verify-logs/run.A4cdyiSi
+[verify] typecheck: exit=0 105s
+[verify] lint: exit=0 96s
+[verify] build: exit=0 286s
+[verify] shell: exit=1 58s
+[verify] unit: exit=1 1561s
+[verify] integration: exit=0 22s
+[verify] db: exit=0 927s
+[verify] secrets: exit=0 0s
+VERIFY SUMMARY
+scope=revalidation phase=F01 current_phase=F02
+build=ok lint=ok typecheck=ok shell=fail
+unit=7964/7966 integration=6/6 db=1499/1501 e2e=pending baseline_n0=8997
+baseline_comparable: scope=unit+db passed=9463 required=8738 full_n0=pending
+isolation: tables=117 ops=4 dirs=2 leaks=0 (material_cross_org=90/117)
+rls-coverage: tables_with_org_id=117 policies_found=109 missing=0 service_only_with_grant=0
+rbac: roles=3 denied_expected=17 denied_actual=17
+entitlement: usage_events_written=2
+ai_eval: cases=pending pass=pending unknown=pending injection=pending cross_tenant=pending provider_calls_at_zero_balance=pending
+handoff: ai_msgs_after_handoff=pending summary=pending assignee=pending notify=pending
+reminder: runs=pending sent=pending duplicates=pending
+webhook: replay=pending stored=pending tables_checked=pending
+replicability: e2e[deka]=pending e2e[demo2]=pending src_diff_lines=pending grep_deka_in_src=0
+secrets: files_scanned=361 findings=0
+tests_deleted=0 tests_skipped=1 expected_failures=2 tests_failed=1 tests_pending=0 mutants_killed=2/2
+debt_known=3 skip_only_occurrences=16 violations=4
+debt: unit expected_failure tests/unit/agenda-separar-historico.test.tsx :: o compromisso EM ANDAMENTO ainda é Próximos — começou, mas não terminou
+debt: db expected_failure tests/invariants/followup-reactivity.test.ts :: STOP alcança também o enrollment PAUSADO MANUALMENTE — opt-out não abre exceção de estado
+debt: db skipped tests/invariants/webhooks-inbound.test.ts :: rate limit 429 após estourar a janela — coberto por unit test do fallback in-memory
+violation: shell: comando falhou ou não executou
+violation: unit: comando falhou ou não executou
+violation: unit: módulo falhou: /home/klarosk/projetos/DeskcommCRM-v1.17.0/tests/unit/manifest-x-migrations.test.ts
+violation: unit: falha ou execução incompleta
+STATUS: NOT READY
+
+PROVENIÊNCIA DAS REPETIÇÕES
+{
+  "code_commit": "a86ca7c4234722d8422e833dbefcaf986fad1797",
+  "created_utc": "2026-09-08T22:42:24.489025+00:00",
+  "initial_run": "/home/klarosk/projetos/DeskcommCRM-v1.17.0/.verify-logs/run.A4cdyiSi",
+  "full_unit_rerun": "/home/klarosk/projetos/DeskcommCRM-v1.17.0/.verify-logs/rerun-unit.aonGONZi",
+  "replacements": {
+    "shell.log": {
+      "source": "/tmp/crm-os-v117-shell-fixed.log",
+      "sha256": "124837f759198d76b27fcae425011c0c6556f165830b1d44f42a12808a8b0507",
+      "source_mtime_utc": "2026-09-08T21:53:07.504046+00:00"
+    },
+    "shell.exit": {
+      "source": "/tmp/crm-os-v117-shell-fixed.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "source_mtime_utc": "2026-09-08T21:53:07.526046+00:00"
+    },
+    "typecheck.log": {
+      "source": "/tmp/crm-os-v117-typecheck-final-4gb.log",
+      "sha256": "ea8eb7f7927ef800d41cf34cc18fa90d0df2d21cc2551213e373a07cd0dc5856",
+      "source_mtime_utc": "2026-09-08T22:30:54.003169+00:00"
+    },
+    "typecheck.exit": {
+      "source": "/tmp/crm-os-v117-typecheck-final-4gb.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "source_mtime_utc": "2026-09-08T22:34:38.810641+00:00"
+    },
+    "unit.log": {
+      "source": "/home/klarosk/projetos/DeskcommCRM-v1.17.0/.verify-logs/rerun-unit.aonGONZi/unit.log",
+      "sha256": "77ae6f4b872db86dd3c15cdc01c535f7dce5227bafe2bfc93e74bbe8ca429d3b",
+      "source_mtime_utc": "2026-09-08T22:41:39.838942+00:00"
+    },
+    "unit.json": {
+      "source": "/home/klarosk/projetos/DeskcommCRM-v1.17.0/.verify-logs/rerun-unit.aonGONZi/unit.json",
+      "sha256": "bfaff59e92102d1cbf6f675e2bba3509583d17654efb58cb18008efbcc507081",
+      "source_mtime_utc": "2026-09-08T22:41:39.837942+00:00"
+    },
+    "unit.exit": {
+      "source": "/home/klarosk/projetos/DeskcommCRM-v1.17.0/.verify-logs/rerun-unit.aonGONZi/unit.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "source_mtime_utc": "2026-09-08T22:41:40.064943+00:00"
+    }
+  },
+  "retained_steps": [
+    "lint",
+    "build",
+    "integration",
+    "db",
+    "secrets",
+    "mutants"
+  ],
+  "metrics_origin": "/home/klarosk/projetos/DeskcommCRM-v1.17.0/.verify-logs/run.A4cdyiSi/metrics",
+  "metrics_note": "RBAC e entitlement da corrida inicial, inalterados pelas correções, coincidem literalmente com stdout da repetição unitária. Não foram copiados da pasta global de métricas.",
+  "commands": {
+    "initial": "./scripts/verify.sh --revalidate F01",
+    "shell": "AI_PROVIDER=mock WHATSAPP_MODE=mock pnpm test:shell",
+    "unit": "AI_PROVIDER=mock WHATSAPP_MODE=mock CI=1 NODE_OPTIONS=--max-old-space-size=4096 VITEST_MAX_THREADS=1 VITEST_MAX_FORKS=1 pnpm test:unit --maxWorkers=1 --allowOnly=false --reporter=default --reporter=$PWD/scripts/verify/reporter.mjs --outputFile=$RERUN/unit.json",
+    "typecheck": "AI_PROVIDER=mock WHATSAPP_MODE=mock NODE_OPTIONS=--max-old-space-size=4096 pnpm typecheck"
+  },
+  "corrections": "ADR-007: fixture shell isola seleção de provider; fixture agenda simula auditoria e exige payload. ADR-010: rótulos F01 únicos preservam timestamp e SQL. Suplemento typecheck sem limite de4GB falhou por heap, exit134; repetição4GB exit0."
+}
+
+HASHES SHA256 DOS ARTEFATOS LOCAIS
+summary.json: b897caf0fddbc81ccfe8e9bba8cc499f894047814f39c27ae80eab4da82f2585
+summary.initial-failed.json: 98dbfcc8331b193c144034a45cb8b68d4ef61d1cdd588535163e6d81b528823d
+unit.json: bfaff59e92102d1cbf6f675e2bba3509583d17654efb58cb18008efbcc507081
+db.json: ad574ab270517c1050fae297f29e229f4d56902715cf054ac10b15c512320146
+integration.json: 0381e8462aac248af55c79c62cb43e38a4428f881e2cd3c8b3b9234b2af856d8
+shell.log: 124837f759198d76b27fcae425011c0c6556f165830b1d44f42a12808a8b0507
+typecheck.log: ea8eb7f7927ef800d41cf34cc18fa90d0df2d21cc2551213e373a07cd0dc5856
+unit.initial-failed.json: 4ed33d86740ff572fe1e909af29d0c1ea7ada79144aa01495a6b5b5e53900324
+unit.initial-failed.log: 3cf25f5723467d1e4136f64b0b4805cd80e2136f44b72f7ab5d4c8536d77284e
+typecheck.supplement-oom.log: 81c37b2134512fdfde55f85693dcc64a71c31d0f568143c2969c8c42574db3f7
+provenance.json: 1ccead0e7a9c474ed584c05323ba76bbafe9a1f1841923d527943690cc6598c9
+baseline.sql: a8d9c3c64ba76ff1e98c2d5d971ec576cc929073e411677903323399923c60f0

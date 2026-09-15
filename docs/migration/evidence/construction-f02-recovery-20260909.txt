@@ -1,0 +1,49 @@
+RECUPERAÇÃO DE AMBIENTE — 2026-09-09
+
+O proprietário confirmou reinício manual da VPS pelo painel após travamento. Boot local 19:50:32 BRT (22:50:32 UTC); interrupção não foi deploy da construção. Logs disponíveis não identificaram OOM killer, panic ou erro de I/O como causa do travamento. A causa continua indeterminada.
+
+Git fsck --no-reflogs --no-dangling aprovou. Migrations9008/9009/9010/9011 mantiveram hashes registrados. Banco descartável realizou recovery automático e aceitou conexões; 9010 existe com RLS no arquivo privado e RPC do perfil, 9011 não tem policy FOR ALL. Checkout F01 original segue limpo. Alterações do projeto e .env.e2e privado permaneceram. /tmp foi limpo: pacotes de preparação e provas temporárias perderam-se; fontes já promovidas estão preservadas. Um contrato T12 começado em /tmp será reconstruído.
+
+Provas anteriores preservadas: DB T08 41/41 completo; CLI T07 + canonical-seed 7/7 completo; integração comercial 5/7, duas falhas de fixture usando manager em editores que exigem admin, ocorridas antes do reboot. A primeira preparação também tinha um parâmetro de organização trocado com user_id, já corrigido. Nenhuma dessas falhas significa corrupção do banco.
+
+Run unit T08 produziu59 aprovações em7arquivos e mensagens de timeout ao encerrar workers; não é aprovação integral dos11arquivos solicitados. Typecheck não teve exit observado antes do reboot. Rechecagens são necessárias. Após retorno, limite de heap2GB encerrou somente tsc por OOM do Node, sem queda da VPS. Execuções pesadas foram serializadas; agentes só preparam código em /home/klarosk/projetos/.crm-os-work, fora do Git e persistente entre reboots.
+
+Backup local ignorado do trabalho: .verify-logs/recovery-20260909/tracked-work.patch e new-source-files.tar.gz (55novos arquivos naquele momento); sem env/secrets. Sem alteração de swap, serviços de terceiros ou produção.
+
+Após retorno: TypeScript global passou (exit0) com heap máximo3GB e nenhuma outra verificação pesada simultânea. A VPS permaneceu disponível; ao terminar havia aproximadamente3,9GB de memória disponível. A execução anterior com2GB é limitação do processo, não evidência sobre a causa do travamento anterior.
+
+Revisão somente leitura às 00:07 UTC de 10/09 (21:07 BRT de 09/09): banco
+supabase_db_f02-crm-cadastros running/healthy, RestartCount=0; recovery concluído
+às 22:51:50 UTC, sem PANIC ou indicação de corrupção/I/O após ficar pronto.
+O gate final F02 segue ativo, com tipos/lint aprovados. T12 foi reconstruída
+em diretório persistente e integrada; as provas estão na evidência T10–T12.
+Fora do CRM: tos-postgres-dev saiu255 no boot, RestartPolicy=no; não foi
+reiniciado. systemctl --failed lista run-u1201.service, comando transitório do
+Tailscale, sem journal disponível ao usuário. Esses serviços não foram alterados.
+Esta revisão não estabelece a causa original do travamento nem substitui o
+gate funcional em andamento. Delegação: gpt-5.6-terra, esforço medium.
+
+Às 00:09 UTC, o terceiro gate foi interrompido pelo construtor durante build
+quando MemAvailable caiu sucessivamente de637 para488/388/323MB, sem swap ativo.
+Somente o processo verify.sh e seus seis descendentes foram terminados; o host
+permaneceu acessível. Tipos/lint haviam saído0; este gate não foi aprovado.
+Depois da interrupção, memória disponível voltou a aproximadamente3GB.
+
+A auditoria F00 registra /swapfile de2GB criado para esta bateria, sem fstab.
+O arquivo existente foi confirmado como Linux swap válido, root0600,0badpages.
+Na retomada seguinte, sudo -n swapon /swapfile saiu0, restaurando essa
+reserva temporária anterior ao reboot. Nenhum arquivo foi criado, nenhum serviço
+de terceiro foi reiniciado e fstab não foi alterado. A observação explica a
+diferença de recursos após reboot; não prova a causa do travamento original.
+
+A nova tentativa f02-final-04 aprovou typecheck23s, lint118s e build444s, sem
+alteração de código desde a interrupção. Durante o build, havia outra compilação
+em /srv/prod/pdv-os/releases/20260909-10359f9; ela não foi alterada. A reserva
+chegou a cerca de2GB utilizados. Ao terminar o build, o host tinha cerca de4,9GB
+disponíveis e permaneceu acessível. Os testes posteriores continuam pendentes
+no instante deste registro (00:21 UTC de10/09).
+
+Na revisão do checkpoint foi encontrado README.md sobrescrito por instruções de
+preparação do patch T03. A cópia acidental foi guardada na pasta ignorada de
+recuperação e o README original de HEAD foi restaurado integralmente. Nenhum
+conteúdo do README original entrou como exclusão no commit.

@@ -37,8 +37,8 @@ import { sql } from "./gov-helpers";
  * ─── Por que a dívida é congelada em vez de reprovar hoje ──────────────────
  *
  * Um invariante que nasce vermelho por dívida legada não entra: ou é ignorado,
- * ou é desligado. As três entradas abaixo são o retrato de 2026-08-26, cada uma
- * com a razão escrita. A catraca é o teste do fim: entrada NOVA sem
+ * ou é desligado. A entrada abaixo é o retrato de 2026-08-26, com a razão
+ * escrita. A catraca é o teste do fim: entrada NOVA sem
  * justificativa não passa, e tabela que sai da dívida nunca volta.
  */
 
@@ -51,28 +51,9 @@ const PADRAO_PII =
  * razão precisa dizer QUANDO sai, não só por que está.
  */
 const DIVIDA_LGPD_CONHECIDA: Record<string, string> = {
-  calendar_appointments:
-    "Achado do levantamento 13 §2 (QAVivo/maestro). Guarda title e notes do compromisso. " +
-    "Conserto DESPACHADO ao Arquiteto — sai desta lista no mesmo commit que acrescentar a tabela à cascata.",
   lead_notes:
     "Anotação livre do atendente SOBRE o contato (coluna body). Dívida anterior à agenda; " +
     "nenhum commit a declarou. Sai quando o cascade a alcançar.",
-  crm_tasks:
-    "Migration 0210 (extração do PR #418). A tabela guarda `title` — texto livre que " +
-    "na prática nomeia a pessoa (\"Ligar para Fulano confirmar o orçamento\"). " +
-    "⚠️ ELA JÁ ESTÁ PROTEGIDA: o trigger `trg_redigir_tarefas_ao_anonimizar` troca o " +
-    "título e apaga a descrição na transição `is_anonymized false → true`, e " +
-    "`tests/invariants/lgpd-tarefa-do-contato-anonimizado.test.ts` prova o efeito " +
-    "pelo comportamento, não pelo símbolo. A entrada existe só porque ESTE instrumento " +
-    "lê UMA função (`fn_lgpd_cascade_redact_contact`) e não enxerga trigger — a mesma " +
-    "razão pela qual `webhook_lead_captures` (0174) e `calendar_appointments` (0184) " +
-    "estão aqui, as duas também já cobertas por trigger. Sai no dia em que " +
-    "`tabelasNaCascata()` passar a derivar do catálogo também os triggers de " +
-    "`contacts`, ou no dia em que a função ganhar o passo.",
-  webhook_lead_captures:
-    "captured_name, captured_email e captured_phone — o payload cru de captação. " +
-    "A própria migration 0174 escreveu que 'o cascade de anonimização precisa alcançar esta tabela' " +
-    "e o passo nunca foi acrescentado. Sai quando for.",
 };
 
 /** Tabelas no escopo: FK para contacts E coluna de conteúdo pessoal. */
@@ -99,21 +80,59 @@ function tabelasComDadoDePessoa(): string[] {
     .filter(Boolean);
 }
 
-/** Tabelas que a função REALMENTE toca — lida do corpo no banco, não do arquivo. */
-function tabelasNaCascata(): string[] {
-  return sql(`
-    select distinct m[1]
-      from pg_proc p,
-           lateral regexp_matches(
-             pg_get_functiondef(p.oid),
-             '(?:update|delete from)\\s+(?:public\\.)?"?([a-z_]+)"?', 'gi') m
-     where p.proname = 'fn_lgpd_cascade_redact_contact'
-     order by 1;
-  `)
+/**
+ * Funções que realmente participam da anonimização: a RPC canônica e funções
+ * ligadas a triggers ROW UPDATE ativos de contacts que observam is_anonymized.
+ * Função apenas criada não conta; trigger desabilitado também não conta.
+ */
+const REDATORES_ATIVOS = `
+  with redatores as (
+    select p.oid
+      from pg_proc p
+     where p.pronamespace = 'public'::regnamespace
+       and p.proname = 'fn_lgpd_cascade_redact_contact'
+    union
+    select p.oid
+      from pg_trigger t
+      join pg_proc p on p.oid = t.tgfoid
+      join pg_attribute a
+        on a.attrelid = t.tgrelid and a.attname = 'is_anonymized'
+     where t.tgrelid = 'public.contacts'::regclass
+       and not t.tgisinternal
+       and t.tgenabled in ('O', 'A')
+       and (t.tgtype & 1) = 1
+       and (t.tgtype & 16) = 16
+       and (t.tgattr::text = '' or a.attnum = any(t.tgattr))
+  )
+`;
+
+function linhas(query: string): string[] {
+  return sql(query)
     .trim()
     .split("\n")
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+function funcoesRedatorasAtivas(): string[] {
+  return linhas(`${REDATORES_ATIVOS}
+    select p.proname
+      from redatores r join pg_proc p on p.oid = r.oid
+     order by 1;
+  `);
+}
+
+/** Tabelas tocadas pelo corpo instalado de cada redator ativo. */
+function tabelasNaCascata(): string[] {
+  return linhas(`${REDATORES_ATIVOS}
+    select distinct m[1]
+      from redatores r
+      join pg_proc p on p.oid = r.oid,
+           lateral regexp_matches(
+             pg_get_functiondef(p.oid),
+             '(?:update|delete from)\\s+(?:public\\.)?"?([a-z_]+)"?', 'gi') m
+     order by 1;
+  `);
 }
 
 describe("LGPD: a cascata alcança toda tabela que guarda dado de pessoa", () => {
@@ -130,6 +149,69 @@ describe("LGPD: a cascata alcança toda tabela que guarda dado de pessoa", () =>
     const naCascata = tabelasNaCascata();
     expect(naCascata.length).toBeGreaterThanOrEqual(5);
     expect(naCascata).toContain("contacts");
+  });
+
+  it("CONTROLE: o redator0227 ativo alcança ai_reply_drafts pelo corpo instalado", () => {
+    expect(tabelasNaCascata()).toContain("ai_reply_drafts");
+  });
+
+  it("CONTROLE: descobre os redatores ativos de pedidos, tarefas e notas pelo trigger", () => {
+    const funcoes = funcoesRedatorasAtivas();
+    expect(funcoes).toEqual(
+      expect.arrayContaining([
+        "fn_crm_orders_redact_contact",
+        "fn_redigir_tarefas_do_contato_anonimizado",
+        "fn_crm_notes_redact_contact",
+      ]),
+    );
+    expect(tabelasNaCascata()).toEqual(
+      expect.arrayContaining(["crm_orders", "crm_tasks", "crm_notes"]),
+    );
+  });
+
+  it("CONTROLE NEGATIVO: função desconectada de contacts não fabrica cobertura", () => {
+    const result = sql(`
+      begin;
+      create or replace function public.test_lgpd_redator_desconectado()
+      returns trigger language plpgsql as $$
+      begin
+        update public.crm_notes set body = '[não deveria contar]' where contact_id = new.id;
+        return new;
+      end $$;
+      ${REDATORES_ATIVOS}
+      select case when exists (
+        select 1 from redatores r join pg_proc p on p.oid = r.oid
+         where p.proname = 'test_lgpd_redator_desconectado'
+      ) then 'desconectado-incluido' else 'desconectado-excluido' end;
+      rollback;
+    `);
+    expect(result).toContain("desconectado-excluido");
+    expect(result).not.toContain("desconectado-incluido");
+  });
+
+  it("CONTROLE NEGATIVO: trigger desabilitado não fabrica cobertura", () => {
+    const result = sql(`
+      begin;
+      create or replace function public.test_lgpd_redator_desabilitado()
+      returns trigger language plpgsql as $$
+      begin
+        update public.crm_notes set body = '[não deveria contar]' where contact_id = new.id;
+        return new;
+      end $$;
+      drop trigger if exists test_lgpd_redator_desabilitado on public.contacts;
+      create trigger test_lgpd_redator_desabilitado
+        after update of is_anonymized on public.contacts
+        for each row execute function public.test_lgpd_redator_desabilitado();
+      alter table public.contacts disable trigger test_lgpd_redator_desabilitado;
+      ${REDATORES_ATIVOS}
+      select case when exists (
+        select 1 from redatores r join pg_proc p on p.oid = r.oid
+         where p.proname = 'test_lgpd_redator_desabilitado'
+      ) then 'desabilitado-incluido' else 'desabilitado-excluido' end;
+      rollback;
+    `);
+    expect(result).toContain("desabilitado-excluido");
+    expect(result).not.toContain("desabilitado-incluido");
   });
 
   it("nenhuma tabela NOVA guarda dado de pessoa fora da cascata", () => {
@@ -169,6 +251,9 @@ describe("LGPD: a cascata alcança toda tabela que guarda dado de pessoa", () =>
     const semRazao = Object.entries(DIVIDA_LGPD_CONHECIDA)
       .filter(([, razao]) => razao.trim().length < 40)
       .map(([t]) => t);
-    expect(semRazao, "Entrada sem justificativa — lista à mão sem razão é o defeito de novo.").toEqual([]);
+    expect(
+      semRazao,
+      "Entrada sem justificativa — lista à mão sem razão é o defeito de novo.",
+    ).toEqual([]);
   });
 });

@@ -11,6 +11,12 @@ export const TRIGGER_EVENTS = [
   "message.received",
   "lead.tag_added",
   "contact.tag_added",
+  // F15-T04 (ADR-036 §2 T04, D54 e): os três gatilhos do SaaS, emitidos por
+  // `src/events/emitir.ts`. A rota do SaaS aceita só GATILHOS_DE_REGRA
+  // (`src/automation/regras.ts`); os herdados acima continuam no enum do kit.
+  "conversation.resolved",
+  "order.confirmed",
+  "task.overdue",
 ] as const;
 
 export const conditionSchema = z.object({
@@ -23,7 +29,19 @@ export const actionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("create_or_move_lead"), config: z.object({ pipeline_id: z.string().uuid(), stage_id: z.string().uuid() }) }),
   z.object({ type: z.literal("send_whatsapp_message"), config: z.object({ channel_session_id: z.string().uuid(), template: z.string().min(1).max(2000) }) }),
   z.object({ type: z.literal("add_tag"), config: z.object({ tags: z.array(z.string().min(1).max(60)).min(1).max(10) }) }),
-  z.object({ type: z.literal("assign_owner"), config: z.object({ user_id: z.string().uuid() }) }),
+  // F15-T04: `assign_owner` sem `user_id` = rodízio de `crm.queue_roles` (catálogo D17).
+  z.object({ type: z.literal("assign_owner"), config: z.object({ user_id: z.string().uuid().nullable().default(null) }) }),
+  // F15-T04 (ADR-036 §2 T04): as três ações do catálogo D17 com executor `automation`.
+  z.object({ type: z.literal("send_message"), config: z.object({ body: z.string().trim().min(1).max(4096) }) }),
+  z.object({
+    type: z.literal("create_task"),
+    config: z.object({
+      title: z.string().trim().min(1).max(255),
+      priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
+      due_in_hours: z.number().int().min(1).max(24 * 365).nullable().default(null),
+    }),
+  }),
+  z.object({ type: z.literal("transfer_to_human"), config: z.object({ summary: z.string().trim().min(2).max(2000) }) }),
   z.object({
     type: z.literal("send_ai_message"),
     config: z.object({

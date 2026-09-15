@@ -1,0 +1,12 @@
+{
+  "event": "message.ack",
+  "session": "f03-sessao-ficticia",
+  "payload": {
+    "id": "true_5511900000001@c.us_3EB0F03OUT001",
+    "from": "5511900000001@c.us",
+    "fromMe": true,
+    "ack": 2,
+    "ackName": "DEVICE",
+    "timestamp": 1789000240
+  }
+}

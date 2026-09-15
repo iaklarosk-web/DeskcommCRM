@@ -84,6 +84,10 @@ const CURATED_FIELDS: Record<TriggerEvent, CuratedField[]> = {
   "message.received": MESSAGE_FIELDS,
   "lead.tag_added": [...LEAD_FIELDS, TAG_ADDED_FIELD],
   "contact.tag_added": [TAG_ADDED_FIELD],
+  // F15-T04: gatilhos do SaaS — condições sobre o contato do evento.
+  "conversation.resolved": [{ value: "contact.tags", label: "Tags do contato", op: "contains" }],
+  "order.confirmed": [{ value: "contact.tags", label: "Tags do contato", op: "contains" }],
+  "task.overdue": [{ value: "event.priority", label: "Prioridade da tarefa", op: "eq" }],
 };
 
 const OP_LABELS: Record<Op, string> = { eq: "é", neq: "não é", contains: "contém" };

@@ -1,0 +1,27 @@
+{
+  "event": "message.any",
+  "session": "f03-sessao-ficticia",
+  "payload": {
+    "id": "false_5511900000001@c.us_3EB0F03IMG001",
+    "from": "5511900000001@c.us",
+    "to": "5511900000099@c.us",
+    "fromMe": false,
+    "body": "",
+    "type": "image",
+    "hasMedia": true,
+    "timestamp": 1789000180,
+    "media": {
+      "url": "http://127.0.0.1:55424/files/f03-ficticia.jpg",
+      "mimetype": "image/jpeg"
+    },
+    "_data": {
+      "pushName": "Cliente Ficticio Um",
+      "key": {
+        "remoteJid": "5511900000001@s.whatsapp.net",
+        "fromMe": false,
+        "id": "3EB0F03IMG001"
+      },
+      "message": { "imageMessage": { "mimetype": "image/jpeg", "fileLength": "20480" } }
+    }
+  }
+}

@@ -1,3 +1,5 @@
+import { requireSupportWrite } from "@/lib/impersonate/support";
+import { getRequestId } from "@/lib/api/request-id";
 /**
  * GET    /api/v1/contacts/[id] — fetch single (handler em ../_handler.ts)
  * PATCH  /api/v1/contacts/[id] — update (handler em ../_handler.ts)
@@ -5,7 +7,6 @@
  *
  * Thin wrapper: auth + Zod + ok/fail. Decrypt CPF + LGPD irreversibility no handler.
  */
-import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 
 import { ApiError } from "@/lib/api/types";
@@ -15,6 +16,8 @@ import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { contactPatchSchema, validateRequest } from "@/lib/schemas";
 import { createClient } from "@/lib/supabase/server";
+import { validarCamposDa } from "@/src/crm/campos";
+import { ctxDaRota } from "@/src/crm/permissao-da-rota";
 
 import { deleteContactHandler, getContactHandler, patchContactHandler } from "../_handler";
 
@@ -24,7 +27,7 @@ export async function GET(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const requestId = randomUUID();
+  const requestId = getRequestId(req);
   const { id } = await ctx.params;
 
   const supabase = await createClient();
@@ -69,7 +72,10 @@ export async function PATCH(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const requestId = randomUUID();
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
+
+  const requestId = getRequestId(req);
   const { id } = await ctx.params;
 
   const supabase = await createClient();
@@ -90,6 +96,16 @@ export async function PATCH(
       });
     }
     throw err;
+  }
+  // F13-T01 (ADR-034): o valor dos campos configuráveis do contato passa pelo
+  // validador único (definições de `crm.fields.contacts`); chave sem definição
+  // é preservada — apagar uma definição não apaga o valor gravado.
+  if (input.custom_fields !== undefined) {
+    const campos = await validarCamposDa(ctxDaRota(authz), "contacts", input.custom_fields);
+    if (!campos.ok) {
+      return fail("custom_field_invalid", "Campos personalizados inválidos.", 422, { requestId, details: { erros: campos.erros } });
+    }
+    input = { ...input, custom_fields: campos.valores };
   }
 
   try {
@@ -117,7 +133,10 @@ export async function DELETE(
   _req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const requestId = randomUUID();
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
+
+  const requestId = getRequestId(_req);
   const { id } = await ctx.params;
 
   const authz = await requireRole("agent", { requestId, resource: "contacts" });

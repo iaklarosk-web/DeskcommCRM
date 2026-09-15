@@ -67,6 +67,14 @@ const schema = z.object({
 
   // Supabase — obrigatórias sempre (até pra dev local)
   NEXT_PUBLIC_SUPABASE_URL: requiredAlways("NEXT_PUBLIC_SUPABASE_URL").url(),
+  /**
+   * F06-T06 (ADR-028): a URL do Supabase que o NAVEGADOR usa quando ela difere
+   * da do servidor. Num Compose o servidor alcança o kong pelo nome do serviço
+   * (`http://kong:8000`) e o navegador não; sem esta chave os dois lados
+   * dividem `NEXT_PUBLIC_SUPABASE_URL`, como sempre. Só o `PublicEnvScript`
+   * a lê — o servidor continua em `NEXT_PUBLIC_SUPABASE_URL`.
+   */
+  NEXT_PUBLIC_SUPABASE_URL_BROWSER: z.string().url().optional(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: requiredAlways("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
   SUPABASE_SERVICE_ROLE_KEY: requiredAlways("SUPABASE_SERVICE_ROLE_KEY"),
 
@@ -227,6 +235,24 @@ const schema = z.object({
 
   // Sentry
   SENTRY_DSN: z.string().optional().default(""),
+
+  /**
+   * Cobrança (F12, ADR-030 §3 — D14/D44/D51). Três defaults DECLARADOS, nenhum
+   * é decisão do proprietário: o gateway real, os dias de carência e o preço
+   * dos planos continuam dele.
+   *
+   * - `BILLING_GATEWAY`: só `mock` existe nesta fase (checkout e webhook
+   *   fictícios, `src/billing/gateway/mock.ts`). Um valor desconhecido reprova
+   *   no boot em vez de cair num provedor por engano.
+   * - `BILLING_GRACE_DAYS`: dias entre `payment_failed` (aviso) e o bloqueio
+   *   de novas operações (D44). Default 7 — placeholder, não decisão.
+   * - `BILLING_MOCK_WEBHOOK_SECRET`: HMAC do webhook do gateway mock. Vazio =
+   *   o webhook responde 503 (fail closed, G-27), nunca aceita evento sem
+   *   assinatura.
+   */
+  BILLING_GATEWAY: z.enum(["mock"]).optional().default("mock"),
+  BILLING_GRACE_DAYS: z.coerce.number().int().min(0).max(90).optional().default(7),
+  BILLING_MOCK_WEBHOOK_SECRET: z.string().optional().default(""),
 
   /**
    * Resend — o transporte de TODO e-mail transacional (convite, LGPD, alarme).
