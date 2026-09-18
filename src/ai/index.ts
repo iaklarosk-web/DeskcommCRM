@@ -38,6 +38,7 @@ export {
 } from "./contexto";
 export {
   motorDaOrganizacao,
+  motorDeclarado,
   textoDaMensagemDeEntrada,
   type MotorDeIa,
 } from "./despacho";

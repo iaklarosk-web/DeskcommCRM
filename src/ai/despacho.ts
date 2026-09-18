@@ -34,12 +34,24 @@ export interface DepsDoDespacho {
  * declarado do schema (`saas`) — o schema é a catraca, e um valor estranho no
  * banco não pode significar "escolha o outro".
  */
+/**
+ * A decisão pura: qual motor um valor de `ai.engine` significa.
+ *
+ * Separada da leitura do banco porque é ELA que precisa ser vigiada por
+ * mutante — e porque o fail-closed mora aqui: qualquer coisa que não seja
+ * exatamente `legacy` é o motor novo, inclusive `null`, número ou um valor que
+ * alguém gravou à mão. "Não entendi o que está escrito" nunca pode significar
+ * "então volte para o motor sem política".
+ */
+export function motorDeclarado(valor: unknown): MotorDeIa {
+  return valor === "legacy" ? "legacy" : "saas"; // MUTANT: engine-routing
+}
+
 export async function motorDaOrganizacao(
   ctx: TenantCtx,
   deps: DepsDoDespacho = {},
 ): Promise<MotorDeIa> {
-  const valor = await getSetting(ctx, "ai.engine", deps);
-  return valor === "legacy" ? "legacy" : "saas";
+  return motorDeclarado(await getSetting(ctx, "ai.engine", deps));
 }
 
 /**

@@ -227,6 +227,18 @@ export async function remarcar(ctx: TenantCtx, actor: AtorDaAgenda, pedido: { id
   );
 }
 
+/**
+ * Compromisso que já aconteceu não é cancelável (F18-T03, ADR-040 §4).
+ *
+ * Pura e separada porque é a trava que sobra quando `cancel_appointment` está
+ * em `allow` (D56 e): sem aprovação humana no caminho, é ela que impede a IA de
+ * reescrever o passado da agenda. Comparar `<=` e não `<`: cancelar o
+ * compromisso que começa AGORA é cancelar quem já está na sala.
+ */
+export function podeCancelar(inicio: Date, agora: Date): boolean {
+  return inicio.getTime() > agora.getTime(); // MUTANT: cancel-past
+}
+
 export async function cancelar(ctx: TenantCtx, actor: AtorDaAgenda, pedido: { id: string; revision: number; reason: string }, deps: AgendaDeps & { requestId?: string } = {}): Promise<ResultadoDaMudanca> {
   const motivo = pedido.reason.trim();
   if (motivo.length === 0) return { ok: false, reason: "invalid", detalhe: "O motivo do cancelamento é obrigatório." };
@@ -249,7 +261,7 @@ export async function cancelar(ctx: TenantCtx, actor: AtorDaAgenda, pedido: { id
         [ctx.organization_id, pedido.id],
       );
       const inicio = linha.rows[0]?.starts_at;
-      if (inicio !== undefined && new Date(inicio).getTime() <= agora.getTime()) {
+      if (inicio !== undefined && !podeCancelar(new Date(inicio), agora)) {
         return { ok: false, reason: "invalid", detalhe: "appointment_in_the_past" } as const;
       }
       const mudado = await mudar(db, ctx, pedido.id, pedido.revision, { status: "cancelled", cancellation_reason: motivo });
