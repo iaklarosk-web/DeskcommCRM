@@ -267,6 +267,20 @@ for (const slug of SLUGS) {
 medidas.webchat_disabled_denied = `${webchatRecusadas}/${SLUGS.length}`;
 passo("chat do site desligado recusa sessão (default declarado)", webchatRecusadas === SLUGS.length, `webchat_disabled_denied=${medidas.webchat_disabled_denied}`);
 
+// ─── Passo 9 (F18-T05): quem responde o cliente, em cada tenant ───────────
+//
+// O default declarado da F18 é o motor NOVO — o que tem política por ação,
+// teto diário e auditoria. Um ambiente onde alguém deixou `ai.engine=legacy`
+// gravado responde sem nenhum dos três, e o smoke é o lugar que percebe isso
+// antes do cliente. Lê pela rota da organização, não do banco.
+let motorNovo = 0;
+for (const slug of SLUGS) {
+  const r = await api("/api/v1/settings/ai-autonomy", cookies[slug] ?? "");
+  if (r.status === 200 && r.corpo?.data?.engine === "saas") motorNovo += 1;
+}
+medidas.engine_saas = `${motorNovo}/${SLUGS.length}`;
+passo("quem responde o cliente é o motor novo (default declarado)", motorNovo === SLUGS.length, `engine_saas=${medidas.engine_saas}`);
+
 // ─── p95 (F06-T09): medição sem otimizar ────────────────────────────────────
 const alvos = [
   ["health", "/api/v1/health", null],
@@ -286,7 +300,7 @@ const medidos = Object.values(p95s).filter((v) => v !== null).length;
 
 const passou = passos.filter((p) => p.ok).length;
 const porTenant = (prefixo) => SLUGS.map((slug) => `${prefixo}[${slug}]=${medidas[`${prefixo}[${slug}]`]}`).join(" ");
-const linha = `smoke: steps=${passos.length} pass=${passou}/${passos.length} ${porTenant("customers")} inbox_new=${medidas.inbox_new} logins=${medidas.logins} ${porTenant("products")} webhook_accepted=${medidas.webhook_accepted} reminder_listed=${medidas.reminder_listed} owner_login=${medidas.owner_login} ${porTenant("subscriptions")} orgs_without_subscription=${medidas.orgs_without_subscription} webchat_disabled_denied=${medidas.webchat_disabled_denied} tenants=${SLUGS.join(",")}`;
+const linha = `smoke: steps=${passos.length} pass=${passou}/${passos.length} ${porTenant("customers")} inbox_new=${medidas.inbox_new} logins=${medidas.logins} ${porTenant("products")} webhook_accepted=${medidas.webhook_accepted} reminder_listed=${medidas.reminder_listed} owner_login=${medidas.owner_login} ${porTenant("subscriptions")} orgs_without_subscription=${medidas.orgs_without_subscription} webchat_disabled_denied=${medidas.webchat_disabled_denied} engine_saas=${medidas.engine_saas} tenants=${SLUGS.join(",")}`;
 const linhaP95 = `p95_ms: endpoints=${medidos}/3 health=${p95s.health ?? "fail"} contacts=${p95s.contacts ?? "fail"} conversations=${p95s.conversations ?? "fail"} samples=${AMOSTRAS} url=${URL_APP}`;
 process.stdout.write(`${linha}\n${linhaP95}\n`);
 process.exit(passou === passos.length && medidos === 3 ? 0 : 1);

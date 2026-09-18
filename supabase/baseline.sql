@@ -26328,6 +26328,24 @@ grant all on public.handoffs to service_role;
 -- Releitura do catálogo DEPOIS do revoke/grant: antes dele a checagem de
 -- privilégio mediria o estado que a própria migration ainda ia corrigir.
 
+-- Apêndice 9032 — o motivo de handoff `tool_missing` (F18-T00, ADR-040 §2).
+-- ⚠️ ENTRA ANTES da guarda `do $f05_t01_fim$`, que confere motivo a motivo: no
+-- banco que ATUALIZA a constraint velha ainda está lá quando a guarda roda, e
+-- o baseline reprovava com "não aceita o motivo tool_missing" (medido no
+-- staging, 18/09/2026). É a lição 26 da F14 na outra ponta: não basta o bloco
+-- único drop+add — ele precisa vir ANTES de quem o verifica.
+-- Par idempotente da migration 20260918180000_9032_handoff_por_ferramenta_que_faltou.sql.
+-- BLOCO ÚNICO drop+add, nunca `if not exists`: o banco que ATUALIZA (staging,
+-- produção) já tem a constraint antiga, e `if not exists` a deixaria intacta —
+-- a lição 26 da F14, medida com 23514 no staging.
+alter table public.handoffs drop constraint if exists handoffs_reason_check;
+alter table public.handoffs add constraint handoffs_reason_check check (reason in (
+  'customer_request','high_risk_action','low_confidence','out_of_knowledge',
+  'complaint','provider_error','tenant_rule','forbidden_request','tool_missing'
+));
+comment on constraint handoffs_reason_check on public.handoffs is
+  'Enum de NOVE valores (§5.11 + F18): os 7 gatilhos de D19, forbidden_request de §5.9 e tool_missing de ADR-040 §2 (ferramenta declarada pelo agente e não migrada). Nunca texto livre (G-78).';
+
 do $f05_t01_fim$
 declare
   v_policies integer;
@@ -28353,18 +28371,6 @@ revoke execute on function public.fn_encrypt_oauth(text) from authenticated;
 revoke execute on function public.fn_lgpd_cascade_redact_contact(uuid, uuid, uuid) from authenticated;
 revoke execute on function public.fn_update_budget_consumption() from authenticated;
 
--- Apêndice 9032 — o motivo de handoff `tool_missing` (F18-T00, ADR-040 §2).
--- Par idempotente da migration 20260918180000_9032_handoff_por_ferramenta_que_faltou.sql.
--- BLOCO ÚNICO drop+add, nunca `if not exists`: o banco que ATUALIZA (staging,
--- produção) já tem a constraint antiga, e `if not exists` a deixaria intacta —
--- a lição 26 da F14, medida com 23514 no staging.
-alter table public.handoffs drop constraint if exists handoffs_reason_check;
-alter table public.handoffs add constraint handoffs_reason_check check (reason in (
-  'customer_request','high_risk_action','low_confidence','out_of_knowledge',
-  'complaint','provider_error','tenant_rule','forbidden_request','tool_missing'
-));
-comment on constraint handoffs_reason_check on public.handoffs is
-  'Enum de NOVE valores (§5.11 + F18): os 7 gatilhos de D19, forbidden_request de §5.9 e tool_missing de ADR-040 §2 (ferramenta declarada pelo agente e não migrada). Nunca texto livre (G-78).';
 
 grant execute on function public.fn_audit_log_row() to service_role;
 grant execute on function public.fn_decrypt_oauth(bytea) to service_role;
