@@ -363,6 +363,15 @@ connection from connection pool` para toda requisição até `docker restart crm
 O `up.sh` reinicia o realtime depois do baseline, não o PostgREST. Conserto: a receita (e o
 `up.sh`) reiniciam o `rest` depois do baseline. Custo: uma linha.
 
+### B21. A guarda do baseline enumera os tipos de notificação e uma prova real derruba a subida seguinte (18/09/2026)
+O apêndice 9023 do `supabase/baseline.sql` recusa aplicar-se (`raise exception`, linha ≈ 27302) quando
+`notifications` tem um `event` fora da lista literal. A prova `ai_real:` da F15 gravou 1 `ai.limit_reached`
+(evento criado pela própria 9028) na produção; o `scripts/prod/up.sh` da F14 parou nessa guarda na primeira
+subida. Conserto aplicado: `'ai.limit_reached'` na lista. Regra: toda migration que cria evento de
+notificação atualiza a lista da guarda no mesmo commit; toda prova real que grava linha nova é candidata a
+tropeçar na subida seguinte — o `up.sh` devia listar os eventos presentes ANTES de aplicar. Custo: uma linha
+na guarda; a checagem prévia no `up.sh`, dez.
+
 ## C. Portões do proprietário — o que a engenharia não pode abrir sozinha
 
 D49 suspendeu a pausa por fase de D47, mas preservou D11–D13. Estes itens não

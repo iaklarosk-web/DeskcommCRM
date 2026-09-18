@@ -1,58 +1,123 @@
 ---
-updated_at: 2026-09-15T19:26:02Z
-head_commit: d2a66fb8eec4b842270673715dbd455024e8631d   # d2a66fb8 = 4c7bfcdf + conserto do scripts/from-scratch.sh (fase ativa em vez de F07 fixo); código VALIDADO pelo gate f15-gate-03 (READY (staging), dentro do staging, F15 — ADR-036/037) = 4c7bfcdf; a única diferença é a prova do zero, validada pela própria linha from-scratch: (verify inteiro no clone de d2a66fb8)
+updated_at: 2026-09-18T17:25:00Z
+head_commit: 10fde380   # commit de fechamento da F14; código VALIDADO pelo gate f14-gate-04 (READY (staging), dentro do staging, F14 — ADR-038/039) = 6b493892; a diferença é a guarda do baseline (ai.limit_reached), a prova real scripts/prod/jornada-webchat.ts e docs — validada pela própria linha from-scratch: (verify inteiro no clone de 10fde380, READY (F14))
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
-plan_version: "2.9 (2026-09-15); D38–D54; ADR-006…037"
+plan_version: "2.10 (2026-09-18); D38–D55; ADR-006…039"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
-current_phase: F15
-next_task: F14-T01             # F14 (D55): T00 em curso (ADR-038/039, verify v1.10, migration 9030, chaves webchat.*); T01 chat do site (servidor) → T02 telas → T03 agenda adotada → T04 IA marca horário → T05 spec/gate/fechamento
-status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26); F15 fechada com READY (staging) em 4c7bfcdf (bloco abaixo), F14 em construção
+current_phase: F14
+next_task: F16-T00             # F14 (D55) FECHADA em 18/09/2026 (READY (staging), f14-gate-04 sobre 6b493892; produção com o código da F14; webchat_real:). Próxima construção só com o proprietário (D50 c): F16 / Stripe + padrão KN do /admin / F17 / unificar o turno de produção (§B8) — ver COMECE-AQUI no CRM-OS
+status: READY_STAGING          # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26); F14 fechada com READY (staging) em 6b493892 (bloco abaixo); F16+ aguarda o proprietário
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
 hosting_confirmed: yes         # D50 (11/09/2026): staging nesta VPS, Docker Compose com Supabase local, acesso só por Tailscale — ADR-027
-build_env: "Claude Code na VPS (4 núcleos/16 GB), worktree DeskcommCRM-v1.17.0; validação em serviços/bancos descartáveis e no staging; WHATSAPP_MODE=mock AI_PROVIDER=mock; F15: 3 chamadas reais à Anthropic na organização do dono (linha ai_real:)"
-verify_summary_last_context: "f15-gate-03 aprovado em 15/09/2026 sobre 4c7bfcdf, ≈7420 s, exit 0, DENTRO do staging (VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202), current_phase=F15 com a spec f15-automacao-e-autonomia (14 specs, 65 testes, ADR-037 §1) e a linha autonomy: (ADR-037 §2). Três tentativas: 01 ciclo de import que matava o CLI create-tenant sem lib/env + constraints de evento reconstruídas 2× no baseline + spec sem dispensa na régua da janela; 02 tudo verde com mutants_killed=68/69 (mutante 40 com alvo desatualizado, reapontado); 03 READY. mutants_killed=69/69. Produção recebeu o código DEPOIS do READY (scripts/prod/up.sh + prova.sh, linha prod:); ai_real: 3 chamadas reais na organização do dono (D54 g). READY (staging) = verificado em staging; owner_validated em branco; BLOCKER-PROD aberto (liberado só para o tenant Deka, D53)."
+build_env: "Claude Code na VPS (4 núcleos/16 GB), worktree DeskcommCRM-v1.17.0; validação em serviços/bancos descartáveis e no staging; WHATSAPP_MODE=mock AI_PROVIDER=mock; F15: 3 chamadas reais à Anthropic (ai_real:); F14: 12 turnos Haiku reais no chat do site da organização do dono (webchat_real:, teto 20)"
+verify_summary_last_context: "f14-gate-04 aprovado em 18/09/2026 sobre 6b493892, 7455 s (12:03Z→14:07Z), exit 0, DENTRO do staging (VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202), current_phase=F14 com a spec f14-canais-e-agenda (15 specs, 72 testes, ADR-039 §1) e a linha channels: (ADR-039 §2). Quatro tentativas: 01 cascata LGPD sem webchat_sessions (migration 9031) + visitanteNaPagina fail-closed + liveVisitor nas suítes de canal + fila de saída compartilhada; 02 interrompida (export LGPD sem o bloco; WHATSAPP_MODE=mock dublando o webchat); 03 só f02-support-readonly-api com timeout de navegação sob load 9.9 da sessão vizinha; 04 READY. mutants_killed=73/73. Produção recebeu o código DEPOIS do READY (scripts/prod/up.sh + prova.sh, linha prod:; a 1ª subida parou na guarda 27302 do baseline por 1 linha ai.limit_reached da F15 — guarda estendida); webchat_real: 3 turnos reais na organização do dono (D55 f). READY (staging) = verificado em staging; owner_validated em branco; BLOCKER-PROD aberto (liberado só para o tenant Deka, D53)."
 verify_summary_last: |
   VERIFY SUMMARY
-  scope=phase phase=F15 current_phase=F15 environment=staging
+  scope=phase phase=F14 current_phase=F14 environment=staging
   build=ok lint=ok typecheck=ok shell=ok
-  unit=8536/8536 integration=208/208 db=1670/1670 e2e=65/65 baseline_n0=8997
-  baseline_comparable: scope=unit+db passed=10206 required=8738 full_n0=pending
-  e2e_scope: F15-required passed=65/65 specs=14/14
-  isolation: tables=138 ops=4 dirs=2 leaks=0 (material_cross_org=97/138)
-  rls-coverage: tables_with_org_id=138 policies_found=116 missing=0 service_only_with_grant=0
+  unit=8553/8553 integration=225/225 db=1677/1677 e2e=72/72 baseline_n0=8997
+  baseline_comparable: scope=unit+db passed=10230 required=8738 full_n0=pending
+  e2e_scope: F14-required passed=72/72 specs=15/15
+  isolation: tables=139 ops=4 dirs=2 leaks=0 (material_cross_org=97/139)
+  rls-coverage: tables_with_org_id=139 policies_found=116 missing=0 service_only_with_grant=0
   rbac: roles=4 denied_expected=32 denied_actual=32
   entitlement: usage_events_written=23
   ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0
   handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3 notify=3 notify_rows=6 msgs_after=3 provider_calls_after=0
   reminder: runs=2 sent=1 duplicates=0 tables_summed=3
   webhook: replay=2 stored=1 tables_checked=7
-  logs: routes=286 routes_logged=286 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
-  rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=286 routes_with_schema=286 routes_reading_input=155 validated=155
+  logs: routes=290 routes_logged=290 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
+  rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=290 routes_with_schema=290 routes_reading_input=159 validated=159
   lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2
   admin: tenants_listed=3/3 support_sessions=2 support_reason=2/2 support_scope_denied=25/32 support_writes_denied=5/5 full_mode_rejected=1/1 signup_awaiting_payment=1/1 orgs_without_subscription=0/3
   billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1/1 blocked_writes_denied=5/5 grace_days=7 reconciliation_mismatch=0/3 cancellations=1/1 data_preserved=7/7
   crm: fields_defined=6 values_rejected=3/3 values_preserved=4/4 queue_size=5 distributed=5/5 balanced=1 second_claim_rejected=1/1 history_types=3 orders_linked=1/1 cross_org_link_denied=1/1 report_indicators=14/14 roles_denied=3/3
   autonomy: policy_modes=4/4 ai_task_created=1/1 limit_hits=1/1 calls_after_limit=0/3 paused=1/1 resumed=1/1 handoffs=4 balanced=1 assignees_distinct=3 rules=4 runs=4/4 replays=4 duplicate_runs=0 outside_catalog_denied=1/1 reindexed=2/2 unchanged_skipped=4/4 sources_cited=1/1 roles_denied=3/3
-  replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=65/65 demo2=65/65 specs=14/14 org_a=seed-replica)
-  secrets: files_scanned=543 findings=0
-  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=69/69
+  channels: webchat_sessions=96 identified=12/12 contacts_created=11/11 messages_in=56 ai_replies=1/1 ai_outside_window=1/1 handoff_queued=1/1 ip_limited=1/1 org_limited=1/1 flood_calls_capped=1/1 cross_org_denied=1/1 appointments=7 conflicts_blocked=1/1 revoked_blocked=1/1 tz_ok=1/1 proposed=2/2 approved=1/1 denied_by_policy=1/1 roles_denied=2/2
+  replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=72/72 demo2=72/72 specs=15/15 org_a=seed-replica)
+  secrets: files_scanned=559 findings=0
+  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=73/73
   debt_known=0 skip_only_occurrences=15 violations=0
   STATUS: READY (staging)
-restore: tables=183 tables_restored=183 rows=14873 rows_diff=0 dump=staging-20260915T034953Z.dump target=restore_20260915_034954 seconds=15 at=20260915T034954Z
-smoke: steps=7 pass=7/7 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 owner_login=1/1 subscriptions[deka]=active/full subscriptions[demo2]=active/full orgs_without_subscription=0/2 tenants=deka,demo2
-p95_ms: endpoints=3/3 health=25 contacts=375 conversations=392 samples=20 url=http://127.0.0.1:3200
-staging: compose=crm-staging services_running=15/15 memory_mib=2064 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F15(4c7bfcdf)
-prod: compose=crm-prod services_running=14/14 config_vars=27/27 placeholders=0/27 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=2 orgs_without_subscription=0/2 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only backup=1/1 restore_rows_diff=0 sha=4c7bfcdf
+restore: tables=184 tables_restored=184 rows=21623 rows_diff=0 dump=staging-20260918T141329Z.dump target=restore_20260918_141339 seconds=12 at=20260918T141339Z
+smoke: steps=8 pass=8/8 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 owner_login=1/1 subscriptions[deka]=active/full subscriptions[demo2]=active/full orgs_without_subscription=0/3 webchat_disabled_denied=2/2 tenants=deka,demo2
+p95_ms: endpoints=3/3 health=26 contacts=505 conversations=523 samples=20 url=http://127.0.0.1:3200
+staging: compose=crm-staging services_running=15/15 memory_mib=2254 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F14(6b493892)
+prod: compose=crm-prod services_running=14/14 config_vars=27/27 placeholders=0/27 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=2 orgs_without_subscription=0/2 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only backup=1/1 restore_rows_diff=0 sha=6b493892
 tenant_deka: created=1 plan=PLAN_C subscription=active origin=operator admin=platform_admin invites_sent=0/0 orgs=2 orgs_without_subscription=0/2 (D53, 14/09/2026 10:40Z)
-prod_stack: compose=crm-prod services_running=14/14 memory_mib=1885 ports=127.0.0.1+tailscale(3300,56431,56432) public_ports=0   # F15: scripts/prod/up.sh (rebuild + baseline com os apêndices 9027–9029) em 255 s, 15/09 03:50Z→03:54Z, DEPOIS do READY (ADR-036 §2 T06); índice 9027, CHECK 9028 e colunas 9029 no banco de produção 1/1 cada
-restore_prod: tables=183 tables_restored=183 rows=461 rows_diff=0 dump=prod-20260915T035537Z.dump target=restore_20260915_035538 seconds=7 at=20260915T035538Z
+prod_stack: compose=crm-prod services_running=14/14 memory_mib=1599 ports=127.0.0.1+tailscale(3300,56431,56432) public_ports=0   # F14: scripts/prod/up.sh (rebuild + baseline com os apêndices 9030–9031) em 221 s, 18/09 14:2xZ, DEPOIS do READY (ADR-038 §2 T05); a 1ª subida parou na guarda 27302 (notifications com 1 ai.limit_reached da prova ai_real da F15) — lista de tipos do apêndice 9023 estendida; 9030/9031 no banco de produção 1/1/1
+restore_prod: tables=184 tables_restored=184 rows=646 rows_diff=0 dump=prod-20260918T142544Z.dump target=restore_20260918_142545 seconds=19 at=20260918T142545Z
 ai_real: turns=3/3 usage_delta=3/3 provider=anthropic model=claude-haiku-4-5 cost_cents=0.0162 limit_hit=1/1 denied=3/3 calls_after_limit=0/3 paused=1/1 notified=1 limit_restored=1/1 day=2026-09-15 at=2026-09-15T03:56:08Z   # F15-T06 (ADR-036 §3, D54 g): scripts/prod/jornada-limite-ia.ts no crm-prod-worker, organização do dono, FORA do bloco (o verify força mock)
-demo3: created=1 smoke=pass=7/7 e2e[demo3]=41/41 specs=10/10 removed=1 tenants=2   # F15 fechamento, 15/09 03:56Z→04:11Z, staging com o código da F15 (scripts/verify/tenant-efemero.sh: inventário fixo da F07 = 10 specs; a fixture demo3 nasce do seed, roda, é removida; o staging volta a 2 tenants)
-from-scratch: steps=7 pass=7/7 verify_exit=0 status="READY (F15)" clone=.from-scratch-phto commit=d2a66fb8   # F15 fechamento, 15/09 17:21Z→19:24Z (verify 7360 s no clone, fase=F15 lida da origem; e2e 65/65 em 14 specs 2×; mutants 69/69); terceira tentativa: 01 fase fixa F07 no script (RBAC 4≠3 — consertado em d2a66fb8), 02 suíte herdada agenda-google-reconciliacao sob load 11 (isolada 3/3 verde)
+webchat_real: sessions=1/1 identified=1/1 turns=3/3 delivered=3/3 visible=3/3 provider=anthropic model=claude-haiku-4-5 cost_cents=0.34357 flood_capped=1/1 calls_after_limit=0/1 cleaned=1/1 settings_rows_restored=1/1 at=2026-09-18T14:38:04Z   # F14-T05 (ADR-038 §2, D55 f): scripts/prod/jornada-webchat.ts no crm-prod-worker, organização do dono, FORA do bloco; rodada 4 de 4 (12 turnos reais no dia, teto 20; rodadas 1–2 mediram ai.enabled ausente, rodada 3 gravou o padrão como linha — ver evidência)
+demo3: created=1 smoke=pass=8/8 e2e[demo3]=41/41 specs=10/10 removed=1 tenants=3   # F14 fechamento, 18/09 14:40Z→14:59Z, staging com o código da F14 (scripts/verify/tenant-efemero.sh: inventário fixo da F07 = 10 specs)
+from-scratch: steps=7 pass=7/7 verify_exit=0 status="READY (F14)" clone=.from-scratch-g3VB commit=10fde380   # F14 fechamento, 18/09 15:00Z→17:19Z (verify 8105 s no clone, fase=F14 lida da origem; unit 8553, integração 225, db 1677, e2e 72/72 ×2 em 15 specs, mutantes 73/73, violations=0); segunda tentativa (a 1ª morreu em 4 s: FROM_SCRATCH_LOG_DIR relativo não existe depois do cd para o clone)
 ---
 
 # BUILD-STATE
+
+## Estado vigente — F14 concluída em 18/09/2026 (READY (staging), f14-gate-04); produção com o código da F14; F16+ aguarda o proprietário (D50 c)
+
+Construída em 18/09/2026 na branch `feat/F14-canais-e-agenda` (a partir de
+`eac2db65`), com tasks e critérios em ADR-038 e o verificador v1.10 em
+ADR-039, autorizada por D55 (retomada com entrevista em cards + contraponto;
+as três objeções viraram testes). Entregue: **chat do site** — canal
+`webchat` no MESMO modelo de conversa/contato/mensagem/handoff/política/limite
+(migration 9030: `webchat` nos 4 CHECKs de canal + tabela `webchat_sessions`
+service-only; 9031: a sessão do visitante na cascata da LGPD e no export);
+visitante anônimo por token (só o hash no banco), identificação nome +
+e-mail/telefone ANTES da 1ª resposta → contato do CRM; rotas públicas
+`/api/public/webchat/[slug]/{session,identify,messages}` com três freios
+declarados (30 sessões/h e 60 mensagens/h por IP, 600 mensagens/h por
+organização) mais o teto diário da F15; adapter `webchat` no SaaS e no
+herdado (entrega = a linha que a página lê; nunca dublado pelo
+`WHATSAPP_MODE=mock`); página `/chat/<slug>` servida com
+`frame-ancestors` por organização, script `/embed/<slug>.js`, polling de 3 s,
+aviso de fora do horário com a próxima abertura; **IA responde 24 h** no site
+pela capability `liveVisitor` (só a janela desarma; o anti-ban segue
+`banRisk`; doutrina restricao-de-canal com a exceção declarada); tela
+`/app/settings/tenant/webchat` e rota `GET/PATCH /api/v1/settings/webchat`
+(`settings.manage`) (T00–T02); **agenda adotada** (D41 fechado: herdada,
+conexão Google por membro) pela fachada `src/agenda` sobre o pool — horários
+livres pelo motor puro herdado, marcar com conflito NOMEADO, horário só entre
+os oferecidos, remarcar/cancelar pela RPC herdada `fn_appointment_change`,
+fuso da pessoa gravado, revogação recusada pelo banco (T03); **IA marca
+horário** — `schedule_appointment` no catálogo (14 ações; `medium` +
+`by_risk` ⇒ sem entrada na política PENDURA para a pessoa; `allow`/`block`/
+`transfer` como F15; a aprovação humana não passa por cima do conflito)
+(T04); spec `f14-canais-e-agenda` (7 testes), linha `channels:`, mutantes
+73–76, smoke +1 passo (`webchat_disabled_denied`), achados §B18–§B20 (T05).
+
+`./scripts/verify.sh` com `VERIFY_ENVIRONMENT=staging` e `current_phase: F14` saiu 0
+com `STATUS: READY (staging)` sobre `6b493892` (gate f14-gate-04, 7455 s), zero
+violações: unit 8553/8553, integração 225/225, banco 1677/1677, navegador 72/72
+em QUINZE specs duas vezes (`E2E_TENANT=deka` e `demo2`, mesma árvore,
+`src_diff_lines=0`), mutantes 73/73, `rbac: roles=4`, `crm:` e `autonomy:`
+inalteradas, linha nova `channels: webchat_sessions=96 identified=12/12
+contacts_created=11/11 messages_in=56 ai_replies=1/1 ai_outside_window=1/1
+handoff_queued=1/1 ip_limited=1/1 org_limited=1/1 flood_calls_capped=1/1
+cross_org_denied=1/1 appointments=7 conflicts_blocked=1/1 revoked_blocked=1/1
+tz_ok=1/1 proposed=2/2 approved=1/1 denied_by_policy=1/1 roles_denied=2/2`.
+Quatro tentativas (01 cascata LGPD/fail-closed/liveVisitor/fila de saída; 02 interrompida: export LGPD e mock dublando o webchat; 03 um timeout de navegação sob load da sessão vizinha; 04 READY) — detalhe na
+[evidência F14](docs/migration/evidence/construction-f14-20260918.txt). Fora
+do bloco: `restore:`/`smoke:`/`p95_ms:`/`staging:` (staging com a imagem da
+F14), `prod:`/`prod_stack:`/`restore_prod:` (produção com o código da F14,
+subida DEPOIS do READY), `webchat_real:` (turnos reais no chat do site da
+organização do dono — D55 f), `demo3:` e `from-scratch:` no cabeçalho.
+
+Defaults declarados, nunca fato (ADR-038 §5): `webchat.enabled=false`,
+`webchat.allowed_origins=[]` (qualquer origem), freios fixos em código,
+`schedule_appointment=approve`, janela do humano = a do pacing, polling 3 s.
+
+O que NÃO é fato: teste visual das telas novas (`/chat/<slug>` embutido num
+site real, `/app/settings/tenant/webchat`) — proprietário; Google OAuth real
+(escolha do proprietário: NOT VALIDATED (real)); a IA propondo horário a
+partir do TEXTO (o dublê do provedor não chama a tool — o que se mede é
+`execute()` → política → fachada); **em produção quem responde o cliente é o
+motor herdado** (`runAgentTurn`, MCP `crm_book_appointment` SEM a política da
+F15 — §B8 continua aberto, ADR-038 Consequências); WhatsApp real,
+reconexão/revogação reais (sem número); realtime do inbox; espelho no
+funil/timeline do lead pela fachada.
 
 ## Estado vigente — F15 concluída em 15/09/2026 (READY (staging), f15-gate-03); produção com o código da F15; F14/F16+ aguarda o proprietário (D50 c)
 
@@ -661,12 +726,12 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 | F11 | Administração da plataforma, empresas/equipes, suporte limitado e auditado, cadastro e entrada guiada | done(verify=2026-09-13 1e13071d) — READY (staging) no f12-gate-05 (inventário de F12 contém o de F11, ADR-031); T00–T06 concluídas; `admin:` medido |
 | F12 | Planos/assinatura/cobrança, confirmação de pagamento, acesso, limites/uso, inadimplência e conciliação | done(verify=2026-09-13 1e13071d) — READY (staging) com gateway MOCK e planos placeholder (D14); T01–T08 concluídas; `billing:` medido; cobrança REAL é NOT VALIDATED (real) |
 | F13 | CRM comercial: funis/oportunidades, campos, papéis/filas, histórico, tarefas, pedidos e relatórios | done(verify=2026-09-14 767d22a6) — READY (staging) no f13-gate-05 (13 specs, linha `crm:`, `roles=4`; ADR-034/035); T00–T06 concluídas; produção com o código da F13 (linha `prod:`); §B17 consertado |
-| F14 | WhatsApp, chat do site e agenda de clientes/equipe sincronizada com Google Agenda | in_progress (D55, 18/09/2026; ADR-038/039; branch `feat/F14-canais-e-agenda` a partir de `eac2db65`; WhatsApp real fora da fase — sem número) |
+| F14 | WhatsApp, chat do site e agenda de clientes/equipe sincronizada com Google Agenda | done(verify=2026-09-18 6b493892) — READY (staging) no f14-gate-04 (15 specs, linha `channels:`; ADR-038/039); T00–T05 concluídas; produção com o código da F14 (linhas `prod:`/`webchat_real:`); WhatsApp real e Google OAuth real continuam NOT VALIDATED (real) (D12-4; escolha do proprietário) |
 | F15 | Automações e autonomia de IA por empresa/ação, aprovação/handoff, limites, auditoria e conhecimento | done(verify=2026-09-15 4c7bfcdf) — READY (staging) no f15-gate-03 (14 specs, linha `autonomy:`; ADR-036/037); T00–T06 concluídas; produção com o código da F15 (linhas `prod:`/`ai_real:`); §B16 reescrito e medido; §B5/§C6 fechados |
 | F16 | Marca do SaaS e presets configuráveis; profundidade de templates, white-label e domínios por cliente a definir | pending |
 | F17 | Operação, capacidade/recuperação, suporte, atualização, regressão e aceite comercial pelo proprietário | pending |
 
-Dependência técnica: F00/F01 → F02 → F03 → F04 → F05 → F06 → F07 → (D51) F11+F12. F11/F12 fecharam juntas o onboarding pago em staging (13/09/2026); F13 fechou em 14/09/2026; F15 fechou em 15/09/2026 (D54); F14 e F16 avançam com contratos definidos. F08 depende das entradas/autorização para serviços reais. D48 permite concluir a construção F11–F17 antes das evidências reais F09/F10; piloto e validação de mercado permanecem marcos separados, sem bloquear o software. F17 reúne a jornada comercial e os critérios de operação. Nenhuma fase futura recebe `done` por existir código equivalente no upstream.
+Dependência técnica: F00/F01 → F02 → F03 → F04 → F05 → F06 → F07 → (D51) F11+F12. F11/F12 fecharam juntas o onboarding pago em staging (13/09/2026); F13 fechou em 14/09/2026; F15 fechou em 15/09/2026 (D54); F14 fechou em 18/09/2026 (D55); F16 avança com contratos definidos. F08 depende das entradas/autorização para serviços reais. D48 permite concluir a construção F11–F17 antes das evidências reais F09/F10; piloto e validação de mercado permanecem marcos separados, sem bloquear o software. F17 reúne a jornada comercial e os critérios de operação. Nenhuma fase futura recebe `done` por existir código equivalente no upstream.
 
 ## Módulos — orientação vigente e estado da integração
 
@@ -681,6 +746,8 @@ As classes abaixo expressam o destino aprovado, não uma nova medição de pront
 | Motor de IA e RAG | ADAPTAR | `lib/agent-engine/`, `lib/ai/embeddings/`; ADR-002/006/008 | Reutilizar motor único e proveniência; completar contexto/ferramentas de pedido, provedor/mock, conhecimento e contabilização de uso na F04 |
 | CRM comercial (F13) | CRIAR sobre o herdado | `src/crm/{campos,oportunidades,relatorio}`, `src/rbac/matrix.ts` (manager), migration 9026, telas `/app/settings/tenant/crm-fields`, `/app/crm/fila`, `/app/reports/crm`; ADR-034/035 | F13 concluída (14/09): campos por organização, fila por rodízio, vínculo com pedido, relatório conferido com a origem; oportunidade continua sendo `crm_leads` (D22), pedido continua ADR-012 |
 | Automação e autonomia de IA (F15) | CRIAR sobre o herdado | `src/actions/{politica,nomes}.ts`, `src/ai/limite.ts`, `src/handoff/rodizio.ts`, `src/automation/{regras,motor}.ts`, `src/events/emitir.ts`, `src/knowledge/reindexacao.ts`, migrations 9027–9029, telas `/app/settings/tenant/ia/autonomia` e `/app/settings/tenant/automation-rules`; ADR-036/037 | F15 concluída (15/09): política por ação sobre o D33, limite diário com pausa, rodízio no handoff, regras 5×4 sobre o catálogo em motor pg (o `lib/automation/engine.ts` herdado fica só como validador), reindexação incremental com fonte citada |
+| Chat do site (F14) | CRIAR | `src/webchat/`, rotas públicas `/api/public/webchat/[slug]/*`, `app/chat/[slug]`, `app/embed/[arquivo]`, adapter `webchat` (SaaS e herdado, capability `liveVisitor`), migrations 9030/9031, tela `/app/settings/tenant/webchat`; ADR-038/039 | F14 concluída (18/09): canal no mesmo modelo de conversa; visitante anônimo com identificação; três freios; IA 24 h; CSP por organização; sessão na cascata e no export da LGPD |
+| Agenda (F14, D41) | ADAPTAR (herdada por membro) | `lib/agenda/` + telas e rotas herdadas expostas; fachada `src/agenda/` (horários livres, marcar com conflito nomeado, remarcar/cancelar pela RPC herdada); ação `schedule_appointment` no catálogo; ADR-038 | F14 concluída (18/09): adotada sem redesenho; Google OAuth real NOT VALIDATED (real) por escolha do proprietário |
 | CRM existente | ADAPTAR | `contacts`, `catalog_products`, `crm_tasks` e contrato herdado de `orders`; ADR-008/desenho F02 | F02 concluída: IDs e contrato externo preservados; empresas, catálogo, pedidos/itens, notas/tarefas e histórico integrados e validados. Inventário e provas em T04/T09/T13 |
 | Lista do dia, impressão e conferência | CRIAR | [Desenho F02](docs/design/F02-pedidos-do-dia.md), DIRETRIZ §7.3 | F02-T10…T13 concluídas: uma fonte para lista/totais/impressão completa, revisão e conferência rastreável. Data/critério explícitos; regras Deka são configuração futura, sem bloquear engenharia |
 | Action Policy | ADAPTAR | Política/preview e executores do motor; target-state §5.8 | Completar catálogo, aprovação e auditoria no mesmo caminho de execução. Aprovação de texto não confirma pedido |
