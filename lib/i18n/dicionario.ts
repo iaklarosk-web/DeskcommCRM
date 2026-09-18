@@ -8686,6 +8686,22 @@ export const DICIONARIO: Traducoes = {
   "Nova regra": {"es":"Nueva regla"},
   "Então": {"es":"Entonces"},
   "Criar regra": {"es":"Crear regla"},
+  // F14-T02 (ADR-038): tela do chat do site.
+  "Chat do site": {"es":"Chat del sitio"},
+  "Um balão de conversa no site da sua empresa. O visitante fala, a assistente responde a qualquer hora e a sua equipe continua pelo inbox no horário de atendimento.": {"es":"Un globo de conversación en el sitio de tu empresa. El visitante escribe, la asistente responde a cualquier hora y tu equipo continúa por el inbox en el horario de atención."},
+  "Chat do site salvo.": {"es":"Chat del sitio guardado."},
+  "Não foi possível salvar o chat do site.": {"es":"No se pudo guardar el chat del sitio."},
+  "Não foi possível carregar o chat do site.": {"es":"No se pudo cargar el chat del sitio."},
+  "O chat do site está ligado.": {"es":"El chat del sitio está activado."},
+  "O chat do site está desligado. Ninguém consegue abrir uma conversa até você ligar.": {"es":"El chat del sitio está desactivado. Nadie puede abrir una conversación hasta que lo actives."},
+  "Desligar o chat": {"es":"Desactivar el chat"},
+  "Ligar o chat": {"es":"Activar el chat"},
+  "Como colocar no site": {"es":"Cómo ponerlo en el sitio"},
+  "Cole esta linha antes do fechamento do </body> das páginas do seu site. Ou use o link direto como botão.": {"es":"Pega esta línea antes del cierre de </body> de las páginas de tu sitio. O usa el enlace directo como botón."},
+  "Link direto": {"es":"Enlace directo"},
+  "Sites que podem embutir": {"es":"Sitios que pueden incrustar"},
+  "Uma origem por linha (https://www.suaempresa.com.br). Vazio = qualquer site pode embutir o chat.": {"es":"Un origen por línea (https://www.tuempresa.com). Vacío = cualquier sitio puede incrustar el chat."},
+  "Salvar origens": {"es":"Guardar orígenes"},
 };
 
 /**

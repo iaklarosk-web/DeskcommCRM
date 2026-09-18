@@ -694,6 +694,17 @@ export const NAV_CATALOG = [
     minRole: "manager",
   },
   {
+    // F14-T02 (ADR-038 §2, D55 c): o chat do site — ligar, origens de embed e
+    // o código para copiar. Manager+ (configuração comercial da operação).
+    href: "/app/settings/tenant/webchat",
+    label: "Chat do site",
+    description: "Balão de conversa no site da empresa: a assistente responde a qualquer hora; a equipe continua no inbox.",
+    icon: "ChatCircleDots",
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "manager",
+  },
+  {
     // F15-T04 (ADR-036 §2, D54 e): as regras QUANDO/ENTÃO sobre o catálogo —
     // configuração comercial da operação, manager+ (a tela herdada de
     // Webhooks continua para o kit; o SaaS escreve aqui).

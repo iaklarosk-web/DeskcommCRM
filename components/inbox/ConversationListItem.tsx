@@ -125,7 +125,9 @@ export function ConversationListItem({
   const t = useT();
   const c = conversation.contacts ?? null;
   const displayName = rotuloDoContato(c, t);
-  const phoneFallback = c?.phone_number ? phoneForDisplay(c.phone_number) : "??";
+  // Sem telefone (visitante do chat do site identificado por e-mail, F14), o
+  // e-mail é o que identifica a pessoa — "??" só quando não há nada.
+  const phoneFallback = c?.phone_number ? phoneForDisplay(c.phone_number) : (c?.email ?? "??");
   const tags = c?.tags ?? [];
   const visibleTags = tags.slice(0, 2);
   const overflow = tags.length - visibleTags.length;

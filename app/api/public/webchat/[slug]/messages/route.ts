@@ -14,7 +14,7 @@ import { z } from "zod";
 
 import { fail, ok } from "@/lib/api/wrappers";
 import { registrarRequisicaoDe } from "@/src/obs/log";
-import { listarMensagensDoVisitante, receberMensagemDoVisitante, TAMANHO_MAXIMO_DA_MENSAGEM } from "@/src/webchat";
+import { estadoDaConversaDoVisitante, janelaDoHumano, listarMensagensDoVisitante, receberMensagemDoVisitante, TAMANHO_MAXIMO_DA_MENSAGEM } from "@/src/webchat";
 
 import { sessaoDaRequisicao, STATUS_POR_MOTIVO } from "../_comum";
 
@@ -62,7 +62,22 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
     registrarRequisicaoDe(req, { outcome: "rejected", organization_id: sessao.organization_id, request_id: requestId, status: 422 });
     return fail("validation_failed", "after inválido", 422, { requestId });
   }
-  const mensagens = await listarMensagensDoVisitante(sessao, consulta.data.after ?? null);
+  const [mensagens, estado] = await Promise.all([
+    listarMensagensDoVisitante(sessao, consulta.data.after ?? null),
+    estadoDaConversaDoVisitante(sessao),
+  ]);
+  // A IA responde 24 h; a pessoa, na janela (D55 d): a página avisa quem atende agora.
+  const humano = janelaDoHumano(new Date(), estado.timezone);
   registrarRequisicaoDe(req, { outcome: "allowed", organization_id: sessao.organization_id, request_id: requestId, status: 200 });
-  return ok({ identified: sessao.identified_at !== null, messages: mensagens }, { requestId });
+  return ok(
+    {
+      identified: sessao.identified_at !== null,
+      messages: mensagens,
+      waiting_human: estado.waiting_human,
+      human_available: humano.human_available,
+      next_human_at: humano.next_human_at,
+      window: humano.window,
+    },
+    { requestId },
+  );
 }

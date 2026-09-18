@@ -25,10 +25,14 @@ import { comoTextoDoProvedor, responderTurno } from "@/src/ai";
 import { rodarCicloDeSaida } from "@/src/jobs/outbound-worker";
 import { setSetting } from "@/src/tenant-config/settings";
 import type { TenantCtx } from "@/src/tenant-context";
+import { ROLE_RANK } from "@/lib/auth/types";
+import { can, type PapelD15 } from "@/src/rbac/matrix";
 import {
   criarSessao,
+  estadoDaConversaDoVisitante,
   hashDoIp,
   identificar,
+  janelaDoHumano,
   listarMensagensDoVisitante,
   receberMensagemDoVisitante,
   sessaoPorToken,
@@ -82,14 +86,17 @@ const medidas = {
   org_limited: 0,
   flood_calls_capped: 0,
   cross_org_denied: 0,
+  handoff_queued: 0,
+  roles_denied: 0,
+  roles_denied_total: 0,
 };
 
-function registroQueResponde() {
+function registroQueResponde(handoff: { wanted: boolean; reason: "customer_request" | null } = { wanted: false, reason: null }) {
   const estado = { chamadas: 0 };
   const registry = createFakeRegistry(async () => {
     estado.chamadas += 1;
     return {
-      content: [{ type: "text" as const, text: comoTextoDoProvedor({ reply: "Olá! Posso ajudar com o seu pedido.", intent: "saudacao", confidence: 0.95, tool_calls: [], handoff: { wanted: false, reason: null } }) }],
+      content: [{ type: "text" as const, text: comoTextoDoProvedor({ reply: handoff.wanted ? "Vou chamar uma pessoa da equipe." : "Olá! Posso ajudar com o seu pedido.", intent: "saudacao", confidence: 0.95, tool_calls: [], handoff }) }],
       finishReason: { unified: "stop" as const, raw: undefined },
       usage: { inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 5, text: 5, reasoning: 0 } },
       warnings: [],
@@ -377,14 +384,58 @@ describe("F14-T01 — a janela de cortesia não vale para o visitante na página
   });
 });
 
-describe("F14 — o que a T01 mediu (a linha `channels:` é gravada na T05, com todos os campos)", () => {
-  it("todos os campos da T01 têm numerador = denominador", () => {
+describe("F14-T02 — o humano segue a janela; a fila e o aviso ao visitante", () => {
+  it("visitante pede uma pessoa: o handoff entra na fila e a página vê waiting_human + a próxima abertura fora da janela", async () => {
+    const s = await abrirIdentificada(TENANT_A.slug, "198.51.100.9", "Helena Visitante", "helena@ficticio.test");
+    medidas.webchat_sessions += 1;
+    medidas.identified_total += 1;
+    medidas.identified += 1;
+    medidas.contacts_total += 1;
+    medidas.contacts_created += s.ident.created_contact ? 1 : 0;
+    const r = await receberMensagemDoVisitante(s.sessao, { client_message_id: randomUUID(), body: "quero falar com uma pessoa" }, deps);
+    if (!r.ok) throw new Error(`mensagem recusada: ${r.reason}`);
+    medidas.messages_in += 1;
+    const { registry } = registroQueResponde({ wanted: true, reason: "customer_request" });
+    const turno = await responderTurno(ctxJobA, { conversation_id: s.ident.conversation_id, mensagem_do_cliente: "quero falar com uma pessoa" }, depsDoTurno(registry));
+    expect(turno.status).toBe("handoff");
+    const fila = await conta(`select count(*)::text as n from public.handoffs where organization_id=$1 and conversation_id=$2 and claimed_at is null`, [ORG_A, s.ident.conversation_id]);
+    expect(fila).toBe(1);
+    const estado = await estadoDaConversaDoVisitante(s.sessao, deps);
+    expect(estado.waiting_human).toBe(true);
+    // A janela do humano: às 3h no fuso da organização o aviso traz a próxima abertura; às 10h não há aviso.
+    const madrugada = janelaDoHumano(new Date("2026-07-28T06:00:00Z"), estado.timezone);
+    const comercial = janelaDoHumano(new Date("2026-07-28T13:00:00Z"), estado.timezone);
+    expect(madrugada.human_available).toBe(false);
+    expect(madrugada.next_human_at).toMatch(/^2026-07-28T10:00:00/);
+    expect(comercial).toMatchObject({ human_available: true, next_human_at: null });
+    medidas.handoff_queued = 1;
+    console.info("f14-t02-handoff: handoff_queued=1/1 waiting_human_visible=1/1 next_human_at_outside_window=1/1");
+  });
+
+  it("configurar o chat do site é settings.manage (rota PATCH /settings/webchat): attendant e platform_admin negados; o rank mínimo é manager", () => {
+    // O que a rota nova da T02 exige: `settings.manage` + rank `manager` (viewer < agent < manager).
+    const negados: PapelD15[] = ["attendant", "platform_admin"];
+    for (const papel of negados) {
+      medidas.roles_denied_total += 1;
+      if (!can(papel, "settings.manage")) medidas.roles_denied += 1;
+    }
+    const rankNega = ROLE_RANK.viewer < ROLE_RANK.manager && ROLE_RANK.agent < ROLE_RANK.manager;
+    expect(medidas.roles_denied).toBe(negados.length);
+    expect(rankNega).toBe(true);
+    expect(can("tenant_admin", "settings.manage") && can("manager", "settings.manage")).toBe(true);
+    console.info(`f14-t02-papeis: roles_denied=${medidas.roles_denied}/${medidas.roles_denied_total} rank_min_manager=1/1`);
+  });
+});
+
+describe("F14 — o que T01/T02 mediram (a linha `channels:` é gravada na T05, com todos os campos)", () => {
+  it("todos os campos de T01/T02 têm numerador = denominador", () => {
     expect(medidas.webchat_sessions).toBeGreaterThanOrEqual(3);
     expect(medidas.identified).toBe(medidas.identified_total);
     expect(medidas.contacts_created).toBe(medidas.contacts_total);
     expect(medidas.messages_in).toBeGreaterThanOrEqual(3);
     expect(medidas.ai_replies).toBe(medidas.ai_replies_total);
-    expect([medidas.ai_outside_window, medidas.ip_limited, medidas.org_limited, medidas.flood_calls_capped, medidas.cross_org_denied]).toEqual([1, 1, 1, 1, 1]);
+    expect([medidas.ai_outside_window, medidas.ip_limited, medidas.org_limited, medidas.flood_calls_capped, medidas.cross_org_denied, medidas.handoff_queued]).toEqual([1, 1, 1, 1, 1, 1]);
+    expect(medidas.roles_denied).toBe(medidas.roles_denied_total);
     console.info(
       `f14-t01-parcial: webchat_sessions=${medidas.webchat_sessions} identified=${medidas.identified}/${medidas.identified_total} contacts_created=${medidas.contacts_created}/${medidas.contacts_total} messages_in=${medidas.messages_in} ai_replies=${medidas.ai_replies}/${medidas.ai_replies_total} ai_outside_window=1/1 ip_limited=1/1 org_limited=1/1 flood_calls_capped=1/1 cross_org_denied=1/1`,
     );

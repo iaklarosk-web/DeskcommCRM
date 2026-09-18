@@ -28,6 +28,41 @@ const AUTOR_POR_SENT_VIA: Record<string, MensagemVisivel["author"]> = {
   system: "automation",
 };
 
+/** Estado que a página mostra ao lado das mensagens: quem atende agora. */
+export interface EstadoDaConversaDoVisitante {
+  readonly saas_state: string | null;
+  /** Há handoff aberto (fila) nesta conversa? */
+  readonly waiting_human: boolean;
+  readonly timezone: string;
+}
+
+export async function estadoDaConversaDoVisitante(
+  sessao: SessaoDoVisitante,
+  deps: WebchatDeps = {},
+): Promise<EstadoDaConversaDoVisitante> {
+  const ctx: TenantCtx = { organization_id: sessao.organization_id, source: "webhook" };
+  return withTenant(
+    ctx,
+    async (db) => {
+      const org = await db.query<{ timezone: string }>(`select timezone from public.organizations where id = $1`, [ctx.organization_id]);
+      const timezone = org.rows[0]?.timezone ?? "America/Sao_Paulo";
+      if (sessao.conversation_id === null) return { saas_state: null, waiting_human: false, timezone };
+      const linha = await db.query<{ saas_state: string | null; aberto: string }>(
+        `select c.saas_state,
+                (select count(*) from public.handoffs h where h.organization_id = c.organization_id and h.conversation_id = c.id and h.claimed_at is null)::text as aberto
+           from public.conversations c where c.id = $1 and c.organization_id = $2`,
+        [sessao.conversation_id, ctx.organization_id],
+      );
+      return {
+        saas_state: linha.rows[0]?.saas_state ?? null,
+        waiting_human: Number(linha.rows[0]?.aberto ?? 0) > 0 || linha.rows[0]?.saas_state === "waiting_human",
+        timezone,
+      };
+    },
+    { pool: deps.pool },
+  );
+}
+
 export async function listarMensagensDoVisitante(
   sessao: SessaoDoVisitante,
   depoisDe: string | null,

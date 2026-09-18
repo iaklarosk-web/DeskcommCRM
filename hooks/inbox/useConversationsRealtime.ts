@@ -14,6 +14,8 @@ export interface ContactSummary {
   display_name: string | null;
   name: string | null;
   phone_number: string | null;
+  /** F14: o visitante do chat do site pode ter só e-mail — é o que a lista mostra sem telefone. Opcional: cache de antes do campo. */
+  email?: string | null;
   tags: string[];
   is_blocked: boolean;
   is_anonymized: boolean;
