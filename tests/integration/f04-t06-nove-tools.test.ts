@@ -349,9 +349,19 @@ afterAll(async () => {
 
 describe("F04-T06: as nove tools de D18, três asserções cada", () => {
   it("tools: tools=10 asserts=3 pass=30/30", async () => {
-    // Arrange — as dez (nove de D18 + schedule_appointment, F14) saem do CATÁLOGO em tempo de teste.
-    const tools = toolsFor(ctxA, "ai");
+    // Arrange — as dez (nove de D18 + schedule_appointment, F14) saem do CATÁLOGO
+    // em tempo de teste. A F18 acrescentou catorze ao catálogo (ADR-040 §2); o
+    // ESCOPO desta suíte continua sendo as dez, e as catorze são exercidas em
+    // `tests/integration/f18-motor-unico.test.ts` (linha `engine:`,
+    // `tools_migradas=13/13` mais os três campos do cancelamento). A guarda
+    // continua forte: o catálogo tem de devolver exatamente dez + catorze, por
+    // NOME — um acréscimo silencioso a qualquer um dos dois lados fica vermelho.
+    const DA_F18 = ["list_leads","get_lead","list_pipelines","list_stages","create_lead","update_lead","move_lead_stage","propose_contact_field","list_event_types","find_free_slots","list_appointments","confirm_appointment","set_appointment_outcome","cancel_appointment"];
+    const todas = toolsFor(ctxA, "ai");
+    expect(todas.length, "o catálogo de IA deixou de ter 24 tools").toBe(24);
+    const tools = todas.filter((t) => !DA_F18.includes(t.name));
     expect(tools.length, "o catálogo deixou de devolver dez tools de IA").toBe(10);
+    expect(todas.filter((t) => DA_F18.includes(t.name)).length, "faltou tool da F18").toBe(14);
 
     let invalidas = 0;
     let isoladas = 0;

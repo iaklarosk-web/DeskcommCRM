@@ -35,7 +35,10 @@ import {
   montarContexto,
   responderTurno,
 } from "@/src/ai";
-import { toolsFor } from "@/src/actions/catalog";
+import { moverLead } from "@/src/crm/funil";
+import { ACTION_CATALOG, toolsFor } from "@/src/actions/catalog";
+import { confirm } from "@/src/actions/confirm";
+import { execute } from "@/src/actions/execute";
 import { setSetting } from "@/src/tenant-config/settings";
 import type { TenantCtx } from "@/src/tenant-context";
 
@@ -55,8 +58,22 @@ const pool = new pg.Pool({
 const ORG_A = "f1800001-0000-4000-8000-00000000000a";
 const ADMIN_A = "f1800001-1000-4000-8000-00000000000a";
 const CONTATO_A = "f1800001-2000-4000-8000-00000000000a";
+/** Segundo contato: a unicidade do produto é UMA conversa por contato/sessão. */
+const CONTATO_T02 = "f1800001-2100-4000-8000-00000000000a";
 const CONVERSA_A = "f1800001-4000-4000-8000-00000000000a";
+/** Conversa só do T02: a aprovação muda o estado, e o T00 precisa da dele intacto. */
+const CONVERSA_T02 = "f1800001-4100-4000-8000-00000000000a";
 const AGENTE_A = "f1800001-5000-4000-8000-00000000000a";
+const FUNIL_A = "f1800001-7000-4000-8000-00000000000a";
+const ETAPA_1 = "f1800001-7100-4000-8000-00000000000a";
+const ETAPA_2 = "f1800001-7200-4000-8000-00000000000a";
+const ETAPA_HUMANA = "f1800001-7300-4000-8000-00000000000a";
+/** As 13 que o agente DECLARA e a fase migrou (o denominador de `tools_migradas`). */
+const MIGRADAS_DECLARADAS = [
+  "list_leads", "get_lead", "list_pipelines", "list_stages", "create_lead", "update_lead",
+  "move_lead_stage", "propose_contact_field", "list_event_types", "find_free_slots",
+  "list_appointments", "confirm_appointment", "set_appointment_outcome",
+] as const;
 const VERSAO_A = "f1800001-6000-4000-8000-00000000000a";
 
 /** O prompt que SÓ existe na versão publicada — é ele que a prova procura. */
@@ -72,8 +89,14 @@ const TENANT_A: ConfigDeTenant = {
   usuario: ADMIN_A,
   sessao: "f1800001-3000-4000-8000-00000000000a",
   conta: "f18-motor-a-conta",
-  contatos: [{ id: CONTATO_A, nome: "Cliente da F18", telefone: "+5519990000018" }],
-  conversas: [{ id: CONVERSA_A, contato: CONTATO_A, estado: "ai_handling", statusLegado: "ai_handling" }],
+  contatos: [
+    { id: CONTATO_A, nome: "Cliente da F18", telefone: "+5519990000018" },
+    { id: CONTATO_T02, nome: "Cliente do T02", telefone: "+5519990000118" },
+  ],
+  conversas: [
+    { id: CONVERSA_A, contato: CONTATO_A, estado: "ai_handling", statusLegado: "ai_handling" },
+    { id: CONVERSA_T02, contato: CONTATO_T02, estado: "ai_handling", statusLegado: "ai_handling" },
+  ],
   produtos: [],
   materiais: [],
   settings: {
@@ -86,6 +109,12 @@ const ctxAdminA: TenantCtx = { organization_id: ORG_A, source: "session", user_i
 const ctxJobA: TenantCtx = { organization_id: ORG_A, source: "job" };
 
 const medidas = {
+  tools_migradas: 0,
+  auditoria: 0,
+  auditoria_total: 0,
+  roles_denied: 0,
+  roles_denied_total: 0,
+  policy_approve_pendura: 0,
   saas_turns: 0,
   legacy_turns: 0,
   volta_atras: 0,
@@ -151,11 +180,29 @@ async function publicarAgente(tools: readonly string[], fontes: readonly string[
   ]);
 }
 
+async function conta(sql: string, params: unknown[] = []): Promise<number> {
+  const { rows } = await pool.query<{ n: string }>(sql, params);
+  return Number(rows[0]?.n ?? 0);
+}
+
 beforeAll(async () => {
   const client = await pool.connect();
   try {
     await client.query("begin");
     await semearTenant(client, TENANT_A);
+    // Funil com três etapas: duas normais e uma que EXIGE gente — é ela que
+    // prova que a IA não move lead para onde o produto pede uma pessoa.
+    await client.query(
+      `insert into public.crm_pipelines (id, organization_id, name, slug) values ($1,$2,'Funil da F18','f18-funil')`,
+      [FUNIL_A, ORG_A],
+    );
+    await client.query(
+      `insert into public.crm_stages (id, organization_id, pipeline_id, name, slug, position, requires_human)
+       values ($1,$2,$3,'Novo','f18-novo',1000,false),
+              ($4,$2,$3,'Em conversa','f18-conversa',2000,false),
+              ($5,$2,$3,'Fechamento','f18-fechamento',3000,true)`,
+      [ETAPA_1, ORG_A, FUNIL_A, ETAPA_2, ETAPA_HUMANA],
+    );
     await client.query("commit");
   } catch (erro) {
     await client.query("rollback");
@@ -279,6 +326,155 @@ describe("F18-T01 — o despacho escolhe o motor pela chave da organização", (
   });
 });
 
+describe("F18-T02 — as 14 ações que saíram do MCP herdado", () => {
+  it("cada uma das 13 declaradas existe no catálogo, é visível à IA e tem política", async () => {
+    const nomes = new Set(ACTION_CATALOG.map((e) => e.name));
+    const daIa = new Set(toolsFor(ctxJobA, "ai").map((t) => t.name));
+    for (const nome of MIGRADAS_DECLARADAS) {
+      expect(nomes.has(nome), `${nome} fora do catálogo`).toBe(true);
+      expect(daIa.has(nome), `${nome} invisível à IA`).toBe(true);
+      medidas.tools_migradas += 1;
+    }
+    // `cancel_appointment` entrou por decisão do proprietário (D56 e), fora das
+    // 13 declaradas — por isso tem campos próprios na linha, não este contador.
+    expect(nomes.has("cancel_appointment")).toBe(true);
+    console.info(`f18-t02-catalogo: migradas=${medidas.tools_migradas}/13 catalogo=${ACTION_CATALOG.length} ia=${daIa.size}`);
+  });
+
+  it("a IA lê o funil e cria oportunidade pelo caminho único, com auditoria", async () => {
+    const funis = await execute(ctxJobA, { kind: "ai" }, "list_pipelines", {}, { pool });
+    expect(funis.status).toBe("executed");
+
+    const etapas = await execute(ctxJobA, { kind: "ai" }, "list_stages", { pipeline_id: FUNIL_A }, { pool });
+    expect(etapas.status).toBe("executed");
+
+    const antes = await conta(
+      `select count(*)::text as n from public.audit_events where organization_id=$1 and actor_type='ai'`,
+      [ORG_A],
+    );
+    // `create_lead` é `medium` + `by_risk`: com a política vazia, D33 PENDURA.
+    // A IA propõe, a pessoa aprova — e é assim que a ação herdada ganha o freio
+    // que ela não tinha no MCP.
+    const proposto = await execute(
+      ctxJobA,
+      { kind: "ai" },
+      "create_lead",
+      { conversation_id: CONVERSA_T02, pipeline_id: FUNIL_A, title: "Orçamento pelo chat", contact_id: CONTATO_A },
+      { pool },
+    );
+    expect(proposto.status, `${proposto.reason ?? ""} ${proposto.detalhe ?? ""}`).toBe("pending");
+    medidas.policy_approve_pendura += 1;
+
+    const criado = await confirm(
+      ctxAdminA,
+      proposto.pending_action_id!,
+      "approved",
+      { kind: "human", user_id: ADMIN_A },
+      { pool },
+    );
+    expect(criado.status, `${criado.reason ?? ""} ${criado.detalhe ?? ""}`).toBe("executed");
+    const depois = await conta(
+      `select count(*)::text as n from public.audit_events where organization_id=$1 and actor_type='ai'`,
+      [ORG_A],
+    );
+    expect(depois).toBeGreaterThan(antes);
+    medidas.auditoria += 1;
+    medidas.auditoria_total += 1;
+
+    const lidos = await execute(ctxJobA, { kind: "ai" }, "list_leads", { pipeline_id: FUNIL_A }, { pool });
+    expect(lidos.status).toBe("executed");
+    console.info("f18-t02-funil: list_pipelines=1/1 list_stages=1/1 create_lead=1/1 auditado=1/1 list_leads=1/1");
+  });
+
+  it("a IA NÃO move lead para etapa que exige gente; um humano move", async () => {
+    const lead = (
+      await pool.query<{ id: string }>(
+        `select id from public.crm_leads where organization_id=$1 and pipeline_id=$2 order by created_at desc limit 1`,
+        [ORG_A, FUNIL_A],
+      )
+    ).rows[0]!.id;
+
+    // A fachada recusa a IA na etapa que exige gente — é ali que a regra vive, e
+    // é ali que ela tem de ser medida: a ferramenta é fina de propósito.
+    const pelaIa = await moverLead(ctxJobA, { kind: "ai" }, lead, ETAPA_HUMANA, { pool });
+    expect(pelaIa.ok).toBe(false);
+    if (!pelaIa.ok) expect(pelaIa.reason).toBe("stage_requires_human");
+    medidas.roles_denied += 1;
+    medidas.roles_denied_total += 1;
+
+    // A automação também não: uma regra QUANDO/ENTÃO não decide por uma pessoa.
+    const pelaAutomacao = await moverLead(ctxJobA, { kind: "automation" }, lead, ETAPA_HUMANA, { pool });
+    expect(pelaAutomacao.ok).toBe(false);
+    medidas.roles_denied += 1;
+    medidas.roles_denied_total += 1;
+
+    // Pelo caminho único, a proposta da IA PENDURA; quem aprova passa a ser o
+    // ator, e aí a etapa que exige gente aceita — porque agora tem gente. O
+    // freio é "sem pessoa não vai", não "nunca vai".
+    const proposta = await execute(ctxJobA, { kind: "ai" }, "move_lead_stage", { conversation_id: CONVERSA_T02, lead_id: lead, to_stage_id: ETAPA_HUMANA }, { pool });
+    expect(proposta.status).toBe("pending");
+    const aprovada = await confirm(
+      ctxAdminA,
+      proposta.pending_action_id!,
+      "approved",
+      { kind: "human", user_id: ADMIN_A },
+      { pool },
+    );
+    expect(aprovada.status, `${aprovada.reason ?? ""} ${aprovada.detalhe ?? ""}`).toBe("executed");
+    medidas.auditoria += 1;
+    medidas.auditoria_total += 1;
+
+    // E a etapa normal, proposta pela IA e aprovada, executa.
+    const normal = await execute(ctxJobA, { kind: "ai" }, "move_lead_stage", { conversation_id: CONVERSA_T02, lead_id: lead, to_stage_id: ETAPA_2 }, { pool });
+    expect(normal.status).toBe("pending");
+    const normalAprovada = await confirm(
+      ctxAdminA,
+      normal.pending_action_id!,
+      "approved",
+      { kind: "human", user_id: ADMIN_A },
+      { pool },
+    );
+    expect(normalAprovada.status).toBe("executed");
+    medidas.auditoria += 1;
+    medidas.auditoria_total += 1;
+    console.info("f18-t02-funil: ia_em_etapa_humana=1/1 automacao_em_etapa_humana=1/1 aprovada_por_pessoa=executed ia_em_etapa_normal=executed(aprovada)");
+  });
+
+  it("a IA PROPÕE o dado do contato; o cadastro não muda", async () => {
+    const proposta = await execute(
+      ctxJobA,
+      { kind: "ai" },
+      "propose_contact_field",
+      { contact_id: CONTATO_A, field: "email", value: "cliente.f18@exemplo.test" },
+      { pool },
+    );
+    expect(proposta.status).toBe("executed");
+    const cadastro = await pool.query<{ email: string | null }>(
+      `select email from public.contacts where organization_id=$1 and id=$2`,
+      [ORG_A, CONTATO_A],
+    );
+    expect(cadastro.rows[0]?.email ?? null).not.toBe("cliente.f18@exemplo.test");
+    const pendentes = await conta(
+      `select count(*)::text as n from public.contact_field_proposals where organization_id=$1 and status='pending'`,
+      [ORG_A],
+    );
+    expect(pendentes).toBe(1);
+    medidas.auditoria += 1;
+    medidas.auditoria_total += 1;
+
+    // A segunda proposta do mesmo campo é recusada — nomeada, não silenciosa.
+    const repetida = await execute(
+      ctxJobA,
+      { kind: "ai" },
+      "propose_contact_field",
+      { contact_id: CONTATO_A, field: "email", value: "outro.f18@exemplo.test" },
+      { pool },
+    );
+    expect(repetida.status).toBe("denied");
+    console.info("f18-t02-proposta: criada=1/1 cadastro_intacto=1/1 repetida_negada=1/1");
+  });
+});
+
 describe("F18-T00 — ferramenta declarada e não migrada (objeção 1)", () => {
   it("o inventário sabe dizer o que a versão declara e o catálogo não tem", async () => {
     const heranca = await herancaDoAgentePublicado(ctxJobA, { pool });
@@ -312,6 +508,9 @@ describe("F18-T00 — ferramenta declarada e não migrada (objeção 1)", () => 
     const linha =
       `engine: saas_turns=${medidas.saas_turns} legacy_turns=${medidas.legacy_turns} volta_atras=${medidas.volta_atras}/1 ` +
       `heranca_prompt=${medidas.heranca_prompt}/1 heranca_acervo=${medidas.heranca_acervo}/1 ` +
+      `policy_approve_pendura=${medidas.policy_approve_pendura}/1 ` +
+      `tools_migradas=${medidas.tools_migradas}/13 auditoria=${medidas.auditoria}/${medidas.auditoria_total} ` +
+      `roles_denied=${medidas.roles_denied}/${medidas.roles_denied_total} ` +
       `fora_do_catalogo_negado=${medidas.fora_do_catalogo_negado}/${medidas.fora_do_catalogo_total} ` +
       `inventadas_descartadas=${medidas.inventadas_descartadas}/1`;
     console.info(linha);

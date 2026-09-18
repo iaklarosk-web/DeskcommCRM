@@ -4,7 +4,7 @@
  *
  * O que este arquivo mede, e por que precisa de banco: as nove tools de D18
  * executadas PELA IA deixam nove linhas em `audit_events` (invariante 2 de
- * §5.8), as onze células negadas da matriz N × 3 são negadas DE FATO e
+ * §5.8), as quinze células negadas da matriz N × 3 são negadas DE FATO e
  * auditadas, e os três caminhos da confirmação (aprovar, recusar, vencer) levam
  * a conversa aos três destinos que D16 escreve.
  *
@@ -307,7 +307,13 @@ describe("F04-T01 — as nove tools de D18 (+ schedule_appointment, F14) pela IA
     // Arrange — as dez saem do CATÁLOGO, não de uma lista paralela.
     const cenario = CENARIOS.catalogo;
     const ctx = ctxDe("catalogo");
-    const tools = ACTION_CATALOG.filter((e) => e.executors.includes("ai"));
+    // As catorze da F18 (ADR-040 §2) têm a própria prova em
+    // `f18-motor-unico.test.ts`; aqui o escopo segue sendo as dez, e a guarda
+    // confere os dois lados por nome para que nenhum acréscimo passe calado.
+    const DA_F18 = ["list_leads","get_lead","list_pipelines","list_stages","create_lead","update_lead","move_lead_stage","propose_contact_field","list_event_types","find_free_slots","list_appointments","confirm_appointment","set_appointment_outcome","cancel_appointment"];
+    const todas = ACTION_CATALOG.filter((e) => e.executors.includes("ai"));
+    expect(todas.length, "o catálogo de IA deixou de ter 24 tools").toBe(24);
+    const tools = todas.filter((e) => !DA_F18.includes(e.name));
     expect(tools.length, "o catálogo deixou de ter dez tools de IA").toBe(10);
     const auditoriaAntes = await auditoriaDaIa(cenario.org);
 
@@ -374,7 +380,7 @@ describe("F04-T01 — as nove tools de D18 (+ schedule_appointment, F14) pela IA
 });
 
 describe("F04-T01 — executor fora do subset é negado e auditado", () => {
-  it("as onze células negadas da matriz N × 3 são negadas DE FATO", async () => {
+  it("as quinze células negadas da matriz N × 3 são negadas DE FATO", async () => {
     // Arrange — as dez (seis de F04, quatro das duas ações LGPD de F06-T03,
     // negadas a `ai` e `automation`) saem do catálogo, não de uma lista à mão.
     const cenario = CENARIOS.negado;
@@ -386,7 +392,7 @@ describe("F04-T01 — executor fora do subset é negado e auditado", () => {
     );
     // Dez: a F15-T04 tira uma (`transfer_to_human` ganha `automation`) e põe
     // uma (`assign_owner` negada à IA).
-    expect(celulasNegadas.length, "a matriz deixou de ter onze células negadas").toBe(11);
+    expect(celulasNegadas.length, "a matriz deixou de ter quinze células negadas").toBe(15);
 
     // Act — cada célula é TENTADA. Ler o catálogo provaria o catálogo; o que
     // se quer saber é se `execute()` obedece a ele.
@@ -442,7 +448,7 @@ describe("F04-T01 — executor fora do subset é negado e auditado", () => {
     // `automation`: 11 células). A IA passa a ver dez tools; a décima pendura,
     // e pendurar também audita (`pending`).
     expect(linha).toBe(
-      "action-policy: actions=14 catalog_total=14 fields=8/8 executor_denied=11/11 audit_rows=10/10",
+      "action-policy: actions=28 catalog_total=28 fields=8/8 executor_denied=15/15 audit_rows=10/10",
     );
   });
 });

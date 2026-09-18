@@ -62,14 +62,32 @@ const ESPERADO_DA_DIRETRIZ: readonly {
   { name: "assign_owner", risk: "low", executors: ["human", "automation"], confirmation: "none" },
   // F14-T04 (ADR-038 §2 T04, D55 e): a IA marca horário — humano e IA; `medium` + `by_risk` pendura por D33.
   { name: "schedule_appointment", risk: "medium", executors: ["human", "ai"], confirmation: "by_risk" },
+  // F18-T02 (ADR-040 §2, D56 b): as 14 que saem do MCP herdado. Leituras `low`
+  // e sem confirmação (contexto não é efeito); escritas de funil `medium` +
+  // `by_risk` (D33 pendura); `cancel_appointment` `medium` SEM confirmação —
+  // é a decisão do proprietário (D56 e) escrita no catálogo, onde se lê.
+  { name: "list_leads", risk: "low", executors: ["human", "ai", "automation"], confirmation: "none" },
+  { name: "get_lead", risk: "low", executors: ["human", "ai", "automation"], confirmation: "none" },
+  { name: "list_pipelines", risk: "low", executors: ["human", "ai", "automation"], confirmation: "none" },
+  { name: "list_stages", risk: "low", executors: ["human", "ai", "automation"], confirmation: "none" },
+  { name: "create_lead", risk: "medium", executors: ["human", "ai", "automation"], confirmation: "by_risk" },
+  { name: "update_lead", risk: "medium", executors: ["human", "ai"], confirmation: "by_risk" },
+  { name: "move_lead_stage", risk: "medium", executors: ["human", "ai", "automation"], confirmation: "by_risk" },
+  { name: "propose_contact_field", risk: "low", executors: ["human", "ai", "automation"], confirmation: "none" },
+  { name: "list_event_types", risk: "low", executors: ["human", "ai", "automation"], confirmation: "none" },
+  { name: "find_free_slots", risk: "low", executors: ["human", "ai", "automation"], confirmation: "none" },
+  { name: "list_appointments", risk: "low", executors: ["human", "ai", "automation"], confirmation: "none" },
+  { name: "confirm_appointment", risk: "low", executors: ["human", "ai"], confirmation: "none" },
+  { name: "set_appointment_outcome", risk: "low", executors: ["human", "ai"], confirmation: "none" },
+  { name: "cancel_appointment", risk: "medium", executors: ["human", "ai"], confirmation: "none" },
   { name: "delete_customer_data", risk: "high", executors: ["human"], confirmation: "none" },
 ];
 
-/** As nove de D18 + `schedule_appointment` (F14). `resume_ai` (D34) e as duas da LGPD (F06-T03) são humanas e NÃO estão aqui. */
+/** As nove de D18 + `schedule_appointment` (F14) + as catorze da F18. `resume_ai` (D34), `assign_owner` e as duas da LGPD são humanas/automação e NÃO estão aqui. */
 const TOOLS_D18 = ESPERADO_DA_DIRETRIZ.filter((e) => e.executors.includes("ai")).map((e) => e.name);
 
-describe("F04-T01 — as entradas do catálogo (dez de F04 + duas de F06-T03 + uma de F15-T04 + uma de F14-T04), com os oito campos", () => {
-  it("o catálogo tem as dez de §5.8, as duas de §7.7 T03, assign_owner (ADR-036) e schedule_appointment (ADR-038), com risco, executores e confirmação do documento", () => {
+describe("F04-T01 — as entradas do catálogo (dez de F04 + duas de F06-T03 + uma de F15-T04 + uma de F14-T04 + catorze da F18), com os oito campos", () => {
+  it("o catálogo tem as dez de §5.8, as duas de §7.7 T03, assign_owner (ADR-036), schedule_appointment (ADR-038) e as catorze da F18 (ADR-040), com risco, executores e confirmação do documento", () => {
     // Arrange — o documento.
     const esperado = ESPERADO_DA_DIRETRIZ;
 
@@ -163,19 +181,22 @@ describe("F04-T01 — a matriz N × 3 executores (§5.8, invariante 1)", () => {
     // `automation`) — e a F15-T04 troca uma por outra: `transfer_to_human`
     // ganha `automation` (−1) e `assign_owner` nasce negada a `ai` (+1). A
     // F14-T04 acrescenta `schedule_appointment`, negada a `automation` (+1).
-    expect(negadas.length, `células negadas: ${negadas.join(", ")}`).toBe(11);
+    // F18-T02 acrescenta 14: quatro delas negam `automation` (update_lead,
+    // confirm_appointment, set_appointment_outcome, cancel_appointment) — as
+    // outras dez são leitura ou escrita que uma regra QUANDO/ENTÃO pode fazer.
+    expect(negadas.length, `células negadas: ${negadas.join(", ")}`).toBe(15);
     console.info(
-      `f04-t01-matriz: cells=${celulas} allowed=${permitidas} denied=${negadas.length}/11`,
+      `f04-t01-matriz: cells=${celulas} allowed=${permitidas} denied=${negadas.length}/15`,
     );
   });
 
-  it("`toolsFor(ctx,\"ai\")` devolve exatamente as nove de D18 mais schedule_appointment (F14)", () => {
+  it("`toolsFor(ctx,\"ai\")` devolve exatamente as nove de D18, schedule_appointment (F14) e as catorze da F18", () => {
     // Arrange + Act
     const doModelo = toolsFor({}, "ai");
 
     // Assert — nove, e são as nove certas: contar sem conferir os nomes
     // aprovaria um catálogo que trocasse `resume_ai` por outra coisa.
-    expect(doModelo.length, "toolsFor(ai) não devolveu dez").toBe(10);
+    expect(doModelo.length, "toolsFor(ai) não devolveu vinte e quatro").toBe(24);
     expect([...doModelo].map((t) => t.name).sort()).toEqual([...TOOLS_D18].sort());
     expect(
       doModelo.some((t) => t.name === "resume_ai"),
@@ -191,13 +212,17 @@ describe("F04-T01 — a matriz N × 3 executores (§5.8, invariante 1)", () => {
     // As outras duas listas, para que o filtro por executor não seja acidente.
     const humanas = toolsFor({}, "human").length;
     const automacao = toolsFor({}, "automation").length;
-    expect(humanas, "toolsFor(human) devia devolver as catorze").toBe(ACTION_CATALOG.length);
-    // Sete: as três leituras, `create_task` e `send_message` (as que §5.12
-    // precisa para o Job de lembrete) mais `transfer_to_human` e `assign_owner`
-    // (F15-T04, as quatro ações de regra são todas de `automation`).
-    expect(automacao, "toolsFor(automation) mudou de tamanho").toBe(7);
+    expect(humanas, "toolsFor(human) devia devolver as vinte e oito").toBe(ACTION_CATALOG.length);
+    // Dezessete: as sete de antes (três leituras, `create_task`, `send_message`,
+    // `transfer_to_human` e `assign_owner`) mais dez da F18 — as leituras de
+    // funil e agenda, `create_lead`, `move_lead_stage` e `propose_contact_field`.
+    // As quatro que uma regra QUANDO/ENTÃO NÃO faz sozinha continuam fora:
+    // `update_lead`, `confirm_appointment`, `set_appointment_outcome` e
+    // `cancel_appointment` — desmarcar horário por regra automática é
+    // exatamente o que ninguém quer descobrir depois.
+    expect(automacao, "toolsFor(automation) mudou de tamanho").toBe(17);
     console.info(
-      `f04-t01-toolsfor: ai=${doModelo.length}/10 human=${humanas}/14 automation=${automacao}/7`,
+      `f04-t01-toolsfor: ai=${doModelo.length}/24 human=${humanas}/28 automation=${automacao}/17`,
     );
   });
 

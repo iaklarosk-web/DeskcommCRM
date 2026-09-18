@@ -292,6 +292,154 @@ export const assignOwnerOutputSchema = z.strictObject({
  * `timezone` é o em que a pessoa combinou ("quinta às 14h"). Risco `medium` com
  * `by_risk`: sem entrada na política, D33 pendura para aprovação humana.
  */
+// ─── F18-T02 (ADR-040 §2): as 13 ações que saem do MCP herdado ──────────────
+//
+// As ferramentas que o agente publicado DECLARA e o catálogo não tinha. Entram
+// aqui com entrada estrita (campo desconhecido reprova, §5.8) e saída fechada:
+// é a mesma catraca das outras, e é o que permite dar política, teto e
+// auditoria a cada uma. As 41 restantes ficam na fila de espera do inventário.
+
+const leadResumo = z.strictObject({
+  id: uuid,
+  title: z.string(),
+  status: z.string(),
+  pipeline_id: uuid,
+  stage_id: uuid,
+  stage_name: z.string(),
+  contact_id: uuid.nullable(),
+  value_cents: z.number().int().nullable(),
+  owner_user_id: uuid.nullable(),
+  updated_at: z.string(),
+});
+
+export const listLeadsInputSchema = z.strictObject({
+  pipeline_id: uuid.nullable().default(null),
+  stage_id: uuid.nullable().default(null),
+  contact_id: uuid.nullable().default(null),
+  limit: z.number().int().min(1).max(50).default(20),
+});
+export const listLeadsOutputSchema = z.strictObject({ leads: z.array(leadResumo) });
+
+export const getLeadInputSchema = z.strictObject({ lead_id: uuid });
+export const getLeadOutputSchema = z.strictObject({ lead: leadResumo });
+
+export const listPipelinesInputSchema = z.strictObject({});
+export const listPipelinesOutputSchema = z.strictObject({
+  pipelines: z.array(z.strictObject({ id: uuid, name: z.string(), slug: z.string(), is_default: z.boolean() })),
+});
+
+export const listStagesInputSchema = z.strictObject({ pipeline_id: uuid });
+export const listStagesOutputSchema = z.strictObject({
+  stages: z.array(
+    z.strictObject({
+      id: uuid,
+      pipeline_id: uuid,
+      name: z.string(),
+      position: z.number().int(),
+      is_won: z.boolean(),
+      is_lost: z.boolean(),
+      requires_human: z.boolean(),
+    }),
+  ),
+});
+
+export const createLeadInputSchema = z.strictObject({
+  // A conversa em que a ação nasce: é nela que a pendência de aprovação fica
+  // pendurada (D33). Opcional porque uma regra QUANDO/ENTÃO não tem conversa —
+  // e aí a organização precisa declarar `allow` na política para a ação rodar.
+  conversation_id: uuid.nullable().default(null),
+  pipeline_id: uuid,
+  title: z.string().trim().min(1).max(200),
+  contact_id: uuid.nullable().default(null),
+  value_cents: z.number().int().min(0).nullable().default(null),
+  description: z.string().trim().max(2000).nullable().default(null),
+});
+export const createLeadOutputSchema = z.strictObject({ lead: leadResumo });
+
+export const updateLeadInputSchema = z.strictObject({
+  conversation_id: uuid.nullable().default(null),
+  lead_id: uuid,
+  title: z.string().trim().min(1).max(200).nullable().default(null),
+  value_cents: z.number().int().min(0).nullable().default(null),
+  description: z.string().trim().max(2000).nullable().default(null),
+});
+export const updateLeadOutputSchema = z.strictObject({ lead: leadResumo });
+
+export const moveLeadStageInputSchema = z.strictObject({
+  conversation_id: uuid.nullable().default(null),
+  lead_id: uuid,
+  to_stage_id: uuid,
+});
+export const moveLeadStageOutputSchema = z.strictObject({ lead: leadResumo });
+
+export const proposeContactFieldInputSchema = z.strictObject({
+  contact_id: uuid,
+  field: z.enum(["email", "name", "phone_number"]),
+  value: z.string().trim().min(1).max(500),
+});
+export const proposeContactFieldOutputSchema = z.strictObject({
+  proposal_id: uuid,
+  field: z.string(),
+});
+
+export const listEventTypesInputSchema = z.strictObject({});
+export const listEventTypesOutputSchema = z.strictObject({
+  event_types: z.array(
+    z.strictObject({
+      id: uuid,
+      name: z.string(),
+      duration_minutes: z.number().int(),
+      requires_confirmation: z.boolean(),
+      location_kind: z.string(),
+    }),
+  ),
+});
+
+export const findFreeSlotsInputSchema = z.strictObject({
+  event_type_id: uuid,
+  from: z.string().datetime({ offset: true }),
+  days: z.number().int().min(1).max(30).default(7),
+});
+export const findFreeSlotsOutputSchema = z.strictObject({
+  slots: z.array(z.strictObject({ starts_at: z.string(), ends_at: z.string() })),
+  time_zone: z.string(),
+});
+
+const compromissoResumo = z.strictObject({
+  id: uuid,
+  starts_at: z.string(),
+  ends_at: z.string(),
+  time_zone: z.string(),
+  status: z.string(),
+  revision: z.number().int(),
+  contact_id: uuid.nullable(),
+  event_type_id: uuid,
+});
+
+export const listAppointmentsInputSchema = z.strictObject({
+  contact_id: uuid.nullable().default(null),
+  from: z.string().datetime({ offset: true }).nullable().default(null),
+  to: z.string().datetime({ offset: true }).nullable().default(null),
+});
+export const listAppointmentsOutputSchema = z.strictObject({ appointments: z.array(compromissoResumo) });
+
+export const confirmAppointmentInputSchema = z.strictObject({ appointment_id: uuid, revision: z.number().int().min(1) });
+export const confirmAppointmentOutputSchema = z.strictObject({ appointment: compromissoResumo });
+
+export const setAppointmentOutcomeInputSchema = z.strictObject({
+  appointment_id: uuid,
+  revision: z.number().int().min(1),
+  outcome: z.enum(["completed", "no_show"]),
+});
+export const setAppointmentOutcomeOutputSchema = z.strictObject({ appointment: compromissoResumo });
+
+export const cancelAppointmentInputSchema = z.strictObject({
+  appointment_id: uuid,
+  revision: z.number().int().min(1),
+  reason: z.string().trim().min(1).max(500),
+});
+export const cancelAppointmentOutputSchema = z.strictObject({ appointment: compromissoResumo });
+
 export const scheduleAppointmentInputSchema = z.strictObject({
   conversation_id: uuid,
   event_type_id: uuid,

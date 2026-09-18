@@ -1,5 +1,5 @@
 /**
- * F05-T01/T02 — os OITO motivos, os gatilhos determinísticos e a régua dos sete
+ * F05-T01/T02 — os NOVE motivos, os gatilhos determinísticos e a régua dos sete
  * campos, medidos SEM banco (§5.11, D19, G-78).
  *
  * O que precisa de Postgres — os oito gatilhos ponta a ponta, o dossiê gravado,
@@ -45,8 +45,12 @@ import {
   type ResumoDoHandoff,
 } from "@/src/handoff";
 
-/** Os OITO de §5.11 — escritos aqui como AFIRMAÇÃO, não derivados do código. */
-const OITO_MOTIVOS = [
+/**
+ * Os NOVE motivos — escritos aqui como AFIRMAÇÃO, não derivados do código.
+ * Oito de §5.11; `tool_missing` entrou na F18 (ADR-040 §2): ferramenta que o
+ * agente publicado declara e o catálogo não tem vira handoff, nunca silêncio.
+ */
+const NOVE_MOTIVOS = [
   "customer_request",
   "high_risk_action",
   "low_confidence",
@@ -55,13 +59,14 @@ const OITO_MOTIVOS = [
   "provider_error",
   "tenant_rule",
   "forbidden_request",
+  "tool_missing",
 ] as const;
 
-describe("F05-T01 — o enum dos oito motivos", () => {
+describe("F05-T01 — o enum dos nove motivos", () => {
   it("o enum do código é exatamente a lista de §5.11", () => {
     // Arrange + Act + Assert — os dois sentidos: nada a mais, nada a menos.
-    expect([...MOTIVOS_DE_HANDOFF].sort()).toEqual([...OITO_MOTIVOS].sort());
-    expect(MOTIVOS_DE_HANDOFF.length, "§5.11 tem oito motivos").toBe(8);
+    expect([...MOTIVOS_DE_HANDOFF].sort()).toEqual([...NOVE_MOTIVOS].sort());
+    expect(MOTIVOS_DE_HANDOFF.length, "§5.11 tem oito motivos e a F18 acrescentou tool_missing").toBe(9);
     console.info(`f05-t01-enum: motivos=${MOTIVOS_DE_HANDOFF.length}/8`);
   });
 
@@ -79,7 +84,7 @@ describe("F05-T01 — o enum dos oito motivos", () => {
     let cobertos = 0;
     for (const [nome, registro] of Object.entries(registros)) {
       expect(Object.keys(registro).sort(), `${nome} não cobre o enum`).toEqual(
-        [...OITO_MOTIVOS].sort(),
+        [...NOVE_MOTIVOS].sort(),
       );
       for (const motivo of MOTIVOS_DE_HANDOFF) {
         const valor = (registro as Record<string, string>)[motivo] ?? "";
@@ -88,7 +93,7 @@ describe("F05-T01 — o enum dos oito motivos", () => {
       }
     }
 
-    const esperado = Object.keys(registros).length * OITO_MOTIVOS.length;
+    const esperado = Object.keys(registros).length * NOVE_MOTIVOS.length;
     expect(cobertos).toBe(esperado);
     console.info(`f05-t01-registros: celulas=${cobertos}/${esperado} vazias=0`);
   });

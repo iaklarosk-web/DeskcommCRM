@@ -31,6 +31,25 @@ const DEFAULTS_DECLARADOS: Record<string, "allow" | "approve" | "block" | "trans
   export_customer_data: "block",
   assign_owner: "block", // automação e humano (F15-T04): a IA não escolhe quem vende
   schedule_appointment: "approve", // F14-T04 (D55 e): medium + by_risk — a IA propõe, a pessoa aprova
+  // F18-T02 (ADR-040 §2, D56): leitura `low` ⇒ `allow`; escrita de funil
+  // `medium` + `by_risk` ⇒ `approve` (D33 pendura para a pessoa);
+  // `confirm_appointment`/`set_appointment_outcome` são `low` ⇒ `allow`.
+  list_leads: "allow",
+  get_lead: "allow",
+  list_pipelines: "allow",
+  list_stages: "allow",
+  create_lead: "approve",
+  update_lead: "approve",
+  move_lead_stage: "approve",
+  propose_contact_field: "allow",
+  list_event_types: "allow",
+  find_free_slots: "allow",
+  list_appointments: "allow",
+  confirm_appointment: "allow",
+  set_appointment_outcome: "allow",
+  // D56 e: a decisão do proprietário — a IA desmarca SOZINHA. `medium` com
+  // `confirmation: "none"` ⇒ `allow`, e é aqui que isso fica legível.
+  cancel_appointment: "allow",
   delete_customer_data: "block",
 };
 

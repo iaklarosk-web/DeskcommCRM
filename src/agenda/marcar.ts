@@ -231,12 +231,97 @@ export async function cancelar(ctx: TenantCtx, actor: AtorDaAgenda, pedido: { id
   const motivo = pedido.reason.trim();
   if (motivo.length === 0) return { ok: false, reason: "invalid", detalhe: "O motivo do cancelamento é obrigatório." };
   const requestId = deps.requestId ?? randomUUID();
+  const agora = deps.agora?.() ?? new Date();
   return withTenant(
     ctx,
     async (db) => {
+      // F18-T03 (ADR-040 §4): compromisso que JÁ ACONTECEU não é cancelável.
+      //
+      // Vale para todo ator, e existe por causa da decisão do proprietário de
+      // deixar `cancel_appointment` em `allow`: sem aprovação humana no
+      // caminho, esta é a trava que impede a IA de reescrever o passado da
+      // agenda — "desmarcar" o que já aconteceu apagaria o registro de um
+      // atendimento prestado. Para o que já passou existe desfecho
+      // (`completed`/`no_show`), que é outra ação.
+      const linha = await db.query<{ starts_at: string }>(
+        `select starts_at::text as starts_at from public.calendar_appointments
+          where organization_id=$1 and id=$2 limit 1`,
+        [ctx.organization_id, pedido.id],
+      );
+      const inicio = linha.rows[0]?.starts_at;
+      if (inicio !== undefined && new Date(inicio).getTime() <= agora.getTime()) {
+        return { ok: false, reason: "invalid", detalhe: "appointment_in_the_past" } as const;
+      }
       const mudado = await mudar(db, ctx, pedido.id, pedido.revision, { status: "cancelled", cancellation_reason: motivo });
       if (!mudado.ok) return mudado;
       await recordIn(db, ctx, { ...auditoria(actor), action_name: "agenda.appointment_cancelled", risk: "medium", result: "executed", resource_type: "calendar_appointments", resource_id: pedido.id, request_id: requestId, payload: { actor_kind: actor.kind, reason: motivo } });
+      return mudado;
+    },
+    { pool: deps.pool },
+  );
+}
+
+/**
+ * Confirmação do compromisso (`crm_confirm_appointment` no herdado).
+ *
+ * Só do que ainda não aconteceu, e só a partir de `pending`: confirmar o que já
+ * está confirmado é ruído, e confirmar o passado é contar história.
+ */
+export async function confirmar(
+  ctx: TenantCtx,
+  actor: AtorDaAgenda,
+  pedido: { id: string; revision: number },
+  deps: AgendaDeps & { requestId?: string } = {},
+): Promise<ResultadoDaMudanca> {
+  const requestId = deps.requestId ?? randomUUID();
+  return withTenant(
+    ctx,
+    async (db) => {
+      const mudado = await mudar(db, ctx, pedido.id, pedido.revision, { status: "confirmed" });
+      if (!mudado.ok) return mudado;
+      await recordIn(db, ctx, {
+        ...auditoria(actor),
+        action_name: "agenda.appointment_confirmed",
+        risk: "low",
+        result: "executed",
+        resource_type: "calendar_appointments",
+        resource_id: pedido.id,
+        request_id: requestId,
+        payload: { actor_kind: actor.kind },
+      });
+      return mudado;
+    },
+    { pool: deps.pool },
+  );
+}
+
+/**
+ * O desfecho do que JÁ aconteceu (`crm_set_appointment_outcome` no herdado):
+ * `completed` (aconteceu) ou `no_show` (o cliente não veio). É o par do freio
+ * do cancelamento: o passado se registra, não se desmarca.
+ */
+export async function registrarDesfecho(
+  ctx: TenantCtx,
+  actor: AtorDaAgenda,
+  pedido: { id: string; revision: number; outcome: "completed" | "no_show" },
+  deps: AgendaDeps & { requestId?: string } = {},
+): Promise<ResultadoDaMudanca> {
+  const requestId = deps.requestId ?? randomUUID();
+  return withTenant(
+    ctx,
+    async (db) => {
+      const mudado = await mudar(db, ctx, pedido.id, pedido.revision, { status: pedido.outcome });
+      if (!mudado.ok) return mudado;
+      await recordIn(db, ctx, {
+        ...auditoria(actor),
+        action_name: "agenda.appointment_outcome",
+        risk: "low",
+        result: "executed",
+        resource_type: "calendar_appointments",
+        resource_id: pedido.id,
+        request_id: requestId,
+        payload: { actor_kind: actor.kind, outcome: pedido.outcome },
+      });
       return mudado;
     },
     { pool: deps.pool },

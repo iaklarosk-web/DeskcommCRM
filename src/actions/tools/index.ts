@@ -14,6 +14,24 @@ import { createOrder, createTask, updateOrderQuantity } from "./pedido";
 import { requestConfirmation, resumeAi, sendMessage, transferToHuman } from "./conversa";
 import { deleteCustomerData, exportCustomerData } from "./lgpd";
 import { scheduleAppointment } from "./agenda";
+import {
+  cancelAppointment,
+  confirmAppointment,
+  findFreeSlots,
+  listAppointments,
+  listEventTypes,
+  setAppointmentOutcome,
+} from "./agenda-extra";
+import {
+  createLead,
+  getLead,
+  listLeads,
+  listPipelines,
+  listStages,
+  moveLeadStage,
+  proposeContactField,
+  updateLead,
+} from "./funil";
 import { assignOwner } from "./oportunidade";
 import type { ToolRunner } from "./contrato";
 
@@ -32,6 +50,21 @@ const HANDLERS: Readonly<Record<string, ToolRunner>> = {
   delete_customer_data: deleteCustomerData,
   assign_owner: assignOwner,
   schedule_appointment: scheduleAppointment,
+  // F18-T02 (ADR-040 §2): as 14 que saem do MCP herdado.
+  list_leads: listLeads,
+  get_lead: getLead,
+  list_pipelines: listPipelines,
+  list_stages: listStages,
+  create_lead: createLead,
+  update_lead: updateLead,
+  move_lead_stage: moveLeadStage,
+  propose_contact_field: proposeContactField,
+  list_event_types: listEventTypes,
+  find_free_slots: findFreeSlots,
+  list_appointments: listAppointments,
+  confirm_appointment: confirmAppointment,
+  set_appointment_outcome: setAppointmentOutcome,
+  cancel_appointment: cancelAppointment,
 };
 
 const SEM_HANDLER = ACTION_CATALOG.filter((entrada) => !(entrada.name in HANDLERS));

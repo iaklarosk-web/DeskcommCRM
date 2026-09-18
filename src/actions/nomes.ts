@@ -25,6 +25,21 @@ export const NOMES_DO_CATALOGO = [
   "assign_owner",
   "schedule_appointment",
   "delete_customer_data",
+  // F18-T02 (ADR-040 §2): as 13 que saem do MCP herdado para o catálogo.
+  "list_leads",
+  "get_lead",
+  "list_pipelines",
+  "list_stages",
+  "create_lead",
+  "update_lead",
+  "move_lead_stage",
+  "propose_contact_field",
+  "list_event_types",
+  "find_free_slots",
+  "list_appointments",
+  "confirm_appointment",
+  "set_appointment_outcome",
+  "cancel_appointment",
 ] as const;
 
 export const MODOS_DA_POLITICA = ["allow", "approve", "block", "transfer"] as const;
