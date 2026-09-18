@@ -26,6 +26,7 @@ import { rodarCicloDeSaida } from "@/src/jobs/outbound-worker";
 import { setSetting } from "@/src/tenant-config/settings";
 import type { TenantCtx } from "@/src/tenant-context";
 import { ROLE_RANK } from "@/lib/auth/types";
+import { cancelar, horariosLivresDaOrganizacao, marcar, remarcar } from "@/src/agenda";
 import { can, type PapelD15 } from "@/src/rbac/matrix";
 import {
   criarSessao,
@@ -89,7 +90,18 @@ const medidas = {
   handoff_queued: 0,
   roles_denied: 0,
   roles_denied_total: 0,
+  appointments: 0,
+  conflicts_blocked: 0,
+  revoked_blocked: 0,
+  tz_ok: 0,
 };
+const ATENDENTE_A = "f1400001-1002-4000-8000-00000000000a";
+const TIPO_A = "f1400001-8000-4000-8000-00000000000a";
+const CONEXAO_A = "f1400001-9000-4000-8000-00000000000a";
+const CAL_A = "f1400001-9100-4000-8000-00000000000a";
+/** Terça, 06/10/2026, 14:00 em São Paulo (UTC-3) = 17:00Z — dentro da jornada 09–18 do atendente. */
+const TERCA_14H_SP = new Date("2026-10-06T17:00:00.000Z");
+const AGORA_FIXO = () => new Date("2026-10-01T12:00:00.000Z");
 
 function registroQueResponde(handoff: { wanted: boolean; reason: "customer_request" | null } = { wanted: false, reason: null }) {
   const estado = { chamadas: 0 };
@@ -427,6 +439,146 @@ describe("F14-T02 — o humano segue a janela; a fila e o aviso ao visitante", (
   });
 });
 
+describe("F14-T03 — a agenda herdada pela fachada SaaS (D41: adotada, por membro)", () => {
+  beforeAll(async () => {
+    await pool.query(`insert into auth.users (id, email) values ($1, 'f14-atendente-a@integration.test') on conflict do nothing`, [ATENDENTE_A]);
+    await pool.query(`insert into public.user_organizations (organization_id, user_id, role, accepted_at) values ($1,$2,'agent',now()) on conflict do nothing`, [ORG_A, ATENDENTE_A]);
+    await pool.query(
+      `insert into public.attendant_availability (organization_id, user_id, is_available, schedule)
+       values ($1,$2,true,$3::jsonb) on conflict (organization_id, user_id) do update set schedule = excluded.schedule, is_available = true`,
+      [ORG_A, ATENDENTE_A, JSON.stringify({ timezone: "America/Sao_Paulo", windows: [1, 2, 3, 4, 5].map((dow) => ({ dow, start: "09:00", end: "18:00" })) })],
+    );
+    await pool.query(
+      `insert into public.calendar_event_types (id, organization_id, name, slug, duration_minutes, minimum_notice_minutes, booking_window_days, default_owner_user_id, is_active)
+       values ($1,$2,'Consulta','consulta-f14',60,120,60,$3,true)`,
+      [TIPO_A, ORG_A, ATENDENTE_A],
+    );
+  });
+
+  it("horários livres vêm do motor herdado; marcar cria; o mesmo horário para o mesmo responsável é CONFLITO com nome; remarcar e cancelar passam pela RPC herdada", async () => {
+    const ctx: TenantCtx = { organization_id: ORG_A, source: "session", user_id: ADMIN_A };
+    const livres = await horariosLivresDaOrganizacao(ctx, { event_type_id: TIPO_A, de: new Date("2026-10-06T00:00:00Z"), ate: new Date("2026-10-07T00:00:00Z") }, { pool, agora: AGORA_FIXO });
+    expect(livres.ok).toBe(true);
+    if (!livres.ok) throw new Error("inalcançável");
+    expect(livres.slots.some((sl) => sl.inicio.getTime() === TERCA_14H_SP.getTime())).toBe(true);
+    expect(livres.fuso).toBe("America/Sao_Paulo");
+
+    const visitante = await abrirIdentificada(TENANT_A.slug, "198.51.100.30", "Iris Visitante", "iris@ficticio.test");
+    medidas.webchat_sessions += 1;
+    medidas.identified_total += 1;
+    medidas.identified += 1;
+    medidas.contacts_total += 1;
+    medidas.contacts_created += visitante.ident.created_contact ? 1 : 0;
+    const m1 = await marcar(ctx, { kind: "human", user_id: ADMIN_A }, { event_type_id: TIPO_A, starts_at: TERCA_14H_SP.toISOString(), contact_id: visitante.ident.contact_id, conversation_id: visitante.ident.conversation_id }, { pool, agora: AGORA_FIXO });
+    expect(m1.ok, m1.ok ? "" : `${m1.reason}: ${m1.detalhe}`).toBe(true);
+    if (!m1.ok) throw new Error("inalcançável");
+    medidas.appointments += 1;
+    expect(m1.compromisso).toMatchObject({ status: "confirmed", time_zone: "America/Sao_Paulo", owner_user_id: ATENDENTE_A });
+    const ligado = await pool.query<{ contact_id: string; conversation_id: string; created_by_kind: string }>(`select contact_id, conversation_id, created_by_kind from public.calendar_appointments where id=$1`, [m1.compromisso.id]);
+    expect(ligado.rows[0]).toEqual({ contact_id: visitante.ident.contact_id, conversation_id: visitante.ident.conversation_id, created_by_kind: "user" });
+
+    // O mesmo horário, o mesmo responsável: conflito COM NOME (conflicts_blocked).
+    const m2 = await marcar(ctx, { kind: "human", user_id: ADMIN_A }, { event_type_id: TIPO_A, starts_at: TERCA_14H_SP.toISOString() }, { pool, agora: AGORA_FIXO });
+    expect(m2.ok).toBe(false);
+    if (m2.ok) throw new Error("inalcançável");
+    expect(m2.reason).toBe("conflict");
+    expect(m2.conflicting_id).toBe(m1.compromisso.id);
+    // Meia hora depois também colide (sobreposição), e às 16h não.
+    const m3 = await marcar(ctx, { kind: "human", user_id: ADMIN_A }, { event_type_id: TIPO_A, starts_at: new Date(TERCA_14H_SP.getTime() + 30 * 60_000).toISOString() }, { pool, agora: AGORA_FIXO });
+    expect(m3.ok === false && m3.reason).toBe("conflict");
+    const m4 = await marcar(ctx, { kind: "human", user_id: ADMIN_A }, { event_type_id: TIPO_A, starts_at: new Date(TERCA_14H_SP.getTime() + 2 * 3_600_000).toISOString() }, { pool, agora: AGORA_FIXO });
+    expect(m4.ok, m4.ok ? "" : `${m4.reason}: ${m4.detalhe}`).toBe(true);
+    if (!m4.ok) throw new Error("inalcançável");
+    medidas.appointments += 1;
+    medidas.conflicts_blocked = 1;
+    // Fora da jornada (22h SP = 01:00Z do dia seguinte) não é conflito: é indisponível.
+    const m5 = await marcar(ctx, { kind: "human", user_id: ADMIN_A }, { event_type_id: TIPO_A, starts_at: "2026-10-07T01:00:00.000Z" }, { pool, agora: AGORA_FIXO });
+    expect(m5.ok === false && m5.reason).toBe("slot_unavailable");
+
+    // Remarcar a das 16h para as 11h (mesma linha; revisão sobe); remarcar para as 14h é conflito; cancelar exige motivo.
+    const r1 = await remarcar(ctx, { kind: "human", user_id: ADMIN_A }, { id: m4.compromisso.id, revision: m4.compromisso.revision, starts_at: new Date(TERCA_14H_SP.getTime() - 3 * 3_600_000).toISOString() }, { pool, agora: AGORA_FIXO });
+    expect(r1.ok, r1.ok ? "" : `${r1.reason}: ${r1.detalhe}`).toBe(true);
+    if (!r1.ok) throw new Error("inalcançável");
+    expect(r1.compromisso.id).toBe(m4.compromisso.id);
+    expect(r1.compromisso.revision).toBeGreaterThan(m4.compromisso.revision);
+    const r2 = await remarcar(ctx, { kind: "human", user_id: ADMIN_A }, { id: m4.compromisso.id, revision: r1.compromisso.revision, starts_at: TERCA_14H_SP.toISOString() }, { pool, agora: AGORA_FIXO });
+    expect(r2.ok === false && r2.reason).toBe("conflict");
+    const velha = await remarcar(ctx, { kind: "human", user_id: ADMIN_A }, { id: m4.compromisso.id, revision: m4.compromisso.revision, starts_at: new Date(TERCA_14H_SP.getTime() - 2 * 3_600_000).toISOString() }, { pool, agora: AGORA_FIXO });
+    expect(velha.ok === false && velha.reason).toBe("stale");
+    const c0 = await cancelar(ctx, { kind: "human", user_id: ADMIN_A }, { id: m4.compromisso.id, revision: r1.compromisso.revision, reason: "  " }, { pool });
+    expect(c0.ok === false && c0.reason).toBe("invalid");
+    const c1 = await cancelar(ctx, { kind: "human", user_id: ADMIN_A }, { id: m4.compromisso.id, revision: r1.compromisso.revision, reason: "cliente desistiu" }, { pool });
+    expect(c1.ok && c1.compromisso.status).toBe("cancelled");
+    // Cancelado libera: marcar às 11h volta a funcionar.
+    const m6 = await marcar(ctx, { kind: "human", user_id: ADMIN_A }, { event_type_id: TIPO_A, starts_at: new Date(TERCA_14H_SP.getTime() - 3 * 3_600_000).toISOString() }, { pool, agora: AGORA_FIXO });
+    expect(m6.ok).toBe(true);
+    medidas.appointments += 1;
+    const auditadas = await conta(`select count(*)::text as n from public.audit_events where organization_id=$1 and action_name like 'agenda.appointment_%'`, [ORG_A]);
+    expect(auditadas).toBeGreaterThanOrEqual(5);
+    console.info(`f14-t03-agenda: slots_from_engine=1/1 appointments=${medidas.appointments} conflicts_blocked=2/2 slot_unavailable=1/1 rescheduled=1/1 stale=1/1 cancelled=1/1 freed=1/1 audited=${auditadas}`);
+  });
+
+  it("fuso: o mesmo instante combinado em Manaus grava o mesmo starts_at e outro time_zone (tz_ok)", async () => {
+    const ctx: TenantCtx = { organization_id: ORG_A, source: "session", user_id: ADMIN_A };
+    // 13:00 em Manaus (UTC-4) = 17:00Z = 14:00 em São Paulo — o mesmo instante da m1, em OUTRO dia (quarta) para não colidir.
+    const quarta = new Date(TERCA_14H_SP.getTime() + 24 * 3_600_000);
+    const m = await marcar(ctx, { kind: "human", user_id: ADMIN_A }, { event_type_id: TIPO_A, starts_at: quarta.toISOString(), timezone: "America/Manaus" }, { pool, agora: AGORA_FIXO });
+    expect(m.ok, m.ok ? "" : `${m.reason}: ${m.detalhe}`).toBe(true);
+    if (!m.ok) throw new Error("inalcançável");
+    medidas.appointments += 1;
+    const gravado = await pool.query<{ starts_at: string; time_zone: string; hora_manaus: string; hora_sp: string }>(
+      `select starts_at::text, time_zone,
+              to_char(starts_at at time zone 'America/Manaus', 'HH24:MI') as hora_manaus,
+              to_char(starts_at at time zone 'America/Sao_Paulo', 'HH24:MI') as hora_sp
+         from public.calendar_appointments where id=$1`, [m.compromisso.id]);
+    expect(gravado.rows[0]?.time_zone).toBe("America/Manaus");
+    expect(new Date(gravado.rows[0]!.starts_at).toISOString()).toBe(quarta.toISOString());
+    expect(gravado.rows[0]?.hora_manaus).toBe("13:00");
+    expect(gravado.rows[0]?.hora_sp).toBe("14:00");
+    const invalido = await marcar(ctx, { kind: "human", user_id: ADMIN_A }, { event_type_id: TIPO_A, starts_at: quarta.toISOString(), timezone: "Marte/Olympus" }, { pool, agora: AGORA_FIXO });
+    expect(invalido.ok === false && invalido.reason).toBe("invalid_timezone");
+    medidas.tz_ok = 1;
+    console.info("f14-t03-fuso: same_instant=1/1 tz_stored=1/1 display_differs=1/1 invalid_tz_denied=1/1 tz_ok=1/1");
+  });
+
+  it("conexão Google desconectada/membro revogado: a publicação é recusada pelo banco (revoked_blocked) — pelo executor herdado", async () => {
+    await pool.query(
+      `insert into public.calendar_connections (id, organization_id, user_id, provider, account_email, status) values ($1,$2,$3,'google_calendar','atendente-a@ficticio.test','healthy')`,
+      [CONEXAO_A, ORG_A, ATENDENTE_A],
+    );
+    await pool.query(
+      `insert into public.calendar_connection_calendars (id, organization_id, connection_id, external_calendar_id, name, is_destination, access_role) values ($1,$2,$3,'destino','Agenda',true,'owner')`,
+      [CAL_A, ORG_A, CONEXAO_A],
+    );
+    const ctx: TenantCtx = { organization_id: ORG_A, source: "session", user_id: ADMIN_A };
+    const quinta = new Date(TERCA_14H_SP.getTime() + 2 * 24 * 3_600_000);
+    const m = await marcar(ctx, { kind: "human", user_id: ADMIN_A }, { event_type_id: TIPO_A, starts_at: quinta.toISOString() }, { pool, agora: AGORA_FIXO });
+    if (!m.ok) throw new Error(`${m.reason}: ${m.detalhe}`);
+    medidas.appointments += 1;
+    // Com a conexão saudável o executor herdado reserva (claim) a publicação…
+    const claim = await pool.query<{ result: { claim?: unknown } }>(`select public.fn_google_appointment($1,$2,'claim','{}'::jsonb) as result`, [ORG_A, m.compromisso.id]);
+    expect(claim.rows[0]?.result).toBeTruthy();
+    // …e com o membro REVOGADO (o dono saiu da organização) a renovação e o commit são recusados pelo banco.
+    await pool.query(`update public.user_organizations set revoked_at = now() where organization_id=$1 and user_id=$2`, [ORG_A, ATENDENTE_A]);
+    let recusas = 0;
+    try {
+      for (const acao of ["renew", "commit"] as const) {
+        try {
+          await pool.query(`select public.fn_google_appointment($1,$2,$3,$4::jsonb)`, [ORG_A, m.compromisso.id, acao, JSON.stringify({ ...(claim.rows[0]?.result as object), result: { ack: true } })]);
+        } catch (erro) {
+          if (/google_owner_unavailable|google_connection_unavailable/.test(erro instanceof Error ? erro.message : String(erro))) recusas += 1;
+          else throw erro;
+        }
+      }
+    } finally {
+      await pool.query(`update public.user_organizations set revoked_at = null where organization_id=$1 and user_id=$2`, [ORG_A, ATENDENTE_A]);
+    }
+    expect(recusas).toBe(2);
+    medidas.revoked_blocked = 1;
+    console.info("f14-t03-revogacao: claim_with_healthy=1/1 denied_after_revoke=2/2 revoked_blocked=1/1");
+  });
+});
+
 describe("F14 — o que T01/T02 mediram (a linha `channels:` é gravada na T05, com todos os campos)", () => {
   it("todos os campos de T01/T02 têm numerador = denominador", () => {
     expect(medidas.webchat_sessions).toBeGreaterThanOrEqual(3);
@@ -436,6 +588,8 @@ describe("F14 — o que T01/T02 mediram (a linha `channels:` é gravada na T05, 
     expect(medidas.ai_replies).toBe(medidas.ai_replies_total);
     expect([medidas.ai_outside_window, medidas.ip_limited, medidas.org_limited, medidas.flood_calls_capped, medidas.cross_org_denied, medidas.handoff_queued]).toEqual([1, 1, 1, 1, 1, 1]);
     expect(medidas.roles_denied).toBe(medidas.roles_denied_total);
+    expect(medidas.appointments).toBeGreaterThanOrEqual(2);
+    expect([medidas.conflicts_blocked, medidas.revoked_blocked, medidas.tz_ok]).toEqual([1, 1, 1]);
     console.info(
       `f14-t01-parcial: webchat_sessions=${medidas.webchat_sessions} identified=${medidas.identified}/${medidas.identified_total} contacts_created=${medidas.contacts_created}/${medidas.contacts_total} messages_in=${medidas.messages_in} ai_replies=${medidas.ai_replies}/${medidas.ai_replies_total} ai_outside_window=1/1 ip_limited=1/1 org_limited=1/1 flood_calls_capped=1/1 cross_org_denied=1/1`,
     );
