@@ -20,6 +20,7 @@ const {
   EXPECTED_F12_E2E_TESTS,
   EXPECTED_F13_E2E_TESTS,
   EXPECTED_F15_E2E_TESTS,
+  EXPECTED_F14_E2E_TESTS,
   REQUIRED_F02_E2E_SPECS,
   REQUIRED_F03_E2E_SPECS,
   REQUIRED_F04_E2E_SPECS,
@@ -29,6 +30,7 @@ const {
   REQUIRED_F12_E2E_SPECS,
   REQUIRED_F13_E2E_SPECS,
   REQUIRED_F15_E2E_SPECS,
+  REQUIRED_F14_E2E_SPECS,
   compareF02Inputs,
   snapshotF02Inputs,
   verifyF02Sandbox,
@@ -1240,4 +1242,84 @@ for (const [rotulo, linha] of [
   const result = evaluate(data);
   assert.equal(result.exitCode, 1, rotulo);
   assert.ok(result.errors.some((e) => /^autonomy fora do contrato/.test(e)), result.errors.join("\n"));
+});
+
+// ─── ADR-039 — verify.sh v1.10: F14 (chat do site, agenda) mede `channels:` ──
+
+const stateF14 = stateF15.replace("current_phase: F15", "current_phase: F14")
+  .replace("| F15 | Automação e autonomia | in_progress |", "| F15 | Automação e autonomia | done(verify=2026-09-15 4c7bfcdf) |\n| F14 | Chat do site e agenda | in_progress |");
+const F14_SPEC_COUNTS = [...F15_SPEC_COUNTS, 7];
+const CHANNELS_OK = "channels: webchat_sessions=3 identified=3/3 contacts_created=3/3 messages_in=6 ai_replies=3/3 ai_outside_window=1/1 handoff_queued=1/1 ip_limited=1/1 org_limited=1/1 flood_calls_capped=1/1 cross_org_denied=1/1 appointments=3 conflicts_blocked=1/1 revoked_blocked=1/1 tz_ok=1/1 proposed=2/2 approved=1/1 denied_by_policy=1/1 roles_denied=2/2";
+function f14Input() {
+  const data = fasePorTenant("F12", stateF14, REQUIRED_F14_E2E_SPECS, F14_SPEC_COUNTS, EXPECTED_F14_E2E_TESTS);
+  data.metrics.crm = CRM_OK;
+  data.metrics.rbac = RBAC_4;
+  data.metrics.autonomy = AUTONOMY_OK;
+  data.metrics.channels = CHANNELS_OK;
+  return data;
+}
+
+test("F14 is gated: inventory of 15 specs (72 tests) per tenant, admin, billing, crm, autonomy and channels measured; in staging it prints READY (staging)", () => {
+  const data = f14Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F14)");
+  const bloco = render(data, result);
+  assert.match(bloco, /e2e_scope: F14-required passed=72\/72 specs=15\/15/);
+  assert.match(bloco, /channels: webchat_sessions=3 identified=3\/3 contacts_created=3\/3 messages_in=6/);
+  assert.match(bloco, /replicability: e2e\[deka\]=ok e2e\[demo2\]=ok src_diff_lines=0 grep_deka_in_src=0 \(deka=72\/72 demo2=72\/72 specs=15\/15 org_a=seed-replica\)/);
+  const staging = f14Input();
+  staging.sandbox = stagingEvidence();
+  assert.equal(evaluate(staging).status, "READY (staging)");
+});
+
+test("missing channels line makes otherwise green F14 fail", () => {
+  const data = f14Input();
+  delete data.metrics.channels;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.some((e) => /Métrica obrigatória ausente: channels/.test(e)), result.errors.join("\n"));
+});
+
+test("F14 still requires autonomy and crm (closes after F15) and rbac roles=4", () => {
+  const semAutonomy = f14Input();
+  delete semAutonomy.metrics.autonomy;
+  assert.ok(evaluate(semAutonomy).errors.some((e) => /Métrica obrigatória ausente: autonomy/.test(e)));
+  const semCrm = f14Input();
+  delete semCrm.metrics.crm;
+  assert.ok(evaluate(semCrm).errors.some((e) => /Métrica obrigatória ausente: crm/.test(e)));
+  const tres = f14Input();
+  tres.metrics.rbac = "rbac: roles=3 denied_expected=19 denied_actual=19";
+  assert.ok(evaluate(tres).errors.includes("RBAC fora do contrato"));
+});
+
+test("channels line stays pending before F14 (F15) and is not required there", () => {
+  const data = f15Input();
+  assert.deepEqual(evaluate(data).errors, []);
+  assert.match(render(data, evaluate(data)), /channels: webchat_sessions=pending/);
+});
+
+for (const [rotulo, linha] of [
+  ["poucas sessões", CHANNELS_OK.replace("webchat_sessions=3", "webchat_sessions=2")],
+  ["sessão sem identificação", CHANNELS_OK.replace("identified=3/3", "identified=2/3")],
+  ["contato não criado", CHANNELS_OK.replace("contacts_created=3/3", "contacts_created=0/0")],
+  ["IA muda fora da janela", CHANNELS_OK.replace("ai_outside_window=1/1", "ai_outside_window=0/1")],
+  ["handoff não enfileirado", CHANNELS_OK.replace("handoff_queued=1/1", "handoff_queued=0/1")],
+  ["freio por ip não bateu", CHANNELS_OK.replace("ip_limited=1/1", "ip_limited=0/1")],
+  ["freio por organização não bateu", CHANNELS_OK.replace("org_limited=1/1", "org_limited=0/1")],
+  ["enxurrada passou do teto", CHANNELS_OK.replace("flood_calls_capped=1/1", "flood_calls_capped=0/1")],
+  ["token cruzou organização", CHANNELS_OK.replace("cross_org_denied=1/1", "cross_org_denied=0/1")],
+  ["poucos compromissos", CHANNELS_OK.replace("appointments=3", "appointments=1")],
+  ["conflito aceito", CHANNELS_OK.replace("conflicts_blocked=1/1", "conflicts_blocked=0/1")],
+  ["conexão revogada publicou", CHANNELS_OK.replace("revoked_blocked=1/1", "revoked_blocked=0/1")],
+  ["fuso errado", CHANNELS_OK.replace("tz_ok=1/1", "tz_ok=0/1")],
+  ["IA não propôs", CHANNELS_OK.replace("proposed=2/2", "proposed=0/0")],
+  ["política ignorada", CHANNELS_OK.replace("denied_by_policy=1/1", "denied_by_policy=0/1")],
+  ["papel permitido onde nega", CHANNELS_OK.replace("roles_denied=2/2", "roles_denied=1/2")],
+]) test(`F14 rejects a channels line out of contract: ${rotulo}`, () => {
+  const data = f14Input();
+  data.metrics.channels = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, rotulo);
+  assert.ok(result.errors.some((e) => /^channels fora do contrato/.test(e)), result.errors.join("\n"));
 });

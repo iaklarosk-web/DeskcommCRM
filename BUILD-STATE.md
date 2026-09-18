@@ -5,8 +5,8 @@ f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskco
 plan_version: "2.9 (2026-09-15); D38–D54; ADR-006…037"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
 current_phase: F15
-next_task: F16-T00             # F15 concluída (READY (staging) f15-gate-03, produção com o código da F15); nenhuma fase começa sem nova mensagem (D50 c/D53 c/D54); F14 (agenda herdada + chat do site + WhatsApp real), F16, F17, Stripe e F09/F10 são escolha do proprietário
-status: READY_STAGING          # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26)
+next_task: F14-T01             # F14 (D55): T00 em curso (ADR-038/039, verify v1.10, migration 9030, chaves webchat.*); T01 chat do site (servidor) → T02 telas → T03 agenda adotada → T04 IA marca horário → T05 spec/gate/fechamento
+status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26); F15 fechada com READY (staging) em 4c7bfcdf (bloco abaixo), F14 em construção
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
 hosting_confirmed: yes         # D50 (11/09/2026): staging nesta VPS, Docker Compose com Supabase local, acesso só por Tailscale — ADR-027
@@ -661,7 +661,7 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 | F11 | Administração da plataforma, empresas/equipes, suporte limitado e auditado, cadastro e entrada guiada | done(verify=2026-09-13 1e13071d) — READY (staging) no f12-gate-05 (inventário de F12 contém o de F11, ADR-031); T00–T06 concluídas; `admin:` medido |
 | F12 | Planos/assinatura/cobrança, confirmação de pagamento, acesso, limites/uso, inadimplência e conciliação | done(verify=2026-09-13 1e13071d) — READY (staging) com gateway MOCK e planos placeholder (D14); T01–T08 concluídas; `billing:` medido; cobrança REAL é NOT VALIDATED (real) |
 | F13 | CRM comercial: funis/oportunidades, campos, papéis/filas, histórico, tarefas, pedidos e relatórios | done(verify=2026-09-14 767d22a6) — READY (staging) no f13-gate-05 (13 specs, linha `crm:`, `roles=4`; ADR-034/035); T00–T06 concluídas; produção com o código da F13 (linha `prod:`); §B17 consertado |
-| F14 | WhatsApp, chat do site e agenda de clientes/equipe sincronizada com Google Agenda | pending |
+| F14 | WhatsApp, chat do site e agenda de clientes/equipe sincronizada com Google Agenda | in_progress (D55, 18/09/2026; ADR-038/039; branch `feat/F14-canais-e-agenda` a partir de `eac2db65`; WhatsApp real fora da fase — sem número) |
 | F15 | Automações e autonomia de IA por empresa/ação, aprovação/handoff, limites, auditoria e conhecimento | done(verify=2026-09-15 4c7bfcdf) — READY (staging) no f15-gate-03 (14 specs, linha `autonomy:`; ADR-036/037); T00–T06 concluídas; produção com o código da F15 (linhas `prod:`/`ai_real:`); §B16 reescrito e medido; §B5/§C6 fechados |
 | F16 | Marca do SaaS e presets configuráveis; profundidade de templates, white-label e domínios por cliente a definir | pending |
 | F17 | Operação, capacidade/recuperação, suporte, atualização, regressão e aceite comercial pelo proprietário | pending |

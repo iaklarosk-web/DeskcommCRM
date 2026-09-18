@@ -17,7 +17,8 @@ const integer = (n) => Number.isSafeInteger(n) && n >= 0;
 // ADR-033: F08 (produção inicial) fecha com o inventário de F12 e sem campo
 // novo no bloco — a produção é medida pela linha `prod:` FORA dele (ADR-032 §4).
 // ADR-037: F15 (automação/autonomia) fecha DEPOIS da F13 e mede a linha `autonomy:`.
-const GATED_PHASES = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F08", "F11", "F12", "F13", "F15"];
+// ADR-039: F14 (chat do site/agenda) fecha DEPOIS da F15 e mede a linha `channels:`.
+const GATED_PHASES = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F08", "F11", "F12", "F13", "F15", "F14"];
 
 /** §8.3: cada campo passa a ser obrigatório a partir da fase que o cria. */
 const phaseNumber = (phase) => Number(phase.slice(1));
@@ -35,16 +36,23 @@ const requiresReplicability = (phase) => phaseNumber(phase) >= phaseNumber("F07"
 // ADR-033: a F08 fecha DEPOIS de F11/F12 (D51 a, D52) e herda os dois campos;
 // a ordem de fechamento, não o número da fase, decide o que é obrigatório.
 // ADR-035: a F13 (CRM comercial) fecha DEPOIS da F08 e mede a linha `crm:`;
-// ADR-037: a F15 fecha DEPOIS da F13 e mede `autonomy:`. Fases fora da ordem
-// escrita (F09, F10, F14, F16+) contam pelo número contra a ÚLTIMA fase da
-// ordem: a F14, quando fechar, entra aqui pela sua ADR.
-const CLOSING_ORDER = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F11", "F12", "F08", "F13", "F15"];
+// ADR-037: a F15 fecha DEPOIS da F13 e mede `autonomy:`; ADR-039: a F14 fecha
+// DEPOIS da F15 e mede `channels:`. Fases fora da ordem escrita (F09, F10,
+// F16+) contam pelo número contra a ÚLTIMA fase da ordem.
+const CLOSING_ORDER = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F11", "F12", "F08", "F13", "F15", "F14"];
 const ULTIMA_DA_ORDEM = CLOSING_ORDER[CLOSING_ORDER.length - 1];
-const closesAtOrAfter = (phase, ref) => CLOSING_ORDER.indexOf(phase) >= CLOSING_ORDER.indexOf(ref) || phaseNumber(phase) > phaseNumber(ULTIMA_DA_ORDEM);
+// Fase NA ordem escrita conta pela posição; fase FORA dela (F09, F10, F16+)
+// conta pelo número contra a última da ordem. As duas cláusulas não se somam:
+// com a F14 no fim, a F15 (número maior, posição menor) herdaria `channels:`
+// pela cláusula numérica — e a F15 fechou ANTES da F14 (ADR-039 §1).
+const closesAtOrAfter = (phase, ref) => (CLOSING_ORDER.includes(phase)
+  ? CLOSING_ORDER.indexOf(phase) >= CLOSING_ORDER.indexOf(ref)
+  : phaseNumber(phase) > phaseNumber(ULTIMA_DA_ORDEM));
 const requiresAdmin = (phase) => closesAtOrAfter(phase, "F11"); // MUTANT: admin-required
 const requiresBilling = (phase) => closesAtOrAfter(phase, "F12"); // MUTANT: billing-required
 const requiresCrm = (phase) => closesAtOrAfter(phase, "F13"); // MUTANT: crm-required
 const requiresAutonomy = (phase) => closesAtOrAfter(phase, "F15"); // MUTANT: autonomy-required
+const requiresChannels = (phase) => closesAtOrAfter(phase, "F14"); // MUTANT: channels-required
 // ADR-035 §3: a matriz D15 é propriedade da ÁRVORE — quatro papéis a partir
 // da F13 (ADR-034 §2 T02), medidos pela fase ativa, não pela fase pedida.
 const papeisEsperados = (phase) => (closesAtOrAfter(phase, "F13") ? 4 : 3);
@@ -347,6 +355,26 @@ export function evaluate(input) {
       errors.push("autonomy fora do contrato: exige policy_modes=4/4, ai_task_created=1, limit_hits=1, calls_after_limit=0/K (K>=3), paused=1, resumed=1, handoffs>=3, balanced=1, assignees_distinct>=2, rules>=4, runs=rules (=denominador), replays>=rules, duplicate_runs=0, outside_catalog_denied=1, reindexed/unchanged_skipped/sources_cited >=1 (=denominador), roles_denied>=3 (=denominador)");
     }
   }
+  // ADR-039 §2: canais e agenda (F14). `cross_org_denied` é "mensagens e
+  // eventos reais isolados por empresa", `conflicts_blocked`/`tz_ok` é
+  // "disponibilidade, fuso e conflitos", `flood_calls_capped` é o freio do
+  // endpoint público (ADR-038 §6, objeção 2), `denied_by_policy` liga a
+  // ferramenta de agenda à política da F15 (§7.9).
+  if (requiresChannels(context.phase)) {
+    const ch = metric("channels", ["webchat_sessions", "identified", "contacts_created", "messages_in", "ai_replies", "ai_outside_window", "handoff_queued", "ip_limited", "org_limited", "flood_calls_capped", "cross_org_denied", "appointments", "conflicts_blocked", "revoked_blocked", "tz_ok", "proposed", "approved", "denied_by_policy", "roles_denied"]);
+    const den = (field) => {
+      const m = new RegExp(`\\b${field}=(\\d+)/(\\d+)`).exec(input.metrics.channels ?? "");
+      return m ? Number(m[2]) : null;
+    };
+    const exatos = ["ai_outside_window", "handoff_queued", "ip_limited", "org_limited", "flood_calls_capped", "cross_org_denied", "conflicts_blocked", "revoked_blocked", "tz_ok", "approved", "denied_by_policy"];
+    const iguais = ["identified", "contacts_created", "ai_replies", "proposed"];
+    if (ch && (ch.webchat_sessions < 3 || ch.messages_in < 3 || ch.appointments < 2 ||
+        exatos.some((f) => ch[f] !== 1 || den(f) !== 1) ||
+        iguais.some((f) => ch[f] < 1 || ch[f] !== den(f)) ||
+        ch.roles_denied < 2 || ch.roles_denied !== den("roles_denied"))) {
+      errors.push("channels fora do contrato: exige webchat_sessions>=3, messages_in>=3, appointments>=2, identified/contacts_created/ai_replies/proposed >=1 (=denominador), ai_outside_window/handoff_queued/ip_limited/org_limited/flood_calls_capped/cross_org_denied/conflicts_blocked/revoked_blocked/tz_ok/approved/denied_by_policy =1/1, roles_denied>=2 (=denominador)");
+    }
+  }
   const clean = errors.length === 0;
   // ADR-028 §2: a partir de F06, o gate limpo rodado no ambiente `staging`
   // sai `READY (staging)`; no sandbox sai `READY (Fnn)` — prova de código.
@@ -403,7 +431,7 @@ export function collect(root, directory, context) {
   // reprova), enquanto §8.3 fixa o rótulo do campo com underscore. O mapa é o
   // único lugar onde essa diferença existe.
   const ARQUIVO_DA_METRICA = { ai_eval: "ai-eval" };
-  for (const name of ["isolation", "rls-coverage", "rbac", "entitlement", "webhook", "ai_eval", "handoff", "reminder", "logs", "rate-limit", "lgpd", "admin", "billing", "crm", "autonomy"]) {
+  for (const name of ["isolation", "rls-coverage", "rbac", "entitlement", "webhook", "ai_eval", "handoff", "reminder", "logs", "rate-limit", "lgpd", "admin", "billing", "crm", "autonomy", "channels"]) {
     metrics[name] = read(path.join(directory, "metrics", `${ARQUIVO_DA_METRICA[name] ?? name}.line`));
   }
   metrics.secrets = read(path.join(directory, "secrets.log"));
@@ -470,6 +498,7 @@ export function render(input, result) {
     input.metrics.billing ?? "billing: plans=pending events=pending duplicates=pending out_of_order=pending activations=pending blocked_writes_denied=pending grace_days=pending reconciliation_mismatch=pending cancellations=pending data_preserved=pending",
     input.metrics.crm ?? "crm: fields_defined=pending values_rejected=pending values_preserved=pending queue_size=pending distributed=pending balanced=pending second_claim_rejected=pending history_types=pending orders_linked=pending cross_org_link_denied=pending report_indicators=pending roles_denied=pending",
     input.metrics.autonomy ?? "autonomy: policy_modes=pending ai_task_created=pending limit_hits=pending calls_after_limit=pending paused=pending resumed=pending handoffs=pending balanced=pending assignees_distinct=pending rules=pending runs=pending replays=pending duplicate_runs=pending outside_catalog_denied=pending reindexed=pending unchanged_skipped=pending sources_cited=pending roles_denied=pending",
+    input.metrics.channels ?? "channels: webchat_sessions=pending identified=pending contacts_created=pending messages_in=pending ai_replies=pending ai_outside_window=pending handoff_queued=pending ip_limited=pending org_limited=pending flood_calls_capped=pending cross_org_denied=pending appointments=pending conflicts_blocked=pending revoked_blocked=pending tz_ok=pending proposed=pending approved=pending denied_by_policy=pending roles_denied=pending",
     replicability,
     input.metrics.secrets ?? "secrets: pending",
     `tests_deleted=${input.testsDeleted ?? "pending"} tests_skipped=${count("skipped")} expected_failures=${count("expectedFailures")} tests_failed=${count("failed")} tests_pending=${count("pending")} mutants_killed=${input.mutants.killed ?? "pending"}/${input.mutants.total ?? "pending"}`,

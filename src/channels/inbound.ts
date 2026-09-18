@@ -55,11 +55,7 @@ import { randomUUID } from "node:crypto";
 
 import { incrementCounter } from "@/src/obs/counters";
 import { registrarRequisicao } from "@/src/obs/log";
-import {
-  transition,
-  type ConversationState,
-  type TransitionEffect,
-} from "@/src/conversation";
+import { transition, type ConversationState, type TransitionEffect } from "@/src/conversation";
 import { papeisDaFila } from "@/src/handoff/registro";
 import { donoOuFila, notify } from "@/src/notifications";
 import { registrarRespostaAoLembrete } from "@/src/reminder/resposta";
@@ -357,6 +353,154 @@ async function aplicarAck(
   );
 }
 
+/**
+ * O que acontece DEPOIS de a linha de `messages` existir — igual para todo
+ * canal (F14: o chat do site entra aqui com a sua própria mensagem): fronteira
+ * herdada, transição `inbound.message` com os efeitos, resposta ao lembrete,
+ * despacho da IA (`ai_agent.dispatch_requested`) e auditoria. Roda DENTRO da
+ * transação de quem chamou (`db`), como sempre rodou.
+ */
+export interface EntradaGravada {
+  readonly provider: string;
+  readonly conversationId: string;
+  readonly contactId: string;
+  readonly messageId: string;
+  readonly providerMessageId: string;
+  readonly requestId: string;
+  /** Vai no `metadata.source` do evento de despacho (`webhook_saas:<provider>`, `webchat`). */
+  readonly source: string;
+}
+
+export async function concluirEntrada(
+  db: TenantDb,
+  ctx: TenantCtx,
+  entrada: EntradaGravada,
+): Promise<Extract<ResultadoDaEntrada, { status: "ingerido" | "fora_da_fronteira" }>> {
+  const { provider, conversationId, contactId, messageId, requestId } = entrada;
+  const channelSessionId =
+    (
+      await db.query<{ channel_session_id: string }>(
+        `select channel_session_id from public.conversations where id = $1 and organization_id = $2`,
+        [conversationId, ctx.organization_id],
+      )
+    ).rows[0]?.channel_session_id ?? null;
+  await db.query(`select public.fn_service_inbound($1::uuid)`, [messageId]);
+
+  // ─── A fronteira herdada precede a máquina D16 ────────────────────────
+  //
+  // `fn_service_inbound` desiste em silêncio quando a mensagem chega
+  // ANTES do fechamento do atendimento (`m.sent_at <= c.service_closed_at`)
+  // ou quando a conversa é de grupo: nesses casos ela não carimba
+  // `messages.service_revision`, e a conversa permanece terminal. É a
+  // guarda de janela do ServiceBoundary, que a ADR-016 manda preservar.
+  //
+  // Sem esta leitura, a transição rodaria a partir de `archived` — e a
+  // linha D16 desse par declara o efeito `new_conversation`, que o schema
+  // herdado não comporta (`uniq_conversations_1to1_per_contact_session`
+  // tem uma conversa por contato e sessão, e oito provas dependem disso).
+  // O resultado medido era 500 numa mensagem legítima de cliente, com a
+  // linha já gravada e a transação desfeita. A mensagem NÃO se perde: ela
+  // fica persistida, fora da janela de serviço, e o fato é contado.
+  const fronteira = await db.query<{ service_revision: string | null; saas_state: string }>(
+    `select m.service_revision, c.saas_state
+         from public.messages m
+         join public.conversations c
+           on c.id = m.conversation_id and c.organization_id = m.organization_id
+        where m.id = $1 and m.organization_id = $2`,
+    [messageId, ctx.organization_id],
+  );
+  const linhaDaFronteira = fronteira.rows[0];
+  if (linhaDaFronteira === undefined || linhaDaFronteira.service_revision === null) {
+    incrementCounter("conversation_inbound_fora_da_fronteira", {
+      provider,
+      state: linhaDaFronteira?.saas_state ?? "desconhecido",
+    });
+    return {
+      status: "fora_da_fronteira",
+      conversation_id: conversationId,
+      contact_id: contactId,
+      message_id: messageId,
+      provider_message_id: entrada.providerMessageId,
+    } as const;
+  }
+
+  const movimento = await transition(
+    ctx,
+    conversationId,
+    "inbound.message",
+    { kind: "system" },
+    {
+      pool: poolNaTransacao(db),
+      effects: executorDeEfeitosDaEntrada(
+        ctx.organization_id,
+        conversationId,
+        contactId,
+        messageId,
+      ),
+    },
+  );
+
+  // §5.12 (F05-T08): se esta conversa esperava a resposta a um LEMBRETE,
+  // a resposta é um FATO da entrada — carimbada aqui, na transação da
+  // mensagem, com `replied_late` decidido contra o `cutoff_at` gravado no
+  // envio. Quem lê a quantidade é o turno (§5.9); quem registra que o
+  // cliente falou é a entrada, mesmo com a IA desligada.
+  const lembrete = await registrarRespostaAoLembrete(
+    db,
+    ctx,
+    conversationId,
+    messageId,
+    new Date(),
+  );
+  if (lembrete !== null) {
+    incrementCounter("reminder_reply_ingested", { late: String(lembrete.late) });
+  }
+
+  // O MESMO evento da rota herdada, com o MESMO payload campo a campo
+  // (`lib/channels/pos-entrada.ts:305-318`). É o que faz opt-out, demanda,
+  // campanha e despacho continuarem valendo sem serem reimplementados.
+  await db.query(
+    `select public.emit_event($1::text,$2::text,$3::uuid,$4::jsonb,$5::jsonb,$6::uuid)`,
+    [
+      EVENTO_DE_DESPACHO,
+      "message",
+      messageId,
+      JSON.stringify({
+        organization_id: ctx.organization_id,
+        conversation_id: conversationId,
+        contact_id: contactId,
+        channel_session_id: channelSessionId,
+        inbound_message_id: messageId,
+      }),
+      JSON.stringify({ source: entrada.source, request_id: requestId }),
+      ctx.organization_id,
+    ],
+  );
+
+  await db.query(
+    `insert into public.api_audit_log
+         (organization_id, action, resource_type, resource_id, request_id, bypassed_rls, metadata)
+       values ($1::uuid,'message.received','messages',$2::uuid,$3::text,true,$4::jsonb)`,
+    [
+      ctx.organization_id,
+      messageId,
+      requestId,
+      JSON.stringify({
+        provider,
+        conversation_id: conversationId,
+        saas_state: movimento.to,
+      }),
+    ],
+  );
+
+  return {
+    status: "ingerido",
+    conversation_id: conversationId,
+    message_id: messageId,
+    saas_state: movimento.to,
+  } as const;
+}
+
 async function ingerirMensagem(
   ctx: TenantCtx,
   provider: SaasChannelProvider,
@@ -413,7 +557,9 @@ async function ingerirMensagem(
       );
       const conversationId = conversa.rows[0]?.fn_upsert_wa_conversation ?? null;
       if (conversationId === null) {
-        throw new Error("fn_upsert_wa_conversation não devolveu conversa para a entrada do webhook");
+        throw new Error(
+          "fn_upsert_wa_conversation não devolveu conversa para a entrada do webhook",
+        );
       }
 
       const midia = evento.media[0] ?? null;
@@ -477,121 +623,15 @@ async function ingerirMensagem(
 
       // Reabertura, demanda e revisão de serviço são DELA. Só aceita id de
       // mensagem persistida, por isso vem depois do INSERT.
-      await db.query(`select public.fn_service_inbound($1::uuid)`, [messageId]);
-
-      // ─── A fronteira herdada precede a máquina D16 ────────────────────────
-      //
-      // `fn_service_inbound` desiste em silêncio quando a mensagem chega
-      // ANTES do fechamento do atendimento (`m.sent_at <= c.service_closed_at`)
-      // ou quando a conversa é de grupo: nesses casos ela não carimba
-      // `messages.service_revision`, e a conversa permanece terminal. É a
-      // guarda de janela do ServiceBoundary, que a ADR-016 manda preservar.
-      //
-      // Sem esta leitura, a transição rodaria a partir de `archived` — e a
-      // linha D16 desse par declara o efeito `new_conversation`, que o schema
-      // herdado não comporta (`uniq_conversations_1to1_per_contact_session`
-      // tem uma conversa por contato e sessão, e oito provas dependem disso).
-      // O resultado medido era 500 numa mensagem legítima de cliente, com a
-      // linha já gravada e a transação desfeita. A mensagem NÃO se perde: ela
-      // fica persistida, fora da janela de serviço, e o fato é contado.
-      const fronteira = await db.query<{ service_revision: string | null; saas_state: string }>(
-        `select m.service_revision, c.saas_state
-           from public.messages m
-           join public.conversations c
-             on c.id = m.conversation_id and c.organization_id = m.organization_id
-          where m.id = $1 and m.organization_id = $2`,
-        [messageId, ctx.organization_id],
-      );
-      const linhaDaFronteira = fronteira.rows[0];
-      if (linhaDaFronteira === undefined || linhaDaFronteira.service_revision === null) {
-        incrementCounter("conversation_inbound_fora_da_fronteira", {
-          provider,
-          state: linhaDaFronteira?.saas_state ?? "desconhecido",
-        });
-        return {
-          status: "fora_da_fronteira",
-          conversation_id: conversationId,
-          contact_id: contactId,
-          message_id: messageId,
-          provider_message_id: evento.provider_message_id,
-        } as const;
-      }
-
-      const movimento = await transition(
-        ctx,
+      return concluirEntrada(db, ctx, {
+        provider,
         conversationId,
-        "inbound.message",
-        { kind: "system" },
-        {
-          pool: poolNaTransacao(db),
-          effects: executorDeEfeitosDaEntrada(
-            ctx.organization_id,
-            conversationId,
-            contactId,
-            messageId,
-          ),
-        },
-      );
-
-      // §5.12 (F05-T08): se esta conversa esperava a resposta a um LEMBRETE,
-      // a resposta é um FATO da entrada — carimbada aqui, na transação da
-      // mensagem, com `replied_late` decidido contra o `cutoff_at` gravado no
-      // envio. Quem lê a quantidade é o turno (§5.9); quem registra que o
-      // cliente falou é a entrada, mesmo com a IA desligada.
-      const lembrete = await registrarRespostaAoLembrete(
-        db,
-        ctx,
-        conversationId,
+        contactId,
         messageId,
-        new Date(),
-      );
-      if (lembrete !== null) {
-        incrementCounter("reminder_reply_ingested", { late: String(lembrete.late) });
-      }
-
-      // O MESMO evento da rota herdada, com o MESMO payload campo a campo
-      // (`lib/channels/pos-entrada.ts:305-318`). É o que faz opt-out, demanda,
-      // campanha e despacho continuarem valendo sem serem reimplementados.
-      await db.query(
-        `select public.emit_event($1::text,$2::text,$3::uuid,$4::jsonb,$5::jsonb,$6::uuid)`,
-        [
-          EVENTO_DE_DESPACHO,
-          "message",
-          messageId,
-          JSON.stringify({
-            organization_id: ctx.organization_id,
-            conversation_id: conversationId,
-            contact_id: contactId,
-            channel_session_id: channelSessionId,
-            inbound_message_id: messageId,
-          }),
-          JSON.stringify({ source: `webhook_saas:${provider}`, request_id: requestId }),
-          ctx.organization_id,
-        ],
-      );
-
-      await db.query(
-        `insert into public.api_audit_log
-           (organization_id, action, resource_type, resource_id, request_id, bypassed_rls, metadata)
-         values ($1::uuid,'message.received','messages',$2::uuid,$3::text,true,$4::jsonb)`,
-        [
-          ctx.organization_id,
-          messageId,
-          requestId,
-          JSON.stringify({
-            provider,
-            conversation_id: conversationId,
-            saas_state: movimento.to,
-          }),
-        ],
-      );
-
-      return {
-        status: "ingerido",
-        conversation_id: conversationId,
-        message_id: messageId,
-        saas_state: movimento.to,
-      } as const;
+        providerMessageId: evento.provider_message_id,
+        requestId,
+        source: `webhook_saas:${provider}`,
+      });
     },
     { pool: deps.pool },
   );

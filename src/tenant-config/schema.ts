@@ -141,6 +141,11 @@ export const SETTINGS_SCHEMA: readonly SettingEntry[] = [
   { key: "crm.fields.companies", tipo: "custom_fields", default: [] },
   { key: "crm.distribution", tipo: "enum", default: "manual", valores: ["manual", "round_robin"] },
   { key: "crm.queue_roles", tipo: "string_array", default: ["attendant"] },
+  // webchat (F14, ADR-038 §5, D55 c): o chat do site só existe quando a
+  // organização liga; `allowed_origins` vazio = qualquer origem pode embutir
+  // (frame-ancestors), a organização restringe. Defaults declarados, nunca fato.
+  { key: "webchat.enabled", tipo: "boolean", default: false },
+  { key: "webchat.allowed_origins", tipo: "string_array", default: [] },
 ] as const;
 
 const POR_CHAVE = new Map(SETTINGS_SCHEMA.map((e) => [e.key, e]));

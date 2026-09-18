@@ -384,6 +384,21 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "dois tenants, 4/4 para anon, service_role escreve e lê de volta; os seis " +
       "eventos no CHECK e destinatário/assunto/corpo não vazios conferidos à parte.",
   },
+  // F14-T00 (ADR-038 §3, migration 9030). A sessão do VISITANTE do chat do
+  // site: o visitante não tem JWT, e uma policy para `anon` abriria a sessão a
+  // quem tivesse a URL. Servida só pelas rotas públicas via service pool +
+  // `withTenant`. Como nas entradas acima, a prova mede a RECUSA.
+  {
+    tabela: "webchat_sessions",
+    razao:
+      "tests/invariants/f14-t00-webchat-sessions-service-only.test.ts — duas organizações " +
+      "e dois usuários reais; `permission denied` medido sob `set local role " +
+      "authenticated` + JWT nas quatro operações para os DOIS usuários (8/8), as " +
+      "mesmas quatro negadas para `anon` (4/4) e controle positivo de `service_role` " +
+      "que escreve e lê a linha de volta. Catálogo (RLS ligada, zero policies, relacl " +
+      "sem anon/authenticated/PUBLIC), CHECKs de coerência da identificação e forma " +
+      "do hash, e os quatro CHECKs de canal aceitando `webchat` conferidos à parte.",
+  },
   // F05-T06 (§5.12, migration 9022). Registro da automação, lido pelo job, pela
   // entrada e pelo turno via `withTenant`; a FK composta para `contacts` é o
   // que impede cliente de outro tenant. A prova mede a RECUSA.
