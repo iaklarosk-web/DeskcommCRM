@@ -27287,12 +27287,17 @@ declare
   v_fora integer;
 begin
   foreach v_tabela in array array['notifications', 'email_outbox'] loop
+    -- A lista da guarda tem de ser o vocabulário FINAL (o do bloco único logo
+    -- abaixo), não o da época: 'ai.limit_reached' (9028, F15) faltava aqui e a
+    -- produção — que tem 1 aviso real da prova ai_real: — reprovava o baseline
+    -- inteiro ao reaplicar (medido em 18/09/2026, up.sh da F14).
     execute format(
-      'select count(*) from public.%I where event not in (%L,%L,%L,%L,%L,%L,%L,%L,%L)',
+      'select count(*) from public.%I where event not in (%L,%L,%L,%L,%L,%L,%L,%L,%L,%L)',
       v_tabela,
       'handoff.created', 'task.assigned', 'confirmation.requested',
       'customer.replied_while_human', 'reminder.no_reply', 'job.blocked',
-      'subscription.payment_failed', 'subscription.blocked', 'subscription.activated'
+      'subscription.payment_failed', 'subscription.blocked', 'subscription.activated',
+      'ai.limit_reached'
     ) into v_fora;
     if v_fora > 0 then
       raise exception '% tem % linha(s) com evento fora da lista nova — a migration não estreita', v_tabela, v_fora;
