@@ -26222,13 +26222,13 @@ create table if not exists public.handoffs (
   claimed_by uuid,
   claimed_at timestamptz,
   created_at timestamptz not null default now(),
-  -- Os OITO motivos de §5.11 (os 7 gatilhos de D19 mais `forbidden_request` de
-  -- §5.9). Enum e NUNCA frase (G-78): motivo em prosa não vira etiqueta de
+  -- Os NOVE motivos: os 7 gatilhos de D19, `forbidden_request` de §5.9 e
+  -- `tool_missing` de ADR-040 §2 (ferramenta declarada e não migrada). Enum e NUNCA frase (G-78): motivo em prosa não vira etiqueta de
   -- contador nem filtro de fila, e o CHECK é o que impede o primeiro texto
   -- livre de entrar por um caminho que esqueceu do enum do TypeScript.
   constraint handoffs_reason_check check (reason in (
     'customer_request','high_risk_action','low_confidence','out_of_knowledge',
-    'complaint','provider_error','tenant_rule','forbidden_request'
+    'complaint','provider_error','tenant_rule','forbidden_request','tool_missing'
   )),
   constraint handoffs_created_by_check
     check (created_by in ('ai','system','human')),
@@ -26294,7 +26294,7 @@ alter table public.handoffs enable row level security;
 comment on table public.handoffs is
   'Dossiê de uma passagem para humano (§5.11, D19): por que saiu da IA e o que a pessoa precisa ler para assumir. NÃO é estado — estado é conversations.saas_state (D16); "aberto" aqui é claimed_at is null. Nasce AO LADO de agent_inbox_items(kind=handoff), que continua sendo o aviso da organização. service_only (D35): RLS ligada, zero policies, só service_role — o Inbox a lê pelo servidor, via withTenant.';
 comment on column public.handoffs.reason is
-  'Enum de OITO valores (§5.11): os 7 gatilhos de D19 mais forbidden_request de §5.9. Nunca texto livre (G-78) — o CHECK é a catraca, e o espelho em TypeScript é src/actions/schemas.ts (HANDOFF_REASONS).';
+  'Enum de NOVE valores (§5.11 + F18): os 7 gatilhos de D19, forbidden_request de §5.9 e tool_missing de ADR-040 §2. Nunca texto livre (G-78) — o CHECK é a catraca, e o espelho em TypeScript é src/actions/schemas.ts (HANDOFF_REASONS).';
 comment on column public.handoffs.last_messages is
   'As CINCO últimas mensagens da conversa no instante do handoff, da mais antiga para a mais nova. SEMPRE cinco posições: conversa mais curta preenche as antigas com null, para que "não houve mensagem" e "o montador não leu" não fiquem indistinguíveis.';
 comment on column public.handoffs.pending_action is
@@ -26397,12 +26397,12 @@ begin
     raise exception 'F05-T01 não instalou handoffs_fila_aberta_idx — a fila varreria o histórico do tenant';
   end if;
 
-  -- Os OITO motivos, um a um, contra o CHECK de verdade. "A constraint existe"
-  -- aprovaria uma lista com sete — e o oitavo só falharia no dia em que um
-  -- cliente pedisse o que não se pode.
+  -- Os NOVE motivos, um a um, contra o CHECK de verdade. "A constraint existe"
+  -- aprovaria uma lista com oito — e o nono só falharia no dia em que o agente
+  -- declarasse uma ferramenta que a fase não migrou.
   foreach v_motivo in array array[
     'customer_request','high_risk_action','low_confidence','out_of_knowledge',
-    'complaint','provider_error','tenant_rule','forbidden_request'
+    'complaint','provider_error','tenant_rule','forbidden_request','tool_missing'
   ] loop
     if not exists (
       select 1 from pg_constraint
@@ -26414,8 +26414,8 @@ begin
     end if;
     v_motivos_aceitos := v_motivos_aceitos + 1;
   end loop;
-  if v_motivos_aceitos <> 8 then
-    raise exception 'handoffs_reason_check cobre % motivos, e §5.11 tem 8', v_motivos_aceitos;
+  if v_motivos_aceitos <> 9 then
+    raise exception 'handoffs_reason_check cobre % motivos, e o vocabulário tem 9 (§5.11 + tool_missing)', v_motivos_aceitos;
   end if;
 
   -- As três constraints que fazem o dossiê ser dossiê, por NOME.
@@ -28352,6 +28352,19 @@ revoke execute on function public.fn_decrypt_oauth(bytea) from authenticated;
 revoke execute on function public.fn_encrypt_oauth(text) from authenticated;
 revoke execute on function public.fn_lgpd_cascade_redact_contact(uuid, uuid, uuid) from authenticated;
 revoke execute on function public.fn_update_budget_consumption() from authenticated;
+
+-- Apêndice 9032 — o motivo de handoff `tool_missing` (F18-T00, ADR-040 §2).
+-- Par idempotente da migration 20260918180000_9032_handoff_por_ferramenta_que_faltou.sql.
+-- BLOCO ÚNICO drop+add, nunca `if not exists`: o banco que ATUALIZA (staging,
+-- produção) já tem a constraint antiga, e `if not exists` a deixaria intacta —
+-- a lição 26 da F14, medida com 23514 no staging.
+alter table public.handoffs drop constraint if exists handoffs_reason_check;
+alter table public.handoffs add constraint handoffs_reason_check check (reason in (
+  'customer_request','high_risk_action','low_confidence','out_of_knowledge',
+  'complaint','provider_error','tenant_rule','forbidden_request','tool_missing'
+));
+comment on constraint handoffs_reason_check on public.handoffs is
+  'Enum de NOVE valores (§5.11 + F18): os 7 gatilhos de D19, forbidden_request de §5.9 e tool_missing de ADR-040 §2 (ferramenta declarada pelo agente e não migrada). Nunca texto livre (G-78).';
 
 grant execute on function public.fn_audit_log_row() to service_role;
 grant execute on function public.fn_decrypt_oauth(bytea) to service_role;

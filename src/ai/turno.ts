@@ -564,6 +564,39 @@ async function decidir(
     incrementCounter("ai_tool_call_descartada", { name: descartada });
   }
 
+  // 6-fail-closed. F18-T00 (ADR-040 §2): o modelo pediu uma ferramenta que a
+  //     VERSÃO PUBLICADA declara e o catálogo não tem. Antes desta fase isso
+  //     era descarte silencioso (§5.9) — o cliente ficava sem resposta e
+  //     ninguém sabia qual ferramenta faltou. Agora vira handoff com o nome da
+  //     ferramenta em `pending_action`, que é o campo do dossiê que a pessoa lê.
+  //
+  //     Só vale para o que o agente DECLARA: nome inventado pelo modelo
+  //     continua descartado e contado, porque inventar não é falta de produto.
+  const declaradas = new Set(contexto.heranca?.tools_declaradas ?? []);
+  const faltando = triagem.descartadas.filter((nome) => declaradas.has(nome));
+  if (faltando.length > 0) {
+    const nome = faltando[0]!;
+    incrementCounter("ai_ferramenta_declarada_sem_catalogo", { name: nome });
+    deps.log?.warn("ai: ferramenta declarada pelo agente e ausente do catálogo — handoff", {
+      organization_id: ctx.organization_id,
+      conversation_id: pedido.conversation_id,
+      ferramenta: nome,
+      version_id: contexto.heranca?.version_id,
+    });
+    const resultado = await pedirHandoff(
+      ctx,
+      pedido,
+      "tool_missing",
+      saida.intent,
+      estado,
+      estadoInicial,
+      deps,
+      nome,
+    );
+    await concluirSeLembrete(ctx, contexto, "handoff", deps);
+    return resultado;
+  }
+
   // 6a. AÇÃO DE RISCO ALTO (D19, gatilho 2) — o handoff acontece em vez da
   //     execução, não depois dela. `execute()` também recusaria uma Action
   //     `blocked`, mas recusar não é chamar gente: a recusa deixaria o cliente

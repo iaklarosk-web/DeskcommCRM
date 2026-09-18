@@ -27,7 +27,7 @@ import { HANDOFF_REASONS } from "@/src/actions/schemas";
 
 export type MotivoDeHandoff = (typeof HANDOFF_REASONS)[number];
 
-/** Os oito, em ordem estável. Nunca escritos à mão em teste nenhum. */
+/** Os nove, em ordem estável. Nunca escritos à mão em teste nenhum. */
 export const MOTIVOS_DE_HANDOFF: readonly MotivoDeHandoff[] = HANDOFF_REASONS;
 
 export function ehMotivoDeHandoff(valor: unknown): valor is MotivoDeHandoff {
@@ -63,6 +63,12 @@ export const ORIGEM_DO_MOTIVO: Record<MotivoDeHandoff, OrigemDoMotivo> = {
   tenant_rule: "deterministica",
   /** Injeção de prompt reconhecida antes do provedor (§5.9). */
   forbidden_request: "deterministica",
+  /**
+   * O modelo pediu uma ferramenta que o agente publicado DECLARA e o catálogo
+   * não tem (F18, ADR-040 §2). Origem `execucao`: só se sabe depois de ler o
+   * que o modelo pediu, e não se produz sem o pedido dele.
+   */
+  tool_missing: "execucao",
 };
 
 /**
@@ -84,6 +90,7 @@ export const INTENT_PADRAO: Record<MotivoDeHandoff, string> = {
   provider_error: "erro_antes_da_resposta",
   tenant_rule: "regra_do_tenant",
   forbidden_request: "pedido_proibido",
+  tool_missing: "ferramenta_indisponivel",
 };
 
 /**
@@ -104,6 +111,8 @@ export const PORQUE_DO_MOTIVO: Record<MotivoDeHandoff, string> = {
   tenant_rule: "Uma regra do tenant interrompeu o atendimento automático.",
   forbidden_request:
     "O texto recebido pediu configuração, dado de outro cliente ou quebra de regra.",
+  tool_missing:
+    "A IA precisou de uma ferramenta que este produto ainda não oferece; nada foi feito pela metade.",
 };
 
 /**
@@ -128,6 +137,8 @@ export const PROXIMO_PASSO_DO_MOTIVO: Record<MotivoDeHandoff, string> = {
   tenant_rule: "Assuma a conversa; uma regra desta organização impediu o atendimento automático.",
   forbidden_request:
     "Leia o texto do cliente antes de responder: ele pediu configuração ou dado de terceiro.",
+  tool_missing:
+    "Faça você o que a IA não pôde fazer, e diga ao responsável qual ferramenta faltou — ela está na fila de espera do inventário.",
 };
 
 /**

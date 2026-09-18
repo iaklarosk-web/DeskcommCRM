@@ -144,6 +144,12 @@ export const SETTINGS_SCHEMA: readonly SettingEntry[] = [
   // webchat (F14, ADR-038 §5, D55 c): o chat do site só existe quando a
   // organização liga; `allowed_origins` vazio = qualquer origem pode embutir
   // (frame-ancestors), a organização restringe. Defaults declarados, nunca fato.
+  // F18-T00 (ADR-040 §1, D56 c): QUEM atende o despacho de IA desta
+  // organização. `saas` = o turno com política por ação, teto diário e
+  // auditoria (o que o gate mede); `legacy` = o motor herdado (runAgentTurn),
+  // que fica como volta atrás POR ORGANIZAÇÃO, sem deploy. Default declarado,
+  // nunca fato — e o default aqui é o motor novo por decisão do proprietário.
+  { key: "ai.engine", tipo: "enum", default: "saas", valores: ["saas", "legacy"] },
   { key: "webchat.enabled", tipo: "boolean", default: false },
   { key: "webchat.allowed_origins", tipo: "string_array", default: [] },
 ] as const;

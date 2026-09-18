@@ -40,6 +40,7 @@ import { getSetting, listSchema } from "@/src/tenant-config";
 import type { ServicePool } from "@/src/tenant-context/db";
 import type { TenantCtx } from "@/src/tenant-context";
 
+import { herancaDoAgentePublicado, type HerancaDoAgente } from "./heranca";
 import { lerConversaDoTurno, type ConversaDoTurno } from "./historico";
 
 /** §5.9: `knowledge.search(ctx, última mensagem, k=5)`. */
@@ -109,6 +110,14 @@ export interface ContextoDoTurno {
    * e a revisão que `update_order_quantity` exige.
    */
   readonly lembrete: LembreteDaConversa | null;
+  /**
+   * F18-T00 (ADR-040 §3): o que este turno herdou do agente publicado — o
+   * prompt daquela versão, as fontes do acervo e as ferramentas declaradas.
+   * `null` quando a organização não tem agente publicado (o caso de toda
+   * organização nova) ou quando `ai.engine` não é `saas`: aí o turno usa a
+   * persona da organização e o acervo inteiro, como sempre usou.
+   */
+  readonly heranca: HerancaDoAgente | null;
 }
 
 export interface EntradaDoContexto {
@@ -181,12 +190,27 @@ export async function montarContexto(
     { ...(deps.pool === undefined ? {} : { pool: deps.pool }) },
   );
 
+  // F18-T00 (ADR-040 §3): com o motor novo no despacho, quem manda na voz e no
+  // acervo é a versão PUBLICADA do agente — não as chaves da organização. Ler
+  // antes da busca é o que permite restringir as fontes; `escopo.fontes` já
+  // existia em `buscar` (src/knowledge/busca.ts), então isto é ligação, não
+  // motor novo de RAG.
+  const heranca =
+    settings["ai.engine"] === "saas"
+      ? await herancaDoAgentePublicado(ctx, {
+          ...(deps.pool === undefined ? {} : { pool: deps.pool }),
+        })
+      : null;
+
   const acervo = await buscar(
     ctx,
     {
       pergunta: entrada.mensagem_do_cliente,
       topK: TRECHOS_NO_CONTEXTO,
       limiar: LIMIAR_DO_ACERVO,
+      ...(heranca !== null && heranca.fontes.length > 0
+        ? { escopo: { fontes: [...heranca.fontes] } }
+        : {}),
     },
     {
       ...(deps.pool === undefined ? {} : { pool: deps.pool }),
@@ -212,6 +236,7 @@ export async function montarContexto(
     },
     tools: toolsFor(ctx, "ai"),
     lembrete,
+    heranca,
   };
 }
 
@@ -232,7 +257,11 @@ const FORMA_DA_RESPOSTA = [
  * é permitido.
  */
 export function instrucoesDoSistema(contexto: ContextoDoTurno): string {
-  const persona = contexto.settings["ai.system_prompt"];
+  // F18-T00 (ADR-040 §3): o prompt da versão publicada VENCE o da organização.
+  // A ordem importa e é deliberada: quem publicou uma versão escolheu aquela
+  // voz, e trocá-la pela chave genérica ao mudar de motor seria mudar o
+  // atendimento sem ninguém ter pedido.
+  const persona = contexto.heranca?.system_prompt ?? contexto.settings["ai.system_prompt"];
   const proibidos = contexto.settings["ai.forbidden_topics"];
 
   const linhas: string[] = [

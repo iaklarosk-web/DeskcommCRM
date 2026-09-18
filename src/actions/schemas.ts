@@ -37,6 +37,10 @@ export const HANDOFF_REASONS = [
   "provider_error",
   "tenant_rule",
   "forbidden_request",
+  // F18-T00 (ADR-040 §2): o agente publicado declarou uma ferramenta que o
+  // catálogo não tem (fila de espera do inventário). Antes disso o turno a
+  // descartava em silêncio — e silêncio é o desfecho que a objeção 1 proibiu.
+  "tool_missing",
 ] as const;
 
 // ─── Leitura ────────────────────────────────────────────────────────────────

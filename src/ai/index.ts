@@ -37,6 +37,11 @@ export {
   type EntradaDoContexto,
 } from "./contexto";
 export {
+  declaradasForaDoCatalogo,
+  herancaDoAgentePublicado,
+  type HerancaDoAgente,
+} from "./heranca";
+export {
   abaixoDoLimiar,
   ESTADOS_EM_QUE_A_IA_FALA,
   estaForaDaBase,
