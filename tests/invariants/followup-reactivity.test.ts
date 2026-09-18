@@ -1,3 +1,4 @@
+import { criarOrigemDeFollowup } from "./followup-service-origin";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import pg from "pg";
 
@@ -300,12 +301,13 @@ async function seedEnrollment(params: {
       : status === "paused_handoff"
         ? null
         : new Date(Date.now() + 3_600_000).toISOString();
+  const boundary = await criarOrigemDeFollowup(pool, params.org, params.contactId);
   const { rows } = await pool.query<{ id: string }>(
     `insert into followup_enrollments
-       (organization_id, pointer_id, version_id, contact_id, current_node_id, status, next_eval_at, steps_taken)
-     values ($1, $2, $3, $4, $5, $6, $7, $8)
+       (organization_id, pointer_id, version_id, contact_id, current_node_id, status, next_eval_at, steps_taken, conversation_id, service_boundary)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
      returning id`,
-    [params.org, params.pointerId, params.versionId, params.contactId, params.currentNodeId, status, nextEvalAt, params.stepsTaken ?? 0],
+    [params.org, params.pointerId, params.versionId, params.contactId, params.currentNodeId, status, nextEvalAt, params.stepsTaken ?? 0, boundary.conversation_id, JSON.stringify(boundary)],
   );
   return rows[0]!.id;
 }
@@ -486,25 +488,13 @@ describe("applyReactivityEvent — STOP/opt-out (message.received + is_blocked)"
     expect(summary.matched).toBe(true); // completou; o QUANTO é a catraca abaixo
   });
 
-  // ACOPLADO À MIGRATION 0145: o `seedEnrollment` abaixo grava
-  // `status: "paused_manual"`, e na `main` o CHECK de `followup_enrollments`
-  // ainda RECUSA esse valor (0054: active, waiting_reply, paused_handoff,
-  // completed, cancelled, dead). Este caso só roda em árvore que carrega a 0145 —
-  // medido: 1 arquivo de migration 0145 e 7 ocorrências no baseline desta base.
-  // Cherry-pick isolado para uma árvore sem ela vira 23514 no seed, e o vermelho
-  // vai parecer defeito de reactivity em vez de migration ausente.
-  //
-  // `it.fails` = CATRACA, não teste desligado. Ele EXECUTA e exige que o defeito
-  // ainda esteja lá; no dia em que `LIVE_STATUSES` ganhar `paused_manual` este
-  // caso REPROVA por ter passado, e quem consertar é obrigado a vir tirar o
-  // `.fails`. O conserto é acrescentar o estado à lista em
-  // `lib/followup/reactivity.ts` — decisão de comportamento, do dono do arquivo.
-  it.fails("STOP alcança também o enrollment PAUSADO MANUALMENTE — opt-out não abre exceção de estado", async () => {
+  // STOP também encerra a pausa manual e libera a vaga única do contato.
+  it("STOP alcança também o enrollment PAUSADO MANUALMENTE — opt-out não abre exceção de estado", async () => {
     const org = nextOrgId();
     await seedOrg(org);
     const contactId = await seedContact(org, { isBlocked: true });
     const flow = await seedFlow(org, SIMPLE_GRAPH);
-    await seedEnrollment({
+    const enrollmentId = await seedEnrollment({
       org,
       pointerId: flow.pointerId,
       versionId: flow.versionId,
@@ -517,22 +507,19 @@ describe("applyReactivityEvent — STOP/opt-out (message.received + is_blocked)"
     const row = eventRow({ organization_id: org, event_type: "message.received", payload: { contact_id: contactId } });
     const summary = await applyReactivityEvent(reactivityDb(), () => new Date(), row);
 
-    // UMA asserção só, e é deliberado — `it.fails` é satisfeito pela PRIMEIRA
-    // que falha, então toda asserção extra aqui seria letra morta enquanto o
-    // defeito existir, e estrearia junto no dia do conserto. Se uma delas
-    // quebrasse por outro motivo, o caso seguiria falhando, o `.fails` seguiria
-    // satisfeito, e a catraca não reprovaria: sobreviveria ao próprio conserto.
-    //
-    // O estado final do enrollment cancelado é congelado pelo caso irmão
-    // "cancela o enrollment VIVO do contato (outcome='opted_out') e ignora os já
-    // terminais" — citado pelo TÍTULO, e não por "logo acima", porque a garantia
-    // desta catraca depende dele e um `git grep` precisa achá-lo se ele se mudar.
-    // Os dois passam pelo mesmo `cancelAll`, que não tem ramo por status.
-    //
-    // DÍVIDA DECLARADA: se aquele caso for removido, movido ou pulado, as três
-    // propriedades ficam órfãs e ESTA catraca continua com cara de saudável.
-    // Prosa não reprova — quem mexer no irmão está mexendo em dois lugares.
     expect(summary.reacted).toBe(1);
+    const after = await getEnrollment(enrollmentId);
+    expect(after).toMatchObject({
+      status: "cancelled", outcome: "opted_out", cancel_reason: "stop_keyword",
+      next_eval_at: null, claimed_until: null,
+    });
+    expect(after.completed_at).not.toBeNull();
+    expect(await applyReactivityEvent(reactivityDb(), () => new Date(), row)).toEqual({ matched: true, reacted: 0 });
+    expect((await getEvents(enrollmentId)).filter((e) => e.event_type === "reactivity_opted_out")).toHaveLength(1);
+    // Depois de desbloqueio explícito, o enrollment encerrado não prende a vaga.
+    await pool.query("update contacts set is_blocked = false where id = $1 and organization_id = $2", [contactId, org]);
+    const next = await seedEnrollment({ org, pointerId: flow.pointerId, versionId: flow.versionId, contactId, currentNodeId: "w1" });
+    expect((await getEnrollment(next)).status).toBe("active");
   });
 
   it("re-drenar o MESMO event_log row é idempotente — sem efeito duplicado", async () => {
@@ -656,6 +643,38 @@ describe("applyReactivityEvent — inbound wake (waiting_reply, sem cancel_on_re
     const after = await getEnrollment(enrollmentId);
     expect(after.status).toBe("waiting_reply");
     expect(after.outcome).toBeNull();
+  });
+});
+
+describe("pausa manual preservada e STOP isolado", () => {
+  it.each(["pause", "cancel", "allow"] as const)("inbound e ciclo de handoff não desfazem pausa manual (policy=%s)", async (handoffPolicy) => {
+    const org = nextOrgId();
+    await seedOrg(org);
+    const contactId = await seedContact(org);
+    const conversationId = await seedConversation(org, contactId);
+    const flow = await seedFlow(org, SIMPLE_GRAPH, { handoffPolicy, triggerConfig: { kind: "manual", cancel_on_reply: true } });
+    const id = await seedEnrollment({ org, ...flow, contactId, currentNodeId: "w1", status: "paused_manual", nextEvalAt: null });
+    const before = await getEnrollment(id);
+    for (const event_type of ["message.received", "ai.handoff_triggered", "ai.handoff_resolved"]) {
+      const row = eventRow({ organization_id: org, event_type, payload: { contact_id: contactId, conversation_id: conversationId } });
+      expect(await applyReactivityEvent(reactivityDb(), () => new Date(), row)).toEqual({ matched: true, reacted: 0 });
+      expect(await getEnrollment(id)).toEqual(before);
+    }
+    expect(await getEvents(id)).toHaveLength(0);
+  });
+
+  it("STOP de outra organização não toca o enrollment pausado manualmente", async () => {
+    const org = nextOrgId(), otherOrg = nextOrgId();
+    await seedOrg(org); await seedOrg(otherOrg);
+    const contactId = await seedContact(org, { isBlocked: true });
+    const flow = await seedFlow(org, SIMPLE_GRAPH);
+    const id = await seedEnrollment({ org, ...flow, contactId, currentNodeId: "w1", status: "paused_manual", nextEvalAt: null });
+    const forged = eventRow({ organization_id: otherOrg, event_type: "message.received", payload: { contact_id: contactId } });
+    expect(await applyReactivityEvent(reactivityDb(), () => new Date(), forged)).toEqual({ matched: true, reacted: 0 });
+    expect((await getEnrollment(id)).status).toBe("paused_manual");
+    expect(await getEvents(id)).toHaveLength(0);
+    const correct = eventRow({ organization_id: org, event_type: "message.received", payload: { contact_id: contactId } });
+    expect((await applyReactivityEvent(reactivityDb(), () => new Date(), correct)).reacted).toBe(1);
   });
 });
 
@@ -838,6 +857,7 @@ describe("completeTurnForEnrollment (turn-bridge) — respeita paused_handoff", 
       currentNodeId: "ac1",
       nextEvalAt: new Date(Date.now() - 1_000).toISOString(),
     });
+    expect((await getEnrollment(enrollmentId)).conversation_id).toBe(conversationId);
     const tick1 = await runFollowupTick({ db: pgDb, clock: relogioAncoradoNoBanco(), enqueueJob: async (j) => void jobs.push(j) }, { limit: 5 });
     expect(tick1.scheduled).toBe(1);
     const afterTick1 = await getEnrollment(enrollmentId);

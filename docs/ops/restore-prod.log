@@ -1,0 +1,4 @@
+restore: tables=183 tables_restored=183 rows=207 rows_diff=0 dump=prod-20260914T023429Z.dump target=restore_20260914_023430 seconds=11 at=20260914T023430Z
+restore: tables=183 tables_restored=183 rows=449 rows_diff=0 dump=prod-20260914T193845Z.dump target=restore_20260914_193846 seconds=11 at=20260914T193846Z
+restore: tables=183 tables_restored=183 rows=461 rows_diff=0 dump=prod-20260915T035537Z.dump target=restore_20260915_035538 seconds=7 at=20260915T035538Z
+restore: tables=184 tables_restored=184 rows=646 rows_diff=0 dump=prod-20260918T142544Z.dump target=restore_20260918_142545 seconds=19 at=20260918T142545Z

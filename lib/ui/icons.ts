@@ -88,6 +88,7 @@ export {
   MonitorPlay,
   // conversation
   ChatCircle,
+  ChatCircleDots,
   Phone,
   Paperclip,
   Microphone,

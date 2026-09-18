@@ -41,6 +41,13 @@ export interface PacingInput {
    * Omitir = `true`: nenhum chamador existente muda de comportamento.
    */
   banRisk?: boolean;
+  /**
+   * O destinatário está NA PÁGINA agora (chat do site, capability `liveVisitor`,
+   * F14/ADR-038): a janela horária de cortesia não se aplica — não há quem
+   * acordar. Desarma SÓ a janela; o que é anti-ban continua decidido por
+   * `banRisk`. Omitir = `false`: nenhum chamador existente muda.
+   */
+  liveVisitor?: boolean;
   /** [0,1) — injetável nos testes; default Math.random. */
   rng?: () => number;
 }
@@ -57,9 +64,13 @@ export function decidePacing(input: PacingInput): PacingDecision {
   const { now, knobs, state, crmDailyLimit } = input;
   const rng = input.rng ?? Math.random;
   const banRisk = input.banRisk ?? true; // default preserva o comportamento atual
+  const liveVisitor = input.liveVisitor ?? false;
   const wall = wallClock(now, knobs.timezone);
 
-  if (!insideWindow(wall, knobs)) {
+  // A cortesia (janela) existe para não acordar quem está longe do aparelho;
+  // com o visitante na página ela não tem a quem proteger (doutrina, inv. 3,
+  // exceção F14). Só a janela: warm-up/cap/throttle seguem `banRisk` abaixo.
+  if (!liveVisitor && !insideWindow(wall, knobs)) {
     const nextAllowedAt = addMs(nextWindowOpen(now, knobs), jitterOf(rng, knobs));
     return {
       allow: false,

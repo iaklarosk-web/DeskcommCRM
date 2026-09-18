@@ -9,7 +9,9 @@ import type { OutboundMedia } from "@/lib/waha/media-send";
 
 export type { OutboundMedia };
 
-export type ChannelProvider = "waha" | "meta_cloud" | "zernio";
+// `webchat` (F14, ADR-038): o chat do site — canal SEM transporte externo; a
+// mensagem "entregue" é a linha em `messages` que a página do visitante lê.
+export type ChannelProvider = "waha" | "meta_cloud" | "zernio" | "webchat";
 
 export interface ChannelCapabilities {
   /** Pode enviar texto livre a qualquer momento? false = exige template fora da janela. */
@@ -37,6 +39,13 @@ export interface ChannelCapabilities {
   groups: "full" | "limited" | "none";
   /** Mensagem entregue gera custo → decisões de envio precisam considerar orçamento. */
   costPerMessage: boolean;
+  /**
+   * O destinatário está NA PÁGINA agora (chat do site): a janela horária de
+   * cortesia não vale — não há quem acordar às 3h — e a IA responde 24 h
+   * (F14, ADR-038 §2 T01, decisão do proprietário). Só o humano segue a janela
+   * (fila de handoff). `false` em todo canal que chega ao celular da pessoa.
+   */
+  liveVisitor: boolean;
 }
 
 /**
@@ -95,6 +104,8 @@ export interface ChannelTenantScope {
 }
 
 export interface OutboundEnvelope extends ChannelTenantScope {
+  /** Callback interno: revalida a origem depois do preparo assíncrono e antes do transporte. */
+  beforeSend?: () => Promise<void>;
   /** Identificador da sessão/número no provider (WAHA: nome da sessão). */
   sessionRef: string;
   /** Endereço já resolvido por `resolveRecipient`. */
@@ -293,6 +304,7 @@ export interface ChannelAdapter {
   }): Promise<FetchedMedia>;
 
   sendTemplate?(input: ChannelTenantScope & {
+    beforeSend?: () => Promise<void>;
     sessionRef: string;
     to: string;
     providerConversationId?: string | null;

@@ -1,0 +1,52 @@
+F04 — AI Agent + Knowledge/RAG + Action Policy + tools da Fase 1. Evidência de construção.
+Fechamento: 2026-09-11T16:25Z (13:25 de Brasília). Branch feat/F03-conversation-inbox.
+Código validado: 76c0b00bdadd2d21c0527bf3a34a0879d6ec8130 (inclui F05-T01..T04 e T10 já na árvore).
+
+== GATE INTEGRAL ==
+./scripts/verify.sh, WHATSAPP_MODE=mock AI_PROVIDER=mock CI=1, um worker, zero retries.
+Execução f04-gate-01, 5143 s (85,7 min), exit 0, STATUS: READY (F04), violations=0, PRIMEIRA tentativa.
+
+unit=8462/8462  integration=128/128  db=1637/1637  e2e=37/37  specs=9/9
+baseline_comparable: scope=unit+db passed=10099 required=8738 (baseline_n0=8997 @ c85f7d72)
+isolation: tables=132 ops=4 dirs=2 leaks=0 (material_cross_org=95/132)
+rls-coverage: tables_with_org_id=132 policies_found=116 missing=0 service_only_with_grant=0
+rbac: roles=3 denied_expected=19 denied_actual=19
+entitlement: usage_events_written=23
+ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0
+webhook: replay=2 stored=1 tables_checked=7
+replicability: e2e[fictitious_A_B]=37/37 specs=9/9 grep_deka_in_src=0
+secrets: files_scanned=453 findings=0
+tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0
+mutants_killed=46/46  debt_known=0  skip_only_occurrences=15
+
+Inputs: 3463 arquivos, SHA-256 e68fdeeb…cec328 idêntico antes e depois.
+handoff e reminder seguem pending: pertencem à F05 e só são obrigatórios a partir dela.
+
+== O QUE A FASE ENTREGOU ==
+T01 catálogo: actions=10 catalog_total=10 fields=8/8 executor_denied=6/6 audit_rows=9/9;
+    toolsFor(ai)=9/9 human=10/10 automation=5/5. ADR-021.
+T02 confirmação by_risk: paths=3 pass=3/3 audit_rows=3; pending_actions e audit_events
+    (service_only, RLS comportamental 16/16 e 8/8). Migration 9017.
+T03 acervo por organização: knowledge docs_a=2 docs_b=1 consultas=5 chunks=3
+    cross_tenant_hits=0/3, sem tabela nova (ADR-023). Migration 9018.
+T04 contexto e provedor: context-builder snapshots=6/6 org_unica=6/6 ids_de_outro_tenant=0/6.
+T05 guardrails: unknown=6 injection=10 acoes_fora_do_catalogo=0/0 handoffs=9/9.
+T06 nove tools: tools=9 asserts=3 pass=27/27; tools-sql hits=0/0 fixture_negativa=3/3.
+T07 dataset e ai:eval: 30 casos (6/10/5/6/3), comparados com o BANCO (G-35).
+T08 consumo único: provider_calls=5 llm_calls=5/5 ai_usage_events=5/5 custo_conferido=5/5;
+    provider_calls_at_zero_balance=0 attempts=3. Preço por maior prefixo (gpt-4o-mini
+    deixou de ser cotado como gpt-4o, 15 vs 250 USD/Mtok).
+T09 erro do provedor: handoffs=1/1 provider_calls=1.
+T10 tela de IA: 10/10 no navegador (5 jornadas x 2 organizações), documento no tenant certo.
+T11 verify v1.2: ai_eval medido, gate.cases 62/62, mutante 41. ADR-022.
+
+== LIMITES DECLARADOS ==
+AI_PROVIDER=openai real: NOT VALIDATED (real) (D12). Nenhum byte saiu para rede em teste.
+Dois turnos de IA coexistem (o de lead herdado e o SaaS); elegivelParaWorkerLegado segue
+false, então ninguém recebe duas respostas — unificação é F13/F15 (ADR-021).
+create_task pela IA é negada pelo domínio (executor humano com sessão) — catálogo promete,
+domínio nega; decisão registrada em VARREDURA-MELHORIAS §B5.
+expirarConfirmacoes() existe e é provada; nenhum Job a chama ainda (§B6).
+A tela aceita só .txt/.md; PDF continua pelo caminho herdado.
+Provas de F04 foram colhidas duas vezes por causa de uma colisão entre agentes em
+src/ai/turno.ts; o gate integral sobre a árvore final é o que vale, e passou.

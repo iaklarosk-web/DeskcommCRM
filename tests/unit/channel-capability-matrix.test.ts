@@ -15,7 +15,8 @@ import {
   type ChannelProvider,
 } from "@/lib/channels/capabilities";
 
-const PROVIDERS = ["waha", "meta_cloud", "zernio"] as const satisfies readonly ChannelProvider[];
+// F14 (ADR-038): `webchat` entra na matriz — o chat do site é canal sem transporte.
+const PROVIDERS = ["waha", "meta_cloud", "zernio", "webchat"] as const satisfies readonly ChannelProvider[];
 
 /**
  * Esquecer um provider aqui passa a ser erro de COMPILAÇÃO.
@@ -37,6 +38,8 @@ const CAPABILITIES = [
   "voiceNote",
   "groups",
   "costPerMessage",
+  // F14: "o destinatário está na página" — só o chat do site.
+  "liveVisitor",
 ] as const;
 
 describe("matriz capability × provider é exaustiva", () => {

@@ -1,0 +1,24 @@
+{
+  "event": "message.any",
+  "session": "f03-sessao-ficticia",
+  "payload": {
+    "id": "false_5511900000001@c.us_3EB0F03TEXTO01",
+    "from": "5511900000001@c.us",
+    "to": "5511900000099@c.us",
+    "fromMe": false,
+    "body": "Bom dia, queria confirmar o pedido de amanha",
+    "type": "chat",
+    "hasMedia": false,
+    "timestamp": 1789000000,
+    "_data": {
+      "notifyName": "Cliente Ficticio Um",
+      "pushName": "Cliente Ficticio Um",
+      "key": {
+        "remoteJid": "5511900000001@s.whatsapp.net",
+        "fromMe": false,
+        "id": "3EB0F03TEXTO01"
+      },
+      "message": { "conversation": "Bom dia, queria confirmar o pedido de amanha" }
+    }
+  }
+}

@@ -1,3 +1,4 @@
+import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
  * POST /api/v1/conversations/[id]/transfer — reatribui a conversa a outro
  * atendente. Decisão G1-06d (spec 13 §5): transferência é IMEDIATA, sem etapa
@@ -12,6 +13,7 @@ import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 
 import { audit, isServiceRoleConfigured } from "@/lib/audit";
+import { ctxDoInbox, erroDeApiDaTransicao, moverPeloInbox } from "@/lib/inbox/acoes-d16";
 import { registrarTrocaDeComando } from "@/lib/inbox/atividade-de-comando";
 import { ApiError } from "@/lib/api/types";
 import { ok, fail } from "@/lib/api/wrappers";
@@ -29,6 +31,9 @@ interface RouteCtx {
 }
 
 export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
+
   const requestId = randomUUID();
   const { id } = await ctx.params;
   const supabase = await createClient();
@@ -75,19 +80,35 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     }
   }
 
-  const { data, error } = await supabase.rpc("fn_conversation_assign", {
-    p_organization_id: orgId,
-    p_conversation_id: id,
-    p_to_user_id: input.to_user_id,
-    p_reason: "transfer",
-    // Imediata (G1-06d): sem optimistic lock — reatribui qualquer que seja o dono atual.
-    p_enforce_expected: false,
-  });
+  // F03-T09: o movimento é `human.transferred` (D16) e a atribuição continua na
+  // MESMA `fn_conversation_assign`, chamada pelo efeito `assign_to_target` de
+  // `transition()`. Imediata (G1-06d): sem optimistic lock — reatribui qualquer
+  // que seja o dono atual.
+  try {
+    await moverPeloInbox(ctxDoInbox(orgId, user.id, authz.org.role), id, "transferir", {
+      kind: "attendant",
+      userId: user.id,
+      targetUserId: input.to_user_id,
+    });
+  } catch (err) {
+    const apiErr = erroDeApiDaTransicao(err, requestId, t);
+    if (!apiErr) throw err;
+    return fail(apiErr.code, apiErr.message, apiErr.status, {
+      details: apiErr.details,
+      requestId,
+    });
+  }
+
+  const { data: row, error } = await supabase
+    .from("conversations")
+    .select("*")
+    .eq("id", id)
+    .eq("organization_id", orgId)
+    .maybeSingle();
 
   if (error) {
     return fail("internal_error", error.message, 500, { requestId });
   }
-  const row = data?.[0];
   if (!row) {
     return fail("not_found", t("Conversa não encontrada."), 404, { requestId });
   }
