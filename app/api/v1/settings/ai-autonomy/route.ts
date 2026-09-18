@@ -2,7 +2,7 @@
  * F15-T01 (ADR-036 §2 T01, D54 b) — a autonomia da IA por AÇÃO.
  *
  * GET   /api/v1/settings/ai-autonomy → { policy, confirm_from_risk, table[], limits }
- * PATCH /api/v1/settings/ai-autonomy ← { policy?: {<ação>: allow|approve|block|transfer|null}, daily_turns?: int }
+ * PATCH /api/v1/settings/ai-autonomy ← { policy?: {<ação>: allow|approve|block|transfer|null}, daily_turns?: int, engine?: saas|legacy }
  *
  * `policy` é a chave `actions.policy` de `tenant_settings` (só as entradas
  * que a organização sobrescreveu); `table` é o modo EFETIVO de cada ação do
@@ -22,6 +22,7 @@ import { requireRole } from "@/lib/auth/require-role";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { ACTION_CATALOG } from "@/src/actions/catalog";
 import { estadoDoLimite } from "@/src/ai/limite";
+import { motorDeclarado, MOTORES_DE_IA } from "@/src/ai/despacho";
 import { MODOS_DA_POLITICA, POLITICA_PADRAO, politicaValida, tabelaDaPolitica, type Politica } from "@/src/actions/politica";
 import { ctxDaRota, negarSemPermissao } from "@/src/crm/permissao-da-rota";
 import { getSetting, InvalidSettingError, setSetting } from "@/src/tenant-config/settings";
@@ -32,20 +33,25 @@ const patchSchema = z
   .strictObject({
     policy: z.record(z.string().max(60), z.enum(MODOS_DA_POLITICA).nullable()).refine((p) => Object.keys(p).length > 0, { message: "nada a alterar" }).optional(),
     daily_turns: z.number().int().min(0).max(100_000).optional(),
+    engine: z.enum(MOTORES_DE_IA).optional(),
   })
-  .refine((v) => v.policy !== undefined || v.daily_turns !== undefined, { message: "nada a alterar" });
+  .refine((v) => v.policy !== undefined || v.daily_turns !== undefined || v.engine !== undefined, {
+    message: "nada a alterar",
+  });
 
 async function leitura(ctx: ReturnType<typeof ctxDaRota>) {
-  const [bruta, confirm_from_risk, limite] = await Promise.all([
+  const [bruta, confirm_from_risk, limite, engine] = await Promise.all([
     getSetting(ctx, "actions.policy"),
     getSetting(ctx, "actions.confirm_from_risk"),
     estadoDoLimite(ctx),
+    getSetting(ctx, "ai.engine"),
   ]);
   const policy: Politica = politicaValida(bruta) ? bruta : POLITICA_PADRAO;
   return {
     policy,
     confirm_from_risk,
     table: tabelaDaPolitica("ai", policy, confirm_from_risk),
+    engine: motorDeclarado(engine),
     limits: { daily_turns: limite.limit, used_today: limite.used, remaining: limite.remaining, day: limite.day, timezone: limite.timezone, paused: !limite.allowed },
   };
 }
@@ -87,6 +93,10 @@ export async function PATCH(req: Request): Promise<Response> {
       await setSetting(ctx, "actions.policy", nova, "tenant_admin");
       // `resource_id` é uuid: a chave natural (`actions.policy`) vai no metadata.
       await audit({ organizationId: authz.org.orgId, actorUserId: authz.user.id, action: "ai_autonomy.updated", resourceType: "tenant_settings", resourceId: null, requestId, metadata: { key: "actions.policy", changes: parsed.data.policy } });
+    }
+    if (parsed.data.engine !== undefined) {
+      await setSetting(ctx, "ai.engine", parsed.data.engine, "tenant_admin");
+      await audit({ organizationId: authz.org.orgId, actorUserId: authz.user.id, action: "ai_engine.updated", resourceType: "tenant_settings", resourceId: null, metadata: { key: "ai.engine", engine: parsed.data.engine }, requestId });
     }
     if (parsed.data.daily_turns !== undefined) {
       await setSetting(ctx, "ai.limits.daily_turns", parsed.data.daily_turns, "tenant_admin");

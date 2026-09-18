@@ -485,6 +485,8 @@ export const AUDIT_ACTIONS = [
   // sobre o catálogo — a configuração comercial do agente.
   "ai_autonomy.updated",
   "ai_limits.updated",
+  // F18-T05 (ADR-040 §1): a organização trocou QUEM atende o despacho de IA.
+  "ai_engine.updated",
   // F14-T02 (ADR-038): chat do site ligado/desligado e origens de embed.
   "webchat_settings.updated",
   "automation_rule.created",

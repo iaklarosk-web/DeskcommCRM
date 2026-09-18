@@ -37,6 +37,7 @@ export {
   type EntradaDoContexto,
 } from "./contexto";
 export {
+  MOTORES_DE_IA,
   motorDaOrganizacao,
   motorDeclarado,
   textoDaMensagemDeEntrada,

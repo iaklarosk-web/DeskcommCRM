@@ -613,6 +613,7 @@ jobs:
         f13-crm-comercial.spec.ts
         f15-automacao-e-autonomia.spec.ts
         f14-canais-e-agenda.spec.ts
+        f18-motor-unico.spec.ts
 
       FORA_DO_CI: >-
         vps-fresh-onboarding.spec.ts

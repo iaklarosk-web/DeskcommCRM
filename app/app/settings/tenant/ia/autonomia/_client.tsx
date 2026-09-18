@@ -28,6 +28,7 @@ interface Leitura {
   confirm_from_risk: unknown;
   table: Linha[];
   limits: { daily_turns: number; used_today: number; remaining: number | null; day: string; timezone: string; paused: boolean };
+  engine: "saas" | "legacy";
 }
 
 const MODOS: Modo[] = ["allow", "approve", "block", "transfer"];
@@ -94,8 +95,31 @@ export function AiAutonomyClient() {
 
   const sobrescritas = dados.table.filter((l) => l.source === "organização").length;
   const limites = dados.limits;
+  const motorNovo = dados.engine === "saas";
   return (
     <div className="grid gap-6">
+    <section className="rounded-lg border bg-card p-4" data-testid="ai-engine" data-engine={dados.engine}>
+      <h2 className="font-medium">{t("Quem responde o cliente")}</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {motorNovo
+          ? t("O atendimento novo: tudo o que está nesta tela vale — política por ação, limite diário e registro do que a IA fez.")
+          : t("O atendimento antigo: a IA responde sem a política desta tela, sem limite diário e sem registro por ação.")}
+      </p>
+      <Button
+        className="mt-3"
+        size="sm"
+        variant={motorNovo ? "outline" : "default"}
+        disabled={salvando === "engine"}
+        data-testid="ai-engine-alternar"
+        onClick={() => void enviar({ engine: motorNovo ? "legacy" : "saas" }, "engine")}
+      >
+        {salvando === "engine"
+          ? t("Salvando…")
+          : motorNovo
+            ? t("Voltar ao atendimento antigo")
+            : t("Usar o atendimento novo")}
+      </Button>
+    </section>
     <section className="rounded-lg border bg-card p-4" data-testid="ai-limits" data-paused={limites.paused ? "1" : "0"}>
       <h2 className="font-medium">{t("Limite diário de turnos")}</h2>
       <p className="text-xs text-muted-foreground">

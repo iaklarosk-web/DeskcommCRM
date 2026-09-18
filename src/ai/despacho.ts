@@ -23,7 +23,9 @@ import { getSetting } from "@/src/tenant-config";
 import type { ServicePool } from "@/src/tenant-context/db";
 import type { TenantCtx } from "@/src/tenant-context";
 
-export type MotorDeIa = "saas" | "legacy";
+/** O vocabulário da chave `ai.engine` — a mesma lista que o schema declara. */
+export const MOTORES_DE_IA = ["saas", "legacy"] as const;
+export type MotorDeIa = (typeof MOTORES_DE_IA)[number];
 
 export interface DepsDoDespacho {
   pool?: ServicePool;
