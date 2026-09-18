@@ -34,6 +34,8 @@ export interface GetSaasAdapterDeps {
   adapters?: Partial<Record<SaasChannelProvider, SaasChannelAdapter>>;
 }
 
+export { criarConexaoDeTeste, PROVIDER_DA_CONEXAO_DE_TESTE, type ConexaoDeTesteCriada } from "./conexao-de-teste";
+
 export function modoMockLigado(modo?: string): boolean {
   return (modo ?? process.env.WHATSAPP_MODE ?? "").trim().toLowerCase() === "mock";
 }

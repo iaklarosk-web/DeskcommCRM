@@ -176,7 +176,24 @@ const GATILHOS: readonly CasoDeGatilho[] = [
     motivo: "high_risk_action",
     chamadas: 1,
   },
+  {
+    // F18 (ADR-040 §2): o nono motivo. O agente publicado DECLARA uma
+    // ferramenta que o catálogo não tem (fila de espera do inventário) e o
+    // modelo a pede: antes isso era descarte silencioso — o cliente sem
+    // resposta e ninguém sabendo o que faltou. Precisa de versão publicada com
+    // `tool_ids`, semeada no `beforeAll` deste arquivo.
+    // Índice 15, não 9: as conversas 9–14 já têm dono neste arquivo
+    // (`CONVERSA_DO_HUMANO`, a de controle, as três de T04) e reusar uma delas
+    // faria este caso derrubar outro — exatamente o que aconteceu ao escrever.
+    indice: 15,
+    mensagem: "anota no meu caso que eu ja liguei tres vezes",
+    motivo: "tool_missing",
+    chamadas: 1,
+  },
 ];
+
+/** A ferramenta que o agente declara e o catálogo não tem (F18). */
+const FERRAMENTA_NA_FILA = "crm_add_case_note";
 
 /** A conversa do handoff pedido por uma PESSOA, com `pending_action` explícita. */
 const CONVERSA_DO_HUMANO = 9;
@@ -199,7 +216,7 @@ const CONVERSA_DE_CONTROLE = 11;
  */
 const CONVERSAS_DE_T04 = [12, 13, 14] as const;
 
-const TOTAL_DE_CONVERSAS = 14;
+const TOTAL_DE_CONVERSAS = 15;
 
 /** Seis mensagens na conversa 1: é ela que prova `last_messages` com 5 reais. */
 const MENSAGENS_DA_CONVERSA_1 = 6;
@@ -286,6 +303,12 @@ function registroDoRoteiro() {
         intent: "out_of_knowledge",
         confidence: 0.9,
         handoff: { wanted: false, reason: "out_of_knowledge" },
+      });
+    } else if (mensagem === GATILHOS[8]!.mensagem) {
+      saida = saidaDe({
+        intent: "registrar_no_caso",
+        confidence: 0.9,
+        tool_calls: [{ name: FERRAMENTA_NA_FILA, input: {} }],
       });
     } else if (mensagem === GATILHOS[7]!.mensagem) {
       saida = saidaDe({
@@ -431,6 +454,31 @@ beforeAll(async () => {
        values ($1,$2,'agent',now(),null),($1,$3,'admin',now(),null)`,
       [ORG, ATENDENTE_B, ADMIN],
     );
+    // F18: a versão PUBLICADA do agente herdado declarando a ferramenta que o
+    // catálogo não tem — é o que transforma o pedido do modelo em
+    // `tool_missing` (caso 9) em vez de descarte silencioso.
+    const canal = (
+      await client.query<{ channel_session_id: string }>(
+        `select channel_session_id from public.conversations where organization_id=$1 limit 1`,
+        [ORG],
+      )
+    ).rows[0]?.channel_session_id;
+    if (canal !== undefined) {
+      const agente = "f0500001-5000-4000-8000-00000000000a";
+      const versao = "f0500001-6000-4000-8000-00000000000a";
+      await client.query(
+        `insert into public.ai_agents (id, organization_id, name, system_prompt) values ($1,$2,'Agente da F05','Atenda com cuidado.')`,
+        [agente, ORG],
+      );
+      await client.query(
+        `insert into public.ai_agent_versions
+           (id, organization_id, agent_id, version_number, system_prompt, provider, model,
+            channel_session_id, status, published_at, tool_ids)
+         values ($1,$2,$3,1,'Atenda com cuidado.','anthropic','claude-haiku-4-5',$4,'published',now(),$5::text[])`,
+        [versao, ORG, agente, canal, [FERRAMENTA_NA_FILA]],
+      );
+      await client.query(`update public.ai_agents set published_version_id=$1 where id=$2`, [versao, agente]);
+    }
     await client.query("commit");
   } catch (erro) {
     await client.query("rollback");
@@ -447,8 +495,8 @@ afterAll(async () => {
 /** Preenchido pelo primeiro caso e lido pelos seguintes — a ordem é do arquivo. */
 const motivosObservados: string[] = [];
 
-describe("F05-T01 — os OITO motivos do enum, cada um levando a waiting_human", () => {
-  it("handoff-triggers: triggers=8 pass=8/8", async () => {
+describe("F05-T01 — os NOVE motivos do enum, cada um levando a waiting_human", () => {
+  it("handoff-triggers: triggers=9 pass=9/9", async () => {
     // Arrange — a tabela de casos cobre o enum inteiro, e é o enum que diz
     // quantos são. Se um motivo novo entrar em §5.11 sem caso aqui, reprova.
     expect(
@@ -594,10 +642,14 @@ describe("F05-T02 — o resumo de sete campos, lido do banco", () => {
       comCincoReais,
       "nenhum dossiê tem as cinco últimas mensagens de verdade — só posições vazias",
     ).toBeGreaterThanOrEqual(1);
+    // Não-vacuidade, não contagem: desde a F18 há DOIS caminhos que nomeiam a
+    // pendência — o handoff pedido por uma pessoa (com a ação que ela cita) e o
+    // `tool_missing`, que carrega o nome da ferramenta que faltou. Fixar "1"
+    // aqui transformaria um caminho novo e legítimo em falha.
     expect(
       comPendencia,
       "nenhum dossiê carregou `pending_action` — o campo passaria por vacuidade",
-    ).toBe(1);
+    ).toBeGreaterThanOrEqual(1);
     // E o texto do atendente PREVALECE sobre o template (§5.11): a única
     // informação que só ele tem não pode ser apagada por um texto de catálogo.
     const doHumano = dossies.find((d) => d.conversation_id === alvoHumano);

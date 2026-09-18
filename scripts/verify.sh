@@ -112,6 +112,10 @@ fi
 
 step typecheck pnpm typecheck
 step lint pnpm lint
+# F18-T04 (ADR-041 §4, §B19): a régua de canal volta ao gate. Ela reprovava
+# desde a F11 e o gate não a rodava — régua vermelha que ninguém roda é régua
+# que não existe, e o verde afirmava que a doutrina estava sendo respeitada.
+step lint-channels pnpm lint:channels
 if [ "$CLOSED_E2E" = 1 ]; then
   if [ "$F02_SANDBOX_OK" = 1 ] && [ "$F02_INPUTS_OK" = 1 ]; then
     step build pnpm e2e:build

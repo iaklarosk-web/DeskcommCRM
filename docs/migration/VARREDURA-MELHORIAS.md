@@ -340,7 +340,10 @@ o build do app a máquina chegou a 1,9 GB de swap usado. **Porta 1-way**
 
 ---
 
-### B18. A entrada SaaS do WhatsApp (`recebeEntrada`, F03) não marca a prévia nem o não-lido da conversa (F14, 18/09/2026)
+### B18. ~~A entrada SaaS do WhatsApp não marca a prévia nem o não-lido~~ — CONSERTADO na F18-T04
+**Consertado em 18/09/2026 (F18-T04):** `concluirEntrada` chama `fn_mark_conversation_message` para
+TODO canal, e o webchat deixou de chamá-la por conta própria. Registro original abaixo.
+
 A entrada herdada do WAHA (`lib/waha/ingest.ts:377`) chama `fn_mark_conversation_message`
 (prévia, `last_inbound_at`, `unread_count_for_assignee`); a SaaS (`src/channels/inbound.ts`,
 mock e WAHA SaaS) não — o inbox lista a conversa com "Sem mensagens" e sem contador.
@@ -350,7 +353,12 @@ a RPC em `concluirEntrada` para todo canal — muda o comportamento visível do 
 da F03/F05 (contadores), por isso fora da F14. Custo: baixo. Ganho: inbox honesto para o WhatsApp
 SaaS. **Risco enquanto durar:** o atendente não vê a prévia da última mensagem de WhatsApp.
 
-### B19. `pnpm lint:channels` reprova desde a F11 (`app/actions/onboarding/conectarCanalMock.ts` nomeia o provider)
+### B19. ~~`pnpm lint:channels` reprova desde a F11~~ — CONSERTADO na F18-T04
+**Consertado em 18/09/2026 (F18-T04):** a conexão de teste virou `src/channels/conexao-de-teste.ts`
+(dentro da fronteira, onde nomear transporte é permitido) e a action ficou só com o que é do wizard.
+A régua entrou no gate (`step lint-channels`, ADR-041 §4): régua vermelha que ninguém roda é régua
+que não existe. Registro original abaixo.
+
 `scripts/lint-channels.ts` (doutrina restricao-de-canal, invariante 1) reprova o arquivo do
 wizard mock da F11; o gate não roda esse lint (`gov:verify` sim), então passou despercebido
 por quatro fases. Conserto: pedir o adapter/capability em vez de nomear `mock`/`waha` — ou

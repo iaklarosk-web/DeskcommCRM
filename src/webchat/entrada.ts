@@ -85,10 +85,8 @@ export async function receberMensagemDoVisitante(
         return { ok: true, entrada: { status: "duplicado", provider_message_id: mensagem.client_message_id } } as const;
       }
       // A prévia, o "última entrada" e o não-lido da conversa — o que o inbox
-      // lista. A entrada do WhatsApp herdada (`lib/waha/ingest.ts`) chama a
-      // mesma RPC; a SaaS (`recebeEntrada`, F03) não — achado da F14, registrado
-      // na VARREDURA (§B18), fora desta fase.
-      await db.query(`select public.fn_mark_conversation_message($1::uuid, 'inbound', $2::text, now())`, [conversationId, corpo.slice(0, 120)]);
+      // lista. Desde a F18-T04 quem chama a RPC é `concluirEntrada`, para todo
+      // canal (§B18) — aqui não é mais preciso chamá-la.
       incrementCounter("webchat_message_received", {});
       const entrada = await concluirEntrada(db, ctx, {
         provider: "webchat",

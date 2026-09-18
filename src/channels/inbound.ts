@@ -386,6 +386,23 @@ export async function concluirEntrada(
     ).rows[0]?.channel_session_id ?? null;
   await db.query(`select public.fn_service_inbound($1::uuid)`, [messageId]);
 
+  // F18-T04 (§B18): a prévia e o não-lido da conversa, para TODO canal.
+  //
+  // A entrada herdada do WhatsApp (`lib/waha/ingest.ts`) sempre chamou esta
+  // RPC; a SaaS não — e o efeito era um inbox que listava a conversa com "Sem
+  // mensagens" e sem contador, achado ao medir o chat do site no navegador
+  // (F14). O webchat passou a chamá-la na própria entrada; aqui ela passa a
+  // valer para todos, que é onde deveria estar desde a F03.
+  //
+  // O corpo sai da mensagem GRAVADA (não do payload do provider): é uma fonte
+  // só, e é exatamente o texto que o inbox mostra.
+  await db.query(
+    `select public.fn_mark_conversation_message($1::uuid, 'inbound', left(coalesce(m.body, ''), 120), now())
+       from public.messages m
+      where m.id = $2::uuid and m.organization_id = $3::uuid`,
+    [conversationId, messageId, ctx.organization_id],
+  );
+
   // ─── A fronteira herdada precede a máquina D16 ────────────────────────
   //
   // `fn_service_inbound` desiste em silêncio quando a mensagem chega
