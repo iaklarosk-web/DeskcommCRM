@@ -302,11 +302,17 @@ describe("F14-T01 — identificação → contato e conversa; mensagem → mesmo
     medidas.ai_replies_total += 1;
     expect(turno.status).toBe("respondido");
     expect(estado.chamadas).toBe(1);
-    const ciclo = await rodarCicloDeSaida({ pool, backoffMs: [0, 0] });
-    expect(ciclo.entregues).toBeGreaterThanOrEqual(1);
-    const saida = await pool.query<{ status: string; provider: string; external_id: string | null; sent_via: string }>(
+    // A fila de saída é do banco inteiro (as outras suítes do gate deixam jobs
+    // nela): roda ciclos até a NOSSA mensagem sair, com lote largo.
+    const lerSaida = () => pool.query<{ status: string; provider: string; external_id: string | null; sent_via: string }>(
       `select status, provider, external_id, sent_via from public.messages where conversation_id=$1 and direction='outbound' order by created_at desc limit 1`,
       [s.ident.conversation_id]);
+    let entregues = 0;
+    for (let ciclo = 0; ciclo < 8 && (await lerSaida()).rows[0]?.status !== "sent"; ciclo += 1) {
+      entregues += (await rodarCicloDeSaida({ pool, lote: 50, backoffMs: [0, 0] })).entregues;
+    }
+    expect(entregues).toBeGreaterThanOrEqual(1);
+    const saida = await lerSaida();
     expect(saida.rows[0]).toMatchObject({ status: "sent", provider: "webchat", sent_via: "ai" });
     expect(saida.rows[0]?.external_id).toMatch(/^webchat:[0-9a-f]{32}$/);
     medidas.ai_replies += saida.rows[0]?.status === "sent" ? 1 : 0;

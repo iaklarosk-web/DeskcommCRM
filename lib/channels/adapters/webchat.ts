@@ -16,7 +16,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import type { ChannelAdapter, OutboundEnvelope, RecipientInput } from "../types";
+import type { ChannelAdapter, ChannelHealth, ChannelTenantScope, OutboundEnvelope, RecipientInput } from "../types";
 
 export const WEBCHAT_RECIPIENT = "webchat";
 
@@ -33,6 +33,14 @@ export const webchatAdapter: ChannelAdapter = {
     // Sem transporte: a linha já está em `messages`; o id externo é o carimbo
     // desta entrega, único por chamada, para o chamador marcar `sent`.
     return { externalId: `webchat:${randomUUID()}` };
+  },
+  /**
+   * O cron de saúde pergunta a TODO adapter registrado (a régua
+   * `saude-dos-canais-oficiais` cobra); este canal não tem transporte que caia:
+   * a "sessão" é a linha por organização, e ela está de pé enquanto existir.
+   */
+  async checkHealth(_input: ChannelTenantScope & { sessionRef: string }): Promise<ChannelHealth> {
+    return { reachable: true, status: "WORKING", detail: null };
   },
   codes: {
     notConfigured: "webchat_not_configured",

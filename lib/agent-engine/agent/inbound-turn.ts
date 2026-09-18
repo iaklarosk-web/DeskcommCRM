@@ -1362,6 +1362,20 @@ export async function runAgentTurn(
  *     planejamento: não abrem o WhatsApp de ninguém.
  *   * `operator_turn` — retaguarda (mexe no funil), nunca fala com o lead.
  */
+/**
+ * F14 (ADR-038): o canal desta sessão tem o visitante NA PÁGINA (`liveVisitor`,
+ * só o chat do site)? Falha de leitura = `false`: na dúvida a janela de cortesia
+ * fica armada — o mesmo fail-closed de `loadChannelKnobs`, que devolve os
+ * defaults quando não consegue ler.
+ */
+async function visitanteNaPagina(pool: pg.Pool, tenantId: string, channelSessionId: string): Promise<boolean> {
+  try {
+    return capabilitiesOf(await loadChannelProvider(pool, tenantId, channelSessionId)).liveVisitor;
+  } catch {
+    return false;
+  }
+}
+
 function turnoVaiFalarComOLead(job: JobRow): boolean {
   if (job.kind === 'inbound_turn' || job.kind === 'case_reply_turn') return true;
   if (job.kind !== 'followup_turn') return false;
@@ -1501,7 +1515,7 @@ async function executarTurnoDoAgente(
   // F14 (ADR-038, doutrina inv. 3 — exceção `liveVisitor`): no chat do site o
   // visitante está na página; a janela não tem a quem proteger e o turno NÃO
   // adia. A mesma capability desarma só a janela no gate de envio.
-  if (!preview && turnoVaiFalarComOLead(liveJob()) && !capabilitiesOf(await loadChannelProvider(pool, tenantId, input.channelSessionId)).liveVisitor) {
+  if (!preview && turnoVaiFalarComOLead(liveJob()) && !(await visitanteNaPagina(pool, tenantId, input.channelSessionId))) {
     const { knobs } = await loadChannelKnobs(pool, tenantId, input.channelSessionId, runLog);
     const agora = clock();
     if (!janelaDeEnvioAberta(agora, knobs)) {

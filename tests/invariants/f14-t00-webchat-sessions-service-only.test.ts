@@ -157,6 +157,27 @@ describe("F14-T00 — webchat_sessions é service_only (D35)", () => {
   });
 });
 
+describe("F14-T05 — a sessão do visitante está na cascata da LGPD (9031)", () => {
+  it("anonimizar o contato apaga nome, contato, user-agent e URL da sessão; o carimbo e o hash do IP ficam", () => {
+    const CONTATO = "f1400000-6000-4000-8000-00000000000a";
+    const SESSAO = "f1400000-a000-4000-8000-00000000000a";
+    const saida = sql(`
+      begin;
+      set local role service_role;
+      insert into public.contacts (id, organization_id, name, email) values ('${CONTATO}','${ORG}','Visitante LGPD','lgpd@ficticio.test');
+      insert into public.webchat_sessions (id, organization_id, token_hash, ip_hash, contact_id, visitor_name, visitor_contact, user_agent, page_url, identified_at)
+        values ('${SESSAO}','${ORG}','${"e".repeat(64)}','${"c".repeat(64)}','${CONTATO}','Visitante LGPD','lgpd@ficticio.test','Mozilla/5.0','https://site.ficticio.test/p', now());
+      update public.contacts set is_anonymized = true, anonymized_at = now() where id = '${CONTATO}';
+      select 'apagados=' || ((visitor_name is null)::int + (visitor_contact is null)::int + (user_agent is null)::int + (page_url is null)::int)::text || '/4'
+             || ' carimbo=' || (identified_at is not null)::int::text || '/1 ip_hash=' || (ip_hash = '${"c".repeat(64)}')::int::text || '/1'
+        from public.webchat_sessions where id = '${SESSAO}';
+      rollback;
+    `);
+    expect(saida).toContain("apagados=4/4 carimbo=1/1 ip_hash=1/1");
+    console.info("f14-t05-lgpd: redacted_fields=4/4 identified_at_kept=1/1 ip_hash_kept=1/1");
+  });
+});
+
 describe("F14-T00 — os quatro CHECKs de canal aceitam webchat (9030)", () => {
   it("channel_sessions, channel_accounts, conversations e messages aceitam provider/channel webchat; prosa continua recusada", () => {
     const SESSAO = "f1400000-5000-4000-8000-000000000001";
