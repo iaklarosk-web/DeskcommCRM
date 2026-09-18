@@ -37,6 +37,11 @@ export {
   type EntradaDoContexto,
 } from "./contexto";
 export {
+  motorDaOrganizacao,
+  textoDaMensagemDeEntrada,
+  type MotorDeIa,
+} from "./despacho";
+export {
   declaradasForaDoCatalogo,
   herancaDoAgentePublicado,
   type HerancaDoAgente,

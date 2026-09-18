@@ -27,6 +27,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createFakeRegistry } from "@/lib/agent-engine/edge/llm/providers";
 import {
   comoTextoDoProvedor,
+  motorDaOrganizacao,
+  textoDaMensagemDeEntrada,
   declaradasForaDoCatalogo,
   herancaDoAgentePublicado,
   instrucoesDoSistema,
@@ -84,6 +86,9 @@ const ctxAdminA: TenantCtx = { organization_id: ORG_A, source: "session", user_i
 const ctxJobA: TenantCtx = { organization_id: ORG_A, source: "job" };
 
 const medidas = {
+  saas_turns: 0,
+  legacy_turns: 0,
+  volta_atras: 0,
   heranca_prompt: 0,
   heranca_acervo: 0,
   fora_do_catalogo_negado: 0,
@@ -221,6 +226,59 @@ describe("F18-T00 — herança do agente publicado (objeção 2)", () => {
   });
 });
 
+describe("F18-T01 — o despacho escolhe o motor pela chave da organização", () => {
+  it("o padrão declarado é o motor novo, e `legacy` é volta atrás por organização", async () => {
+    expect(await motorDaOrganizacao(ctxJobA, { pool })).toBe("saas");
+
+    await setSetting(ctxAdminA, "ai.engine", "legacy", "tenant_admin", { pool });
+    expect(await motorDaOrganizacao(ctxJobA, { pool })).toBe("legacy");
+    medidas.legacy_turns += 1;
+
+    // Valor fora do vocabulário não pode significar "escolha o outro motor":
+    // o schema é a catraca e o padrão declarado é o que vale.
+    await pool.query(
+      `update public.tenant_settings set value=$1::jsonb where organization_id=$2 and key='ai.engine'`,
+      [JSON.stringify("vendaval"), ORG_A],
+    );
+    expect(await motorDaOrganizacao(ctxJobA, { pool })).toBe("saas");
+
+    await setSetting(ctxAdminA, "ai.engine", "saas", "tenant_admin", { pool });
+    medidas.volta_atras += 1;
+    console.info("f18-t01-despacho: padrao_saas=1/1 legacy=1/1 valor_estranho_cai_no_padrao=1/1 volta_atras=1/1");
+  });
+
+  it("o texto do turno sai da MENSAGEM gravada, e mensagem de saída não vira turno", async () => {
+    const entrada = randomUUID();
+    const canal = (
+      await pool.query<{ channel_session_id: string }>(
+        `select channel_session_id from public.conversations where organization_id=$1 and id=$2`,
+        [ORG_A, CONVERSA_A],
+      )
+    ).rows[0]?.channel_session_id;
+    await pool.query(
+      `insert into public.messages
+         (id, organization_id, conversation_id, channel_session_id, contact_id,
+          type, direction, status, body, sent_via)
+       values ($1,$2,$3,$4,$5,'text','inbound','received','quero remarcar minha consulta','crm')`,
+      [entrada, ORG_A, CONVERSA_A, canal, CONTATO_A],
+    );
+    expect(await textoDaMensagemDeEntrada(pool, ORG_A, entrada)).toBe("quero remarcar minha consulta");
+
+    const saida = randomUUID();
+    await pool.query(
+      `insert into public.messages
+         (id, organization_id, conversation_id, channel_session_id, contact_id,
+          type, direction, status, body, sent_via)
+       values ($1,$2,$3,$4,$5,'text','outbound','sent','posso te ajudar?','crm')`,
+      [saida, ORG_A, CONVERSA_A, canal, CONTATO_A],
+    );
+    expect(await textoDaMensagemDeEntrada(pool, ORG_A, saida)).toBeNull();
+    expect(await textoDaMensagemDeEntrada(pool, ORG_A, randomUUID())).toBeNull();
+    medidas.saas_turns += 1;
+    console.info("f18-t01-despacho: texto_da_entrada=1/1 saida_nao_vira_turno=1/1 inexistente=1/1");
+  });
+});
+
 describe("F18-T00 — ferramenta declarada e não migrada (objeção 1)", () => {
   it("o inventário sabe dizer o que a versão declara e o catálogo não tem", async () => {
     const heranca = await herancaDoAgentePublicado(ctxJobA, { pool });
@@ -252,7 +310,8 @@ describe("F18-T00 — ferramenta declarada e não migrada (objeção 1)", () => 
     medidas.fora_do_catalogo_negado += 1;
 
     const linha =
-      `engine: heranca_prompt=${medidas.heranca_prompt}/1 heranca_acervo=${medidas.heranca_acervo}/1 ` +
+      `engine: saas_turns=${medidas.saas_turns} legacy_turns=${medidas.legacy_turns} volta_atras=${medidas.volta_atras}/1 ` +
+      `heranca_prompt=${medidas.heranca_prompt}/1 heranca_acervo=${medidas.heranca_acervo}/1 ` +
       `fora_do_catalogo_negado=${medidas.fora_do_catalogo_negado}/${medidas.fora_do_catalogo_total} ` +
       `inventadas_descartadas=${medidas.inventadas_descartadas}/1`;
     console.info(linha);
