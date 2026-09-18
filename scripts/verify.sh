@@ -45,6 +45,7 @@ case "$PHASE" in
   # ADR-039: F14 (chat do site, agenda, canais) fecha DEPOIS da F15 e acrescenta
   # a spec f14-canais-e-agenda (+7 testes) ao inventário de F15; mede `channels:`.
   F14) CLOSED_E2E=1; EXPECTED_SPECS=15; REPLICABILITY_TENANTS="deka,demo2" ;;
+  F18) CLOSED_E2E=1; EXPECTED_SPECS=16; REPLICABILITY_TENANTS="deka,demo2" ;;
   *)   CLOSED_E2E=0; EXPECTED_SPECS=0 ;;
 esac
 REPLICABILITY_TENANTS="${REPLICABILITY_TENANTS:-}"

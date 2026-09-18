@@ -21,6 +21,7 @@ const {
   EXPECTED_F13_E2E_TESTS,
   EXPECTED_F15_E2E_TESTS,
   EXPECTED_F14_E2E_TESTS,
+  EXPECTED_F18_E2E_TESTS,
   REQUIRED_F02_E2E_SPECS,
   REQUIRED_F03_E2E_SPECS,
   REQUIRED_F04_E2E_SPECS,
@@ -31,6 +32,7 @@ const {
   REQUIRED_F13_E2E_SPECS,
   REQUIRED_F15_E2E_SPECS,
   REQUIRED_F14_E2E_SPECS,
+  REQUIRED_F18_E2E_SPECS,
   compareF02Inputs,
   snapshotF02Inputs,
   verifyF02Sandbox,
@@ -1322,4 +1324,82 @@ for (const [rotulo, linha] of [
   const result = evaluate(data);
   assert.equal(result.exitCode, 1, rotulo);
   assert.ok(result.errors.some((e) => /^channels fora do contrato/.test(e)), result.errors.join("\n"));
+});
+
+// ─── ADR-041 — verify.sh v1.11: F18 (um motor de IA só) mede `engine:` ───────
+
+const stateF18 = stateF14.replace("current_phase: F14", "current_phase: F18")
+  .replace("| F14 | Chat do site e agenda | in_progress |", "| F14 | Chat do site e agenda | done(verify=2026-09-18 6b493892) |\n| F18 | Um motor de IA só | in_progress |");
+const F18_SPEC_COUNTS = [...F14_SPEC_COUNTS, 7];
+const ENGINE_OK = "engine: saas_turns=4 legacy_turns=1 volta_atras=1/1 tools_migradas=13/13 fora_do_catalogo_negado=1/1 heranca_prompt=1/1 heranca_acervo=1/1 policy_approve_pendura=1/1 limite_diario_nega=1/1 cancel_allow=1/1 cancel_passado_negado=1/1 cancel_auditado=1/1 auditoria=6/6 roles_denied=2/2";
+function f18Input() {
+  const data = fasePorTenant("F12", stateF18, REQUIRED_F18_E2E_SPECS, F18_SPEC_COUNTS, EXPECTED_F18_E2E_TESTS);
+  data.metrics.crm = CRM_OK;
+  data.metrics.rbac = RBAC_4;
+  data.metrics.autonomy = AUTONOMY_OK;
+  data.metrics.channels = CHANNELS_OK;
+  data.metrics.engine = ENGINE_OK;
+  return data;
+}
+
+test("F18 is gated: inventory of 16 specs (79 tests) per tenant, with crm, autonomy, channels and engine measured; in staging it prints READY (staging)", () => {
+  const data = f18Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F18)");
+  const bloco = render(data, result);
+  assert.match(bloco, /e2e_scope: F18-required passed=79\/79 specs=16\/16/);
+  assert.match(bloco, /engine: saas_turns=4 legacy_turns=1 volta_atras=1\/1 tools_migradas=13\/13/);
+  const staging = f18Input();
+  staging.sandbox = stagingEvidence();
+  assert.equal(evaluate(staging).status, "READY (staging)");
+});
+
+test("missing engine line makes otherwise green F18 fail", () => {
+  const data = f18Input();
+  delete data.metrics.engine;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.some((e) => /Métrica obrigatória ausente: engine/.test(e)), result.errors.join("\n"));
+});
+
+test("F18 still requires channels, autonomy and crm (it closes after all three)", () => {
+  for (const campo of ["channels", "autonomy", "crm"]) {
+    const data = f18Input();
+    delete data.metrics[campo];
+    assert.ok(
+      evaluate(data).errors.some((e) => new RegExp(`Métrica obrigatória ausente: ${campo}`).test(e)),
+      campo,
+    );
+  }
+});
+
+test("engine line stays pending before F18 (F14) and is not required there", () => {
+  const data = f14Input();
+  assert.deepEqual(evaluate(data).errors, []);
+  assert.match(render(data, evaluate(data)), /engine: saas_turns=pending/);
+});
+
+for (const [rotulo, linha] of [
+  ["nenhum turno pelo motor novo", ENGINE_OK.replace("saas_turns=4", "saas_turns=0")],
+  ["volta atrás não medida", ENGINE_OK.replace("legacy_turns=1", "legacy_turns=0")],
+  ["volta atrás declarada e não provada", ENGINE_OK.replace("volta_atras=1/1", "volta_atras=0/1")],
+  ["ferramenta migrada a menos", ENGINE_OK.replace("tools_migradas=13/13", "tools_migradas=12/13")],
+  ["denominador das ferramentas encolhido", ENGINE_OK.replace("tools_migradas=13/13", "tools_migradas=12/12")],
+  ["ferramenta fora do catálogo passou em silêncio", ENGINE_OK.replace("fora_do_catalogo_negado=1/1", "fora_do_catalogo_negado=0/1")],
+  ["prompt da versão não herdado", ENGINE_OK.replace("heranca_prompt=1/1", "heranca_prompt=0/1")],
+  ["acervo da versão não respeitado", ENGINE_OK.replace("heranca_acervo=1/1", "heranca_acervo=0/1")],
+  ["approve não pendurou", ENGINE_OK.replace("policy_approve_pendura=1/1", "policy_approve_pendura=0/1")],
+  ["teto diário não negou", ENGINE_OK.replace("limite_diario_nega=1/1", "limite_diario_nega=0/1")],
+  ["cancelamento não executou sozinho", ENGINE_OK.replace("cancel_allow=1/1", "cancel_allow=0/1")],
+  ["cancelou compromisso passado", ENGINE_OK.replace("cancel_passado_negado=1/1", "cancel_passado_negado=0/1")],
+  ["cancelamento sem auditoria", ENGINE_OK.replace("cancel_auditado=1/1", "cancel_auditado=0/1")],
+  ["execução sem auditoria", ENGINE_OK.replace("auditoria=6/6", "auditoria=5/6")],
+  ["papel permitido onde nega", ENGINE_OK.replace("roles_denied=2/2", "roles_denied=1/2")],
+]) test(`F18 rejects an engine line out of contract: ${rotulo}`, () => {
+  const data = f18Input();
+  data.metrics.engine = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, rotulo);
+  assert.ok(result.errors.some((e) => /^engine fora do contrato/.test(e)), result.errors.join("\n"));
 });

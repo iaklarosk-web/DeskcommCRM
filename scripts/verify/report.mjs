@@ -18,7 +18,8 @@ const integer = (n) => Number.isSafeInteger(n) && n >= 0;
 // novo no bloco — a produção é medida pela linha `prod:` FORA dele (ADR-032 §4).
 // ADR-037: F15 (automação/autonomia) fecha DEPOIS da F13 e mede a linha `autonomy:`.
 // ADR-039: F14 (chat do site/agenda) fecha DEPOIS da F15 e mede a linha `channels:`.
-const GATED_PHASES = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F08", "F11", "F12", "F13", "F15", "F14"];
+// ADR-041: F18 (um motor de IA só) fecha DEPOIS da F14 e mede a linha `engine:`.
+const GATED_PHASES = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F08", "F11", "F12", "F13", "F15", "F14", "F18"];
 
 /** §8.3: cada campo passa a ser obrigatório a partir da fase que o cria. */
 const phaseNumber = (phase) => Number(phase.slice(1));
@@ -39,7 +40,7 @@ const requiresReplicability = (phase) => phaseNumber(phase) >= phaseNumber("F07"
 // ADR-037: a F15 fecha DEPOIS da F13 e mede `autonomy:`; ADR-039: a F14 fecha
 // DEPOIS da F15 e mede `channels:`. Fases fora da ordem escrita (F09, F10,
 // F16+) contam pelo número contra a ÚLTIMA fase da ordem.
-const CLOSING_ORDER = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F11", "F12", "F08", "F13", "F15", "F14"];
+const CLOSING_ORDER = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F11", "F12", "F08", "F13", "F15", "F14", "F18"];
 const ULTIMA_DA_ORDEM = CLOSING_ORDER[CLOSING_ORDER.length - 1];
 // Fase NA ordem escrita conta pela posição; fase FORA dela (F09, F10, F16+)
 // conta pelo número contra a última da ordem. As duas cláusulas não se somam:
@@ -53,6 +54,7 @@ const requiresBilling = (phase) => closesAtOrAfter(phase, "F12"); // MUTANT: bil
 const requiresCrm = (phase) => closesAtOrAfter(phase, "F13"); // MUTANT: crm-required
 const requiresAutonomy = (phase) => closesAtOrAfter(phase, "F15"); // MUTANT: autonomy-required
 const requiresChannels = (phase) => closesAtOrAfter(phase, "F14"); // MUTANT: channels-required
+const requiresEngine = (phase) => closesAtOrAfter(phase, "F18"); // MUTANT: engine-required
 // ADR-035 §3: a matriz D15 é propriedade da ÁRVORE — quatro papéis a partir
 // da F13 (ADR-034 §2 T02), medidos pela fase ativa, não pela fase pedida.
 const papeisEsperados = (phase) => (closesAtOrAfter(phase, "F13") ? 4 : 3);
@@ -375,6 +377,27 @@ export function evaluate(input) {
       errors.push("channels fora do contrato: exige webchat_sessions>=3, messages_in>=3, appointments>=2, identified/contacts_created/ai_replies/proposed >=1 (=denominador), ai_outside_window/handoff_queued/ip_limited/org_limited/flood_calls_capped/cross_org_denied/conflicts_blocked/revoked_blocked/tz_ok/approved/denied_by_policy =1/1, roles_denied>=2 (=denominador)");
     }
   }
+  // ADR-041 §2: QUEM respondeu (F18). `saas_turns`/`legacy_turns`/`volta_atras`
+  // medem o roteamento pela chave `ai.engine`; `heranca_*` são a objeção 2 do
+  // contraponto (o turno novo não troca a voz nem o acervo do agente
+  // publicado); `fora_do_catalogo_negado` é a objeção 1 (ferramenta declarada e
+  // não migrada vira handoff, nunca silêncio); `cancel_*` é a única ação de
+  // efeito externo que a IA executa sem aprovação humana (D56 e).
+  if (requiresEngine(context.phase)) {
+    const en = metric("engine", ["saas_turns", "legacy_turns", "volta_atras", "tools_migradas", "fora_do_catalogo_negado", "heranca_prompt", "heranca_acervo", "policy_approve_pendura", "limite_diario_nega", "cancel_allow", "cancel_passado_negado", "cancel_auditado", "auditoria", "roles_denied"]);
+    const den = (field) => {
+      const m = new RegExp(`\\b${field}=(\\d+)/(\\d+)`).exec(input.metrics.engine ?? "");
+      return m ? Number(m[2]) : null;
+    };
+    const exatos = ["volta_atras", "fora_do_catalogo_negado", "heranca_prompt", "heranca_acervo", "policy_approve_pendura", "limite_diario_nega", "cancel_allow", "cancel_passado_negado", "cancel_auditado"];
+    if (en && (en.saas_turns < 1 || en.legacy_turns < 1 ||
+        en.tools_migradas !== 13 || den("tools_migradas") !== 13 ||
+        exatos.some((f) => en[f] !== 1 || den(f) !== 1) ||
+        en.auditoria < 1 || en.auditoria !== den("auditoria") ||
+        en.roles_denied < 1 || en.roles_denied !== den("roles_denied"))) {
+      errors.push("engine fora do contrato: exige saas_turns>=1, legacy_turns>=1, tools_migradas=13/13, volta_atras/fora_do_catalogo_negado/heranca_prompt/heranca_acervo/policy_approve_pendura/limite_diario_nega/cancel_allow/cancel_passado_negado/cancel_auditado=1/1, auditoria=N/N (N>=1) e roles_denied=N/N (N>=1)");
+    }
+  }
   const clean = errors.length === 0;
   // ADR-028 §2: a partir de F06, o gate limpo rodado no ambiente `staging`
   // sai `READY (staging)`; no sandbox sai `READY (Fnn)` — prova de código.
@@ -499,6 +522,7 @@ export function render(input, result) {
     input.metrics.crm ?? "crm: fields_defined=pending values_rejected=pending values_preserved=pending queue_size=pending distributed=pending balanced=pending second_claim_rejected=pending history_types=pending orders_linked=pending cross_org_link_denied=pending report_indicators=pending roles_denied=pending",
     input.metrics.autonomy ?? "autonomy: policy_modes=pending ai_task_created=pending limit_hits=pending calls_after_limit=pending paused=pending resumed=pending handoffs=pending balanced=pending assignees_distinct=pending rules=pending runs=pending replays=pending duplicate_runs=pending outside_catalog_denied=pending reindexed=pending unchanged_skipped=pending sources_cited=pending roles_denied=pending",
     input.metrics.channels ?? "channels: webchat_sessions=pending identified=pending contacts_created=pending messages_in=pending ai_replies=pending ai_outside_window=pending handoff_queued=pending ip_limited=pending org_limited=pending flood_calls_capped=pending cross_org_denied=pending appointments=pending conflicts_blocked=pending revoked_blocked=pending tz_ok=pending proposed=pending approved=pending denied_by_policy=pending roles_denied=pending",
+    input.metrics.engine ?? "engine: saas_turns=pending legacy_turns=pending volta_atras=pending tools_migradas=pending fora_do_catalogo_negado=pending heranca_prompt=pending heranca_acervo=pending policy_approve_pendura=pending limite_diario_nega=pending cancel_allow=pending cancel_passado_negado=pending cancel_auditado=pending auditoria=pending roles_denied=pending",
     replicability,
     input.metrics.secrets ?? "secrets: pending",
     `tests_deleted=${input.testsDeleted ?? "pending"} tests_skipped=${count("skipped")} expected_failures=${count("expectedFailures")} tests_failed=${count("failed")} tests_pending=${count("pending")} mutants_killed=${input.mutants.killed ?? "pending"}/${input.mutants.total ?? "pending"}`,
