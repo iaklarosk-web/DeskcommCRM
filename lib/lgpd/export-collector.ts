@@ -170,6 +170,19 @@ export interface TaskRow {
  * zera — inclusive `remote_ip` e `user_agent`, que a LGPD trata como dado
  * pessoal e que a organização guarda a respeito do titular.
  */
+/** F14: a sessão do visitante do chat do site — o que a 9031 redige, o titular recebe (Art. 18 II). */
+export interface WebchatSessionRow {
+  id: string;
+  conversation_id: string | null;
+  visitor_name: string | null;
+  visitor_contact: string | null;
+  page_url: string | null;
+  user_agent: string | null;
+  identified_at: string | null;
+  created_at: string;
+  last_seen_at: string;
+}
+
 export interface CaptureRow {
   id: string;
   source_name: string | null;
@@ -250,6 +263,8 @@ export interface ExportPayload {
   appointments: AppointmentRow[];
   tasks: TaskRow[];
   webhook_captures: CaptureRow[];
+  /** F14 (9031): sessões do chat do site do titular. */
+  webchat_sessions: WebchatSessionRow[];
   audit_log_extract: AuditRow[];
   meeting_deliveries: MeetingDeliveryRow[];
   appointment_notices: AppointmentNoticeRow[];
@@ -655,6 +670,30 @@ export async function collectExportData(
     }
   }
 
+  // Chat do site (F14, migration 9031) — a MESMA classe: o trigger
+  // `trg_redigir_sessoes_do_site_ao_anonimizar` apaga nome, contato, user-agent e
+  // URL da sessão do visitante; o que se apaga a pedido do titular é o que se
+  // entrega a pedido dele. Achado pelo gate f14-gate-02 (régua
+  // `lgpd-exporta-o-que-redige`), não por planejamento — registro honesto.
+  let webchat_sessions: WebchatSessionRow[] = [];
+  if (contactId) {
+    const { data, error } = await admin
+      .from("webchat_sessions")
+      .select("id, conversation_id, visitor_name, visitor_contact, page_url, user_agent, identified_at, created_at, last_seen_at")
+      .eq("organization_id", organizationId)
+      .eq("contact_id", contactId)
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (error) {
+      logger.warn("[lgpd-export-worker] webchat sessions load failed", {
+        request_id: requestId,
+        error: error.message,
+      });
+    } else if (data) {
+      webchat_sessions = data as WebchatSessionRow[];
+    }
+  }
+
   // Audit log extract (best-effort: rows where metadata.contact_id matches).
   let audit_log_extract: AuditRow[] = [];
   if (contactId) {
@@ -810,6 +849,7 @@ export async function collectExportData(
     appointments,
     tasks,
     webhook_captures,
+    webchat_sessions,
     audit_log_extract,
     reply_drafts,
     meeting_deliveries,
@@ -848,6 +888,7 @@ function emptyPayload(
     appointments: [],
     tasks: [],
     webhook_captures: [],
+    webchat_sessions: [],
     audit_log_extract: [],
     meeting_deliveries: [],
     appointment_notices: [],

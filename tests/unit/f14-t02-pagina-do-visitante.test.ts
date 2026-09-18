@@ -62,3 +62,14 @@ describe("F14-T02 — página do visitante", () => {
     expect(isPublicPath("/embed/loja-x.html")).toBe(false);
   });
 });
+
+describe("F14 — o chat do site não é dublado pelo WHATSAPP_MODE=mock", () => {
+  it("em modo mock, waha vira mock e webchat continua webchat (não há transporte a dublar)", async () => {
+    const { getSaasAdapter } = await import("@/src/channels");
+    expect(getSaasAdapter("waha", { modo: "mock" }).provider).toBe("mock");
+    expect(getSaasAdapter(undefined, { modo: "mock" }).provider).toBe("mock");
+    expect(getSaasAdapter("webchat", { modo: "mock" }).provider).toBe("webchat");
+    expect(getSaasAdapter("webchat", { modo: "real" }).provider).toBe("webchat");
+    console.info("f14-adapter: mock_keeps_whatsapp=2/2 webchat_never_mocked=2/2");
+  });
+});

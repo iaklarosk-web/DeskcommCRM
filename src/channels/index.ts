@@ -48,9 +48,13 @@ export function getSaasAdapter(
   deps: GetSaasAdapterDeps = {},
 ): SaasChannelAdapter {
   const matriz = { ...ADAPTERS, ...(deps.adapters ?? {}) };
-  if (modoMockLigado(deps.modo)) return matriz.mock;
-
   const pedido = provider ?? PROVIDER_PADRAO;
+  // `WHATSAPP_MODE=mock` dubla o TRANSPORTE do WhatsApp (D12). O chat do site
+  // (F14) não tem transporte: a entrega é a linha que a página do visitante
+  // lê, e dublá-la mandaria a resposta para o `mock_outbox` em vez de para a
+  // pessoa que está na página. O mock continua valendo para todo o resto.
+  if (modoMockLigado(deps.modo) && pedido !== "webchat") return matriz.mock;
+
   if (!SAAS_CHANNEL_PROVIDERS.includes(pedido)) {
     throw new Error(`unknown_saas_channel_provider: ${String(pedido)}`);
   }
