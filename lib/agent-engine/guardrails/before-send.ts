@@ -561,13 +561,14 @@ export const disclosureGate: Gate = {
 export const pacingGate: Gate = {
   name: 'pacing',
   evaluate: (ctx) => {
-    const { banRisk } = capabilitiesOf(ctx.provider);
+    const { banRisk, liveVisitor } = capabilitiesOf(ctx.provider);
     const decision = decidePacing({
       now: ctx.now,
       knobs: ctx.pacing.knobs,
       state: ctx.pacing.state,
       crmDailyLimit: ctx.pacing.crmDailyLimit,
       banRisk,
+      liveVisitor,
       rng: ctx.pacing.rng,
     });
     if (!decision.allow) {

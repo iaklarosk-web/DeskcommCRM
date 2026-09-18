@@ -156,13 +156,6 @@ export async function enviarMensagem(
       resourceId: pedido.conversation_id,
     };
   }
-  if (conversa.phone_number === null || conversa.phone_number.length === 0) {
-    return {
-      ok: false,
-      reason: "contact_without_phone",
-      resourceId: pedido.conversation_id,
-    };
-  }
   if (conversa.account_key === null || conversa.provider === null) {
     // Fail-closed (G-27): sem conta de canal ativa não há por onde sair, e
     // inventar um provider default mandaria a mensagem pela sessão errada.
@@ -174,6 +167,17 @@ export async function enviarMensagem(
   }
 
   const provider = conversa.provider as SaasChannelProvider;
+  // No chat do site (F14, ADR-038) não há E.164: quem endereça é a conversa, e
+  // o visitante pode ter se identificado só por e-mail. O telefone continua
+  // obrigatório em todo canal que chega ao celular da pessoa.
+  const semTelefone = conversa.phone_number === null || conversa.phone_number.length === 0;
+  if (provider !== "webchat" && semTelefone) {
+    return {
+      ok: false,
+      reason: "contact_without_phone",
+      resourceId: pedido.conversation_id,
+    };
+  }
 
   // A mensagem nasce `queued` — o vocabulário herdado de `messages.status` já
   // tem o valor (baseline.sql:1665); F03 não inventa estado nenhum.
@@ -214,7 +218,7 @@ export async function enviarMensagem(
       organization_id: ctx.organization_id,
       conversation_id: pedido.conversation_id,
       message_id: gravada,
-      to_e164: conversa.phone_number,
+      to_e164: conversa.phone_number ?? "",
       provider,
       account_key: conversa.account_key,
       idempotency_key: idempotencyKey,

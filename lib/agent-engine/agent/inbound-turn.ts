@@ -1498,7 +1498,10 @@ async function executarTurnoDoAgente(
   // Só a JANELA adia. Cap diário e warm-up continuam com o gate de envio: eles
   // dependem de quanto já saiu hoje, e antecipá-los aqui adiaria turno que, na
   // hora do envio, teria passado.
-  if (!preview && turnoVaiFalarComOLead(liveJob())) {
+  // F14 (ADR-038, doutrina inv. 3 — exceção `liveVisitor`): no chat do site o
+  // visitante está na página; a janela não tem a quem proteger e o turno NÃO
+  // adia. A mesma capability desarma só a janela no gate de envio.
+  if (!preview && turnoVaiFalarComOLead(liveJob()) && !capabilitiesOf(await loadChannelProvider(pool, tenantId, input.channelSessionId)).liveVisitor) {
     const { knobs } = await loadChannelKnobs(pool, tenantId, input.channelSessionId, runLog);
     const agora = clock();
     if (!janelaDeEnvioAberta(agora, knobs)) {

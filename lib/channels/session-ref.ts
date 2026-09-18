@@ -14,7 +14,10 @@
 export type ChannelSessionRef =
   | { provider: "waha"; waha_session_name: string }
   | { provider: "meta_cloud"; meta_phone_number_id: string }
-  | { provider: "zernio"; zernio_account_id: string };
+  | { provider: "zernio"; zernio_account_id: string }
+  // F14: a chave da sessão do site vive em `waha_session_name` (`webchat:<org>`,
+  // coluna herdada reaproveitada — migration 9030).
+  | { provider: "webchat"; waha_session_name: string };
 
 /**
  * Colunas que um `select` do PostgREST precisa trazer para `resolveSessionRef`
@@ -35,5 +38,7 @@ export function resolveSessionRef(session: ChannelSessionRef): string {
     // endereça pelo id dele. Mandar o id da Meta aqui responde 404.
     case "zernio":
       return session.zernio_account_id;
+    case "webchat":
+      return session.waha_session_name;
   }
 }

@@ -20,10 +20,13 @@
  */
 import type { TenantCtx } from "@/src/tenant-context";
 
-export type SaasChannelProvider = "waha" | "mock";
+// `webchat` (F14, ADR-038): o chat do site — sem webhook de entrada (a entrada
+// é a rota pública, `src/webchat/entrada.ts`) e sem transporte de saída (a
+// mensagem "entregue" é a linha que a página do visitante lê).
+export type SaasChannelProvider = "waha" | "mock" | "webchat";
 
 /** Os provedores em forma de dado — o `getSaasAdapter` e as provas os contam. */
-export const SAAS_CHANNEL_PROVIDERS = ["waha", "mock"] as const satisfies readonly SaasChannelProvider[];
+export const SAAS_CHANNEL_PROVIDERS = ["waha", "mock", "webchat"] as const satisfies readonly SaasChannelProvider[];
 
 /**
  * O anexo como ele chega: um ponteiro e o MIME que o provedor declarou. Os bytes

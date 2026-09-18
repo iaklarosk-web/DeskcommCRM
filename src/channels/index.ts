@@ -11,6 +11,7 @@
  * não passa um argumento diferente.
  */
 import { mockAdapter } from "./mock";
+import { webchatSaasAdapter } from "./webchat";
 import { wahaSaasAdapter } from "./waha";
 import {
   SAAS_CHANNEL_PROVIDERS,
@@ -21,6 +22,7 @@ import {
 const ADAPTERS: Record<SaasChannelProvider, SaasChannelAdapter> = {
   waha: wahaSaasAdapter,
   mock: mockAdapter,
+  webchat: webchatSaasAdapter,
 };
 
 /** O provider assumido quando o chamador não diz qual. */
@@ -58,6 +60,7 @@ export function getSaasAdapter(
 }
 
 export { criarAdapterMock, idDeterministicoDoMock, mockAdapter } from "./mock";
+export { webchatSaasAdapter } from "./webchat";
 export { criarAdapterWahaSaas, wahaSaasAdapter, type MemoDeEnvio } from "./waha";
 export {
   CAMPOS_CATALOGADOS,

@@ -40,6 +40,14 @@ export const PUBLIC_PATHS: RegExp[] = [
   // qualquer sub-path futuro nascer público de carona.
   /^\/api\/v1\/agenda\/google\/callback$/,
   /^\/api\/v1\/integrations\/nuvemshop\/callback$/,
+  // CHAT DO SITE (F14, ADR-038): o visitante não tem cookie de sessão. A
+  // autoridade é o token da sessão do visitante, conferido DENTRO das rotas
+  // (`app/api/public/webchat/[slug]/_comum.ts`); a página e o script de embed
+  // são públicos por natureza — vivem no site do cliente. Ancorados: um
+  // sub-path novo de /chat ou /embed não nasce público de carona.
+  /^\/api\/public\/webchat\/[a-z0-9-]+\/(session|identify|messages)$/,
+  /^\/chat\/[a-z0-9-]+$/,
+  /^\/embed\/[a-z0-9-]+\.js$/,
   /^\/api\/internal\//,
   /^\/api\/mcp(\/.*)?$/,
   /^\/_next\//,
