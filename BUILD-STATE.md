@@ -4,7 +4,7 @@ head_commit: 10fde380   # commit de fechamento da F14; código VALIDADO pelo gat
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
 plan_version: "2.10 (2026-09-18); D38–D55; ADR-006…039"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
-current_phase: F14
+current_phase: F18
 next_task: F16-T00             # F14 (D55) FECHADA em 18/09/2026 (READY (staging), f14-gate-04 sobre 6b493892; produção com o código da F14; webchat_real:). Próxima construção só com o proprietário (D50 c): F16 / Stripe + padrão KN do /admin / F17 / unificar o turno de produção (§B8) — ver COMECE-AQUI no CRM-OS
 status: READY_STAGING          # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26); F14 fechada com READY (staging) em 6b493892 (bloco abaixo); F16+ aguarda o proprietário
 baseline_n0: 8997

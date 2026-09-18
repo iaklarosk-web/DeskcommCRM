@@ -1,0 +1,78 @@
+== F18 — um motor de IA só (ADR-040/041; D56) — evidência de construção, 18/09/2026 ==
+
+Branch feat/F18-motor-unico-de-ia a partir de a3d01f9b (HEAD da F14). Tasks T00–T05 (ADR-040 §5).
+Autorização: mensagem do proprietário de 18/09/2026, depois do fechamento da F14. Ele escolheu
+unificar os dois turnos de IA (§B8) entre F16 / F17 / Stripe / unificação, e escolheu o caminho A
+(o turno SaaS assume o despacho) — eu havia recomendado o B (levar a política ao motor herdado) e
+ele recusou, com o argumento de resolver agora. Quatro decisões em cards, brief com contraponto
+(3 objeções, todas viradas teste) e "Aprovo — comece". Depois pediu, em mensagem própria, que as
+ferramentas que ficassem de fora fossem ANOTADAS para entrar depois: é o inventário abaixo.
+
+== O que a medição na produção mudou no plano (antes de escrever código) ==
+- NENHUM agente publicado: duas versões em `draft` na organização kn-tecnologia, nenhum agente na
+  deka. Como `agenteAtende` exige published_version_id, o motor herdado não respondia a ninguém —
+  o §B8 era risco LATENTE, que viraria real na publicação do primeiro agente.
+- O agente que tem ferramentas declara 19 das 60 servidas pelo MCP (ai_agent_versions.tool_ids).
+- Tráfego real: 1 conversa e 1 mensagem de saída no banco inteiro (sem número de WhatsApp, D12-4).
+  Trocar o motor agora é o momento mais barato que vai existir: não há cliente no meio.
+- A herança (prompt + acervo da versão publicada) é LIGAÇÃO, não reescrita: `buscar()` já aceitava
+  escopo de fontes e o contexto já injetava persona. A objeção 2 deixou de ameaçar o tamanho da fase.
+
+== Inventário (o que o proprietário pediu para ficar anotado) ==
+CRM-OS/docs/f18/FERRAMENTAS-MCP-INVENTARIO-20260918.md — as 60 ferramentas `crm_*` com o que cada
+uma faz e o arquivo onde o herdado a implementa: 13 migradas, 6 já cobertas pelo catálogo, 41 na
+FILA DE ESPERA. A fila é honesta por construção: ferramenta declarada por um agente e não migrada
+vira handoff `tool_missing` com o nome dela no dossiê — nunca silêncio (objeção 1).
+
+== Objeção 1 (fail-closed da ferramenta que falta) ==
+Medida na integração e por mutante: o modelo pede `crm_add_case_note` (declarada pela versão
+publicada, ausente do catálogo) → handoff/tool_missing com `pending_action` = o nome da ferramenta.
+Nome INVENTADO pelo modelo continua descartado e contado — inventar não é falta de produto.
+Migration 9032 abre o nono motivo no CHECK; mutante 79 mata a fila vazia.
+
+== Objeção 2 (herança do agente publicado) ==
+Com `ai.engine=saas` e versão publicada, o contexto usa o `system_prompt` DAQUELA versão (vence o
+`ai.system_prompt` da organização) e restringe o acervo aos `knowledge_source_ids` dela. Medido
+com banco de verdade: `heranca_prompt=1/1 heranca_acervo=1/1`. Com `legacy`, nada disso é lido.
+
+== Objeção 3 (sem número, o canal que motivou o §B8 não é provado) ==
+Aceita e declarada: WhatsApp real continua NOT VALIDATED (real). A fase é provada no chat do site e
+na entrada simulada; o motor unificado no canal que motivou o §B8 depende do número (D12-4).
+
+== Commits ==
+fe0964a4 T00 parte 1: ADR-040/041, D56
+b22400e3 T00 parte 2: herança, fail-closed (tool_missing, migration 9032), chave ai.engine
+7ada269b T00 parte 3: verify v1.11 (16 specs, 79 testes), contrato da linha engine:, 19 casos, mutante 77
+87969051 T01: o despacho escolhe o motor pela chave da organização (saas padrão, legacy volta atrás)
+67a18447 T02/T03: as 14 ações no catálogo (28), fachadas src/crm/funil, src/agenda/leitura, src/crm/proposta
+f9b1cc28 T03: teto diário medido no caminho novo; tool inventada segue descartada
+b27d36cb T04: §B18 (prévia para todo canal) e §B19 (lint:channels verde e no gate)
+8cc9bb20 T05 parte 1: as três decisões puras e os mutantes 78–80
+a938a27b T05 parte 2: motor na rota e na tela de autonomia, spec de navegador, workflow
+b75e75d0 T05 parte 3: apêndice 9032 antes da guarda que o verifica; spec 7/7 no staging; smoke passo 9
+
+== Gate ==
+__GATE__
+
+== Linhas fora do bloco (BUILD-STATE) ==
+__FORA__
+
+== Achados registrados nesta fase ==
+- §B18 e §B19 FECHADOS (T04): a prévia da conversa passa a valer para todo canal, e a régua de
+  canal voltou ao gate (`step lint-channels`) depois de quatro fases vermelha sem ninguém rodar.
+- Lição nova (medida no staging): a lição 26 da F14 tem uma segunda ponta — não basta reconstruir a
+  constraint em bloco único; o bloco precisa vir ANTES da guarda que a verifica. O apêndice 9032
+  estava no fim do arquivo e a guarda `do $f05_t01_fim$` reprovava o baseline inteiro no banco que
+  ATUALIZA ("handoffs_reason_check não aceita o motivo tool_missing").
+- Ação que PENDURA precisa de conversa: `execute()` recusa `by_risk` sem `conversation_id`
+  (`conversation_required_for_confirmation`). As três escritas de funil ganharam o campo; sem
+  conversa (automação), a organização precisa declarar `allow` na política.
+- `crm_leads_owner_kind_coherence`: lead criado pela IA nasce SEM dono — inventar um dono ao criar
+  daria a oportunidade a quem não pediu.
+
+== O que NÃO foi verificado (fica em FINAL-VALIDATION §3) ==
+WhatsApp real com o motor novo (sem número); a IA escolhendo a ferramenta a partir do TEXTO (o dublê
+do provedor não decide — o que se mede é execute() → política → fachada); as 41 ferramentas da fila
+de espera (por desenho: quem precisar delas terá handoff nomeado, não silêncio); telas novas no
+navegador HUMANO (o seletor de motor foi provado por Playwright, não por olho); a conversão de uma
+organização REAL de `legacy` para `saas` com cliente em atendimento.
