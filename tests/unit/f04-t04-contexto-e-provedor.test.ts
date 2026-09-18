@@ -292,9 +292,9 @@ describe("F04-T05 — limiar de confiança e fora da base", () => {
 
 describe("F04-T05 — tool_call fora da lista é descartada e contada (§5.9)", () => {
   it("só os nomes de `toolsFor(ctx,\"ai\")` sobrevivem à triagem", () => {
-    // Arrange — as nove saem do catálogo, em tempo de teste.
+    // Arrange — as dez (nove de D18 + schedule_appointment, F14) saem do catálogo, em tempo de teste.
     const tools = toolsFor({}, "ai");
-    expect(tools.length, "o catálogo deixou de devolver nove tools de IA").toBe(9);
+    expect(tools.length, "o catálogo deixou de devolver dez tools de IA").toBe(10);
 
     // Act
     const triagem = triarToolCalls(

@@ -30,6 +30,7 @@ const DEFAULTS_DECLARADOS: Record<string, "allow" | "approve" | "block" | "trans
   resume_ai: "block", // só humana (D34): a IA não devolve a conversa a si mesma
   export_customer_data: "block",
   assign_owner: "block", // automação e humano (F15-T04): a IA não escolhe quem vende
+  schedule_appointment: "approve", // F14-T04 (D55 e): medium + by_risk — a IA propõe, a pessoa aprova
   delete_customer_data: "block",
 };
 

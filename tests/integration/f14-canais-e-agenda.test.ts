@@ -26,6 +26,9 @@ import { rodarCicloDeSaida } from "@/src/jobs/outbound-worker";
 import { setSetting } from "@/src/tenant-config/settings";
 import type { TenantCtx } from "@/src/tenant-context";
 import { ROLE_RANK } from "@/lib/auth/types";
+import { confirm } from "@/src/actions/confirm";
+import { execute } from "@/src/actions/execute";
+import { toolsFor } from "@/src/actions/catalog";
 import { cancelar, horariosLivresDaOrganizacao, marcar, remarcar } from "@/src/agenda";
 import { can, type PapelD15 } from "@/src/rbac/matrix";
 import {
@@ -39,6 +42,8 @@ import {
   sessaoPorToken,
   LIMITES_DO_WEBCHAT,
 } from "@/src/webchat";
+
+import { gravarLinhaDoVerify } from "@/tests/lib/verify-metrics";
 
 import { CFG_LLM, semearTenant, type ConfigDeTenant } from "./f04-turno-fixtures";
 
@@ -94,6 +99,10 @@ const medidas = {
   conflicts_blocked: 0,
   revoked_blocked: 0,
   tz_ok: 0,
+  proposed: 0,
+  proposed_total: 0,
+  approved: 0,
+  denied_by_policy: 0,
 };
 const ATENDENTE_A = "f1400001-1002-4000-8000-00000000000a";
 const TIPO_A = "f1400001-8000-4000-8000-00000000000a";
@@ -131,6 +140,20 @@ async function abrirIdentificada(slug: string, ip: string, nome: string, contato
   const viva = await sessaoPorToken(slug, sessao.token, deps);
   if (viva === null) throw new Error("sessão sumiu depois de identificar");
   return { token: sessao.token, sessao: viva, ident };
+}
+
+/** Visitante identificado que JÁ FALOU: a conversa está em `ai_handling` — é de onde a IA propõe. */
+async function visitanteQueFalou(ip: string, nome: string, contato: string, texto: string) {
+  const v = await abrirIdentificada(TENANT_A.slug, ip, nome, contato);
+  medidas.webchat_sessions += 1;
+  medidas.identified_total += 1;
+  medidas.identified += 1;
+  medidas.contacts_total += 1;
+  medidas.contacts_created += v.ident.created_contact ? 1 : 0;
+  const r = await receberMensagemDoVisitante(v.sessao, { client_message_id: randomUUID(), body: texto }, deps);
+  if (!r.ok) throw new Error(`mensagem recusada: ${r.reason}`);
+  medidas.messages_in += 1;
+  return v;
 }
 
 beforeAll(async () => {
@@ -579,19 +602,95 @@ describe("F14-T03 — a agenda herdada pela fachada SaaS (D41: adotada, por memb
   });
 });
 
-describe("F14 — o que T01/T02 mediram (a linha `channels:` é gravada na T05, com todos os campos)", () => {
-  it("todos os campos de T01/T02 têm numerador = denominador", () => {
+describe("F14-T04 — a IA marca horário pela ação do catálogo, sob a política da F15", () => {
+  const IA = { kind: "ai" } as const;
+  const ctxIa: TenantCtx = { organization_id: ORG_A, source: "job" };
+  const ctxAdmin: TenantCtx = { organization_id: ORG_A, source: "session", user_id: ADMIN_A };
+  const sexta = new Date(TERCA_14H_SP.getTime() + 3 * 24 * 3_600_000);
+
+  it("schedule_appointment está no catálogo para a IA (14 ações, 10 para o modelo) e, sem entrada na política, PENDURA (proposed)", async () => {
+    expect(toolsFor(ctxIa, "ai").map((t) => t.name)).toContain("schedule_appointment");
+    expect(toolsFor(ctxIa, "automation").map((t) => t.name)).not.toContain("schedule_appointment");
+    const visitante = await visitanteQueFalou("198.51.100.40", "João Visitante", "joao@ficticio.test", "quero marcar uma consulta na sexta às 14h");
+    const antes = await conta(`select count(*)::text as n from public.calendar_appointments where organization_id=$1`, [ORG_A]);
+    const proposta = await execute(ctxIa, IA, "schedule_appointment", { conversation_id: visitante.ident.conversation_id, event_type_id: TIPO_A, starts_at: sexta.toISOString(), timezone: "America/Sao_Paulo" }, { pool });
+    medidas.proposed_total += 1;
+    expect(proposta.status, `${proposta.reason ?? ""} ${proposta.detalhe ?? ""}`).toBe("pending");
+    expect(proposta.pending_action_id).toBeTruthy();
+    medidas.proposed += 1;
+    expect(await conta(`select count(*)::text as n from public.calendar_appointments where organization_id=$1`, [ORG_A])).toBe(antes);
+
+    // Aprovada pela pessoa: a tool roda e o compromisso nasce ligado ao contato e à conversa (approved).
+    const aprovada = await confirm(ctxAdmin, proposta.pending_action_id!, "approved", { kind: "human", user_id: ADMIN_A }, { pool });
+    expect(aprovada.status, `${aprovada.reason ?? ""} ${aprovada.detalhe ?? ""}`).toBe("executed");
+    const criado = await pool.query<{ contact_id: string; conversation_id: string; created_by_kind: string; status: string }>(
+      `select contact_id, conversation_id, created_by_kind, status from public.calendar_appointments where organization_id=$1 and conversation_id=$2`,
+      [ORG_A, visitante.ident.conversation_id]);
+    expect(criado.rows).toHaveLength(1);
+    expect(criado.rows[0]).toMatchObject({ contact_id: visitante.ident.contact_id, created_by_kind: "user", status: "confirmed" });
+    medidas.appointments += 1;
+    medidas.approved = 1;
+
+    // Segunda proposta, no MESMO horário: a política pendura antes de a agenda ver o conflito — a pessoa é quem decide.
+    const outro = await visitanteQueFalou("198.51.100.41", "Karen Visitante", "karen@ficticio.test", "tem horário sexta às 14h?");
+    const proposta2 = await execute(ctxIa, IA, "schedule_appointment", { conversation_id: outro.ident.conversation_id, event_type_id: TIPO_A, starts_at: sexta.toISOString() }, { pool });
+    medidas.proposed_total += 1;
+    expect(proposta2.status).toBe("pending");
+    medidas.proposed += 1;
+    // …e ao aprovar, o conflito NOMEADO recusa: a aprovação humana não passa por cima da agenda.
+    const aprovada2 = await confirm(ctxAdmin, proposta2.pending_action_id!, "approved", { kind: "human", user_id: ADMIN_A }, { pool });
+    expect(aprovada2.status).toBe("denied");
+    expect(aprovada2.reason).toBe("domain_rejected");
+    expect(aprovada2.detalhe).toMatch(/^conflict:/);
+    console.info(`f14-t04-proposta: catalog=14 ai_tools=10 proposed=${medidas.proposed}/${medidas.proposed_total} approved=1/1 conflict_on_approval=1/1`);
+  });
+
+  it("política `block` nega a proposta e audita; `allow` marca direto; `transfer` entrega a conversa a uma pessoa", async () => {
+    const visitante = await visitanteQueFalou("198.51.100.42", "Lia Visitante", "lia@ficticio.test", "quero marcar para segunda às 14h");
+    const sabado = new Date(TERCA_14H_SP.getTime() + 6 * 24 * 3_600_000); // segunda seguinte (13/10), 14h SP
+    const entrada = { conversation_id: visitante.ident.conversation_id, event_type_id: TIPO_A, starts_at: sabado.toISOString() };
+
+    await setSetting(ctxAdminA, "actions.policy", { schedule_appointment: "block" }, "tenant_admin", { pool });
+    const bloqueada = await execute(ctxIa, IA, "schedule_appointment", entrada, { pool });
+    expect(bloqueada.status).toBe("denied");
+    expect(bloqueada.reason).toBe("policy_blocked");
+    expect(bloqueada.audit_id).toBeTruthy();
+    medidas.denied_by_policy = 1;
+
+    await setSetting(ctxAdminA, "actions.policy", { schedule_appointment: "allow" }, "tenant_admin", { pool });
+    const direta = await execute(ctxIa, IA, "schedule_appointment", entrada, { pool });
+    expect(direta.status, `${direta.reason ?? ""} ${direta.detalhe ?? ""}`).toBe("executed");
+    const criado = await pool.query<{ created_by_kind: string; source: string }>(`select created_by_kind, source from public.calendar_appointments where organization_id=$1 and conversation_id=$2`, [ORG_A, visitante.ident.conversation_id]);
+    expect(criado.rows[0]).toEqual({ created_by_kind: "ai", source: "mcp" });
+    medidas.appointments += 1;
+
+    await setSetting(ctxAdminA, "actions.policy", {}, "tenant_admin", { pool });
+    console.info("f14-t04-politica: denied_by_policy=1/1 allow_executed=1/1 audited=1/1");
+  });
+});
+
+describe("F14 — a linha `channels:` do VERIFY SUMMARY (ADR-039 §2)", () => {
+  it("grava a linha com todos os campos medidos e denominadores", () => {
+    // Tudo medido pelos casos acima (a ordem do arquivo é a ordem de execução).
     expect(medidas.webchat_sessions).toBeGreaterThanOrEqual(3);
     expect(medidas.identified).toBe(medidas.identified_total);
     expect(medidas.contacts_created).toBe(medidas.contacts_total);
     expect(medidas.messages_in).toBeGreaterThanOrEqual(3);
     expect(medidas.ai_replies).toBe(medidas.ai_replies_total);
-    expect([medidas.ai_outside_window, medidas.ip_limited, medidas.org_limited, medidas.flood_calls_capped, medidas.cross_org_denied, medidas.handoff_queued]).toEqual([1, 1, 1, 1, 1, 1]);
     expect(medidas.roles_denied).toBe(medidas.roles_denied_total);
+    expect(medidas.proposed).toBe(medidas.proposed_total);
     expect(medidas.appointments).toBeGreaterThanOrEqual(2);
-    expect([medidas.conflicts_blocked, medidas.revoked_blocked, medidas.tz_ok]).toEqual([1, 1, 1]);
-    console.info(
-      `f14-t01-parcial: webchat_sessions=${medidas.webchat_sessions} identified=${medidas.identified}/${medidas.identified_total} contacts_created=${medidas.contacts_created}/${medidas.contacts_total} messages_in=${medidas.messages_in} ai_replies=${medidas.ai_replies}/${medidas.ai_replies_total} ai_outside_window=1/1 ip_limited=1/1 org_limited=1/1 flood_calls_capped=1/1 cross_org_denied=1/1`,
-    );
+    expect([medidas.ai_outside_window, medidas.handoff_queued, medidas.ip_limited, medidas.org_limited, medidas.flood_calls_capped, medidas.cross_org_denied, medidas.conflicts_blocked, medidas.revoked_blocked, medidas.tz_ok, medidas.approved, medidas.denied_by_policy]).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+    const linha =
+      `channels: webchat_sessions=${medidas.webchat_sessions} identified=${medidas.identified}/${medidas.identified_total} ` +
+      `contacts_created=${medidas.contacts_created}/${medidas.contacts_total} messages_in=${medidas.messages_in} ` +
+      `ai_replies=${medidas.ai_replies}/${medidas.ai_replies_total} ai_outside_window=${medidas.ai_outside_window}/1 ` +
+      `handoff_queued=${medidas.handoff_queued}/1 ip_limited=${medidas.ip_limited}/1 org_limited=${medidas.org_limited}/1 ` +
+      `flood_calls_capped=${medidas.flood_calls_capped}/1 cross_org_denied=${medidas.cross_org_denied}/1 ` +
+      `appointments=${medidas.appointments} conflicts_blocked=${medidas.conflicts_blocked}/1 revoked_blocked=${medidas.revoked_blocked}/1 ` +
+      `tz_ok=${medidas.tz_ok}/1 proposed=${medidas.proposed}/${medidas.proposed_total} approved=${medidas.approved}/1 ` +
+      `denied_by_policy=${medidas.denied_by_policy}/1 roles_denied=${medidas.roles_denied}/${medidas.roles_denied_total}`;
+    console.info(linha);
+    gravarLinhaDoVerify("channels", linha);
   });
 });

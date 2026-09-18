@@ -23,6 +23,7 @@ export const NOMES_DO_CATALOGO = [
   "resume_ai",
   "export_customer_data",
   "assign_owner",
+  "schedule_appointment",
   "delete_customer_data",
 ] as const;
 

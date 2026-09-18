@@ -4,7 +4,7 @@
  *
  * O que este arquivo mede, e por que precisa de banco: as nove tools de D18
  * executadas PELA IA deixam nove linhas em `audit_events` (invariante 2 de
- * §5.8), as dez células negadas da matriz N × 3 são negadas DE FATO e
+ * §5.8), as onze células negadas da matriz N × 3 são negadas DE FATO e
  * auditadas, e os três caminhos da confirmação (aprovar, recusar, vencer) levam
  * a conversa aos três destinos que D16 escreve.
  *
@@ -268,6 +268,9 @@ function entradaDaTool(nome: string, org: string): Record<string, unknown> {
       return { conversation_id: conversaDe(org, 2), question: "Confirma 2kg de açúcar?" };
     case "send_message":
       return { conversation_id: conversaDe(org, 1), body: "Bom dia! Já anotei o seu pedido." };
+    case "schedule_appointment":
+      // F14-T04: `medium` + `by_risk` — pela IA PENDURA (D33); a agenda nem é consultada.
+      return { conversation_id: conversaDe(org, 1), event_type_id: "f0400001-9000-4000-8000-00000000000a", starts_at: "2026-10-06T17:00:00.000Z" };
     default:
       throw new Error(`entrada de tool não prevista no cenário: ${nome}`);
   }
@@ -295,15 +298,17 @@ const ESPERADO_DA_IA: Readonly<Record<string, "executed" | "pending" | "denied">
   transfer_to_human: "executed",
   request_confirmation: "executed",
   send_message: "executed",
+  // F14-T04 (ADR-038 §2 T04, D55 e): a IA propõe, a pessoa aprova.
+  schedule_appointment: "pending",
 };
 
-describe("F04-T01 — as nove tools de D18 pela IA, todas auditadas", () => {
-  it("nove execuções, nove linhas de auditoria com actor_type=ai", async () => {
-    // Arrange — as nove saem do CATÁLOGO, não de uma lista paralela.
+describe("F04-T01 — as nove tools de D18 (+ schedule_appointment, F14) pela IA, todas auditadas", () => {
+  it("dez execuções, dez linhas de auditoria com actor_type=ai", async () => {
+    // Arrange — as dez saem do CATÁLOGO, não de uma lista paralela.
     const cenario = CENARIOS.catalogo;
     const ctx = ctxDe("catalogo");
     const tools = ACTION_CATALOG.filter((e) => e.executors.includes("ai"));
-    expect(tools.length, "o catálogo deixou de ter nove tools de IA").toBe(9);
+    expect(tools.length, "o catálogo deixou de ter dez tools de IA").toBe(10);
     const auditoriaAntes = await auditoriaDaIa(cenario.org);
 
     // Act — uma chamada por tool, cada uma na sua conversa.
@@ -353,7 +358,8 @@ describe("F04-T01 — as nove tools de D18 pela IA, todas auditadas", () => {
         where organization_id = $1 and status = 'pending'`,
       [cenario.org],
     );
-    expect(pendentes, "as duas ações `by_risk` deviam ter virado pendência").toBe(2);
+    // Três desde a F14-T04: `create_order`, `update_order_quantity` e `schedule_appointment`.
+    expect(pendentes, "as três ações `by_risk` deviam ter virado pendência").toBe(3);
     const handoffs = await contar(
       `select count(*)::int as v from public.agent_inbox_items
         where organization_id = $1 and kind = 'handoff'`,
@@ -362,13 +368,13 @@ describe("F04-T01 — as nove tools de D18 pela IA, todas auditadas", () => {
     expect(handoffs, "o handoff não deixou item de inbox").toBe(1);
 
     console.info(
-      `f04-t01-tools: tools=${tools.length}/9 desfecho_esperado=${acertos}/${tools.length} audit_rows=${auditoria}/${tools.length} saidas=${mensagens}/2 pendencias=${pendentes}/2 handoff=${handoffs}/1`,
+      `f04-t01-tools: tools=${tools.length}/10 desfecho_esperado=${acertos}/${tools.length} audit_rows=${auditoria}/${tools.length} saidas=${mensagens}/2 pendencias=${pendentes}/2 handoff=${handoffs}/1`,
     );
   });
 });
 
 describe("F04-T01 — executor fora do subset é negado e auditado", () => {
-  it("as dez células negadas da matriz N × 3 são negadas DE FATO", async () => {
+  it("as onze células negadas da matriz N × 3 são negadas DE FATO", async () => {
     // Arrange — as dez (seis de F04, quatro das duas ações LGPD de F06-T03,
     // negadas a `ai` e `automation`) saem do catálogo, não de uma lista à mão.
     const cenario = CENARIOS.negado;
@@ -380,7 +386,7 @@ describe("F04-T01 — executor fora do subset é negado e auditado", () => {
     );
     // Dez: a F15-T04 tira uma (`transfer_to_human` ganha `automation`) e põe
     // uma (`assign_owner` negada à IA).
-    expect(celulasNegadas.length, "a matriz deixou de ter dez células negadas").toBe(10);
+    expect(celulasNegadas.length, "a matriz deixou de ter onze células negadas").toBe(11);
 
     // Act — cada célula é TENTADA. Ler o catálogo provaria o catálogo; o que
     // se quer saber é se `execute()` obedece a ele.
@@ -429,15 +435,14 @@ describe("F04-T01 — executor fora do subset é negado e auditado", () => {
     // A linha do VERIFY SUMMARY de F04-T01 (§7.5).
     const catalogo = ACTION_CATALOG.length;
     const auditoriaDaIaNoCatalogo = await auditoriaDaIa(CENARIOS.catalogo.org);
-    const linha = `action-policy: actions=${catalogo} catalog_total=${catalogo} fields=8/8 executor_denied=${negadas}/${celulasNegadas.length} audit_rows=${auditoriaDaIaNoCatalogo}/9`;
+    const linha = `action-policy: actions=${catalogo} catalog_total=${catalogo} fields=8/8 executor_denied=${negadas}/${celulasNegadas.length} audit_rows=${auditoriaDaIaNoCatalogo}/10`;
     console.info(linha);
     gravarLinhaDoVerify("action-policy", linha);
-    // Treze desde a F15-T04 (dez de F04 + as duas ações LGPD, negadas a `ai` e
-    // `automation`: 6 + 4 células; `transfer_to_human` ganha `automation` e
-    // `assign_owner` nasce negada a `ai`: 10 células). A auditoria da IA no
-    // catálogo não muda — a IA nunca vê `assign_owner`.
+    // Catorze desde a F14-T04 (treze da F15 + `schedule_appointment`, negada a
+    // `automation`: 11 células). A IA passa a ver dez tools; a décima pendura,
+    // e pendurar também audita (`pending`).
     expect(linha).toBe(
-      "action-policy: actions=13 catalog_total=13 fields=8/8 executor_denied=10/10 audit_rows=9/9",
+      "action-policy: actions=14 catalog_total=14 fields=8/8 executor_denied=11/11 audit_rows=10/10",
     );
   });
 });

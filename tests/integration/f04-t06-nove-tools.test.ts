@@ -250,6 +250,9 @@ function entradaValida(nome: string, conversa: string): Record<string, unknown> 
       return { conversation_id: conversa, question: "Confirma 2kg de café?" };
     case "send_message":
       return { conversation_id: conversa, body: "Bom dia! Já anotei o seu pedido." };
+    case "schedule_appointment":
+      // F14-T04: pela IA pendura (D33, medium) — a agenda nem é consultada.
+      return { conversation_id: conversa, event_type_id: "f0400001-9100-4000-8000-00000000000a", starts_at: "2026-10-06T17:00:00.000Z" };
     default:
       throw new Error(`tool sem entrada prevista: ${nome}`);
   }
@@ -298,6 +301,8 @@ function entradaComIdAlheio(nome: string): Record<string, unknown> {
       return { conversation_id: B.conversas[0]!.id, question: "Confirma?" };
     case "send_message":
       return { conversation_id: B.conversas[0]!.id, body: "Mensagem que não pode sair." };
+    case "schedule_appointment":
+      return { conversation_id: B.conversas[0]!.id, event_type_id: "f0400001-9100-4000-8000-00000000000b", starts_at: "2026-10-06T17:00:00.000Z" };
     default:
       throw new Error(`tool sem entrada alheia prevista: ${nome}`);
   }
@@ -343,10 +348,10 @@ afterAll(async () => {
 });
 
 describe("F04-T06: as nove tools de D18, três asserções cada", () => {
-  it("tools: tools=9 asserts=3 pass=27/27", async () => {
-    // Arrange — as nove saem do CATÁLOGO em tempo de teste.
+  it("tools: tools=10 asserts=3 pass=30/30", async () => {
+    // Arrange — as dez (nove de D18 + schedule_appointment, F14) saem do CATÁLOGO em tempo de teste.
     const tools = toolsFor(ctxA, "ai");
-    expect(tools.length, "o catálogo deixou de devolver nove tools de IA").toBe(9);
+    expect(tools.length, "o catálogo deixou de devolver dez tools de IA").toBe(10);
 
     let invalidas = 0;
     let isoladas = 0;

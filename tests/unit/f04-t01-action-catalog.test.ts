@@ -60,14 +60,16 @@ const ESPERADO_DA_DIRETRIZ: readonly {
   { name: "export_customer_data", risk: "high", executors: ["human"], confirmation: "none" },
   // F15-T04 (ADR-036 §2 T04): entregar uma oportunidade — automação e humano; a IA não escolhe quem vende.
   { name: "assign_owner", risk: "low", executors: ["human", "automation"], confirmation: "none" },
+  // F14-T04 (ADR-038 §2 T04, D55 e): a IA marca horário — humano e IA; `medium` + `by_risk` pendura por D33.
+  { name: "schedule_appointment", risk: "medium", executors: ["human", "ai"], confirmation: "by_risk" },
   { name: "delete_customer_data", risk: "high", executors: ["human"], confirmation: "none" },
 ];
 
-/** As nove de D18. `resume_ai` (D34) e as duas da LGPD (F06-T03) são humanas e NÃO estão aqui. */
+/** As nove de D18 + `schedule_appointment` (F14). `resume_ai` (D34) e as duas da LGPD (F06-T03) são humanas e NÃO estão aqui. */
 const TOOLS_D18 = ESPERADO_DA_DIRETRIZ.filter((e) => e.executors.includes("ai")).map((e) => e.name);
 
-describe("F04-T01 — as entradas do catálogo (dez de F04 + duas de F06-T03 + uma de F15-T04), com os oito campos", () => {
-  it("o catálogo tem as dez de §5.8, as duas de §7.7 T03 e assign_owner (ADR-036), com risco, executores e confirmação do documento", () => {
+describe("F04-T01 — as entradas do catálogo (dez de F04 + duas de F06-T03 + uma de F15-T04 + uma de F14-T04), com os oito campos", () => {
+  it("o catálogo tem as dez de §5.8, as duas de §7.7 T03, assign_owner (ADR-036) e schedule_appointment (ADR-038), com risco, executores e confirmação do documento", () => {
     // Arrange — o documento.
     const esperado = ESPERADO_DA_DIRETRIZ;
 
@@ -134,7 +136,7 @@ describe("F04-T01 — as entradas do catálogo (dez de F04 + duas de F06-T03 + u
 });
 
 describe("F04-T01 — a matriz N × 3 executores (§5.8, invariante 1)", () => {
-  it("36 células: 26 permitidas e 10 negadas, derivadas do catálogo", () => {
+  it("42 células: 31 permitidas e 11 negadas, derivadas do catálogo", () => {
     // Arrange — o esperado vem do DOCUMENTO, a observação vem do catálogo.
     const esperadoPorNome = new Map(ESPERADO_DA_DIRETRIZ.map((e) => [e.name, e.executors]));
 
@@ -159,20 +161,21 @@ describe("F04-T01 — a matriz N × 3 executores (§5.8, invariante 1)", () => {
     expect(permitidas + negadas.length).toBe(celulas);
     // Seis de F04 mais quatro de F06-T03 (as duas ações LGPD negadas a `ai` e a
     // `automation`) — e a F15-T04 troca uma por outra: `transfer_to_human`
-    // ganha `automation` (−1) e `assign_owner` nasce negada a `ai` (+1).
-    expect(negadas.length, `células negadas: ${negadas.join(", ")}`).toBe(10);
+    // ganha `automation` (−1) e `assign_owner` nasce negada a `ai` (+1). A
+    // F14-T04 acrescenta `schedule_appointment`, negada a `automation` (+1).
+    expect(negadas.length, `células negadas: ${negadas.join(", ")}`).toBe(11);
     console.info(
-      `f04-t01-matriz: cells=${celulas} allowed=${permitidas} denied=${negadas.length}/10`,
+      `f04-t01-matriz: cells=${celulas} allowed=${permitidas} denied=${negadas.length}/11`,
     );
   });
 
-  it("`toolsFor(ctx,\"ai\")` devolve exatamente as nove de D18", () => {
+  it("`toolsFor(ctx,\"ai\")` devolve exatamente as nove de D18 mais schedule_appointment (F14)", () => {
     // Arrange + Act
     const doModelo = toolsFor({}, "ai");
 
     // Assert — nove, e são as nove certas: contar sem conferir os nomes
     // aprovaria um catálogo que trocasse `resume_ai` por outra coisa.
-    expect(doModelo.length, "toolsFor(ai) não devolveu nove").toBe(9);
+    expect(doModelo.length, "toolsFor(ai) não devolveu dez").toBe(10);
     expect([...doModelo].map((t) => t.name).sort()).toEqual([...TOOLS_D18].sort());
     expect(
       doModelo.some((t) => t.name === "resume_ai"),
@@ -188,13 +191,13 @@ describe("F04-T01 — a matriz N × 3 executores (§5.8, invariante 1)", () => {
     // As outras duas listas, para que o filtro por executor não seja acidente.
     const humanas = toolsFor({}, "human").length;
     const automacao = toolsFor({}, "automation").length;
-    expect(humanas, "toolsFor(human) devia devolver as treze").toBe(ACTION_CATALOG.length);
+    expect(humanas, "toolsFor(human) devia devolver as catorze").toBe(ACTION_CATALOG.length);
     // Sete: as três leituras, `create_task` e `send_message` (as que §5.12
     // precisa para o Job de lembrete) mais `transfer_to_human` e `assign_owner`
     // (F15-T04, as quatro ações de regra são todas de `automation`).
     expect(automacao, "toolsFor(automation) mudou de tamanho").toBe(7);
     console.info(
-      `f04-t01-toolsfor: ai=${doModelo.length}/9 human=${humanas}/13 automation=${automacao}/7`,
+      `f04-t01-toolsfor: ai=${doModelo.length}/10 human=${humanas}/14 automation=${automacao}/7`,
     );
   });
 

@@ -282,6 +282,27 @@ export const assignOwnerOutputSchema = z.strictObject({
   mode: z.enum(["round_robin", "named"]),
 });
 
+/**
+ * F14-T04 (ADR-038 §2 T04, D55 e) — `schedule_appointment`: a IA (ou uma pessoa)
+ * marca um horário para o cliente da conversa. `starts_at` é o instante; o
+ * `timezone` é o em que a pessoa combinou ("quinta às 14h"). Risco `medium` com
+ * `by_risk`: sem entrada na política, D33 pendura para aprovação humana.
+ */
+export const scheduleAppointmentInputSchema = z.strictObject({
+  conversation_id: uuid,
+  event_type_id: uuid,
+  starts_at: z.string().datetime({ offset: true }),
+  timezone: z.string().min(3).max(64).nullable().default(null),
+  notes: z.string().trim().max(500).nullable().default(null),
+});
+export const scheduleAppointmentOutputSchema = z.strictObject({
+  appointment_id: uuid,
+  starts_at: z.string(),
+  ends_at: z.string(),
+  time_zone: z.string(),
+  status: z.enum(["pending", "confirmed"]),
+});
+
 /** F06-T03 — LGPD mínima: as duas ações `high` do tenant_admin sobre um cliente. */
 export const customerDataInputSchema = z.strictObject({ contact_id: uuid });
 export const exportCustomerDataOutputSchema = z.strictObject({

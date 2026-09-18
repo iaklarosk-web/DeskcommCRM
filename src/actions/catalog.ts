@@ -23,6 +23,8 @@ import { CONVERSATION_STATES, type ConversationState } from "@/src/conversation"
 
 import {
   assignOwnerInputSchema,
+  scheduleAppointmentInputSchema,
+  scheduleAppointmentOutputSchema,
   assignOwnerOutputSchema,
   createOrderInputSchema,
   createOrderOutputSchema,
@@ -248,6 +250,21 @@ export const ACTION_CATALOG: readonly ActionCatalogEntry[] = [
     input_schema: assignOwnerInputSchema,
     output_schema: assignOwnerOutputSchema,
     resource_type: "crm_leads",
+  },
+  // F14-T04 (ADR-038 §2 T04, D55 e): a IA marca horário na agenda a partir da
+  // conversa. `medium` + `by_risk` ⇒ sem entrada na política, D33 PENDURA para
+  // aprovação do atendente; a organização sobe para `allow` pela tela da F15.
+  // NÃO `automation`: uma regra QUANDO/ENTÃO não escolhe horário por ninguém.
+  {
+    name: "schedule_appointment",
+    risk: "medium",
+    executors: ["human", "ai"],
+    confirmation: "by_risk",
+    side_effect: "insert em calendar_appointments (ligado ao contato e à conversa) + audit_events",
+    audit: "always",
+    input_schema: scheduleAppointmentInputSchema,
+    output_schema: scheduleAppointmentOutputSchema,
+    resource_type: "calendar_appointments",
   },
   {
     name: "delete_customer_data",

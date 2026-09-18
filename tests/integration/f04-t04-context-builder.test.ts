@@ -344,11 +344,11 @@ describe("F04-T04: o contexto do turno tem um único tenant", () => {
       { pool },
     );
 
-    // Assert — cliente, produtos, chunks, conversa, Settings e as nove tools.
+    // Assert — cliente, produtos, chunks, conversa, Settings e as dez tools (nove de D18 + schedule_appointment, F14).
     expect(contexto.cliente?.display_name).toBe("Padaria Aurora");
     expect(contexto.settings["ai.unknown_answer"]).toBe(A.settings["ai.unknown_answer"]);
     expect(contexto.settings["business.hours"]).toBe("segunda a sexta, das 8h às 18h");
-    expect(contexto.tools.length, "o modelo deixou de ver as nove tools de D18").toBe(9);
+    expect(contexto.tools.length, "o modelo deixou de ver as dez tools").toBe(10);
     expect(contexto.acervo.fontes_consultadas).toBe(A.materiais.length);
 
     // A janela de 20 é a de §5.9, e ela corta o histórico de 25.
@@ -370,7 +370,7 @@ describe("F04-T04: o contexto do turno tem um único tenant", () => {
     expect(texto.includes(A.sessao), "a sessão de canal entrou no prompt").toBe(false);
 
     console.info(
-      `f04-t04-conteudo: settings=${chaves.length} tools=${contexto.tools.length}/9 ` +
+      `f04-t04-conteudo: settings=${chaves.length} tools=${contexto.tools.length}/10 ` +
         `mensagens=${contexto.conversa.mensagens.length}/20 trechos=${contexto.acervo.trechos.length}`,
     );
   });
