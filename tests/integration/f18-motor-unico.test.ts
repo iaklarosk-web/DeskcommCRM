@@ -35,6 +35,7 @@ import {
   montarContexto,
   responderTurno,
 } from "@/src/ai";
+import { cancelar, marcar } from "@/src/agenda";
 import { moverLead } from "@/src/crm/funil";
 import { ACTION_CATALOG, toolsFor } from "@/src/actions/catalog";
 import { confirm } from "@/src/actions/confirm";
@@ -60,6 +61,12 @@ const ADMIN_A = "f1800001-1000-4000-8000-00000000000a";
 const CONTATO_A = "f1800001-2000-4000-8000-00000000000a";
 /** Segundo contato: a unicidade do produto é UMA conversa por contato/sessão. */
 const CONTATO_T02 = "f1800001-2100-4000-8000-00000000000a";
+/** Terceiro: o teto diário termina em handoff, e handoff tira a conversa da IA. */
+const CONTATO_LIMITE = "f1800001-2200-4000-8000-00000000000a";
+const CONVERSA_LIMITE = "f1800001-4200-4000-8000-00000000000a";
+/** Quarto: o nome inventado é descartado, e descartar não tira a conversa da IA. */
+const CONTATO_INVENTADA = "f1800001-2300-4000-8000-00000000000a";
+const CONVERSA_INVENTADA = "f1800001-4300-4000-8000-00000000000a";
 const CONVERSA_A = "f1800001-4000-4000-8000-00000000000a";
 /** Conversa só do T02: a aprovação muda o estado, e o T00 precisa da dele intacto. */
 const CONVERSA_T02 = "f1800001-4100-4000-8000-00000000000a";
@@ -68,6 +75,10 @@ const FUNIL_A = "f1800001-7000-4000-8000-00000000000a";
 const ETAPA_1 = "f1800001-7100-4000-8000-00000000000a";
 const ETAPA_2 = "f1800001-7200-4000-8000-00000000000a";
 const ETAPA_HUMANA = "f1800001-7300-4000-8000-00000000000a";
+const ATENDENTE_A = "f1800001-1002-4000-8000-00000000000a";
+const TIPO_A = "f1800001-8000-4000-8000-00000000000a";
+/** Terça, 06/10/2026, 14:00 em São Paulo (17:00Z) — dentro da jornada 09–18. */
+const TERCA_14H_SP = new Date("2026-10-06T17:00:00.000Z");
 /** As 13 que o agente DECLARA e a fase migrou (o denominador de `tools_migradas`). */
 const MIGRADAS_DECLARADAS = [
   "list_leads", "get_lead", "list_pipelines", "list_stages", "create_lead", "update_lead",
@@ -92,10 +103,14 @@ const TENANT_A: ConfigDeTenant = {
   contatos: [
     { id: CONTATO_A, nome: "Cliente da F18", telefone: "+5519990000018" },
     { id: CONTATO_T02, nome: "Cliente do T02", telefone: "+5519990000118" },
+    { id: CONTATO_LIMITE, nome: "Cliente do teto", telefone: "+5519990000218" },
+    { id: CONTATO_INVENTADA, nome: "Cliente da tool inventada", telefone: "+5519990000318" },
   ],
   conversas: [
     { id: CONVERSA_A, contato: CONTATO_A, estado: "ai_handling", statusLegado: "ai_handling" },
     { id: CONVERSA_T02, contato: CONTATO_T02, estado: "ai_handling", statusLegado: "ai_handling" },
+    { id: CONVERSA_LIMITE, contato: CONTATO_LIMITE, estado: "ai_handling", statusLegado: "ai_handling" },
+    { id: CONVERSA_INVENTADA, contato: CONTATO_INVENTADA, estado: "ai_handling", statusLegado: "ai_handling" },
   ],
   produtos: [],
   materiais: [],
@@ -115,6 +130,10 @@ const medidas = {
   roles_denied: 0,
   roles_denied_total: 0,
   policy_approve_pendura: 0,
+  cancel_allow: 0,
+  cancel_passado_negado: 0,
+  cancel_auditado: 0,
+  limite_diario_nega: 0,
   saas_turns: 0,
   legacy_turns: 0,
   volta_atras: 0,
@@ -475,6 +494,130 @@ describe("F18-T02 — as 14 ações que saíram do MCP herdado", () => {
   });
 });
 
+describe("F18-T03 — desmarcar sem aprovação humana, e o freio que sobra (D56 e)", () => {
+  beforeAll(async () => {
+    await pool.query(`insert into auth.users (id, email) values ($1, 'f18-atendente@integration.test') on conflict do nothing`, [ATENDENTE_A]);
+    await pool.query(
+      `insert into public.user_organizations (organization_id, user_id, role, accepted_at) values ($1,$2,'agent',now()) on conflict do nothing`,
+      [ORG_A, ATENDENTE_A],
+    );
+    await pool.query(
+      `insert into public.attendant_availability (organization_id, user_id, is_available, schedule)
+       values ($1,$2,true,$3::jsonb)
+       on conflict (organization_id, user_id) do update set schedule = excluded.schedule, is_available = true`,
+      [ORG_A, ATENDENTE_A, JSON.stringify({ timezone: "America/Sao_Paulo", windows: [1, 2, 3, 4, 5].map((dow) => ({ dow, start: "09:00", end: "18:00" })) })],
+    );
+    await pool.query(
+      `insert into public.calendar_event_types (id, organization_id, name, slug, duration_minutes, minimum_notice_minutes, booking_window_days, default_owner_user_id, is_active)
+       values ($1,$2,'Consulta','consulta-f18',60,120,60,$3,true)`,
+      [TIPO_A, ORG_A, ATENDENTE_A],
+    );
+  });
+
+  it("a IA desmarca SOZINHA (allow), e a execução fica auditada", async () => {
+    const marcado = await marcar(
+      ctxAdminA,
+      { kind: "human", user_id: ADMIN_A },
+      { event_type_id: TIPO_A, starts_at: TERCA_14H_SP.toISOString(), timezone: "America/Sao_Paulo", contact_id: CONTATO_A },
+      { pool, agora: () => new Date("2026-10-01T12:00:00.000Z") },
+    );
+    expect(marcado.ok, marcado.ok ? "" : `${marcado.reason} ${marcado.detalhe}`).toBe(true);
+    if (!marcado.ok) throw new Error("inalcançável");
+
+    const antes = await conta(
+      `select count(*)::text as n from public.audit_events where organization_id=$1 and action_name='agenda.appointment_cancelled'`,
+      [ORG_A],
+    );
+    // Sem `pending_action_id`: `allow` no catálogo significa que a IA executa e
+    // pronto — é a decisão do proprietário, e é isto que a prova mostra.
+    const desmarcado = await execute(
+      ctxJobA,
+      { kind: "ai" },
+      "cancel_appointment",
+      { appointment_id: marcado.compromisso.id, revision: marcado.compromisso.revision, reason: "o cliente pediu para desmarcar" },
+      { pool },
+    );
+    expect(desmarcado.status, `${desmarcado.reason ?? ""} ${desmarcado.detalhe ?? ""}`).toBe("executed");
+    expect(desmarcado.pending_action_id ?? null).toBeNull();
+    medidas.cancel_allow += 1;
+
+    const estado = await pool.query<{ status: string }>(
+      `select status from public.calendar_appointments where organization_id=$1 and id=$2`,
+      [ORG_A, marcado.compromisso.id],
+    );
+    expect(estado.rows[0]?.status).toBe("cancelled");
+
+    const depois = await conta(
+      `select count(*)::text as n from public.audit_events where organization_id=$1 and action_name='agenda.appointment_cancelled'`,
+      [ORG_A],
+    );
+    expect(depois).toBe(antes + 1);
+    medidas.cancel_auditado += 1;
+    medidas.auditoria += 1;
+    medidas.auditoria_total += 1;
+    console.info("f18-t03-cancelar: allow=1/1 sem_pendencia=1/1 auditado=1/1");
+  });
+
+  it("compromisso que JÁ ACONTECEU não é cancelável — nem pela IA, nem por uma pessoa", async () => {
+    const passado = await marcar(
+      ctxAdminA,
+      { kind: "human", user_id: ADMIN_A },
+      { event_type_id: TIPO_A, starts_at: "2026-10-13T17:00:00.000Z", timezone: "America/Sao_Paulo", contact_id: CONTATO_A },
+      { pool, agora: () => new Date("2026-10-08T12:00:00.000Z") },
+    );
+    expect(passado.ok).toBe(true);
+    if (!passado.ok) throw new Error("inalcançável");
+
+    // O relógio injetado põe o compromisso no passado — nada de `update` à mão:
+    // o que se mede é a REGRA, e ela lê o relógio.
+    const depoisDaHora = { pool, agora: () => new Date("2026-10-20T12:00:00.000Z") };
+    const pelaIa = await cancelar(ctxJobA, { kind: "ai" }, { id: passado.compromisso.id, revision: passado.compromisso.revision, reason: "tentando desmarcar o passado" }, depoisDaHora);
+    expect(pelaIa.ok).toBe(false);
+    if (!pelaIa.ok) expect(pelaIa.detalhe).toBe("appointment_in_the_past");
+    medidas.cancel_passado_negado += 1;
+
+    const pelaPessoa = await cancelar(ctxAdminA, { kind: "human", user_id: ADMIN_A }, { id: passado.compromisso.id, revision: passado.compromisso.revision, reason: "nem a pessoa" }, depoisDaHora);
+    expect(pelaPessoa.ok).toBe(false);
+
+    const estado = await pool.query<{ status: string }>(
+      `select status from public.calendar_appointments where organization_id=$1 and id=$2`,
+      [ORG_A, passado.compromisso.id],
+    );
+    expect(estado.rows[0]?.status).not.toBe("cancelled");
+    console.info("f18-t03-cancelar: passado_negado_ia=1/1 passado_negado_humano=1/1");
+  });
+});
+
+describe("F18-T01 — o teto diário da F15 vale no caminho do despacho", () => {
+  it("com o teto atingido, o turno do despacho NÃO chama o provedor", async () => {
+    // O teto é o da F15 (`ai.limits.daily_turns`), e o ponto da fase é que ele
+    // passou a valer para TODO canal: até aqui, quem respondia em produção era
+    // o motor herdado, que não o conhece.
+    await setSetting(ctxAdminA, "ai.limits.daily_turns", 1, "tenant_admin", { pool });
+    const { registry, estado } = registroQuePede([]);
+    const primeiro = await responderTurno(
+      ctxJobA,
+      { conversation_id: CONVERSA_LIMITE, mensagem_do_cliente: "primeira do dia" },
+      { pool, cfg: CFG_LLM, registry },
+    );
+    expect(primeiro.status === "respondido" || primeiro.status === "handoff").toBe(true);
+    const chamadasDepoisDoPrimeiro = estado.chamadas;
+
+    const segundo = await responderTurno(
+      ctxJobA,
+      { conversation_id: CONVERSA_LIMITE, mensagem_do_cliente: "segunda do dia" },
+      { pool, cfg: CFG_LLM, registry },
+    );
+    expect(segundo.status).toBe("handoff");
+    expect(segundo.motivo).toBe("tenant_rule");
+    // Nenhum byte novo saiu: a negação é ANTES do provedor.
+    expect(estado.chamadas).toBe(chamadasDepoisDoPrimeiro);
+    medidas.limite_diario_nega += 1;
+    await setSetting(ctxAdminA, "ai.limits.daily_turns", 0, "tenant_admin", { pool });
+    console.info("f18-t01-limite: negado=1/1 chamadas_depois_do_teto=0");
+  });
+});
+
 describe("F18-T00 — ferramenta declarada e não migrada (objeção 1)", () => {
   it("o inventário sabe dizer o que a versão declara e o catálogo não tem", async () => {
     const heranca = await herancaDoAgentePublicado(ctxJobA, { pool });
@@ -483,6 +626,19 @@ describe("F18-T00 — ferramenta declarada e não migrada (objeção 1)", () => 
     expect(faltando).toContain(FERRAMENTA_NA_FILA);
     medidas.fora_do_catalogo_total += 1;
     console.info(`f18-t00-fila: declaradas_fora=${faltando.length}`);
+  });
+
+  it("nome INVENTADO pelo modelo continua descartado e contado — inventar não é falta de produto", async () => {
+    const { registry } = registroQuePede(["crm_invente_um_nome_qualquer"]);
+    const resultado = await responderTurno(
+      ctxJobA,
+      { conversation_id: CONVERSA_INVENTADA, mensagem_do_cliente: "faz aquilo lá" },
+      { pool, cfg: CFG_LLM, registry },
+    );
+    expect(resultado.motivo).not.toBe("tool_missing");
+    expect(resultado.tools_descartadas).toContain("crm_invente_um_nome_qualquer");
+    medidas.inventadas_descartadas += 1;
+    console.info("f18-t00-fila: inventada_descartada=1/1 sem_handoff=1/1");
   });
 
   it("o modelo pede a ferramenta da fila e o turno devolve handoff/tool_missing com o nome dela", async () => {
@@ -508,6 +664,9 @@ describe("F18-T00 — ferramenta declarada e não migrada (objeção 1)", () => 
     const linha =
       `engine: saas_turns=${medidas.saas_turns} legacy_turns=${medidas.legacy_turns} volta_atras=${medidas.volta_atras}/1 ` +
       `heranca_prompt=${medidas.heranca_prompt}/1 heranca_acervo=${medidas.heranca_acervo}/1 ` +
+      `limite_diario_nega=${medidas.limite_diario_nega}/1 ` +
+      `cancel_allow=${medidas.cancel_allow}/1 cancel_passado_negado=${medidas.cancel_passado_negado}/1 ` +
+      `cancel_auditado=${medidas.cancel_auditado}/1 ` +
       `policy_approve_pendura=${medidas.policy_approve_pendura}/1 ` +
       `tools_migradas=${medidas.tools_migradas}/13 auditoria=${medidas.auditoria}/${medidas.auditoria_total} ` +
       `roles_denied=${medidas.roles_denied}/${medidas.roles_denied_total} ` +
