@@ -103,6 +103,7 @@ export function htmlDaPagina(dados: DadosDaPagina): string {
     return el;
   }
   function bolha(m) {
+    if (main.querySelector('[data-message-id="' + m.id + '"]')) return; // cursor inclusivo: a última vista pode voltar
     var el = document.createElement('div');
     el.className = 'msg ' + m.author;
     el.setAttribute('data-message-id', m.id);

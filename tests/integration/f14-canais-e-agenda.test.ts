@@ -312,8 +312,10 @@ describe("F14-T01 — identificação → contato e conversa; mensagem → mesmo
     medidas.ai_replies += saida.rows[0]?.status === "sent" ? 1 : 0;
     const visto = await listarMensagensDoVisitante(s.sessao, null, deps);
     expect(visto.map((m) => [m.direction, m.author])).toEqual([["inbound", "visitor"], ["outbound", "ai"]]);
+    // Cursor inclusivo (ms × µs): só a última vista pode voltar; nada anterior a ela.
     const depois = await listarMensagensDoVisitante(s.sessao, visto[1]!.created_at, deps);
-    expect(depois).toHaveLength(0);
+    expect(depois.every((m) => m.id === visto[1]!.id)).toBe(true);
+    expect(visto[1]!.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T.*Z$/);
     console.info(`f14-t01-ia: ai_replies=${medidas.ai_replies}/${medidas.ai_replies_total} delivered_by_webchat_adapter=1/1 visible_to_visitor=2/2`);
   });
 });

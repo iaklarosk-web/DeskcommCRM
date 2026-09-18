@@ -5,7 +5,7 @@
  * via `E2E_TENANT`) + uma do painel do dono = SETE testes (ADR-037 §1). Cada
  * jornada é uma tela nova da F15 com o efeito conferido na rota e no banco:
  *
- *  1. autonomia — `/app/settings/tenant/ia/autonomia`: 13 ações do catálogo,
+ *  1. autonomia — `/app/settings/tenant/ia/autonomia`: 14 ações do catálogo (13 da F15 + schedule_appointment da F14),
  *     sobrescrever `create_task` para "Bloquear" muda o modo efetivo e a
  *     origem, o limite diário grava e mostra o uso do dia, "Voltar ao padrão"
  *     limpa; o outro tenant não vê; o attendant é 403 no PATCH;
@@ -82,14 +82,14 @@ async function entrarComo(page: Page, email: string, fixture: F13Fixture, lado: 
 }
 
 for (const lado of ["A", "B"] as LadoDoTeste[]) {
-  test(`autonomia em ${lado}: 13 ações, bloquear create_task pela tela muda o modo efetivo, limite diário gravado e mostrado, voltar ao padrão limpa, o outro tenant não vê, attendant é 403`, async ({ page, fixture }) => {
+  test(`autonomia em ${lado}: 14 ações, bloquear create_task pela tela muda o modo efetivo, limite diário gravado e mostrado, voltar ao padrão limpa, o outro tenant não vê, attendant é 403`, async ({ page, fixture }) => {
     // Arrange
     await entrarComo(page, fixture.admin.email, fixture, lado);
 
     // Act — a tela.
     await page.goto("/app/settings/tenant/ia/autonomia", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("ai-autonomy")).toBeVisible({ timeout: HTTP_TIMEOUT });
-    await expect(page.getByTestId("ai-autonomy-total")).toHaveText("13");
+    await expect(page.getByTestId("ai-autonomy-total")).toHaveText("14");
     await expect(page.getByTestId("ai-autonomy-sobrescritas")).toHaveText("0");
     const linha = page.getByTestId("ai-autonomy-create_task");
     await expect(linha).toHaveAttribute("data-mode", "allow");

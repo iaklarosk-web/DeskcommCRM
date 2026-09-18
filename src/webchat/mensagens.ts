@@ -73,13 +73,18 @@ export async function listarMensagensDoVisitante(
   return withTenant(
     ctx,
     async (db) => {
-      const linhas = await db.query<{ id: string; direction: string; body: string | null; created_at: string; sent_via: string | null }>(
-        `select id, direction, body, created_at::text, sent_via
+      // `created_at` volta como Date (pg) e sai como ISO: é o cursor que a página
+      // devolve em `?after=` — e a rota o valida como datetime ISO com offset.
+      const linhas = await db.query<{ id: string; direction: string; body: string | null; created_at: Date; sent_via: string | null }>(
+        `select id, direction, body, created_at, sent_via
            from public.messages
           where organization_id = $1 and conversation_id = $2
             and type = 'text' and body is not null
             and (direction = 'inbound' or (direction = 'outbound' and status in ('sent','delivered','read')))
-            and ($3::timestamptz is null or created_at > $3::timestamptz)
+            -- maior-ou-igual, não maior: o cursor ISO tem milissegundos e o banco
+            -- microssegundos; a última linha vista pode voltar (a página deduplica
+            -- por id) — perder uma mensagem do mesmo milissegundo seria pior.
+            and ($3::timestamptz is null or created_at >= $3::timestamptz)
           order by created_at asc
           limit 200`,
         [ctx.organization_id, sessao.conversation_id, depoisDe],
@@ -88,7 +93,7 @@ export async function listarMensagensDoVisitante(
         id: l.id,
         direction: l.direction === "inbound" ? "inbound" : "outbound",
         body: l.body ?? "",
-        created_at: l.created_at,
+        created_at: l.created_at.toISOString(),
         author: l.direction === "inbound" ? "visitor" : (AUTOR_POR_SENT_VIA[l.sent_via ?? ""] ?? "human"),
       }));
     },

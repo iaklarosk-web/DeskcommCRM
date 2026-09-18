@@ -25259,20 +25259,14 @@ comment on column public.channel_accounts.channel_session_id is
 
 alter table public.messages add column if not exists provider text;
 
-do $f03_t04$
-begin
-  if not exists (
-    select 1 from pg_constraint
-     where conrelid = 'public.messages'::regclass
-       and conname = 'messages_provider_conhecido'
-  ) then
-    alter table public.messages
-      add constraint messages_provider_conhecido
-      -- 'webchat' entrou pela 9030 (F14-T00); bloco único (baseline-constraint-reconstruida).
-      check (provider is null or provider in ('waha','meta_cloud','zernio','mock','webchat'));
-  end if;
-end
-$f03_t04$;
+-- Bloco ÚNICO desta constraint (tests/unit/baseline-constraint-reconstruida):
+-- drop + add, e não `if not exists` — a 9030 (F14-T00) acrescentou 'webchat'
+-- e um `if not exists` deixaria o clone que ATUALIZA com o vocabulário velho
+-- (medido no staging em 18/09: 23514 na primeira mensagem do chat do site).
+alter table public.messages drop constraint if exists messages_provider_conhecido;
+alter table public.messages
+  add constraint messages_provider_conhecido
+  check (provider is null or provider in ('waha','meta_cloud','zernio','mock','webchat'));
 
 comment on column public.messages.provider is
   'Provedor de canal que entregou/levou esta mensagem pelo caminho SaaS (§5.7). NULL nas linhas do caminho herdado — e é por isso que o índice de idempotência novo é PARCIAL: ele não muda o contrato das linhas antigas.';

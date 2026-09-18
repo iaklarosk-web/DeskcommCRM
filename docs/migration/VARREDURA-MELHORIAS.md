@@ -340,6 +340,29 @@ o build do app a máquina chegou a 1,9 GB de swap usado. **Porta 1-way**
 
 ---
 
+### B18. A entrada SaaS do WhatsApp (`recebeEntrada`, F03) não marca a prévia nem o não-lido da conversa (F14, 18/09/2026)
+A entrada herdada do WAHA (`lib/waha/ingest.ts:377`) chama `fn_mark_conversation_message`
+(prévia, `last_inbound_at`, `unread_count_for_assignee`); a SaaS (`src/channels/inbound.ts`,
+mock e WAHA SaaS) não — o inbox lista a conversa com "Sem mensagens" e sem contador.
+Descoberto ao medir o chat do site no navegador (a lista não achava a conversa pela prévia);
+o webchat chama a RPC na própria entrada (`src/webchat/entrada.ts`). Conserto proposto: chamar
+a RPC em `concluirEntrada` para todo canal — muda o comportamento visível do inbox nas suítes
+da F03/F05 (contadores), por isso fora da F14. Custo: baixo. Ganho: inbox honesto para o WhatsApp
+SaaS. **Risco enquanto durar:** o atendente não vê a prévia da última mensagem de WhatsApp.
+
+### B19. `pnpm lint:channels` reprova desde a F11 (`app/actions/onboarding/conectarCanalMock.ts` nomeia o provider)
+`scripts/lint-channels.ts` (doutrina restricao-de-canal, invariante 1) reprova o arquivo do
+wizard mock da F11; o gate não roda esse lint (`gov:verify` sim), então passou despercebido
+por quatro fases. Conserto: pedir o adapter/capability em vez de nomear `mock`/`waha` — ou
+registrar em `KNOWN_DEBT` do lint com motivo. Custo: baixo.
+
+### B20. PostgREST do staging trava depois de reaplicar o baseline por `psql` (18/09/2026)
+Depois de `psql -f supabase/baseline.sql` no banco do staging (o que a receita da RETOMADA manda
+antes de uma spec nova), o `crm-staging-rest` respondeu 504 `PGRST003 Timed out acquiring
+connection from connection pool` para toda requisição até `docker restart crm-staging-rest`.
+O `up.sh` reinicia o realtime depois do baseline, não o PostgREST. Conserto: a receita (e o
+`up.sh`) reiniciam o `rest` depois do baseline. Custo: uma linha.
+
 ## C. Portões do proprietário — o que a engenharia não pode abrir sozinha
 
 D49 suspendeu a pausa por fase de D47, mas preservou D11–D13. Estes itens não
