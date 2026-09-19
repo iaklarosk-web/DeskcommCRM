@@ -1,6 +1,6 @@
 ---
 updated_at: 2026-09-19T06:30:00Z
-head_commit: ba2536b5a   # commit de fechamento da F18; código VALIDADO pelo gate f18-gate-04 (READY (staging), dentro do staging, F18 — ADR-040/041) = e5c26c4e; depois dele entraram o conserto do drain (sem ele a unificação valia só para quem já tinha agente herdado), a jornada do motor e docs
+head_commit: 65219c22   # commit VALIDADO DO ZERO pelo from-scratch (READY (F18), verify inteiro no clone); o fechamento (docs) vem depois dele. Código validado pelo gate f18-gate-04 (READY (staging), F18 — ADR-040/041) = e5c26c4e; código VALIDADO pelo gate f18-gate-04 (READY (staging), dentro do staging, F18 — ADR-040/041) = e5c26c4e; depois dele entraram o conserto do drain (sem ele a unificação valia só para quem já tinha agente herdado), a jornada do motor e docs
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
 plan_version: "2.11 (2026-09-19); D38–D56; ADR-006…041"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
