@@ -43,8 +43,13 @@ export type EventoDaAssinatura = (typeof EVENTOS_DA_ASSINATURA)[number];
 export const ORIGENS_DA_ASSINATURA = ["self_service", "operator", "seed", "fixture", "backfill"] as const;
 export type OrigemDaAssinatura = (typeof ORIGENS_DA_ASSINATURA)[number];
 
-/** Os tipos de evento que o gateway entrega — espelho de `billing_events_event_type_check`. */
-export const TIPOS_DE_EVENTO_DO_GATEWAY = ["payment_confirmed", "payment_failed"] as const;
+/**
+ * Os tipos de evento que o gateway entrega — espelho de
+ * `billing_events_event_type_check` (9023 + 9033). `cancelled` entrou na F19:
+ * o Customer Portal do Stripe cancela e o gateway avisa
+ * (`customer.subscription.deleted`); no mock continua sendo só ação humana.
+ */
+export const TIPOS_DE_EVENTO_DO_GATEWAY = ["payment_confirmed", "payment_failed", "cancelled"] as const;
 export type TipoDeEventoDoGateway = (typeof TIPOS_DE_EVENTO_DO_GATEWAY)[number];
 
 const TRANSICOES: ReadonlyArray<readonly [EstadoDaAssinatura, EventoDaAssinatura, EstadoDaAssinatura]> = [

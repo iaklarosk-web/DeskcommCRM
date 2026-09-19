@@ -52,6 +52,10 @@ export interface Assinatura {
   readonly cancelled_at: string | null;
   readonly cancel_reason: string | null;
   readonly last_event_at: string | null;
+  /** F19 (9033): cliente no gateway (Stripe `cus_…`); nulo em mock/operator. */
+  readonly customer_ref: string | null;
+  /** F19 (9033): fim do período de teste (D57 c); nulo = sem trial. */
+  readonly trial_ends_at: string | null;
 }
 
 export interface Fatura {
@@ -86,7 +90,7 @@ interface Deps {
 
 const COLUNAS = `id, organization_id, plan_code, status, origin, gateway, gateway_ref,
   current_period_start, current_period_end, failed_at, grace_until, blocked_at,
-  cancelled_at, cancel_reason, last_event_at`;
+  cancelled_at, cancel_reason, last_event_at, customer_ref, trial_ends_at`;
 
 function agoraDe(deps: Deps): Date {
   return (deps.agora ?? (() => new Date()))();
@@ -118,6 +122,8 @@ function normalizar(linha: Record<string, unknown>): Assinatura {
     cancelled_at: iso(linha.cancelled_at),
     cancel_reason: (linha.cancel_reason as string | null) ?? null,
     last_event_at: iso(linha.last_event_at),
+    customer_ref: (linha.customer_ref as string | null) ?? null,
+    trial_ends_at: iso(linha.trial_ends_at),
   };
 }
 
@@ -271,12 +277,24 @@ export async function iniciarCheckout(
 }
 
 export interface EventoDoGateway {
-  readonly gateway: "mock";
+  readonly gateway: "mock" | "stripe";
   readonly event_ref: string;
   readonly event_type: TipoDeEventoDoGateway;
   readonly occurred_at: string;
   readonly amount_cents?: number | null;
   readonly payload?: Readonly<Record<string, unknown>>;
+  /**
+   * F19 (ADR-042 §2): referências ESTÁVEIS do provedor. No mock não existem e
+   * `gateway_ref` recebe o `event_ref` (comportamento da F12); no Stripe
+   * `subscription_ref` é o `sub_…` (é por ele que o webhook seguinte acha a
+   * organização) e o `event_ref` é só o id do evento.
+   */
+  readonly subscription_ref?: string | null;
+  readonly customer_ref?: string | null;
+  /** ISO; só quando o provedor diz `trialing` (D57 c). `null` apaga. */
+  readonly trial_ends_at?: string | null;
+  /** O `livemode` do evento do Stripe; o mock não manda. */
+  readonly livemode?: boolean | null;
 }
 
 export type DesfechoDoEvento =
@@ -313,13 +331,13 @@ export async function aplicarEventoDoGateway(
       const assinatura = await lerAssinaturaEm(db, ctx);
       const gravado = await db.query<{ id: string }>(
         `insert into public.billing_events
-           (organization_id, subscription_id, gateway, event_ref, event_type, amount_cents, occurred_at, payload)
-         values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+           (organization_id, subscription_id, gateway, event_ref, event_type, amount_cents, occurred_at, payload, livemode)
+         values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
          on conflict (gateway, event_ref) do nothing
          returning id`,
         [
           ctx.organization_id, assinatura?.id ?? null, evento.gateway, evento.event_ref, evento.event_type,
-          evento.amount_cents ?? null, ocorrido, JSON.stringify(evento.payload ?? {}),
+          evento.amount_cents ?? null, ocorrido, JSON.stringify(evento.payload ?? {}), evento.livemode ?? null,
         ],
       );
       const eventoId = gravado.rows[0]?.id;
@@ -343,13 +361,22 @@ export async function aplicarEventoDoGateway(
       let atualizada: Assinatura;
       if (evento.event_type === "payment_confirmed") {
         const fim = new Date(ocorrido.getTime() + plano.period_days * 86_400_000);
+        // Referência estável do provedor quando ele a tem (Stripe: sub_…);
+        // senão o id do evento, como na F12. `customer_ref` só se o evento
+        // trouxer (coalesce mantém o que já estava). `trial_ends_at`: o
+        // provedor manda a data enquanto está em teste e `null` ao sair dele.
         const { rows } = await db.query<Record<string, unknown>>(
           `update public.subscriptions
               set status = $3, gateway = $4, gateway_ref = $5,
                   current_period_start = $6, current_period_end = $7,
-                  failed_at = null, grace_until = null, blocked_at = null, last_event_at = $6
+                  failed_at = null, grace_until = null, blocked_at = null, last_event_at = $6,
+                  customer_ref = coalesce($8, customer_ref),
+                  trial_ends_at = case when $9::boolean then $10::timestamptz else trial_ends_at end
             where id = $1 and organization_id = $2 returning ${COLUNAS}`,
-          [assinatura.id, ctx.organization_id, para, evento.gateway, evento.event_ref, ocorrido, fim],
+          [
+            assinatura.id, ctx.organization_id, para, evento.gateway, evento.subscription_ref ?? evento.event_ref, ocorrido, fim,
+            evento.customer_ref ?? null, evento.trial_ends_at !== undefined, evento.trial_ends_at ?? null,
+          ],
         );
         atualizada = normalizar(rows[0]!);
         const aberta = await faturaAbertaEm(db, ctx, assinatura.id);
@@ -368,6 +395,19 @@ export async function aplicarEventoDoGateway(
           );
         }
         await avisar(db, ctx, "subscription.activated", { plan_code: plano.code, current_period_end: fim.toISOString() });
+      } else if (evento.event_type === "cancelled") {
+        // F19 (ADR-042 §2, D44): o gateway avisa que a assinatura acabou no
+        // Portal — mesmo desfecho do `cancelar()` humano: dados preservados,
+        // acesso `billing_only`. O motivo nomeia a origem, nunca texto do
+        // provedor.
+        const { rows } = await db.query<Record<string, unknown>>(
+          `update public.subscriptions
+              set status = $3, cancelled_at = $4, cancel_reason = $5, last_event_at = $4
+            where id = $1 and organization_id = $2 returning ${COLUNAS}`,
+          [assinatura.id, ctx.organization_id, para, ocorrido, `cancelado no gateway ${evento.gateway}`],
+        );
+        atualizada = normalizar(rows[0]!);
+        incrementCounter("billing_subscription_cancelled", { from: assinatura.status });
       } else {
         const carencia = await diasDeCarencia(deps);
         const graceUntil = new Date(ocorrido.getTime() + carencia * 86_400_000);

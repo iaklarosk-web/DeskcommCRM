@@ -27197,7 +27197,7 @@ create table if not exists public.subscriptions (
   constraint subscriptions_origin_check check (origin in (
     'self_service', 'operator', 'seed', 'fixture', 'backfill'
   )),
-  constraint subscriptions_gateway_check check (gateway is null or gateway in ('mock')),
+  constraint subscriptions_gateway_check check (gateway is null or gateway in ('mock', 'stripe')),  -- vocabulário FINAL (9033); o bloco único drop+add está no apêndice 9033
   constraint subscriptions_periodo_coerente check (
     current_period_start is null or current_period_end is null or current_period_end > current_period_start
   ),
@@ -27242,8 +27242,8 @@ create table if not exists public.billing_events (
   applied boolean not null default false,
   ignored_reason text,
   payload jsonb not null default '{}'::jsonb,
-  constraint billing_events_gateway_check check (gateway in ('mock')),
-  constraint billing_events_event_type_check check (event_type in ('payment_confirmed', 'payment_failed')),
+  constraint billing_events_gateway_check check (gateway in ('mock', 'stripe')),  -- vocabulário FINAL (9033)
+  constraint billing_events_event_type_check check (event_type in ('payment_confirmed', 'payment_failed', 'cancelled')),  -- vocabulário FINAL (9033)
   constraint billing_events_amount_check check (amount_cents is null or amount_cents >= 0),
   constraint billing_events_ignored_reason_check check (ignored_reason is null or ignored_reason in (
     'out_of_order', 'unknown_subscription', 'no_transition'
@@ -27419,6 +27419,81 @@ end
 $f12_t01_fim$;
 
 notify pgrst, 'reload schema';
+
+
+-- Apêndice 9033 — o gateway `stripe` ao lado do `mock` (F19-T01, ADR-042 §3; D52 b, D57).
+-- Par idempotente da migration 20260919150000_9033_cobranca_por_stripe.sql.
+-- Os três CHECKs em BLOCO ÚNICO drop+add (a lição 26 da F14): o banco que
+-- ATUALIZA (staging, produção) tem a constraint da 9023 fechada em 'mock', e o
+-- `create table if not exists` acima não a toca. O vocabulário inline do
+-- create table foi editado para o FINAL, para que install e update convirjam
+-- (tests/unit/baseline-constraint-reconstruida.test.ts conta um `add
+-- constraint` por nome — este é o único).
+
+-- 1 · vocabulário dos gateways: mock e stripe
+alter table public.subscriptions drop constraint if exists subscriptions_gateway_check;
+alter table public.subscriptions add constraint subscriptions_gateway_check
+  check (gateway is null or gateway in ('mock', 'stripe'));
+
+alter table public.billing_events drop constraint if exists billing_events_gateway_check;
+alter table public.billing_events add constraint billing_events_gateway_check
+  check (gateway in ('mock', 'stripe'));
+
+-- 2 · o gateway também cancela (customer.subscription.deleted → cancelled)
+alter table public.billing_events drop constraint if exists billing_events_event_type_check;
+alter table public.billing_events add constraint billing_events_event_type_check
+  check (event_type in ('payment_confirmed', 'payment_failed', 'cancelled'));
+
+-- 3 · colunas do provedor real
+alter table public.subscriptions add column if not exists customer_ref text;
+alter table public.subscriptions add column if not exists trial_ends_at timestamptz;
+alter table public.billing_events add column if not exists livemode boolean;
+
+comment on column public.subscriptions.customer_ref is
+  'Id do cliente no gateway (Stripe: cus_…). Nulo em mock/operator. É por ele e por gateway_ref que o webhook acha a organização (ADR-042 §2).';
+comment on column public.subscriptions.trial_ends_at is
+  'Fim do período de teste (D57 c: 7 dias no Checkout). `trialing` do Stripe mapeia para active com esta data; nulo = sem trial.';
+comment on column public.billing_events.livemode is
+  'O `livemode` do evento do Stripe. Nulo no mock. Evento cujo livemode não bate com STRIPE_MODE é recusado ANTES de virar linha (422).';
+
+-- 4 · o webhook acha a assinatura pela referência do gateway
+create index if not exists subscriptions_gateway_ref_idx
+  on public.subscriptions (gateway, gateway_ref)
+  where gateway_ref is not null;
+
+comment on constraint billing_events_event_type_check on public.billing_events is
+  'Enum de TRÊS tipos (F12 + F19): payment_confirmed, payment_failed e cancelled (o Portal do Stripe cancela e o gateway avisa). Espelho de TIPOS_DE_EVENTO_DO_GATEWAY em src/billing/estados.ts. Nunca texto livre (G-78).';
+
+-- 5 · a migration termina lendo o que afirmou
+do $f19_t01_fim$
+declare
+  v_nome text;
+  v_def text;
+begin
+  foreach v_nome in array array['subscriptions_gateway_check', 'billing_events_gateway_check', 'billing_events_event_type_check'] loop
+    select pg_get_constraintdef(oid) into v_def from pg_constraint where conname = v_nome;
+    if v_def is null then
+      raise exception '9033: constraint % não existe', v_nome;
+    end if;
+    if v_nome like '%gateway%' and v_def not like '%''stripe''%' then
+      raise exception '9033: % não aceita stripe (%)', v_nome, v_def;
+    end if;
+    if v_nome = 'billing_events_event_type_check' and v_def not like '%''cancelled''%' then
+      raise exception '9033: % não aceita cancelled (%)', v_nome, v_def;
+    end if;
+  end loop;
+  if (select count(*) from information_schema.columns
+        where table_schema = 'public'
+          and ((table_name = 'subscriptions' and column_name in ('customer_ref', 'trial_ends_at'))
+            or (table_name = 'billing_events' and column_name = 'livemode'))) <> 3 then
+    raise exception '9033: faltou coluna (customer_ref, trial_ends_at, livemode)';
+  end if;
+  if not exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'subscriptions_gateway_ref_idx') then
+    raise exception '9033: índice subscriptions_gateway_ref_idx ausente';
+  end if;
+end
+$f19_t01_fim$;
+
 
 
 --
