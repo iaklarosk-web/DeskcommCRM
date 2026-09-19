@@ -30,7 +30,7 @@ import {
 } from "@/src/billing";
 import { withTenant, type TenantCtx } from "@/src/tenant-context";
 
-import { BotaoDeCheckout, BotaoDeTrocaDePlano, FormularioDeCancelamento } from "./_acoes";
+import { BotaoDeCheckout, BotaoDeTrocaDePlano, BotaoDoPortal, FormularioDeCancelamento } from "./_acoes";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +42,9 @@ function preco(plano: Plano): string {
   return `${plano.currency} ${(plano.price_cents / 100).toFixed(2)}`;
 }
 
-export default async function BillingPage() {
+export default async function BillingPage({ searchParams }: { searchParams: Promise<{ checkout?: string }> }) {
+  const { checkout } = await searchParams;
+  const agora = new Date().getTime();
   const user = await requireAuth();
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/app");
@@ -69,9 +71,13 @@ export default async function BillingPage() {
   const acesso = acessoDe(
     assinatura === null ? null : { status: assinatura.status, plan_code: assinatura.plan_code, grace_until: assinatura.grace_until },
   );
+  // F19 (ADR-042 §6, D57 b): com gateway `stripe`, troca e cancelamento são
+  // do Customer Portal — as ações da F12 saem da tela e as rotas respondem 409.
+  const noPortal = assinatura?.gateway === "stripe" && assinatura.customer_ref !== null;
   const podeContratar = assinatura === null || ["pending_payment", "past_due", "blocked", "cancelled"].includes(assinatura.status);
-  const podeTrocar = assinatura?.status === "active";
-  const podeCancelar = assinatura !== null && ["active", "past_due", "blocked"].includes(assinatura.status);
+  const podeTrocar = assinatura?.status === "active" && !noPortal;
+  const podeCancelar = assinatura !== null && ["active", "past_due", "blocked"].includes(assinatura.status) && !noPortal;
+  const emTrial = assinatura?.trial_ends_at !== null && assinatura?.trial_ends_at !== undefined && new Date(assinatura.trial_ends_at).getTime() > agora;
 
   return (
     <div className="flex h-full flex-col gap-6 p-6" data-testid="billing">
@@ -81,6 +87,17 @@ export default async function BillingPage() {
           {t("Plano, estado da assinatura, uso do período e faturas desta empresa. Gateway em modo de teste: nenhuma cobrança real acontece.")}
         </p>
       </header>
+
+      {checkout === "ok" && assinatura?.status === "pending_payment" ? (
+        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="billing-aguardando-confirmacao" role="status">
+          {t("Pagamento enviado. Aguardando a confirmação do gateway — esta página atualiza sozinha quando ela chegar.")}
+        </p>
+      ) : null}
+      {checkout === "cancelado" ? (
+        <p className="rounded-md border px-3 py-2 text-sm text-muted-foreground" data-testid="billing-checkout-cancelado" role="status">
+          {t("O pagamento não foi concluído. Você pode tentar de novo quando quiser.")}
+        </p>
+      ) : null}
 
       <section className="rounded-lg border p-4" aria-labelledby="billing-assinatura">
         <h2 id="billing-assinatura" className="text-sm font-medium">{t("Assinatura")}</h2>
@@ -98,6 +115,18 @@ export default async function BillingPage() {
             <dd data-testid="billing-periodo">{data(assinatura.current_period_start)} → {data(assinatura.current_period_end)}</dd>
             <dt className="text-muted-foreground">{t("Acesso")}</dt>
             <dd data-testid="billing-acesso" data-mode={acesso.mode}>{acesso.mode}</dd>
+            {emTrial ? (
+              <>
+                <dt className="text-muted-foreground">{t("Período de teste até")}</dt>
+                <dd data-testid="billing-trial-ate">{data(assinatura.trial_ends_at)}</dd>
+              </>
+            ) : null}
+            {assinatura.gateway ? (
+              <>
+                <dt className="text-muted-foreground">{t("Gateway")}</dt>
+                <dd data-testid="billing-gateway" data-gateway={assinatura.gateway}>{assinatura.gateway}</dd>
+              </>
+            ) : null}
             {assinatura.grace_until ? (
               <>
                 <dt className="text-muted-foreground">{t("Prazo para regularizar")}</dt>
@@ -112,6 +141,12 @@ export default async function BillingPage() {
             ) : null}
           </dl>
         )}
+        {noPortal ? (
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <BotaoDoPortal />
+            <span className="text-xs text-muted-foreground">{t("Trocar de plano, atualizar o cartão e cancelar acontecem no portal do gateway; as mudanças aparecem aqui em seguida.")}</span>
+          </div>
+        ) : null}
         {podeCancelar ? (
           <div className="mt-4">
             <FormularioDeCancelamento />

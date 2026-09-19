@@ -71,6 +71,17 @@ export interface Fatura {
   readonly gateway_ref: string | null;
 }
 
+/**
+ * F19 (ADR-042 §6, D57 b): organização com gateway `stripe` troca de plano e
+ * cancela no Customer Portal — as rotas da F12 respondem 409 `use_portal`.
+ */
+export class UsePortal extends Error {
+  constructor(public readonly acao: "plan_change" | "cancel") {
+    super(`ação ${acao} acontece no Customer Portal do gateway`);
+    this.name = "UsePortal";
+  }
+}
+
 export class TransicaoIlegal extends Error {
   constructor(
     public readonly de: EstadoDaAssinatura | "none",
@@ -465,6 +476,7 @@ export async function mudarPlano(ctx: TenantCtx, entrada: { plan_code: string },
     async (db) => {
       const assinatura = await lerAssinaturaEm(db, ctx);
       if (assinatura === null) throw new TransicaoIlegal("none", "plan_change");
+      if (assinatura.gateway === "stripe") throw new UsePortal("plan_change");
       if (assinatura.status !== "active") throw new TransicaoIlegal(assinatura.status, "plan_change");
       const plano = await obterPlano(entrada.plan_code, { pool: deps.pool });
       const { rows } = await db.query<Record<string, unknown>>(
@@ -485,6 +497,7 @@ export async function cancelar(ctx: TenantCtx, entrada: { reason: string }, deps
     async (db) => {
       const assinatura = await lerAssinaturaEm(db, ctx);
       if (assinatura === null) throw new TransicaoIlegal("none", "cancelled");
+      if (assinatura.gateway === "stripe") throw new UsePortal("cancel");
       const para = transicao(assinatura.status, "cancelled");
       if (para === null) throw new TransicaoIlegal(assinatura.status, "cancelled");
       const { rows } = await db.query<Record<string, unknown>>(

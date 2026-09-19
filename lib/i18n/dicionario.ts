@@ -8707,6 +8707,14 @@ export const DICIONARIO: Traducoes = {
   "Sites que podem embutir": {"es":"Sitios que pueden incrustar"},
   "Uma origem por linha (https://www.suaempresa.com.br). Vazio = qualquer site pode embutir o chat.": {"es":"Un origen por línea (https://www.tuempresa.com). Vacío = cualquier sitio puede incrustar el chat."},
   "Salvar origens": {"es":"Guardar orígenes"},
+  // F19 (ADR-042 §6): a tela de cobrança com o gateway real — Portal, trial e o retorno do Checkout.
+  "Gerenciar assinatura": {"es":"Gestionar suscripción"},
+  "Não foi possível abrir o portal de assinatura.": {"es":"No fue posible abrir el portal de suscripción."},
+  "Pagamento enviado. Aguardando a confirmação do gateway — esta página atualiza sozinha quando ela chegar.": {"es":"Pago enviado. Esperando la confirmación de la pasarela: esta página se actualiza sola cuando llegue."},
+  "O pagamento não foi concluído. Você pode tentar de novo quando quiser.": {"es":"El pago no se completó. Puedes intentarlo de nuevo cuando quieras."},
+  "Período de teste até": {"es":"Período de prueba hasta"},
+  "Gateway": {"es":"Pasarela"},
+  "Trocar de plano, atualizar o cartão e cancelar acontecem no portal do gateway; as mudanças aparecem aqui em seguida.": {"es":"Cambiar de plan, actualizar la tarjeta y cancelar ocurren en el portal de la pasarela; los cambios aparecen aquí enseguida."},
 };
 
 /**

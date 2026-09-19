@@ -474,6 +474,14 @@ export const AUDIT_ACTIONS = [
   "billing.checkout_started",
   "billing.plan_changed",
   "billing.subscription_cancelled",
+  // F19 (ADR-042 §5/§6): o Portal do Stripe aberto pelo tenant_admin e as
+  // cinco ações do padrão KN do /admin sobre a assinatura de uma empresa.
+  "billing.portal_opened",
+  "billing.admin.suspended",
+  "billing.admin.resumed",
+  "billing.admin.trial_extended",
+  "billing.admin.provisioned",
+  "billing.admin.dashboard_opened",
   // F13 (ADR-034 §2): o CRM comercial — definições de campo por organização,
   // distribuição/claim da fila de oportunidades e o vínculo com o pedido.
   "crm_fields.updated",

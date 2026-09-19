@@ -9,7 +9,7 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
 import { requireRole } from "@/lib/auth/require-role";
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { mudarPlano, PlanoDesconhecido, TransicaoIlegal } from "@/src/billing";
+import { mudarPlano, PlanoDesconhecido, TransicaoIlegal, UsePortal } from "@/src/billing";
 
 import { contextoDeCobranca } from "../../_ctx";
 
@@ -42,6 +42,7 @@ export async function POST(req: Request): Promise<Response> {
     return ok({ subscription: assinatura }, { requestId });
   } catch (erro) {
     if (erro instanceof PlanoDesconhecido) return fail("validation_failed", "Plano desconhecido.", 422, { requestId });
+    if (erro instanceof UsePortal) return fail("use_portal", "Esta assinatura é gerenciada no portal do gateway: troque de plano por Gerenciar assinatura.", 409, { requestId });
     if (erro instanceof TransicaoIlegal) return fail("state_conflict", "Só uma assinatura ativa troca de plano.", 409, { requestId });
     return fail("internal_error", "Não foi possível trocar o plano.", 500, { requestId });
   }

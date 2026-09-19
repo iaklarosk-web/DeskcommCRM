@@ -129,3 +129,32 @@ export function BotoesDoCheckoutMock({ checkoutRef }: { checkoutRef: string }) {
     </div>
   );
 }
+
+/**
+ * F19 (ADR-042 §6, D57 b): a assinatura com gateway `stripe` é gerenciada no
+ * Customer Portal — trocar de plano, atualizar o cartão e cancelar acontecem
+ * lá e voltam pelo webhook. O botão pede a sessão ao servidor e navega para
+ * fora (é outro site).
+ */
+export function BotaoDoPortal() {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50"
+      data-testid="billing-portal"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        const r = await chamar("/api/v1/billing/portal", {});
+        setBusy(false);
+        if (!r.ok) return void toast.error(r.message ? t(r.message) : t("Não foi possível abrir o portal de assinatura."));
+        const url = r.data?.url;
+        if (typeof url === "string") window.location.assign(url);
+      }}
+    >
+      {busy ? t("Aguarde…") : t("Gerenciar assinatura")}
+    </button>
+  );
+}

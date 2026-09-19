@@ -22,6 +22,7 @@ export {
 export { PlanoDesconhecido, listarPlanos, obterPlano, type Plano } from "./planos";
 export {
   TransicaoIlegal,
+  UsePortal,
   aplicarEventoDoGateway,
   cancelar,
   criarAssinatura,

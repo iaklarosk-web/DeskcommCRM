@@ -18,7 +18,7 @@ import path from "node:path";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { aplicarEventoDoGateway, iniciarCheckout, lerAssinatura, varrerCarencia } from "@/src/billing";
+import { aplicarEventoDoGateway, cancelar, iniciarCheckout, lerAssinatura, mudarPlano, UsePortal, varrerCarencia } from "@/src/billing";
 import { assinarComoOStripe, criarSessaoDeCheckout, criarSessaoDoPortal } from "@/src/billing/gateway/stripe";
 import { receberEventoStripe, type DepsDoReceptor } from "@/src/billing/webhook-stripe";
 import type { TenantCtx } from "@/src/tenant-context";
@@ -276,12 +276,113 @@ describe("F19-T02 — as três recusas que o mock nunca teve (nenhuma grava linh
   });
 });
 
-// Os casos da T03 (carência, cancelamento preservando dados, portal) e da T04
-// (padrão KN do /admin, cockpit) entram abaixo; a linha `stripe:` é gravada no
-// último deles — os `void` mantêm os imports vivos até lá.
-void varrerCarencia;
-void criarSessaoDoPortal;
+describe("F19-T03 — D44 sobre eventos reais, o Portal e o cancelamento que preserva dados", () => {
+  const SUB_C = "sub_f19_carencia_c";
+  const T_FALHA = 1758895200; // o `created` da fixture invoice.payment_failed
+
+  it("invoice.payment_failed abre a carência (past_due com grace_until = +7 dias) e avisa o tenant_admin", async () => {
+    // Arrange — organização C ativa no Stripe
+    await pool.query(
+      `insert into public.subscriptions (organization_id, plan_code, status, origin, gateway, gateway_ref, customer_ref, current_period_start, current_period_end, last_event_at)
+       values ($1, 'PLAN_A', 'active', 'fixture', 'stripe', $2, 'cus_f19_c', to_timestamp($3) - interval '30 days', to_timestamp($3) + interval '1 day', to_timestamp($3) - interval '30 days')`,
+      [ORG_C, SUB_C, T_FALHA],
+    );
+    const evento = fixture("invoice.payment_failed");
+    (evento.data as { object: Record<string, unknown> }).object.subscription = SUB_C;
+
+    // Act
+    const r = await entregar(evento);
+
+    // Assert
+    expect(r).toMatchObject({ status: 200, code: "ok", organization_id: ORG_C });
+    const a = await lerAssinatura(ctxC, { pool });
+    expect(a?.status).toBe("past_due");
+    expect(a?.grace_until).toBe(new Date((T_FALHA + 7 * 86_400) * 1000).toISOString());
+    expect(await conta(`select count(*)::text as n from public.notifications where organization_id = $1 and event = 'subscription.payment_failed'`, [ORG_C])).toBe(1);
+    console.info("f19-carencia: past_due=1/1 grace_days=7 aviso=1/1");
+  });
+
+  it("a varredura da carência bloqueia depois de 7 dias — antes disso não (blocked_after_grace=1/1)", async () => {
+    // Act — um dia antes do prazo, nada; no prazo, bloqueia; de novo, 0
+    const antes = await varrerCarencia(ctxC, { pool, agora: () => new Date((T_FALHA + 6 * 86_400) * 1000) });
+    const noPrazo = await varrerCarencia(ctxC, { pool, agora: () => new Date((T_FALHA + 7 * 86_400 + 1) * 1000) });
+    const deNovo = await varrerCarencia(ctxC, { pool, agora: () => new Date((T_FALHA + 8 * 86_400) * 1000) });
+
+    // Assert
+    expect(antes).toEqual({ blocked: 0, notified: 0 });
+    expect(noPrazo.blocked).toBe(1);
+    expect(deNovo).toEqual({ blocked: 0, notified: 0 });
+    const a = await lerAssinatura(ctxC, { pool });
+    expect(a?.status).toBe("blocked");
+    medidas.blocked_after_grace += 1;
+    console.info("f19-carencia: blocked_after_grace=1/1 antes_do_prazo=0/0 idempotente=0/0");
+  });
+
+  it("o pagamento que chega depois do bloqueio reativa (invoice.paid → active), e o Portal abre pela referência do cliente (portal_link=1/1)", async () => {
+    // Arrange
+    const pago = fixture("invoice.paid");
+    pago.id = "evt_1F19Fixture000000000031";
+    pago.created = T_FALHA + 9 * 86_400;
+    (pago.data as { object: Record<string, unknown> }).object.subscription = SUB_C;
+
+    // Act
+    const r = await entregar(pago);
+    const portal = await criarSessaoDoPortal({ base: falso.base, chave: CHAVE }, { customer_ref: "cus_f19_c", return_url: "http://app/billing" });
+
+    // Assert
+    expect(r).toMatchObject({ status: 200, code: "ok" });
+    expect((await lerAssinatura(ctxC, { pool }))?.status).toBe("active");
+    expect(portal.url).toContain("/portal/cus_f19_c");
+    const chamada = falso.chamadas.find((c) => c.caminho === "/v1/billing_portal/sessions");
+    expect(chamada?.form).toMatchObject({ customer: "cus_f19_c", return_url: "http://app/billing" });
+    medidas.portal_link += 1;
+    console.info("f19-portal: reativada=1/1 portal_link=1/1");
+  });
+
+  it("com gateway stripe, trocar de plano e cancelar pelas rotas da F12 respondem UsePortal (409), sem mudar nada", async () => {
+    await expect(mudarPlano(ctxC, { plan_code: "PLAN_B" }, { pool })).rejects.toBeInstanceOf(UsePortal);
+    await expect(cancelar(ctxC, { reason: "teste" }, { pool })).rejects.toBeInstanceOf(UsePortal);
+    const a = await lerAssinatura(ctxC, { pool });
+    expect(a).toMatchObject({ status: "active", plan_code: "PLAN_A" });
+    console.info("f19-portal: use_portal=2/2 (plan_change, cancel)");
+  });
+
+  it("customer.subscription.deleted cancela e PRESERVA os dados: as linhas da organização continuam nas N tabelas (cancelled_preserved=N/N)", async () => {
+    // Arrange — dado da organização C em tabelas de negócio, para contar antes e depois
+    await pool.query(`insert into public.contacts (organization_id, name, phone_number) values ($1, 'Cliente F19', '+5511999990001')`, [ORG_C]);
+    const TABELAS = ["organizations", "user_organizations", "subscriptions", "billing_events", "invoices", "notifications", "contacts"];
+    const contar = async () => {
+      const r: Record<string, number> = {};
+      for (const t of TABELAS) r[t] = await conta(`select count(*)::text as n from public.${t} where ${t === "organizations" ? "id" : "organization_id"} = $1`, [ORG_C]);
+      return r;
+    };
+    const antes = await contar();
+    expect(Object.values(antes).every((n) => n >= 1), JSON.stringify(antes)).toBe(true);
+    const evento = fixture("customer.subscription.deleted");
+    evento.created = T_FALHA + 10 * 86_400;
+    (evento.data as { object: Record<string, unknown> }).object.id = SUB_C;
+
+    // Act
+    const r = await entregar(evento);
+
+    // Assert
+    expect(r).toMatchObject({ status: 200, code: "ok", organization_id: ORG_C });
+    const a = await lerAssinatura(ctxC, { pool });
+    expect(a?.status).toBe("cancelled");
+    expect(a?.cancelled_at).not.toBeNull();
+    expect(a?.cancel_reason).toBe("cancelado no gateway stripe");
+    const depois = await contar();
+    let preservadas = 0;
+    for (const t of TABELAS) if (depois[t]! >= antes[t]!) preservadas++;
+    expect(preservadas).toBe(TABELAS.length);
+    medidas.cancelled_preserved += preservadas;
+    medidas.cancelled_preserved_total += TABELAS.length;
+    console.info(`f19-cancelamento: cancelled_preserved=${preservadas}/${TABELAS.length} tabelas=${TABELAS.join(",")}`);
+  });
+});
+
+// Os casos da T04 (padrão KN do /admin, cockpit) entram abaixo; a linha
+// `stripe:` é gravada no último deles — os `void` mantêm os imports vivos até lá.
 void aplicarEventoDoGateway;
-void ctxC;
 void gravarLinhaDoVerify;
 void medidas;
