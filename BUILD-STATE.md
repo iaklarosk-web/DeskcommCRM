@@ -1,24 +1,24 @@
 ---
-updated_at: 2026-09-18T17:25:00Z
-head_commit: 10fde380   # commit de fechamento da F14; código VALIDADO pelo gate f14-gate-04 (READY (staging), dentro do staging, F14 — ADR-038/039) = 6b493892; a diferença é a guarda do baseline (ai.limit_reached), a prova real scripts/prod/jornada-webchat.ts e docs — validada pela própria linha from-scratch: (verify inteiro no clone de 10fde380, READY (F14))
+updated_at: 2026-09-19T06:30:00Z
+head_commit: __HEAD__   # commit de fechamento da F18; código VALIDADO pelo gate f18-gate-04 (READY (staging), dentro do staging, F18 — ADR-040/041) = e5c26c4e; depois dele entraram o conserto do drain (sem ele a unificação valia só para quem já tinha agente herdado), a jornada do motor e docs
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
-plan_version: "2.10 (2026-09-18); D38–D55; ADR-006…039"
+plan_version: "2.11 (2026-09-19); D38–D56; ADR-006…041"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
 current_phase: F18
-next_task: F16-T00             # F14 (D55) FECHADA em 18/09/2026 (READY (staging), f14-gate-04 sobre 6b493892; produção com o código da F14; webchat_real:). Próxima construção só com o proprietário (D50 c): F16 / Stripe + padrão KN do /admin / F17 / unificar o turno de produção (§B8) — ver COMECE-AQUI no CRM-OS
-status: READY_STAGING          # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26); F14 fechada com READY (staging) em 6b493892 (bloco abaixo); F16+ aguarda o proprietário
+next_task: F16-T00             # F18 (D56) FECHADA em 19/09/2026 (READY (staging), f18-gate-04 sobre e5c26c4e; produção com o código da F18; engine_real:). Próxima construção só com o proprietário (D50 c): F16 / Stripe + padrão KN do /admin / F17 / as 41 ferramentas da fila de espera — ver COMECE-AQUI no CRM-OS
+status: READY_STAGING          # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26); F18 fechada com READY (staging) em e5c26c4e (bloco abaixo); F16+ aguarda o proprietário
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
 hosting_confirmed: yes         # D50 (11/09/2026): staging nesta VPS, Docker Compose com Supabase local, acesso só por Tailscale — ADR-027
 build_env: "Claude Code na VPS (4 núcleos/16 GB), worktree DeskcommCRM-v1.17.0; validação em serviços/bancos descartáveis e no staging; WHATSAPP_MODE=mock AI_PROVIDER=mock; F15: 3 chamadas reais à Anthropic (ai_real:); F14: 12 turnos Haiku reais no chat do site da organização do dono (webchat_real:, teto 20)"
-verify_summary_last_context: "f14-gate-04 aprovado em 18/09/2026 sobre 6b493892, 7455 s (12:03Z→14:07Z), exit 0, DENTRO do staging (VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202), current_phase=F14 com a spec f14-canais-e-agenda (15 specs, 72 testes, ADR-039 §1) e a linha channels: (ADR-039 §2). Quatro tentativas: 01 cascata LGPD sem webchat_sessions (migration 9031) + visitanteNaPagina fail-closed + liveVisitor nas suítes de canal + fila de saída compartilhada; 02 interrompida (export LGPD sem o bloco; WHATSAPP_MODE=mock dublando o webchat); 03 só f02-support-readonly-api com timeout de navegação sob load 9.9 da sessão vizinha; 04 READY. mutants_killed=73/73. Produção recebeu o código DEPOIS do READY (scripts/prod/up.sh + prova.sh, linha prod:; a 1ª subida parou na guarda 27302 do baseline por 1 linha ai.limit_reached da F15 — guarda estendida); webchat_real: 3 turnos reais na organização do dono (D55 f). READY (staging) = verificado em staging; owner_validated em branco; BLOCKER-PROD aberto (liberado só para o tenant Deka, D53)."
+verify_summary_last_context: "f18-gate-04 aprovado em 19/09/2026 sobre e5c26c4e, ≈7000 s (02:5xZ→04:51Z), exit 0, DENTRO do staging (VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202), current_phase=F18 com a spec f18-motor-unico (16 specs, 79 testes, ADR-041 §1) e a linha engine: (ADR-041 §2). Quatro tentativas: 01 as seis suítes do turno herdado viam 'nenhuma mensagem saiu' porque o padrão virou o motor novo (cada uma passa a declarar ai.engine=legacy) + a spec da F15 contava 14 ações (são 28); 02 o passo shell PENDUROU 1h25 num head -1 esperando stdin — nenhum passo tinha timeout (ADR-041 §5, §B22); 03 o desvio pegava o modo assistido, ler a chave derrubava o turno com pool dublado, e o report ignorava a linha engine (gravada e não lida); 04 READY. mutants_killed=77/77. Produção recebeu o código DEPOIS do READY (prod:); engine_real: o despacho respondendo pelo motor novo, medido em produção (D56 f). READY (staging) = verificado em staging; owner_validated em branco; BLOCKER-PROD aberto (liberado só para o tenant Deka, D53)."
 verify_summary_last: |
   VERIFY SUMMARY
-  scope=phase phase=F14 current_phase=F14 environment=staging
+  scope=phase phase=F18 current_phase=F18 environment=staging
   build=ok lint=ok typecheck=ok shell=ok
-  unit=8553/8553 integration=225/225 db=1677/1677 e2e=72/72 baseline_n0=8997
-  baseline_comparable: scope=unit+db passed=10230 required=8738 full_n0=pending
-  e2e_scope: F14-required passed=72/72 specs=15/15
+  unit=8561/8561 integration=240/240 db=1677/1677 e2e=79/79 baseline_n0=8997
+  baseline_comparable: scope=unit+db passed=10238 required=8738 full_n0=pending
+  e2e_scope: F18-required passed=79/79 specs=16/16
   isolation: tables=139 ops=4 dirs=2 leaks=0 (material_cross_org=97/139)
   rls-coverage: tables_with_org_id=139 policies_found=116 missing=0 service_only_with_grant=0
   rbac: roles=4 denied_expected=32 denied_actual=32
@@ -35,21 +35,24 @@ verify_summary_last: |
   crm: fields_defined=6 values_rejected=3/3 values_preserved=4/4 queue_size=5 distributed=5/5 balanced=1 second_claim_rejected=1/1 history_types=3 orders_linked=1/1 cross_org_link_denied=1/1 report_indicators=14/14 roles_denied=3/3
   autonomy: policy_modes=4/4 ai_task_created=1/1 limit_hits=1/1 calls_after_limit=0/3 paused=1/1 resumed=1/1 handoffs=4 balanced=1 assignees_distinct=3 rules=4 runs=4/4 replays=4 duplicate_runs=0 outside_catalog_denied=1/1 reindexed=2/2 unchanged_skipped=4/4 sources_cited=1/1 roles_denied=3/3
   channels: webchat_sessions=96 identified=12/12 contacts_created=11/11 messages_in=56 ai_replies=1/1 ai_outside_window=1/1 handoff_queued=1/1 ip_limited=1/1 org_limited=1/1 flood_calls_capped=1/1 cross_org_denied=1/1 appointments=7 conflicts_blocked=1/1 revoked_blocked=1/1 tz_ok=1/1 proposed=2/2 approved=1/1 denied_by_policy=1/1 roles_denied=2/2
-  replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=72/72 demo2=72/72 specs=15/15 org_a=seed-replica)
-  secrets: files_scanned=559 findings=0
-  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=73/73
+  engine: saas_turns=1 legacy_turns=1 volta_atras=1/1 heranca_prompt=1/1 heranca_acervo=1/1 limite_diario_nega=1/1 cancel_allow=1/1 cancel_passado_negado=1/1 cancel_auditado=1/1 policy_approve_pendura=1/1 tools_migradas=13/13 auditoria=5/5 roles_denied=2/2 fora_do_catalogo_negado=1/1 inventadas_descartadas=1/1
+  replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=79/79 demo2=79/79 specs=16/16 org_a=seed-replica)
+  secrets: files_scanned=571 findings=0
+  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=77/77
   debt_known=0 skip_only_occurrences=15 violations=0
   STATUS: READY (staging)
-restore: tables=184 tables_restored=184 rows=21623 rows_diff=0 dump=staging-20260918T141329Z.dump target=restore_20260918_141339 seconds=12 at=20260918T141339Z
-smoke: steps=8 pass=8/8 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 owner_login=1/1 subscriptions[deka]=active/full subscriptions[demo2]=active/full orgs_without_subscription=0/3 webchat_disabled_denied=2/2 tenants=deka,demo2
-p95_ms: endpoints=3/3 health=26 contacts=505 conversations=523 samples=20 url=http://127.0.0.1:3200
-staging: compose=crm-staging services_running=15/15 memory_mib=2254 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F14(6b493892)
-prod: compose=crm-prod services_running=14/14 config_vars=27/27 placeholders=0/27 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=2 orgs_without_subscription=0/2 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only backup=1/1 restore_rows_diff=0 sha=6b493892
+  exit=0
+restore: tables=184 tables_restored=184 rows=27296 rows_diff=0 dump=staging-20260919T045640Z.dump target=restore_20260919_045641 seconds=7 at=20260919T045641Z
+smoke: steps=9 pass=9/9 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 owner_login=1/1 subscriptions[deka]=active/full subscriptions[demo2]=active/full orgs_without_subscription=0/3 webchat_disabled_denied=2/2 engine_saas=2/2 tenants=deka,demo2
+p95_ms: endpoints=3/3 health=24 contacts=383 conversations=352 samples=20 url=http://127.0.0.1:3200
+staging: compose=crm-staging services_running=15/15 memory_mib=2053 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F18(e5c26c4e)
+prod: compose=crm-prod services_running=14/14 config_vars=27/27 placeholders=0/27 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=2 orgs_without_subscription=0/2 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only backup=1/1 restore_rows_diff=0 sha=e5c26c4e8
 tenant_deka: created=1 plan=PLAN_C subscription=active origin=operator admin=platform_admin invites_sent=0/0 orgs=2 orgs_without_subscription=0/2 (D53, 14/09/2026 10:40Z)
-prod_stack: compose=crm-prod services_running=14/14 memory_mib=1599 ports=127.0.0.1+tailscale(3300,56431,56432) public_ports=0   # F14: scripts/prod/up.sh (rebuild + baseline com os apêndices 9030–9031) em 221 s, 18/09 14:2xZ, DEPOIS do READY (ADR-038 §2 T05); a 1ª subida parou na guarda 27302 (notifications com 1 ai.limit_reached da prova ai_real da F15) — lista de tipos do apêndice 9023 estendida; 9030/9031 no banco de produção 1/1/1
-restore_prod: tables=184 tables_restored=184 rows=646 rows_diff=0 dump=prod-20260918T142544Z.dump target=restore_20260918_142545 seconds=19 at=20260918T142545Z
+prod_stack: compose=crm-prod services_running=14/14 memory_mib=2074 ports=127.0.0.1+tailscale(3300,56431,56432) public_ports=0   # F18: scripts/prod/up.sh DEPOIS do READY; o apêndice 9032 aplicou-se no banco que ATUALIZA — o ponto que havia reprovado no staging; 9032 em produção 1/1
+restore_prod: tables=184 tables_restored=184 rows=833 rows_diff=0 dump=prod-20260919T051008Z.dump target=restore_20260919_051009 seconds=10 at=20260919T051009Z
 ai_real: turns=3/3 usage_delta=3/3 provider=anthropic model=claude-haiku-4-5 cost_cents=0.0162 limit_hit=1/1 denied=3/3 calls_after_limit=0/3 paused=1/1 notified=1 limit_restored=1/1 day=2026-09-15 at=2026-09-15T03:56:08Z   # F15-T06 (ADR-036 §3, D54 g): scripts/prod/jornada-limite-ia.ts no crm-prod-worker, organização do dono, FORA do bloco (o verify força mock)
 webchat_real: sessions=1/1 identified=1/1 turns=3/3 delivered=3/3 visible=3/3 provider=anthropic model=claude-haiku-4-5 cost_cents=0.34357 flood_capped=1/1 calls_after_limit=0/1 cleaned=1/1 settings_rows_restored=1/1 at=2026-09-18T14:38:04Z   # F14-T05 (ADR-038 §2, D55 f): scripts/prod/jornada-webchat.ts no crm-prod-worker, organização do dono, FORA do bloco; rodada 4 de 4 (12 turnos reais no dia, teto 20; rodadas 1–2 mediram ai.enabled ausente, rodada 3 gravou o padrão como linha — ver evidência)
+engine_real: dispatch_turns=2/2 delivered=2/2 visible=2/2 handoff_na_segunda=0/1 volta_atras=1/1 provider=anthropic model=claude-sonnet-5 cost_cents=nao_precificado limite_segurou=1/1 calls_after_limit=0/1 cleaned=1/1 settings_rows_restored=1/1 at=2026-09-19T06:02:59Z   # F18-T05 (ADR-040 §1, D56 f): scripts/prod/jornada-motor.ts no crm-prod-worker — a mensagem entra pela rota pública, o DESPACHO decide o motor e o turno com política/teto/auditoria responde; com legacy ninguém responde. Modelo saiu em sonnet-5 (padrão da organização, não Haiku) e custo não precificado: §B23
 demo3: created=1 smoke=pass=8/8 e2e[demo3]=41/41 specs=10/10 removed=1 tenants=3   # F14 fechamento, 18/09 14:40Z→14:59Z, staging com o código da F14 (scripts/verify/tenant-efemero.sh: inventário fixo da F07 = 10 specs)
 from-scratch: steps=7 pass=7/7 verify_exit=0 status="READY (F14)" clone=.from-scratch-g3VB commit=10fde380   # F14 fechamento, 18/09 15:00Z→17:19Z (verify 8105 s no clone, fase=F14 lida da origem; unit 8553, integração 225, db 1677, e2e 72/72 ×2 em 15 specs, mutantes 73/73, violations=0); segunda tentativa (a 1ª morreu em 4 s: FROM_SCRATCH_LOG_DIR relativo não existe depois do cd para o clone)
 ---

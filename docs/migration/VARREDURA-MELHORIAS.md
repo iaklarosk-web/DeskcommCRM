@@ -389,6 +389,19 @@ passo no `step` do `verify.sh` (o teto dá para ser generoso — 40 min cobre o 
 e `</dev/null` nas provas de shell, que não leem entrada. Custo: baixo. **Risco enquanto durar:**
 um gate que pendura à noite custa a janela inteira e parece que "ainda está rodando".
 
+### B23. O turno usa o modelo PADRÃO DA ORGANIZAÇÃO, e o custo dele não é precificado (19/09/2026)
+Dois lados do mesmo achado, medidos na jornada do motor em produção:
+(a) `responderTurno` rodando no WORKER escolhe o modelo por `organizations.settings.llm.default_model`
+(`origem_da_escolha=padrao_da_organizacao`), não pelo `AI_CHAT_MODEL` que a jornada injeta no
+processo — a variável só vale quando o turno roda no MESMO processo do script (F14). Consequência
+medida: 5 chamadas `agent_turn` saíram em `claude-sonnet-5` (61.154 tokens de entrada, 3.640 de
+saída) quando o teto combinado era Haiku. Conserto para a próxima prova: gravar e devolver
+`llm.default_model` junto com as chaves de `tenant_settings`.
+(b) `llm_calls.cost_cents` fica NULO para `claude-sonnet-5` e `ai_usage_events.estimated_cost_cents`
+recebe `coalesce(...,0)` — ou seja, o consumo é registrado com custo ZERO. O teto diário da F15 conta
+TURNOS, então o freio continua valendo; o que não existe é a conta em dinheiro, e a tela de uso de IA
+mostra zero para quem usa esse modelo. **Risco enquanto durar:** o dono não vê o que gasta.
+
 ## C. Portões do proprietário — o que a engenharia não pode abrir sozinha
 
 D49 suspendeu a pausa por fase de D47, mas preservou D11–D13. Estes itens não

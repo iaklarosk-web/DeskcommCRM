@@ -82,7 +82,49 @@ Quatro tentativas, e cada uma achou coisa diferente:
 Bloco integral em BUILD-STATE.md (verify_summary_last). Logs em .verify-logs/f18-gate-01…04 (fora do git).
 
 == Linhas fora do bloco (BUILD-STATE) ==
-__FORA__
+staging (depois do READY, imagem e5c26c4e): up.sh 15/15
+restore: tables=184 tables_restored=184 rows=27296 rows_diff=0 dump=staging-20260919T045640Z.dump target=restore_20260919_045641 seconds=7 at=20260919T045641Z
+smoke: steps=9 pass=9/9 … webchat_disabled_denied=2/2 engine_saas=2/2 tenants=deka,demo2
+p95_ms: endpoints=3/3 health=24 contacts=383 conversations=352 samples=20 url=http://127.0.0.1:3200
+staging: compose=crm-staging services_running=15/15 memory_mib=2053 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F18(e5c26c4e)
+produção (DEPOIS do READY): scripts/prod/up.sh 14/14 — o apêndice 9032 aplicou-se no banco que
+  ATUALIZA (era exatamente o ponto que havia reprovado no staging); 9032 no banco de produção 1/1.
+prod: compose=crm-prod services_running=14/14 config_vars=27/27 placeholders=0/27 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=2 orgs_without_subscription=0/2 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only backup=1/1 restore_rows_diff=0 sha=e5c26c4e8
+prod_stack: compose=crm-prod services_running=14/14 memory_mib=2074 ports=127.0.0.1+tailscale(3300,56431,56432) public_ports=0
+restore_prod: tables=184 tables_restored=184 rows=833 rows_diff=0 dump=prod-20260919T051008Z.dump target=restore_20260919_051009 seconds=10 at=20260919T051009Z
+
+engine_real (D56 f — o DESPACHO em produção, scripts/prod/jornada-motor.ts no crm-prod-worker):
+  engine_real: dispatch_turns=2/2 delivered=2/2 visible=2/2 handoff_na_segunda=0/1 volta_atras=1/1
+  provider=anthropic model=claude-sonnet-5 cost_cents=nao_precificado limite_segurou=1/1
+  calls_after_limit=0/1 cleaned=1/1 settings_rows_restored=1/1 at=2026-09-19T06:02:59Z
+
+  É a linha que fecha o §B8 como FATO: a mensagem do visitante entrou pela rota pública, emitiu
+  `ai_agent.dispatch_requested`, o worker de PRODUÇÃO decidiu o motor pela chave da organização e o
+  turno com política/teto/auditoria respondeu — entregue e visível na página. Com `legacy`, ninguém
+  respondeu (`volta_atras=1/1`): a chave decide, não o acaso.
+
+  O caminho até aqui, inteiro, porque cada tropeço é um fato do produto:
+  1ª rodada: `dispatch_turns=0/3`. O log dizia "drain: nenhum agente publicado para a sessão — turno
+     pulado". O DRAIN descartava o evento antes do job: "tem agente publicado?" é pergunta do motor
+     herdado. Sem conserto, a unificação valeria só para quem JÁ tinha agente herdado — e uma
+     organização nova (o caso do SaaS, e o caso da Deka) continuaria sem atendimento automático, em
+     silêncio. Conserto: o drain deixa passar quando `ai.engine=saas`.
+  2ª rodada: ainda 0/3, e a causa era MINHA — a jornada escrevia `ai.engine=legacy` no passo da volta
+     atrás e não a devolvia (a lista de devolução não tinha a chave nova). A organização do dono
+     ficou no motor ANTIGO até eu apagar a linha. É a lição da F14 (devolver LINHAS) repetida numa
+     chave nova: quem escreve setting numa prova declara a chave no mesmo commit.
+  3ª rodada: o turno rodou e devolveu `handoff/out_of_knowledge` — o acervo do dono é vazio e a
+     pergunta não tinha base. Não era defeito: era a régua da F04 funcionando no caminho novo.
+  4ª rodada (a da linha): com `ai.unknown_answer` configurada, as duas perguntas foram respondidas,
+     entregues e VISTAS na página. `handoff_na_segunda=0/1` é medição honesta, não falha: D19 só
+     manda chamar gente na segunda resposta DESCONHECIDA, e não foi o caso.
+
+  GASTO (a prestação de contas): o teto autorizado era "até 20 turnos Haiku". Os turnos saíram em
+  `claude-sonnet-5`, porque o turno rodando no WORKER escolhe o modelo por
+  `organizations.settings.llm.default_model` e não pelo `AI_CHAT_MODEL` do script (§B23). Foram 5
+  chamadas `agent_turn` no dia: 61.154 tokens de entrada e 3.640 de saída. Dentro do teto em NÚMERO
+  de turnos (5 de 20), fora dele em MODELO — e `cost_cents` fica nulo para esse modelo, então o
+  produto registrou consumo com custo zero.
 
 == Achados registrados nesta fase ==
 - §B18 e §B19 FECHADOS (T04): a prévia da conversa passa a valer para todo canal, e a régua de

@@ -37,7 +37,13 @@ import { getSetting, getStoredSetting, setSetting } from "@/src/tenant-config/se
 import type { TenantCtx } from "@/src/tenant-context";
 import { criarSessao, identificar, listarMensagensDoVisitante, receberMensagemDoVisitante, sessaoPorToken } from "@/src/webchat";
 
-const N = 3;
+const N = 2;
+// ⚠️ O modelo do turno vem de `organizations.settings.llm.default_model` quando
+// ele roda no WORKER (`origem_da_escolha=padrao_da_organizacao`) — o
+// `AI_CHAT_MODEL` só vale no processo do próprio script (F14). Sem fixar aqui,
+// a prova sai no modelo da organização: foi o que aconteceu em 19/09/2026,
+// quando 5 turnos saíram em `claude-sonnet-5` com o teto combinado em Haiku
+// (§B23). Quem rodar de novo: grave e devolva `llm.default_model` também.
 const MODELO = process.env.AI_CHAT_MODEL ?? "claude-haiku-4-5";
 
 async function main(): Promise<void> {
@@ -61,7 +67,12 @@ async function main(): Promise<void> {
   // Guarda a LINHA (presente ou não), não o valor efetivo: devolver o padrão
   // como valor gravado deixaria três linhas novas em tenant_settings que não
   // existiam antes — foi o que a primeira rodada fez (ai.enabled=true gravado).
-  const CHAVES = ["webchat.enabled", "ai.enabled", "ai.limits.daily_turns"] as const;
+  // `ai.engine` ENTRA na lista: a jornada a escreve no passo da volta atrás, e
+  // uma chave escrita e não devolvida deixa a organização do dono no motor
+  // errado — foi o que aconteceu na primeira rodada desta prova, em 19/09.
+  // A lição é a mesma da F14 (devolver LINHAS, não valores), numa chave nova:
+  // quem escreve setting numa prova precisa declará-lo aqui, no mesmo commit.
+  const CHAVES = ["webchat.enabled", "ai.enabled", "ai.limits.daily_turns", "ai.engine", "ai.unknown_answer"] as const;
   const linhasAntes = new Map<string, { present: boolean; value: unknown }>();
   for (const chave of CHAVES) linhasAntes.set(chave, await getStoredSetting(ctx, chave, { pool }));
   const ligadoAntes = await getSetting(ctx, "webchat.enabled", { pool });
@@ -90,11 +101,18 @@ async function main(): Promise<void> {
   let contatoId: string | null = null;
   let conversaId: string | null = null;
   let contatoNovo = false;
-  let turnos = 0, entregues = 0, negadas = 0, vistas = 0, chamadasDepois = 0, voltaAtras = 0;
+  let turnos = 0, entregues = 0, negadas = 0, vistas = 0, chamadasDepois = 0, voltaAtras = 0, handoffNaSegunda = 0;
   try {
     await setSetting(ctxAdmin, "webchat.enabled", true, "tenant_admin", { pool });
     await setSetting(ctxAdmin, "ai.enabled", true, "tenant_admin", { pool });
     await setSetting(ctxAdmin, "ai.limits.daily_turns", antes.used + N, "tenant_admin", { pool });
+    // O acervo da organização do dono é VAZIO, e é assim que ele tem de ficar:
+    // indexar material só para a prova sujaria a base dele. Com
+    // `ai.unknown_answer` configurada, D19 manda a IA responder "não sei" na
+    // PRIMEIRA e chamar gente na SEGUNDA — as duas coisas são resposta do turno
+    // novo, e as duas passam pela cadeia inteira (despacho → turno → provedor →
+    // fila → adapter → página do visitante).
+    await setSetting(ctxAdmin, "ai.unknown_answer", "Ainda não tenho essa informação aqui.", "tenant_admin", { pool });
     const aberta = await criarSessao({ slug: linha.slug, ip: "127.0.0.1", page_url: "https://crm.kntecnologia.app/chat-prova" }, deps);
     if (!aberta.ok) throw new Error(`sessão recusada: ${aberta.reason}`);
     sessaoId = aberta.sessao.id;
@@ -138,9 +156,28 @@ async function main(): Promise<void> {
       // Nada de `responderTurno` aqui: a mensagem emitiu `ai_agent.dispatch_requested`
       // e o worker de produção decide o motor pela chave da organização. É
       // exatamente isso que a F18 mudou, e é isso que esta espera mede.
-      if (await esperarResposta(i + 1)) turnos += 1;
-      else console.error(`turno ${i + 1}: o despacho não respondeu em 120 s`);
+      // O worker precisa de uns segundos; e a resposta só vira linha em
+      // `messages` depois do ciclo de saída, que roda logo abaixo.
+      const estadoAgora = (
+        await pool.query<{ saas_state: string; status: string }>(
+          `select saas_state, status from public.conversations where id=$1`,
+          [conversaId],
+        )
+      ).rows[0];
+      console.error(`entrada ${i + 1}: saas_state=${estadoAgora?.saas_state} status=${estadoAgora?.status}`);
+      // Espera o worker decidir (o turno grava a resposta como outbound
+      // `queued`), e só então roda a fila de saída para entregar.
+      const decidiu = await esperarResposta(i + 1, 90);
       for (let ciclo = 0; ciclo < 5; ciclo += 1) await rodarCicloDeSaida({ pool, lote: 50, backoffMs: [0, 0] });
+      const estadoDepois = (
+        await pool.query<{ saas_state: string }>(`select saas_state from public.conversations where id=$1`, [conversaId])
+      ).rows[0]?.saas_state;
+      if (decidiu) turnos += 1;
+      else console.error(`turno ${i + 1}: o despacho não respondeu em 90 s (estado=${estadoDepois})`);
+      console.error(`turno ${i + 1}: estado depois=${estadoDepois}`);
+      // D19: a segunda pergunta sem base vai para gente — e é o turno NOVO que
+      // decide isso, com o dossiê da F05 e a política da F15.
+      if (i === N - 1 && estadoDepois === "waiting_human") handoffNaSegunda = 1;
     }
     entregues = Number(
       (
@@ -192,7 +229,7 @@ async function main(): Promise<void> {
   const linhasDevolvidas = await linhasIguais();
   const custoDepois = await custo();
   console.info(
-    `engine_real: dispatch_turns=${turnos}/${N} delivered=${entregues}/${N} visible=${vistas}/${N} volta_atras=${voltaAtras}/1 provider=anthropic model=${MODELO} cost_cents=${(custoDepois - custoAntes).toFixed(5)} ` +
+    `engine_real: dispatch_turns=${turnos}/${N} delivered=${entregues}/${N} visible=${vistas}/${N} handoff_na_segunda=${handoffNaSegunda}/1 volta_atras=${voltaAtras}/1 provider=anthropic model=${MODELO} cost_cents=${(custoDepois - custoAntes).toFixed(5)} ` +
       `limite_segurou=${negadas}/1 calls_after_limit=${chamadasDepois}/1 cleaned=${restante === 0 && ligadoDepois === (ligadoAntes === true) && iaDepois === (iaAntes === true) && linhasDevolvidas ? 1 : 0}/1 settings_rows_restored=${linhasDevolvidas ? 1 : 0}/1 at=${new Date().toISOString()}`,
   );
   await pool.end();
