@@ -208,6 +208,8 @@ async function processEvent(
   const { rows: capacidade } = await pool.query<{
     tem_agente: boolean;
     tem_roteador: boolean;
+    /** Existe agente NESTA organização, em qualquer estado (F18). */
+    tem_agente_qualquer: boolean;
   }>(
     `select
        exists(
@@ -245,7 +247,11 @@ async function processEvent(
                  and ma.archived_at is null and mv.status = 'published'
              )
            )
-       ) as tem_roteador`,
+       ) as tem_roteador,
+       exists (
+         select 1 from ai_agents qa
+          where qa.organization_id = $1
+       ) as tem_agente_qualquer`,
     [event.organization_id, p.channel_session_id],
   );
   const cap = capacidade[0];
@@ -260,10 +266,20 @@ async function processEvent(
     // do SaaS — continuaria sem atendimento automático, em silêncio. Medido na
     // produção em 19/09/2026: a jornada do motor devolveu `dispatch_turns=0/3`
     // e o log dizia exatamente isto.
-    const motor = await motorDaOrganizacao(
-      { organization_id: event.organization_id, source: 'job' },
-      { pool },
-    ).catch(() => 'legacy' as const);
+    //
+    // E a linha vale só para quem NÃO TEM AGENTE NENHUM. Se a organização tem
+    // agente e ele está pausado ou arquivado, isso é uma decisão dela — "pare
+    // de responder" —, e o motor novo não passa por cima: `pausar tem que
+    // parar o gasto` é invariante do produto (tests/invariants/
+    // portao-de-capacidade-mede-quem-executa), e o from-scratch da F18 pegou
+    // esta distinção quando o conserto ainda era grosso demais.
+    const semAgenteNenhum = cap.tem_agente_qualquer === false;
+    const motor = semAgenteNenhum
+      ? await motorDaOrganizacao(
+          { organization_id: event.organization_id, source: 'job' },
+          { pool },
+        ).catch(() => 'legacy' as const)
+      : ('legacy' as const);
     if (motor !== 'saas') {
       log.info('drain: nenhum agente publicado para a sessão — turno pulado (sem gasto)', {
         event_id: event.id,
