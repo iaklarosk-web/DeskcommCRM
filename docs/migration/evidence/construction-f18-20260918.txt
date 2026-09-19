@@ -52,7 +52,34 @@ a938a27b T05 parte 2: motor na rota e na tela de autonomia, spec de navegador, w
 b75e75d0 T05 parte 3: apêndice 9032 antes da guarda que o verifica; spec 7/7 no staging; smoke passo 9
 
 == Gate ==
-__GATE__
+f18-gate-04 — READY (staging) sobre e5c26c4e, 19/09 02:5xZ→04:51Z, exit 0, DENTRO do staging
+(VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202), current_phase=F18,
+violations=0.
+unit=8561/8561 integration=240/240 db=1677/1677 e2e=79/79 ×2 (16 specs; deka 1917 s, demo2 ~1900 s)
+mutants_killed=77/77 (77–80 novos: linha engine obrigatória, roteamento pela chave, ferramenta que
+falta em silêncio, cancelar o passado)
+
+Quatro tentativas, e cada uma achou coisa diferente:
+  01 (22:34Z, NOT READY) — 20 falhas no passo db, todas do mesmo tipo: as seis suítes herdadas que
+     exercitam `runAgentTurn` viam "nenhuma mensagem saiu", porque o padrão passou a ser o motor
+     novo. Não era regressão: era suíte dependendo de um padrão que mudou. Cada uma passa a gravar
+     `ai.engine=legacy` na organização que semeia — a suíte declara o motor que mede. No navegador,
+     2 falhas: a tela de autonomia mostra o total do catálogo e a spec da F15 afirmava 14 (são 28).
+  02 (22:47Z, interrompido) — o passo `shell` PENDUROU 1h25 num `head -1` esperando stdin, tendo
+     passado em 58 s no gate 01. Nenhum passo do verify tinha `timeout`: passo que não volta não
+     reprova, pendura, e o gate fica vivo sem produzir nada. Conserto: teto de 1 h por passo e
+     `</dev/null` (ADR-041 §5, §B22). No gate seguinte a mesma prova passou em 59 s.
+  03 (02:27Z, NOT READY) — três achados de encaixe, nenhum de produto: (a) o desvio do despacho
+     estava no TOPO do handler e pegava também o modo ASSISTIDO, que é outra superfície — a F18
+     troca quem responde automaticamente, não o rascunho que uma pessoa revisa; foi para depois
+     dele; (b) ler `ai.engine` derrubava o turno quando o pool é dublado (lição 28 da F14) — exceção
+     não é escolha da organização: segue o caminho de antes, com aviso, enquanto valor ESTRANHO
+     continua caindo no padrão declarado; (c) `report.mjs` lia 16 nomes de métrica e `engine` não
+     estava na lista — a linha era gravada pela suíte e IGNORADA pelo relatório, e o bloco saía
+     `pending` com tudo verde. Esse é o furo que faz um gate mentir a favor.
+  04 — READY. Nenhum teste apagado, pulado ou meia-linha (tests_deleted=0 tests_skipped=0
+     tests_pending=0 expected_failures=0).
+Bloco integral em BUILD-STATE.md (verify_summary_last). Logs em .verify-logs/f18-gate-01…04 (fora do git).
 
 == Linhas fora do bloco (BUILD-STATE) ==
 __FORA__

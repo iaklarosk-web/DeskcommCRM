@@ -19,6 +19,7 @@ import type { Logger } from '../../obs/logger';
 import { enqueueJob } from '../../queue/queue';
 import { TIPOS_DERIVAVEIS, DERIVACAO_TERMINADA } from '@/lib/messaging/media/derivable';
 import { decidirElegibilidadeDaConversa } from '@/lib/ai/elegibilidade/consulta-pg';
+import { motorDaOrganizacao } from '@/src/ai';
 
 const DRAIN_CONSUMER = 'agent-engine';
 
@@ -249,11 +250,31 @@ async function processEvent(
   );
   const cap = capacidade[0];
   if (cap !== undefined && !cap.tem_agente && !cap.tem_roteador) {
-    log.info('drain: nenhum agente publicado para a sessão — turno pulado (sem gasto)', {
+    // F18-T05 (ADR-040 §1): "tem agente publicado?" é pergunta do motor
+    // HERDADO — é ele que precisa de uma versão publicada para responder.
+    //
+    // O turno SaaS não precisa: ele tem o catálogo, a política por ação, o
+    // prompt da organização (`ai.system_prompt`) e o acervo. Sem esta linha a
+    // unificação seria pela metade e do pior jeito: só as organizações que JÁ
+    // tinham agente herdado seriam atendidas, e uma organização nova — o caso
+    // do SaaS — continuaria sem atendimento automático, em silêncio. Medido na
+    // produção em 19/09/2026: a jornada do motor devolveu `dispatch_turns=0/3`
+    // e o log dizia exatamente isto.
+    const motor = await motorDaOrganizacao(
+      { organization_id: event.organization_id, source: 'job' },
+      { pool },
+    ).catch(() => 'legacy' as const);
+    if (motor !== 'saas') {
+      log.info('drain: nenhum agente publicado para a sessão — turno pulado (sem gasto)', {
+        event_id: event.id,
+        channel_session_id: p.channel_session_id,
+      });
+      return 'processado';
+    }
+    log.info('drain: sem agente publicado, mas a organização usa o motor novo — turno segue', {
       event_id: event.id,
       channel_session_id: p.channel_session_id,
     });
-    return 'processado';
   }
 
   // ANTI-BACKLOG (toda instalação, sem knob): a mensagem que disparou este
