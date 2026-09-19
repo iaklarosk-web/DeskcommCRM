@@ -179,7 +179,7 @@ export async function receberEventoStripe(
   let tipo: TipoDeEventoDoGateway | null;
   let noProvedor: AssinaturaDoStripe | null = null;
   let planoPeloPreco: string | null = null;
-  if (evento.type === "checkout.session.completed" || evento.type === "customer.subscription.updated") {
+  if (evento.type === "checkout.session.completed" || evento.type === "customer.subscription.created" || evento.type === "customer.subscription.updated") {
     try {
       noProvedor = await buscarAssinatura(cfg.cliente, alvo.subscription_id!); // MUTANT: stripe-estado-do-provedor
     } catch (erro) {
@@ -239,6 +239,8 @@ export async function receberEventoStripe(
   );
 
   // D57 b: a troca de plano vem do Portal e chega por subscription.updated.
+  // (`customer.subscription.created` entra pelo mesmo caminho do provedor:
+  // acha a organização pelo `metadata.organization_id` que o checkout gravou.)
   let planoSincronizado = false;
   if (evento.type === "customer.subscription.updated" && planoPeloPreco !== null && alvo.plan_code_atual !== null && planoPeloPreco !== alvo.plan_code_atual) {
     const r = await pool.query(

@@ -106,6 +106,7 @@ export const TIPOS_TRATADOS = [
   "invoice.paid",
   "invoice.payment_succeeded",
   "invoice.payment_failed",
+  "customer.subscription.created",
   "customer.subscription.updated",
   "customer.subscription.deleted",
 ] as const;

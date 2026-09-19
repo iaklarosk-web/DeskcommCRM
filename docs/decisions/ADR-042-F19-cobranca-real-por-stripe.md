@@ -176,6 +176,25 @@ Stripe; `STRIPE_PORTAL_CONFIGURATION_ID` vazio = configuração padrão da conta
 
 ## Consequências
 
+Achados da construção (T02–T05), registrados aqui porque mudam o que a F12
+entregou:
+
+- **Renovação não é ativação.** O Stripe manda `invoice.paid` a cada ciclo;
+  `payment_confirmed` sobre `active` (renova) deixa de avisar
+  `subscription.activated` — o aviso é só para pending/past_due/blocked →
+  active. A F12 já contava assim (`activations`), só a notificação sobrava.
+- **Duas verdades de preço, declaradas.** `plans.price_cents` continua 0
+  (placeholder da F12, mostrado na tela) e o Product placeholder no Stripe
+  cobra R$ 10/20/30 em modo test (D57 d). Quando D14 fechar, os dois mudam
+  juntos: migration com `source='owner'` e `stripe:provision` com os valores.
+- **`customer.subscription.created`** entra nos tipos tratados (pelo mesmo
+  caminho do `updated`, com `metadata.organization_id` como último recurso):
+  uma subscription criada fora do Checkout ainda chega à organização certa.
+- **Suspender/reativar são eventos da tabela de transições**
+  (`admin_suspended`, `admin_resumed`; 10 → 13 transições): o dono suspende
+  de `active`/`past_due` para `blocked` e reativa de `blocked`; no Stripe é
+  `pause_collection`. A suíte da F12 declara o número vigente.
+
 - O caminho `pending_payment → Checkout → webhook → active` passa a existir
   com provedor real; a linha `stripe:` mede o que o mock nunca mediu
   (assinatura do webhook, livemode, preço fora da lista, estado do provedor).

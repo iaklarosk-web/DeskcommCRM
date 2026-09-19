@@ -153,6 +153,35 @@ VERIFY_ENVIRONMENT=staging F02_E2E_SANDBOX_ID=crm-staging E2E_PORT=3202 \
 `scripts/test-db.sh`; o navegador roda contra o banco, a auth e o storage do
 staging. O bloco sai com `environment=staging` e `STATUS: READY (staging)`.
 
+## Stripe no staging (F19, ADR-042 §7; D57 e) — a prova real, em modo test
+
+O gate roda com o Stripe FALSO (`tests/lib/stripe-falso.mjs`, segundo `webServer`
+do Playwright; `.env.e2e` traz chaves fictícias). O Stripe DE VERDADE só entra
+na prova real, em modo **test** (US$ 0), e só com o que é do proprietário:
+
+1. **Chave restrita** (`rk_test_…`, Dashboard → Developers → API keys →
+   Restricted keys): `segredo crm-staging.env STRIPE_SECRET_KEY`
+   (nome em `lib/env.ts:283`). Permissões: Checkout Sessions, Subscriptions,
+   Customers, Products/Prices, Billing Portal — write; Webhook Endpoints — read.
+2. **Provisionar** (idempotente; um Product por plano placeholder, R$ 10/20/30):
+   `STRIPE_SECRET_KEY=… pnpm stripe:provision` → imprime `STRIPE_PRICE_IDS=` e
+   `STRIPE_PORTAL_CONFIGURATION_ID=`; gravar os dois no env do staging.
+3. **Webhook pela CLI** (`~/bin/stripe`, sem `stripe login`):
+   `stripe listen --api-key "$STRIPE_SECRET_KEY" --forward-to http://127.0.0.1:3200/api/v1/webhooks/stripe`
+   imprime `whsec_…` → gravar em `STRIPE_WEBHOOK_SECRET`; `BILLING_GATEWAY=stripe`;
+   reiniciar o app do staging (`docker compose … restart app` ou `up.sh`).
+4. **A jornada**: `SUPABASE_DB_URL=postgresql://postgres:<senha>@127.0.0.1:56422/postgres
+   STRIPE_SECRET_KEY=… STRIPE_PRICE_IDS=… tsx scripts/staging/jornada-stripe.ts` —
+   cria uma organização descartável, paga no Checkout real com o cartão de
+   teste 4242 por um navegador, espera o webhook ativar (trial de 7 dias),
+   abre o Portal, cancela no provedor, espera o webhook cancelar e apaga tudo
+   (organização e cliente no Stripe). Imprime a linha `stripe_real:`.
+5. Depois: `BILLING_GATEWAY=mock` de volta no staging (ou deixar `stripe` — é
+   escolha do operador; o smoke aceita os dois: passo 10).
+
+O que NÃO fazer: chave `live`; registrar endpoint de webhook no Dashboard
+apontando para o staging (é Tailscale-only — a CLI é o caminho).
+
 ## Logs
 
 ```bash

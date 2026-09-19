@@ -136,6 +136,30 @@ empresa é pelo painel (`/admin/tenants` → equipe), quando o proprietário
 decidir. Feito em 14/09/2026 para `deka` ("Deka Sucos", PLAN_C) — D53. A busca
 por texto do painel (`?q=`) responde 500 (VARREDURA §B17); a lista sem `q` funciona.
 
+## Ligar o Stripe na produção (F19, ADR-042 §7; D57 f) — é do proprietário
+
+A produção sai da F19 com o CÓDIGO do Stripe e `BILLING_GATEWAY=mock` (a linha
+`prod:` declara `billing_gateway=mock`). Ligar de verdade, na ordem:
+
+1. No Dashboard do Stripe (conta KN, DF-33): chave restrita do CRM-OS
+   (`rk_test_…` primeiro; `rk_live_…` só na liberação comercial) e um **endpoint
+   de webhook** em `https://crm.kntecnologia.app/api/v1/webhooks/stripe` com os
+   eventos `checkout.session.completed`, `invoice.paid`,
+   `invoice.payment_succeeded`, `invoice.payment_failed`,
+   `customer.subscription.created`, `customer.subscription.updated`,
+   `customer.subscription.deleted` → o `whsec_…` do endpoint.
+2. `STRIPE_MODE=test pnpm stripe:provision` (ou `--live` com chave live) →
+   `STRIPE_PRICE_IDS` e `STRIPE_PORTAL_CONFIGURATION_ID`.
+3. `segredo crm-prod.env STRIPE_SECRET_KEY`, `segredo crm-prod.env STRIPE_WEBHOOK_SECRET`;
+   `STRIPE_PRICE_IDS`, `STRIPE_PORTAL_CONFIGURATION_ID`, `STRIPE_MODE` e
+   `BILLING_GATEWAY=stripe` no mesmo env; `bash scripts/prod/up.sh`.
+4. `bash scripts/prod/prova.sh` tem de mostrar `billing_gateway=stripe`; o
+   smoke, `webhook_stripe_unsigned_rejected=1/1` com status 401.
+5. O cockpit da KN lê `GET /api/admin/summary` com `Authorization: Bearer
+   <ADMIN_SUMMARY_TOKEN>` (gerado por `secrets.sh`; o valor é do proprietário).
+
+Nome e preço REAIS dos planos continuam D14: os Products nascem "(placeholder)".
+
 ## Liberar o BLOCKER-PROD geral (é do proprietário, D13)
 
 Texto no BUILD-STATE: `BLOCKER-PROD: liberado por <nome> em <data>, sha <hash>`.
