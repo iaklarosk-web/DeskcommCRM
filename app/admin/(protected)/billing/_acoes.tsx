@@ -50,30 +50,30 @@ export function AcoesDaAssinatura({
   const podeProvisionar = gateway !== "stripe" && status !== "cancelled";
   return (
     <div className="flex flex-wrap items-center gap-1" data-testid="admin-billing-acoes" data-org={organizationId}>
-      <button type="button" className="rounded border px-2 py-0.5 text-xs disabled:opacity-40" data-testid="admin-billing-suspender" disabled={!podeSuspender || busy !== null} onClick={() => executar({ action: "suspend" })}>
+      <button type="button" className="rounded-md border px-2 py-0.5 text-xs disabled:opacity-40" data-testid="admin-billing-suspender" disabled={!podeSuspender || busy !== null} onClick={() => executar({ action: "suspend" })}>
         {t("Suspender")}
       </button>
-      <button type="button" className="rounded border px-2 py-0.5 text-xs disabled:opacity-40" data-testid="admin-billing-reativar" disabled={!podeReativar || busy !== null} onClick={() => executar({ action: "resume" })}>
+      <button type="button" className="rounded-md border px-2 py-0.5 text-xs disabled:opacity-40" data-testid="admin-billing-reativar" disabled={!podeReativar || busy !== null} onClick={() => executar({ action: "resume" })}>
         {t("Reativar")}
       </button>
       <span className="inline-flex items-center gap-1">
-        <input type="number" min={1} max={90} value={dias} onChange={(e) => setDias(Number(e.target.value))} className="w-14 rounded border px-1 py-0.5 text-xs" aria-label={t("Dias de trial")} data-testid="admin-billing-trial-dias" />
-        <button type="button" className="rounded border px-2 py-0.5 text-xs disabled:opacity-40" data-testid="admin-billing-estender-trial" disabled={status === null || status === "cancelled" || busy !== null} onClick={() => executar({ action: "extend_trial", days: dias })}>
+        <input type="number" min={1} max={90} value={dias} onChange={(e) => setDias(Number(e.target.value))} className="w-14 rounded-md border px-1 py-0.5 text-xs" aria-label={t("Dias de trial")} data-testid="admin-billing-trial-dias" />
+        <button type="button" className="rounded-md border px-2 py-0.5 text-xs disabled:opacity-40" data-testid="admin-billing-estender-trial" disabled={status === null || status === "cancelled" || busy !== null} onClick={() => executar({ action: "extend_trial", days: dias })}>
           {t("Estender trial")}
         </button>
       </span>
       <span className="inline-flex items-center gap-1">
-        <select value={plano} onChange={(e) => setPlano(e.target.value)} className="rounded border px-1 py-0.5 text-xs" aria-label={t("Plano")} data-testid="admin-billing-provisionar-plano">
+        <select value={plano} onChange={(e) => setPlano(e.target.value)} className="rounded-md border px-1 py-0.5 text-xs" aria-label={t("Plano")} data-testid="admin-billing-provisionar-plano">
           {planos.map((p) => (
             <option key={p} value={p}>{p}</option>
           ))}
         </select>
-        <button type="button" className="rounded border px-2 py-0.5 text-xs disabled:opacity-40" data-testid="admin-billing-provisionar" disabled={!podeProvisionar || busy !== null} onClick={() => executar({ action: "provision", plan_code: plano })}>
+        <button type="button" className="rounded-md border px-2 py-0.5 text-xs disabled:opacity-40" data-testid="admin-billing-provisionar" disabled={!podeProvisionar || busy !== null} onClick={() => executar({ action: "provision", plan_code: plano })}>
           {t("Provisionar na mão")}
         </button>
       </span>
       {linkStripe ? (
-        <a href={linkStripe} target="_blank" rel="noreferrer" className="rounded border px-2 py-0.5 text-xs underline" data-testid="admin-billing-abrir-no-stripe">
+        <a href={linkStripe} target="_blank" rel="noreferrer" className="rounded-md border px-2 py-0.5 text-xs underline" data-testid="admin-billing-abrir-no-stripe">
           {t("Abrir no Stripe")}
         </a>
       ) : null}
