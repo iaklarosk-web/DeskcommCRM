@@ -1,0 +1,69 @@
+== F19 — cobrança real por Stripe + padrão KN do /admin (ADR-042/043; D57) — evidência de construção, 19/09/2026 ==
+
+Branch feat/F19-cobranca-stripe a partir de a1372de3 (HEAD da F18). Tasks T00–T05 (ADR-042 §8).
+Autorização: mensagem do proprietário de 19/09/2026, depois do fechamento da F18. Entrevista em
+dois blocos de cards (fase; §B23 como T00; cancel_appointment mantido em allow; prova real em
+staging pela CLI | fluxo da F11 mantido; Customer Portal; trial de 7 dias; placeholders R$ 10/20/30),
+brief com contraponto (3 objeções: 1 aceita como teste — a CLI com chave restrita; 2 resolvida pela
+opção (a) — produção fica mock; 3 aceita como teste — specs herdadas "sem pagamento = sem acesso")
+e "Aprovo; objeção 1 ok, 2 opção a, 3 aceita como teste".
+
+== O que a leitura do código mudou no plano (antes de escrever) ==
+- A F12 já era um gateway com nome trocado: `aplicarEventoDoGateway` recebe um evento genérico e
+  `(gateway, event_ref)` é único. O adapter do Stripe TRADUZ; não há máquina de estados nova.
+- `gateway_ref` na F12 recebia o id do EVENTO (semântica do mock). Para o Stripe a referência
+  estável é a subscription (`sub_…`) — é por ela que o webhook seguinte acha a organização. O
+  evento ganhou `subscription_ref` opcional; no mock nada mudou.
+- O `.env.e2e` chega ao app sob teste pelo `webServer.env` do Playwright, e o `env:` do config vence
+  o arquivo — é onde `STRIPE_API_BASE` aponta para o Stripe falso, porque só o config sabe a porta.
+
+== Objeção 1 (a CLI do Stripe com a chave restrita, sem `stripe login`) ==
+CLI 1.51.0 instalada em ~/bin. O teste (10 min) ficou ESPERANDO A CHAVE: o proprietário não a
+gravou durante a sessão. Registrado em FINAL-VALIDATION §3 e em COMECE-AQUI. [preencher se rodar]
+
+== Objeção 2 (produção fica `mock` nesta fase) ==
+Opção (a) escolhida: `BILLING_GATEWAY=mock` gravado por `scripts/prod/secrets.sh`, a linha `prod:`
+declara `billing_gateway=`, o cockpit responde `gateway ok=false` de propósito, e o runbook
+`docs/ops/prod.md` diz o que o proprietário faz para ligar (endpoint no domínio + chaves + up.sh).
+
+== Objeção 3 (specs herdadas "sem pagamento = sem acesso") ==
+Contadas na T00: 2 specs de navegador (f11-admin-e-entrada, f12-assinatura) percorriam o
+mock-checkout por URL/testid. Reescritas na T05 pelo helper `pagarNoCheckout(page)`, que aceita a
+página mock OU a do Stripe falso e declara no log qual exercitou; a afirmação "ativa UMA vez" passou
+a ser medida pela notificação `subscription.activated` (com o Stripe chegam DOIS eventos —
+checkout.session.completed e invoice.paid — e a renovação deixou de avisar "ativada").
+
+== §B23 (b) — o custo da geração 5 ==
+`claude-sonnet-5` (2/10), `claude-opus-5` (5/25) e `claude-haiku-4-5` (1/5) na tabela do motor;
+a jornada da F18 (61.154 entrada / 3.640 saída) recotada em 15,8708 cents em vez de zero;
+`modeloTemPreco=3/3`; mutante 81 mata a linha do sonnet-5.
+
+== Commits da fase ==
+429d9df1 T00: ADR-042/043, D57, §B23 b, verify v1.12 (F19 no gate, linha stripe:), env vars
+947371e3 T01: migration 9033 + apêndice + MANIFEST + prova de schema/RLS
+524692e9 T02: adapter stripe, cliente HTTP, receptor do webhook, checkout pelo provedor, fixtures, Stripe falso
+1fe8395d T03: D44 sobre os eventos, Customer Portal, cancelamento que preserva dados
+b26ecec9 T04: padrão KN do /admin (5 ações), cockpit por token, provisionamento, secrets, linha stripe: gravada
+317a530d T05 parte 1: Stripe falso no gate, spec f19-cobranca-stripe (7), helper nas specs herdadas
+7ceb548e T05 parte 2: jornada-stripe.ts (prova real), subscription.created, runbooks, achados no ADR
+
+== Gate (dentro do staging) ==
+[preencher: tentativas, tempos, bloco]
+
+== Fora do bloco ==
+[preencher: restore, smoke, p95, staging, prod, demo3, from-scratch, stripe_real]
+
+== Achados registrados nesta fase ==
+- Renovação (active → active) não é ativação: `subscription.activated` só em pending/past_due/
+  blocked → active. O Stripe manda `invoice.paid` a cada ciclo.
+- Duas verdades de preço, declaradas: `plans.price_cents=0` (tela) × Product placeholder R$ 10/20/30
+  em modo test. Mudam juntas quando D14 fechar.
+- `next build` morre por OOM nesta VPS quando outra sessão roda eslint+vitest ao mesmo tempo
+  (anon-rss 3,86 GB, 4,3 GB disponíveis): heap limitado a 3 GB (`NODE_OPTIONS`) como o verify já faz.
+- O caso alvo de mutante de integração precisa ser AUTOCONTIDO e ter título sem parênteses: `-t`
+  é regex, e um caso que depende do `it` anterior sai `skipped` (não `failed`) sob o filtro.
+- `lerAssinatura(ctx, {pool})` dentro de `withTenant` lê por OUTRA conexão e não vê a transação
+  aberta — reler por `lerAssinaturaEm(db, …)`.
+
+== O que NÃO foi verificado (fica em FINAL-VALIDATION §3) ==
+[preencher]

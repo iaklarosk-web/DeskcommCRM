@@ -91,7 +91,7 @@ async function main(): Promise<void> {
     // 2 · Checkout real
     const sessao = await criarSessaoDeCheckout(
       { base: BASE, chave: CHAVE },
-      { organization_id: ORG, price_id: price, trial_days: Number(process.env.BILLING_TRIAL_DAYS ?? 7), success_url: `${APP_URL}/app/billing?checkout=ok`, cancel_url: `${APP_URL}/app/billing?checkout=cancelado`, customer_email: `f19-real-${sufixo}@example.test` },
+      { organization_id: ORG, price_id: price, trial_days: Number(process.env.BILLING_TRIAL_DAYS ?? 7), success_url: `${APP_URL}/api/v1/billing/retorno?checkout=ok`, cancel_url: `${APP_URL}/api/v1/billing/retorno?checkout=cancelado`, customer_email: `f19-real-${sufixo}@example.test` },
     );
     medidas.checkout_created = "1/1";
     console.info(`jornada-stripe: checkout ${sessao.id} criado`);
@@ -116,7 +116,7 @@ async function main(): Promise<void> {
       if ((await pais.count()) > 0) await pais.selectOption("BR").catch(() => undefined);
       const enviar = page.locator("button[type=submit], .SubmitButton").first();
       await enviar.click();
-      await page.waitForURL((u) => u.href.startsWith(`${APP_URL}/app/billing`) || /checkout=ok/.test(u.href), { timeout: 90_000 }).catch(async () => {
+      await page.waitForURL((u) => /billing\/retorno|\/app\/billing/.test(u.pathname) && /checkout=ok/.test(u.href), { timeout: 90_000 }).catch(async () => {
         await page.screenshot({ path: ".verify-logs/jornada-stripe-checkout.png" }).catch(() => undefined);
         throw new Error("o Checkout não redirecionou ao success_url (screenshot em .verify-logs/jornada-stripe-checkout.png)");
       });

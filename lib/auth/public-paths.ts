@@ -43,6 +43,10 @@ export const PUBLIC_PATHS: RegExp[] = [
   // qualquer sub-path futuro nascer público de carona.
   /^\/api\/v1\/agenda\/google\/callback$/,
   /^\/api\/v1\/integrations\/nuvemshop\/callback$/,
+  // A VOLTA DO CHECKOUT DO STRIPE (F19): mesma natureza — navegação cross-site
+  // sem o cookie Strict; a ponte responde 200 e navega do nosso origin. Não
+  // lê sessão nem escreve nada (quem ativa é o webhook, D38). Ancorada.
+  /^\/api\/v1\/billing\/retorno$/,
   // CHAT DO SITE (F14, ADR-038): o visitante não tem cookie de sessão. A
   // autoridade é o token da sessão do visitante, conferido DENTRO das rotas
   // (`app/api/public/webchat/[slug]/_comum.ts`); a página e o script de embed

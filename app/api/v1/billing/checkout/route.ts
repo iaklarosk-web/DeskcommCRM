@@ -76,8 +76,10 @@ async function checkoutNoStripe(
       organization_id: assinatura.organization_id,
       price_id: preco,
       trial_days: env.BILLING_TRIAL_DAYS,
-      success_url: `${base}/app/billing?checkout=ok`,
-      cancel_url: `${base}/app/billing?checkout=cancelado`,
+      // Página-ponte (SameSite=Strict): a volta do Stripe é cross-site e não
+      // traz o cookie; a ponte navega do nosso origin para /app/billing.
+      success_url: `${base}/api/v1/billing/retorno?checkout=ok`,
+      cancel_url: `${base}/api/v1/billing/retorno?checkout=cancelado`,
       customer_ref: assinatura.customer_ref,
       customer_email: email,
     },
