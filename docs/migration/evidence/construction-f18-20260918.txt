@@ -126,6 +126,18 @@ engine_real (D56 f — o DESPACHO em produção, scripts/prod/jornada-motor.ts n
   de turnos (5 de 20), fora dele em MODELO — e `cost_cents` fica nulo para esse modelo, então o
   produto registrou consumo com custo zero.
 
+== demo3 e from-scratch ==
+demo3: created=1 smoke=pass=9/9 e2e[demo3]=41/41 specs=10/10 removed=1 tenants=3 (19/09 06:26Z→06:40Z).
+  A 1ª rodada reprovou por UM caso (`total=509` onde a spec da F02 afirma 501) — resíduo da própria
+  rodada, verde na 2ª sem tocar em código.
+from-scratch: steps=7 pass=7/7 verify_exit=0 status="READY (F18)" commit=65219c22 (verify 6631 s no
+  clone, fase F18 lida da origem; violations=0, mutants 77/77).
+  A 1ª tentativa pegou uma REGRESSÃO REAL que nenhum outro passo pegou: o conserto do drain era
+  grosso demais e passava também por cima de agente PAUSADO ou ARQUIVADO — ou seja, ignorava um
+  "pare de responder" dado pela organização, contra o invariante `pausar tem que parar o gasto`
+  (4 casos vermelhos em `portao-de-capacidade-mede-quem-executa`). A exceção do motor novo passou a
+  valer só quando a organização NÃO TEM AGENTE NENHUM, que é o caso que a motivou.
+
 == Achados registrados nesta fase ==
 - §B18 e §B19 FECHADOS (T04): a prévia da conversa passa a valer para todo canal, e a régua de
   canal voltou ao gate (`step lint-channels`) depois de quatro fases vermelha sem ninguém rodar.

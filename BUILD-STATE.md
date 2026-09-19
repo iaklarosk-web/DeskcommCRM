@@ -1,6 +1,6 @@
 ---
 updated_at: 2026-09-19T06:30:00Z
-head_commit: __HEAD__   # commit de fechamento da F18; código VALIDADO pelo gate f18-gate-04 (READY (staging), dentro do staging, F18 — ADR-040/041) = e5c26c4e; depois dele entraram o conserto do drain (sem ele a unificação valia só para quem já tinha agente herdado), a jornada do motor e docs
+head_commit: ba2536b5a   # commit de fechamento da F18; código VALIDADO pelo gate f18-gate-04 (READY (staging), dentro do staging, F18 — ADR-040/041) = e5c26c4e; depois dele entraram o conserto do drain (sem ele a unificação valia só para quem já tinha agente herdado), a jornada do motor e docs
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
 plan_version: "2.11 (2026-09-19); D38–D56; ADR-006…041"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
@@ -54,7 +54,7 @@ ai_real: turns=3/3 usage_delta=3/3 provider=anthropic model=claude-haiku-4-5 cos
 webchat_real: sessions=1/1 identified=1/1 turns=3/3 delivered=3/3 visible=3/3 provider=anthropic model=claude-haiku-4-5 cost_cents=0.34357 flood_capped=1/1 calls_after_limit=0/1 cleaned=1/1 settings_rows_restored=1/1 at=2026-09-18T14:38:04Z   # F14-T05 (ADR-038 §2, D55 f): scripts/prod/jornada-webchat.ts no crm-prod-worker, organização do dono, FORA do bloco; rodada 4 de 4 (12 turnos reais no dia, teto 20; rodadas 1–2 mediram ai.enabled ausente, rodada 3 gravou o padrão como linha — ver evidência)
 engine_real: dispatch_turns=2/2 delivered=2/2 visible=2/2 handoff_na_segunda=0/1 volta_atras=1/1 provider=anthropic model=claude-sonnet-5 cost_cents=nao_precificado limite_segurou=1/1 calls_after_limit=0/1 cleaned=1/1 settings_rows_restored=1/1 at=2026-09-19T06:02:59Z   # F18-T05 (ADR-040 §1, D56 f): scripts/prod/jornada-motor.ts no crm-prod-worker — a mensagem entra pela rota pública, o DESPACHO decide o motor e o turno com política/teto/auditoria responde; com legacy ninguém responde. Modelo saiu em sonnet-5 (padrão da organização, não Haiku) e custo não precificado: §B23
 demo3: created=1 smoke=pass=9/9 e2e[demo3]=41/41 specs=10/10 removed=1 tenants=3   # F18 fechamento, 19/09 06:26Z→06:40Z, staging com o código da F18; a 1ª rodada reprovou por 1 caso (total=509 onde a spec afirma 501) — resíduo da própria rodada, verde sem tocar em código na 2ª
-from-scratch: steps=7 pass=7/7 verify_exit=0 status="READY (F14)" clone=.from-scratch-g3VB commit=10fde380   # F14 fechamento, 18/09 15:00Z→17:19Z (verify 8105 s no clone, fase=F14 lida da origem; unit 8553, integração 225, db 1677, e2e 72/72 ×2 em 15 specs, mutantes 73/73, violations=0); segunda tentativa (a 1ª morreu em 4 s: FROM_SCRATCH_LOG_DIR relativo não existe depois do cd para o clone)
+from-scratch: steps=7 pass=7/7 verify_exit=0 status="READY (F18)" clone=.from-scratch-sc8H commit=65219c22   # F18 fechamento, 19/09 07:5xZ→09:4xZ (verify 6631 s no clone, fase=F18 lida da origem; violations=0, mutants 77/77); segunda tentativa — a 01 pegou uma REGRESSÃO REAL: o conserto do drain passava por cima de agente pausado/arquivado (invariante "pausar tem que parar o gasto"), e a exceção passou a valer só para quem não tem agente nenhum
 ---
 
 # BUILD-STATE

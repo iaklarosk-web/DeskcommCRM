@@ -151,7 +151,12 @@ Jornadas reais anteriores (uma vez cada, proprietário como único destinatário
 `docs/ops/prod-jornadas.log`): Sentry, e-mail pela Resend, FAQ indexado, turno
 de IA, sessão do WAHA aguardando QR, limite diário (`ai_real:`, F15) e o chat do
 site com provedor real (`webchat_real:`, F14).
-`demo3:` e `from-scratch:` desta fase estão no cabeçalho do BUILD-STATE.
+`demo3:` e `from-scratch:` desta fase estão no cabeçalho do BUILD-STATE
+(`demo3: e2e 41/41`; `from-scratch: 7/7 verify_exit=0 status="READY (F18)"
+commit=65219c22`, verify inteiro de 6631 s num clone do zero). A primeira
+tentativa do from-scratch pegou uma regressão que nenhum outro passo pegou — o
+conserto do drain passando por cima de agente pausado/arquivado —, e é o melhor
+argumento que esta fase produziu para a prova do zero continuar existindo.
 
 ## 3. O que NÃO foi verificado
 
