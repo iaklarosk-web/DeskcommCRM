@@ -10,10 +10,14 @@
  * do proprietário (D14) e entra por migration/seed, com `source = 'owner'`.
  */
 import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
+import { env } from "@/lib/env";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { IDIOMAS, type Idioma } from "@/lib/i18n/idiomas";
 import { conciliar, listarPlanos } from "@/src/billing";
+import { linkNoStripe } from "@/src/billing/admin";
 import { getServicePool } from "@/src/tenant-context/db";
+
+import { AcoesDaAssinatura } from "./_acoes";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Cobrança — Admin Plataforma" };
@@ -29,6 +33,9 @@ interface LinhaDeAssinatura {
   grace_until: Date | null;
   invoices_paid: string;
   events_received: string;
+  gateway: string | null;
+  gateway_ref: string | null;
+  trial_ends_at: Date | null;
 }
 
 function data(v: Date | string | null): string {
@@ -37,7 +44,10 @@ function data(v: Date | string | null): string {
 }
 
 export default async function AdminBillingPage() {
-  const { user } = await requirePlatformAdmin();
+  const adminCtx = await requirePlatformAdmin();
+  const { user } = adminCtx;
+  // Acompanhamento (suporte) é só leitura: as ações só para escopo `full`.
+  const somenteLeitura = adminCtx.platformAdmin.scope !== "full";
   const bruto = (user.user_metadata?.locale as string | undefined) ?? "pt-BR";
   const idioma: Idioma = (IDIOMAS as readonly string[]).includes(bruto) ? (bruto as Idioma) : "pt-BR";
   const t = (texto: string) => traduzir(texto, idioma);
@@ -48,7 +58,7 @@ export default async function AdminBillingPage() {
     conciliar(null, { pool }),
     pool.query<LinhaDeAssinatura>(`
       select s.organization_id, o.slug::text as slug, o.display_name, s.plan_code, s.status, s.origin,
-             s.current_period_end, s.grace_until,
+             s.current_period_end, s.grace_until, s.gateway, s.gateway_ref, s.trial_ends_at,
              (select count(*) from public.invoices i where i.organization_id = s.organization_id and i.status = 'paid')::text as invoices_paid,
              (select count(*) from public.billing_events e where e.organization_id = s.organization_id)::text as events_received
         from public.subscriptions s join public.organizations o on o.id = s.organization_id
@@ -137,6 +147,8 @@ export default async function AdminBillingPage() {
               <th className="py-1">{t("Prazo para regularizar")}</th>
               <th className="py-1">{t("Faturas pagas")}</th>
               <th className="py-1">{t("Eventos")}</th>
+              <th className="py-1">{t("Gateway")}</th>
+              <th className="py-1">{t("Ações")}</th>
             </tr>
           </thead>
           <tbody>
@@ -150,6 +162,17 @@ export default async function AdminBillingPage() {
                 <td className="py-1">{data(s.grace_until)}</td>
                 <td className="py-1 tabular-nums">{s.invoices_paid}</td>
                 <td className="py-1 tabular-nums">{s.events_received}</td>
+                <td className="py-1" data-testid="admin-billing-gateway" data-gateway={s.gateway ?? ""}>{s.gateway ?? "—"}{s.trial_ends_at ? ` · trial ${data(s.trial_ends_at)}` : ""}</td>
+                <td className="py-1">
+                  <AcoesDaAssinatura
+                    organizationId={s.organization_id}
+                    status={s.status}
+                    gateway={s.gateway}
+                    planos={planos.map((p) => p.code)}
+                    linkStripe={linkNoStripe({ gateway: s.gateway, gateway_ref: s.gateway_ref }, env.STRIPE_MODE)}
+                    somenteLeitura={somenteLeitura}
+                  />
+                </td>
               </tr>
             ))}
           </tbody>

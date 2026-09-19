@@ -281,6 +281,17 @@ for (const slug of SLUGS) {
 medidas.engine_saas = `${motorNovo}/${SLUGS.length}`;
 passo("quem responde o cliente é o motor novo (default declarado)", motorNovo === SLUGS.length, `engine_saas=${medidas.engine_saas}`);
 
+// ─── Passo 10 (F19-T05, ADR-043 §5): o webhook do Stripe nunca aceita sem assinatura ──
+//
+// Com gateway `stripe` o segredo existe e a rota responde 401 (assinatura
+// ausente); com `mock` (produção nesta fase, D57 f) o segredo está vazio e a
+// rota responde 503 (fail closed). As duas são "recusado"; 200 é o único
+// desfecho que reprova — e é o que apareceria se alguém abrisse a rota.
+const stripeSemAssinatura = await fetch(`${URL_APP}/api/v1/webhooks/stripe`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+const recusadoStripe = stripeSemAssinatura.status === 401 || stripeSemAssinatura.status === 503 ? 1 : 0;
+medidas.webhook_stripe_unsigned_rejected = `${recusadoStripe}/1`;
+passo("webhook do Stripe sem assinatura é recusado (401 com gateway stripe, 503 com mock)", recusadoStripe === 1, `webhook_stripe_unsigned_rejected=${medidas.webhook_stripe_unsigned_rejected} status=${stripeSemAssinatura.status}`);
+
 // ─── p95 (F06-T09): medição sem otimizar ────────────────────────────────────
 const alvos = [
   ["health", "/api/v1/health", null],
@@ -300,7 +311,7 @@ const medidos = Object.values(p95s).filter((v) => v !== null).length;
 
 const passou = passos.filter((p) => p.ok).length;
 const porTenant = (prefixo) => SLUGS.map((slug) => `${prefixo}[${slug}]=${medidas[`${prefixo}[${slug}]`]}`).join(" ");
-const linha = `smoke: steps=${passos.length} pass=${passou}/${passos.length} ${porTenant("customers")} inbox_new=${medidas.inbox_new} logins=${medidas.logins} ${porTenant("products")} webhook_accepted=${medidas.webhook_accepted} reminder_listed=${medidas.reminder_listed} owner_login=${medidas.owner_login} ${porTenant("subscriptions")} orgs_without_subscription=${medidas.orgs_without_subscription} webchat_disabled_denied=${medidas.webchat_disabled_denied} engine_saas=${medidas.engine_saas} tenants=${SLUGS.join(",")}`;
+const linha = `smoke: steps=${passos.length} pass=${passou}/${passos.length} ${porTenant("customers")} inbox_new=${medidas.inbox_new} logins=${medidas.logins} ${porTenant("products")} webhook_accepted=${medidas.webhook_accepted} reminder_listed=${medidas.reminder_listed} owner_login=${medidas.owner_login} ${porTenant("subscriptions")} orgs_without_subscription=${medidas.orgs_without_subscription} webchat_disabled_denied=${medidas.webchat_disabled_denied} engine_saas=${medidas.engine_saas} webhook_stripe_unsigned_rejected=${medidas.webhook_stripe_unsigned_rejected} tenants=${SLUGS.join(",")}`;
 const linhaP95 = `p95_ms: endpoints=${medidos}/3 health=${p95s.health ?? "fail"} contacts=${p95s.contacts ?? "fail"} conversations=${p95s.conversations ?? "fail"} samples=${AMOSTRAS} url=${URL_APP}`;
 process.stdout.write(`${linha}\n${linhaP95}\n`);
 process.exit(passou === passos.length && medidos === 3 ? 0 : 1);

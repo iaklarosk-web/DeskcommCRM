@@ -16,6 +16,12 @@
  * | blocked                    | payment_confirmed   | active            |
  * | active, past_due, blocked  | cancelled (humano)  | cancelled         |
  * | cancelled                  | checkout            | pending_payment   |
+ * | active, past_due           | admin_suspended     | blocked (F19)     |
+ * | blocked                    | admin_resumed       | active (F19)      |
+ *
+ * F19 (ADR-042 §5, padrão KN do /admin): o dono da plataforma SUSPENDE uma
+ * assinatura (acesso read_only, dados preservados — o mesmo desfecho da
+ * carência vencida) e REATIVA; no Stripe isso vira `pause_collection`.
  *
  * Tudo o mais é `null`: transição ilegal é ERRO contado, não estado inventado
  * (§5.5 invariante 2, aplicado à assinatura).
@@ -36,6 +42,8 @@ export const EVENTOS_DA_ASSINATURA = [
   "grace_expired",
   "cancelled",
   "checkout",
+  "admin_suspended",
+  "admin_resumed",
 ] as const;
 export type EventoDaAssinatura = (typeof EVENTOS_DA_ASSINATURA)[number];
 
@@ -63,6 +71,9 @@ const TRANSICOES: ReadonlyArray<readonly [EstadoDaAssinatura, EventoDaAssinatura
   ["past_due", "cancelled", "cancelled"],
   ["blocked", "cancelled", "cancelled"],
   ["cancelled", "checkout", "pending_payment"],
+  ["active", "admin_suspended", "blocked"],
+  ["past_due", "admin_suspended", "blocked"],
+  ["blocked", "admin_resumed", "active"],
 ];
 
 /** O estado seguinte, ou `null` quando a tabela não prevê a transição. */

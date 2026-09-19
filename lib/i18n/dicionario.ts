@@ -8715,6 +8715,15 @@ export const DICIONARIO: Traducoes = {
   "Período de teste até": {"es":"Período de prueba hasta"},
   "Gateway": {"es":"Pasarela"},
   "Trocar de plano, atualizar o cartão e cancelar acontecem no portal do gateway; as mudanças aparecem aqui em seguida.": {"es":"Cambiar de plan, actualizar la tarjeta y cancelar ocurren en el portal de la pasarela; los cambios aparecen aquí enseguida."},
+  // F19 (ADR-042 §5): as ações do padrão KN do /admin sobre a assinatura.
+  "A ação não foi executada.": {"es":"La acción no se ejecutó."},
+  "Abrir no Stripe": {"es":"Abrir en Stripe"},
+  "Assinatura atualizada.": {"es":"Suscripción actualizada."},
+  "Dias de trial": {"es":"Días de prueba"},
+  "Estender trial": {"es":"Extender la prueba"},
+  "Provisionar na mão": {"es":"Aprovisionar a mano"},
+  "Suspender": {"es":"Suspender"},
+  "só leitura": {"es":"solo lectura"},
 };
 
 /**

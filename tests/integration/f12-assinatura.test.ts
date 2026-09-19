@@ -105,7 +105,10 @@ afterAll(async () => {
 });
 
 describe("F12-T02 — a tabela de transições é fechada e espelha o CHECK", () => {
-  it("dez transições previstas; todo par (estado, evento) fora delas é null", () => {
+  // F19 (ADR-042 §5): treze — as dez da F12 mais as três do administrador
+  // (suspender de active/past_due, reativar de blocked). A suíte herdada
+  // declara o que mede: o número é o da tabela vigente, não o da época.
+  it("treze transições previstas (10 da F12 + 3 do administrador da F19); todo par (estado, evento) fora delas é null", () => {
     let previstas = 0;
     let ilegais = 0;
     for (const de of ESTADOS_DA_ASSINATURA) {
@@ -115,9 +118,9 @@ describe("F12-T02 — a tabela de transições é fechada e espelha o CHECK", ()
       }
     }
     expect(previstas).toBe(TOTAL_DE_TRANSICOES);
-    expect(previstas).toBe(10);
-    expect(ilegais).toBe(ESTADOS_DA_ASSINATURA.length * EVENTOS_DA_ASSINATURA.length - 10);
-    console.info(`f12-estados: previstas=${previstas}/10 ilegais=${ilegais}/${ESTADOS_DA_ASSINATURA.length * EVENTOS_DA_ASSINATURA.length - 10}`);
+    expect(previstas).toBe(13);
+    expect(ilegais).toBe(ESTADOS_DA_ASSINATURA.length * EVENTOS_DA_ASSINATURA.length - 13);
+    console.info(`f12-estados: previstas=${previstas}/13 ilegais=${ilegais}/${ESTADOS_DA_ASSINATURA.length * EVENTOS_DA_ASSINATURA.length - 13}`);
   });
 });
 

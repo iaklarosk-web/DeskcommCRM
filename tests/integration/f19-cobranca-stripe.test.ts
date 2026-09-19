@@ -18,7 +18,10 @@ import path from "node:path";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { aplicarEventoDoGateway, cancelar, iniciarCheckout, lerAssinatura, mudarPlano, UsePortal, varrerCarencia } from "@/src/billing";
+import { cancelar, iniciarCheckout, lerAssinatura, mudarPlano, TransicaoIlegal, UsePortal, varrerCarencia } from "@/src/billing";
+import { DiasForaDaFaixa, estenderTrial, linkNoStripe, provisionarNaMao, reativar, suspender } from "@/src/billing/admin";
+import { PLANOS_PLACEHOLDER, provisionar } from "@/src/billing/provisionar";
+import { montarCockpit } from "@/src/billing/summary";
 import { assinarComoOStripe, criarSessaoDeCheckout, criarSessaoDoPortal } from "@/src/billing/gateway/stripe";
 import { receberEventoStripe, type DepsDoReceptor } from "@/src/billing/webhook-stripe";
 import type { TenantCtx } from "@/src/tenant-context";
@@ -381,8 +384,107 @@ describe("F19-T03 — D44 sobre eventos reais, o Portal e o cancelamento que pre
   });
 });
 
-// Os casos da T04 (padrão KN do /admin, cockpit) entram abaixo; a linha
-// `stripe:` é gravada no último deles — os `void` mantêm os imports vivos até lá.
-void aplicarEventoDoGateway;
-void gravarLinhaDoVerify;
-void medidas;
+describe("F19-T04 — o padrão KN do /admin e o cockpit", () => {
+  const ORG_D = "f1900002-0000-4000-8000-000000000004";
+  const SUB_D = "sub_f19_admin_d";
+  const T0 = new Date("2026-09-19T15:00:00.000Z");
+
+  it("as cinco ações: suspender pausa a cobrança no Stripe e bloqueia; reativar limpa e volta; estender trial escreve no Stripe e em trial_ends_at; provisionar na mão cria operator ativa; abrir no Stripe é o link do modo (admin_actions=5/5)", async () => {
+    // Arrange — organização D com assinatura no Stripe (ativa)
+    await pool.query(`insert into public.organizations (id, slug, legal_name, display_name, onboarded_at) values ($1,'f19-stripe-d','F19 Stripe D','F19 D', now())`, [ORG_D]);
+    await pool.query(
+      `insert into public.subscriptions (organization_id, plan_code, status, origin, gateway, gateway_ref, customer_ref, current_period_start, current_period_end, last_event_at)
+       values ($1, 'PLAN_A', 'active', 'fixture', 'stripe', $2, 'cus_f19_d', $3, $3::timestamptz + interval '30 days', $3)`,
+      [ORG_D, SUB_D, T0],
+    );
+    falso.definirAssinatura(SUB_D, { status: "active", customer: "cus_f19_d", trial_end: null, items: { object: "list", data: [{ price: { id: "price_1F19FixturePlanA" } }] } });
+    const stripe = { base: falso.base, chave: CHAVE };
+    let acoes = 0;
+
+    // Act + Assert — 1 · suspender
+    const suspensa = await suspender(ORG_D, { pool, stripe, agora: () => T0 });
+    expect(suspensa.status).toBe("blocked");
+    expect(falso.assinaturas.get(SUB_D)?.pause_collection).toEqual({ behavior: "void" });
+    acoes++;
+    // 2 · reativar
+    const reativada = await reativar(ORG_D, { pool, stripe, agora: () => T0 });
+    expect(reativada.status).toBe("active");
+    expect(reativada.blocked_at).toBeNull();
+    expect(falso.assinaturas.get(SUB_D)?.pause_collection).toBeNull();
+    acoes++;
+    // 3 · estender trial (14 dias); fora da faixa recusa sem chamar
+    const comTrial = await estenderTrial(ORG_D, 14, { pool, stripe, agora: () => T0 });
+    expect(comTrial.trial_ends_at).toBe(new Date(T0.getTime() + 14 * 86_400_000).toISOString());
+    expect(falso.assinaturas.get(SUB_D)?.trial_end).toBe(Math.floor((T0.getTime() + 14 * 86_400_000) / 1000));
+    await expect(estenderTrial(ORG_D, 91, { pool, stripe })).rejects.toBeInstanceOf(DiasForaDaFaixa);
+    await expect(estenderTrial(ORG_D, 0, { pool, stripe })).rejects.toBeInstanceOf(DiasForaDaFaixa);
+    acoes++;
+    // 4 · provisionar na mão: organização SEM assinatura → operator ativa; a do Stripe recusa
+    const ORG_E = "f1900002-0000-4000-8000-000000000005";
+    await pool.query(`insert into public.organizations (id, slug, legal_name, display_name, onboarded_at) values ($1,'f19-stripe-e','F19 Stripe E','F19 E', now())`, [ORG_E]);
+    const provisionada = await provisionarNaMao(ORG_E, "PLAN_B", { pool, stripe: null, agora: () => T0 });
+    expect(provisionada).toMatchObject({ status: "active", origin: "operator", plan_code: "PLAN_B", gateway: null });
+    await expect(provisionarNaMao(ORG_D, "PLAN_B", { pool, stripe })).rejects.toBeInstanceOf(TransicaoIlegal);
+    acoes++;
+    // 5 · abrir no Stripe
+    expect(linkNoStripe(reativada, "test")).toBe(`https://dashboard.stripe.com/test/subscriptions/${SUB_D}`);
+    expect(linkNoStripe(provisionada, "test")).toBeNull();
+    acoes++;
+
+    expect(acoes).toBe(5);
+    medidas.admin_actions += acoes;
+    console.info("f19-admin: admin_actions=5/5 pause=1/1 resume=1/1 trial=1/1 provision=1/1 link=1/1 fora_da_faixa=2/2");
+  });
+
+  it("se o Stripe recusar, nada muda no banco (primeiro o provedor, depois o banco)", async () => {
+    const semChave = { base: falso.base, chave: "rk_test_errada" };
+    await expect(suspender(ORG_D, { pool, stripe: semChave })).rejects.toMatchObject({ name: "StripeIndisponivel", status: 401 });
+    expect((await lerAssinatura({ organization_id: ORG_D, source: "job" }, { pool }))?.status).toBe("active");
+    console.info("f19-admin: provedor_recusou=1/1 banco_intacto=1/1");
+  });
+
+  it("o cockpit monta os itens {nome, ok, valor, detalhe} do banco (summary_ok=1/1)", async () => {
+    const itens = await montarCockpit(pool, { gateway: "stripe", modo: "test", agora: new Date() });
+    const porNome = Object.fromEntries(itens.map((i) => [i.nome, i]));
+    expect(itens.map((i) => i.nome)).toEqual(["gateway", "assinaturas", "past_due", "blocked", "trials", "ultimo_webhook", "webhooks_recusados_24h", "orgs_sem_assinatura"]);
+    expect(porNome.gateway).toMatchObject({ ok: true, valor: "stripe/test" });
+    expect(Number(porNome.assinaturas!.valor)).toBeGreaterThanOrEqual(5);
+    expect(porNome.trials).toMatchObject({ ok: true });
+    expect(Number(porNome.trials!.valor)).toBeGreaterThanOrEqual(1);
+    expect(porNome.ultimo_webhook!.ok).toBe(true);
+    expect(itens.every((i) => typeof i.ok === "boolean" && typeof i.detalhe === "string")).toBe(true);
+    const mock = await montarCockpit(pool, { gateway: "mock", modo: "test" });
+    expect(mock.find((i) => i.nome === "gateway")).toMatchObject({ ok: false, valor: "mock/test" });
+    medidas.summary_ok += 1;
+    console.info(`f19-cockpit: summary_ok=1/1 itens=${itens.length}/8 gateway_mock_ok=false`);
+  });
+
+  it("o provisionamento cria 3 Products + 3 Prices + 1 Portal e, rodado de novo, reaproveita tudo (provision=1/1)", async () => {
+    const stripe = { base: falso.base, chave: CHAVE };
+    const primeira = await provisionar(stripe, { os: "crm-os", headline: "CRM OS", planos: PLANOS_PLACEHOLDER });
+    const segunda = await provisionar(stripe, { os: "crm-os", headline: "CRM OS", planos: PLANOS_PLACEHOLDER, portal_configuration: primeira.portal_configuration });
+    expect(primeira.criados).toBe(7);
+    expect(primeira.produtos.map((p) => p.plan_code)).toEqual(["PLAN_A", "PLAN_B", "PLAN_C"]);
+    expect(primeira.env.STRIPE_PRICE_IDS).toMatch(/^price_falso\d+:PLAN_A,price_falso\d+:PLAN_B,price_falso\d+:PLAN_C$/);
+    expect(segunda.criados).toBe(0);
+    expect(segunda.reaproveitados).toBe(7);
+    expect(segunda.env).toEqual(primeira.env);
+    expect([...falso.produtos.values()].filter((p) => (p.metadata as { os: string }).os === "crm-os")).toHaveLength(3);
+    console.info("f19-provision: provision=1/1 criados=7/7 segunda_rodada_criados=0/0 reaproveitados=7/7");
+  });
+
+  it("grava a linha stripe: do bloco com todos os campos do contrato (ADR-043 §2)", () => {
+    const linha =
+      `stripe: signature_rejected=${medidas.signature_rejected}/1 livemode_mismatch=${medidas.livemode_mismatch}/1 ` +
+      `price_outside_list=${medidas.price_outside_list}/1 checkout_created=${medidas.checkout_created}/1 ` +
+      `activated=${medidas.activated}/1 trialing_mapped=${medidas.trialing_mapped}/1 ` +
+      `duplicates=${medidas.duplicates} out_of_order=${medidas.out_of_order} ` +
+      `state_from_provider=${medidas.state_from_provider}/1 past_due=${medidas.past_due}/1 ` +
+      `blocked_after_grace=${medidas.blocked_after_grace}/1 ` +
+      `cancelled_preserved=${medidas.cancelled_preserved}/${medidas.cancelled_preserved_total} ` +
+      `portal_link=${medidas.portal_link}/1 admin_actions=${medidas.admin_actions}/5 summary_ok=${medidas.summary_ok}/1`;
+    expect(linha).not.toMatch(/=0\//);
+    console.info(linha);
+    gravarLinhaDoVerify("stripe", linha);
+  });
+});

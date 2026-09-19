@@ -26,6 +26,8 @@ export interface StripeFalso {
   readonly chamadas: ChamadaAoFalso[];
   readonly assinaturas: Map<string, Record<string, unknown>>;
   readonly sessoes: Map<string, SessaoNoFalso>;
+  readonly produtos: Map<string, Record<string, unknown>>;
+  readonly precos: Map<string, Record<string, unknown>>;
   definirAssinatura(id: string, obj: Record<string, unknown>): void;
   parar(): Promise<void>;
 }

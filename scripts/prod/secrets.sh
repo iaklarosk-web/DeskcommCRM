@@ -12,6 +12,8 @@
 #   WAHA_API_KEY                 chave app ↔ container WAHA (interna, gerada aqui)
 #   WAHA_API_KEY_SHA512          o hash que o WAHA compara (`sha512:` no compose)
 #   BILLING_MOCK_WEBHOOK_SECRET  HMAC do webhook do gateway mock (D52: Stripe depois)
+#   ADMIN_SUMMARY_TOKEN          bearer do cockpit GET /api/admin/summary (F19)
+#   BILLING_GATEWAY              `mock` nesta fase (D57 f); `stripe` é ação do proprietário
 # As chaves do proprietário (ANTHROPIC/OPENAI/RESEND/SENTRY) NÃO nascem aqui:
 # `segredo crm-prod.env <NOME>`.
 set -euo pipefail
@@ -67,6 +69,14 @@ garantir WAHA_API_KEY "$(hex 24)"
 # manda o plaintext. Derivado da chave acima.
 garantir WAHA_API_KEY_SHA512 "$(printf '%s' "$(valor_de WAHA_API_KEY)" | sha512sum | cut -d' ' -f1)"
 garantir BILLING_MOCK_WEBHOOK_SECRET "$(hex 24)"
+# F19-T04 (ADR-042 §5): bearer do cockpit `GET /api/admin/summary` (lib/env.ts
+# ADMIN_SUMMARY_TOKEN). Gerado aqui; o cockpit da KN recebe o valor do
+# proprietário. STRIPE_* NÃO nascem aqui (D57 f: a produção fica em
+# BILLING_GATEWAY=mock até o proprietário registrar o webhook no domínio e
+# gravar STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET / STRIPE_PRICE_IDS /
+# STRIPE_PORTAL_CONFIGURATION_ID com `segredo crm-prod.env <NOME>`).
+garantir ADMIN_SUMMARY_TOKEN "$(hex 32)"
+garantir BILLING_GATEWAY "mock"
 garantir NEXT_PUBLIC_APP_URL "https://crm.kntecnologia.app"
 garantir PLATFORM_NAME "\"CRM OS\""
 garantir RESEND_FROM_EMAIL "crm@mail.kntecnologia.app"

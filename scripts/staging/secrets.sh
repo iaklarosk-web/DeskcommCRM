@@ -16,6 +16,7 @@
 #   REALTIME_DB_ENC_KEY (16 chars), REALTIME_SECRET_KEY_BASE (64 hex)
 #   STAGING_SMOKE_PASSWORD    senha dos usuários fictícios que o smoke usa para logar
 #   BILLING_MOCK_WEBHOOK_SECRET HMAC do webhook do gateway mock (F12)
+#   ADMIN_SUMMARY_TOKEN         bearer do cockpit GET /api/admin/summary (F19)
 #   WHATSAPP_MOCK_HMAC_SECRET assinatura do webhook do canal mock (smoke)
 set -euo pipefail
 
@@ -85,6 +86,14 @@ garantir WHATSAPP_MOCK_HMAC_SECRET "$(hex 24)"
 # BILLING_MOCK_WEBHOOK_SECRET; src/billing/webhook-mock.ts). Sem ela o webhook
 # responde 503 (fail closed) e o checkout mock não ativa nada.
 garantir BILLING_MOCK_WEBHOOK_SECRET "$(hex 24)"
+# F19-T04 (ADR-042 §5/§7): bearer do cockpit `GET /api/admin/summary`
+# (lib/env.ts ADMIN_SUMMARY_TOKEN), gerado aqui. O Stripe do STAGING é do
+# proprietário: STRIPE_SECRET_KEY (chave restrita rk_test_…) com
+# `segredo crm-staging.env STRIPE_SECRET_KEY`; STRIPE_WEBHOOK_SECRET vem do
+# `stripe listen` (prova real, D57 e); STRIPE_PRICE_IDS e
+# STRIPE_PORTAL_CONFIGURATION_ID são a saída de `pnpm stripe:provision`.
+# BILLING_GATEWAY só vira `stripe` no staging quando os quatro existirem.
+garantir ADMIN_SUMMARY_TOKEN "$(hex 32)"
 
 sudo install -o root -g klarosk -m 640 "$TMP" "$ARQUIVO"
 rm -f "$TMP"

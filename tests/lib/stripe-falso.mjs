@@ -50,6 +50,9 @@ export async function subirStripeFalso(opts) {
   const assinaturas = new Map();
   /** @type {Map<string, {organization_id: string, price: string, trial_days: number, success_url: string, cancel_url: string, customer: string|null, subscription: string}>} */
   const sessoes = new Map();
+  /** @type {Map<string, any>} Products e Prices do provisionamento */
+  const produtos = new Map();
+  const precos = new Map();
   let seq = 0;
 
   const servidor = http.createServer(async (req, res) => {
@@ -151,6 +154,32 @@ export async function subirStripeFalso(opts) {
       }
       return responder(200, sub);
     }
+    // Provisionamento (scripts/stripe-provision.ts): Products por metadata, Prices, configuração do Portal.
+    if (req.method === "GET" && url.pathname === "/v1/products/search") {
+      const q = url.searchParams.get("query") ?? "";
+      const os = /metadata\['os'\]:'([^']+)'/.exec(q)?.[1] ?? null;
+      return responder(200, { object: "search_result", data: [...produtos.values()].filter((p) => os === null || p.metadata.os === os) });
+    }
+    if (req.method === "POST" && url.pathname === "/v1/products") {
+      seq += 1;
+      const produto = { id: `prod_falso${String(seq).padStart(4, "0")}`, object: "product", name: form.name, active: true, metadata: { os: form["metadata[os]"], plan_code: form["metadata[plan_code]"] } };
+      produtos.set(produto.id, produto);
+      return responder(200, produto);
+    }
+    if (req.method === "GET" && url.pathname === "/v1/prices") {
+      const product = url.searchParams.get("product");
+      return responder(200, { object: "list", data: [...precos.values()].filter((p) => p.product === product && p.active) });
+    }
+    if (req.method === "POST" && url.pathname === "/v1/prices") {
+      seq += 1;
+      const preco = { id: `price_falso${String(seq).padStart(4, "0")}`, object: "price", product: form.product, unit_amount: Number(form.unit_amount), currency: form.currency, active: true, recurring: { interval: form["recurring[interval]"] }, metadata: { plan_code: form["metadata[plan_code]"] } };
+      precos.set(preco.id, preco);
+      return responder(200, preco);
+    }
+    if (req.method === "POST" && url.pathname === "/v1/billing_portal/configurations") {
+      seq += 1;
+      return responder(200, { id: `bpc_falso${String(seq).padStart(4, "0")}`, object: "billing_portal.configuration", active: true });
+    }
     if (req.method === "POST" && url.pathname === "/v1/billing_portal/sessions") {
       if (!form.customer) return responder(400, { error: { type: "invalid_request_error", message: "Missing required param: customer." } });
       return responder(200, { id: `bps_falso${randomBytes(4).toString("hex")}`, object: "billing_portal.session", customer: form.customer, url: `http://127.0.0.1:${servidor.address().port}/portal/${form.customer}`, return_url: form.return_url });
@@ -166,6 +195,8 @@ export async function subirStripeFalso(opts) {
     chamadas,
     assinaturas,
     sessoes,
+    produtos,
+    precos,
     /** Muda o que o provedor responde para uma subscription (é assim que se mede `state_from_provider`). */
     definirAssinatura(id, obj) {
       assinaturas.set(id, { ...FIXTURE_TRIALING, ...obj, id });

@@ -18,6 +18,9 @@ export const PUBLIC_PATHS: RegExp[] = [
   // e entra pela linha acima: a autoridade é a assinatura HMAC conferida
   // DENTRO da rota, `src/billing/webhook-mock.ts`.)
   /^\/api\/v1\/cron\//,
+  // F19 (ADR-042 §5): o cockpit da KN, `Authorization: Bearer ADMIN_SUMMARY_TOKEN`
+  // conferido DENTRO da rota, em tempo constante — sem cookie, como /cron/.
+  /^\/api\/admin\/summary$/,
   // Heartbeat do agente do host (bearer INTERNAL_SECRET/INTERNAL_CRON_SECRET,
   // checado dentro da própria rota) — sem cookie de sessão, igual /cron/.
   /^\/api\/v1\/system\/agent$/,

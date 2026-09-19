@@ -316,3 +316,92 @@ export async function estenderTrial(cfg: ConfigDoCliente, subscriptionId: string
 export function linkDoDashboard(modo: "test" | "live", subscriptionId: string): string {
   return `https://dashboard.stripe.com/${modo === "test" ? "test/" : ""}subscriptions/${encodeURIComponent(subscriptionId)}`;
 }
+
+// ---------------------------------------------------------------------------
+// 6 · Provisionamento (scripts/stripe-provision.ts) — Products, Prices, Portal
+// ---------------------------------------------------------------------------
+
+export interface ProdutoDoStripe {
+  readonly id: string;
+  readonly name: string;
+  readonly metadata: Readonly<Record<string, string>>;
+}
+
+export interface PrecoDoStripe {
+  readonly id: string;
+  readonly product: string;
+  readonly unit_amount: number | null;
+  readonly currency: string;
+  readonly active: boolean;
+}
+
+function lerProduto(bruto: unknown): ProdutoDoStripe | null {
+  const p = bruto as { id?: unknown; name?: unknown; metadata?: unknown } | null;
+  if (!p || typeof p.id !== "string" || typeof p.name !== "string") return null;
+  return { id: p.id, name: p.name, metadata: (p.metadata as Record<string, string> | undefined) ?? {} };
+}
+
+function lerPreco(bruto: unknown): PrecoDoStripe | null {
+  const p = bruto as { id?: unknown; product?: unknown; unit_amount?: unknown; currency?: unknown; active?: unknown } | null;
+  if (!p || typeof p.id !== "string" || typeof p.product !== "string") return null;
+  return { id: p.id, product: p.product, unit_amount: typeof p.unit_amount === "number" ? p.unit_amount : null, currency: String(p.currency ?? ""), active: p.active !== false };
+}
+
+/** `GET /v1/products/search?query=metadata['os']:'<os>'` — os Products deste OS (DF-33: um por plano). */
+export async function buscarProdutosDoOs(cfg: ConfigDoCliente, os: string): Promise<ProdutoDoStripe[]> {
+  const r = (await chamar(cfg, "GET", `/v1/products/search?query=${encodeURIComponent(`metadata['os']:'${os}' AND active:'true'`)}&limit=100`)) as { data?: unknown[] };
+  return (r.data ?? []).map(lerProduto).filter((p): p is ProdutoDoStripe => p !== null);
+}
+
+export async function criarProduto(cfg: ConfigDoCliente, entrada: { name: string; os: string; plan_code: string; description?: string }): Promise<ProdutoDoStripe> {
+  const r = lerProduto(
+    await chamar(cfg, "POST", "/v1/products", paraForm({ name: entrada.name, description: entrada.description, "metadata[os]": entrada.os, "metadata[plan_code]": entrada.plan_code })),
+  );
+  if (r === null) throw new StripeIndisponivel(502, "product fora da forma");
+  return r;
+}
+
+/** `GET /v1/prices?product=…&active=true` */
+export async function listarPrecosDoProduto(cfg: ConfigDoCliente, productId: string): Promise<PrecoDoStripe[]> {
+  const r = (await chamar(cfg, "GET", `/v1/prices?product=${encodeURIComponent(productId)}&active=true&limit=100`)) as { data?: unknown[] };
+  return (r.data ?? []).map(lerPreco).filter((p): p is PrecoDoStripe => p !== null);
+}
+
+export async function criarPreco(cfg: ConfigDoCliente, entrada: { product: string; unit_amount: number; currency: string; interval: "month" | "year"; plan_code: string }): Promise<PrecoDoStripe> {
+  const r = lerPreco(
+    await chamar(
+      cfg,
+      "POST",
+      "/v1/prices",
+      paraForm({ product: entrada.product, unit_amount: entrada.unit_amount, currency: entrada.currency, "recurring[interval]": entrada.interval, "metadata[plan_code]": entrada.plan_code }),
+    ),
+  );
+  if (r === null) throw new StripeIndisponivel(502, "price fora da forma");
+  return r;
+}
+
+/**
+ * `POST /v1/billing_portal/configurations` — o Portal que troca entre os
+ * preços listados, cancela ao fim do período e atualiza o cartão (D57 b).
+ */
+export async function criarConfiguracaoDoPortal(cfg: ConfigDoCliente, entrada: { headline: string; produtos: ReadonlyArray<{ product: string; prices: readonly string[] }> }): Promise<{ id: string }> {
+  const params: Record<string, string | number | boolean | undefined> = {
+    "business_profile[headline]": entrada.headline,
+    "features[payment_method_update][enabled]": true,
+    "features[subscription_cancel][enabled]": true,
+    "features[subscription_cancel][mode]": "at_period_end",
+    "features[subscription_update][enabled]": true,
+    "features[subscription_update][default_allowed_updates][0]": "price",
+    "features[subscription_update][proration_behavior]": "none",
+    "features[invoice_history][enabled]": true,
+  };
+  entrada.produtos.forEach((p, i) => {
+    params[`features[subscription_update][products][${i}][product]`] = p.product;
+    p.prices.forEach((preco, j) => {
+      params[`features[subscription_update][products][${i}][prices][${j}]`] = preco;
+    });
+  });
+  const r = (await chamar(cfg, "POST", "/v1/billing_portal/configurations", paraForm(params))) as { id?: unknown };
+  if (typeof r.id !== "string") throw new StripeIndisponivel(502, "configuração do portal sem id");
+  return { id: r.id };
+}
