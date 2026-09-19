@@ -137,6 +137,16 @@ UPSTASH_REDIS_REST_TOKEN=e2e-placeholder-nao-e-segredo
 # F12-T03: HMAC do webhook do gateway MOCK — a spec de cobrança paga pelo
 # checkout mock, que assina e entrega o evento ao webhook. Valor de teste.
 BILLING_MOCK_WEBHOOK_SECRET=e2e-billing-mock-webhook-placeholder-nao-e-segredo
+# F19 (ADR-043 §4): o gate roda com o gateway REAL apontado para o Stripe FALSO
+# da bancada (o playwright.config sobe o falso em E2E_PORT+1000 e injeta
+# STRIPE_API_BASE no app). Chaves FICTÍCIAS, rotuladas — nunca credencial.
+BILLING_GATEWAY=stripe
+STRIPE_MODE=test
+STRIPE_SECRET_KEY=sk_test_falso_da_bancada_nao_e_segredo
+STRIPE_WEBHOOK_SECRET=whsec_falso_da_bancada_nao_e_segredo
+STRIPE_PRICE_IDS=price_falsoPlanA:PLAN_A,price_falsoPlanB:PLAN_B,price_falsoPlanC:PLAN_C
+BILLING_TRIAL_DAYS=7
+ADMIN_SUMMARY_TOKEN=e2e-admin-summary-token-placeholder-nao-e-segredo
 NEXT_TELEMETRY_DISABLED=1
 # Telemetria DESLIGADA na suíte, explicitamente. Até §B11 (F11-T00) o vazio
 # fazia o SDK do browser assumir o DSN da comunidade (\`lib/sentry/dsn.ts\`) e a

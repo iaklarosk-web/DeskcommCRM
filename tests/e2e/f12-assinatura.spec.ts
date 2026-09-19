@@ -19,6 +19,7 @@
  */
 import { test as base, expect, type Page } from "@playwright/test";
 
+import { pagarNoCheckout } from "./utils/checkout";
 import { f02E2eSandbox } from "./utils/f02-crm-cadastros";
 import { cleanupF11F12, seedF11F12, type F11F12Fixture, type LadoDoTeste } from "./utils/f11-f12-fixture";
 
@@ -158,22 +159,14 @@ for (const lado of ["A", "B"] as LadoDoTeste[]) {
     const contatos = await db.from("contacts").select("id", { count: "exact", head: true }).eq("organization_id", fixture.orgs[lado]);
     expect(contatos.count).toBeGreaterThanOrEqual(1);
 
-    // Act 2 — contratar de novo → página do gateway mock → pagamento confirmado.
+    // Act 2 — contratar de novo → página do GATEWAY CONFIGURADO (mock ou o
+    // Stripe falso da bancada — F19, ADR-042 §4) → pagamento confirmado.
     await page.goto(TELA, { waitUntil: "domcontentloaded" });
-    await Promise.all([
-      page.waitForURL("**/app/billing/mock-checkout/**", { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" }),
-      page.getByTestId("billing-checkout-PLAN_A").click(),
-    ]);
-    await expect(page.getByTestId("mock-checkout")).toBeVisible();
-    expect(await page.getByTestId("mock-checkout-status").textContent()).toBe("open");
-    const faturaId = await page.getByTestId("mock-checkout").getAttribute("data-invoice");
-    await Promise.all([
-      page.waitForResponse((r) => r.request().method() === "POST" && new URL(r.url()).pathname === "/api/v1/billing/mock-checkout", { timeout: HTTP_TIMEOUT }),
-      page.getByTestId("mock-checkout-pagar").click(),
-    ]);
-    await page.waitForURL("**/app/billing", { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" });
+    const gateway = await pagarNoCheckout(page, "PLAN_A");
 
     // Assert 2 — ativou UMA vez: estado, fatura paga, evento aplicado, uso liberado.
+    // No Stripe chegam DOIS eventos (checkout.session.completed e invoice.paid,
+    // como o provedor manda); a afirmação é "ativou uma vez", não "um evento".
     await expect.poll(async () => (await assinaturaNoBanco(fixture.orgs[lado])).status, { timeout: HTTP_TIMEOUT }).toBe("active");
     await page.reload({ waitUntil: "domcontentloaded" });
     expect(await page.getByTestId("billing-status").getAttribute("data-status")).toBe("active");
@@ -181,10 +174,14 @@ for (const lado of ["A", "B"] as LadoDoTeste[]) {
     if (faturas.error) throw faturas.error;
     const pagas = (faturas.data as unknown as Array<{ id: string; status: string; gateway_ref: string | null }>).filter((f) => f.status === "paid");
     expect(pagas).toHaveLength(1);
-    expect(pagas[0]!.id).toBe(faturaId);
-    const eventos = await db.from("billing_events" as never).select("event_type, applied").eq("organization_id", fixture.orgs[lado]);
+    const eventos = await db.from("billing_events" as never).select("event_type, applied, gateway").eq("organization_id", fixture.orgs[lado]);
     if (eventos.error) throw eventos.error;
-    expect(eventos.data as unknown as Array<{ event_type: string; applied: boolean }>).toEqual([{ event_type: "payment_confirmed", applied: true }]);
+    const aplicados = (eventos.data as unknown as Array<{ event_type: string; applied: boolean; gateway: string }>).filter((e) => e.applied);
+    expect(aplicados.length, `eventos aplicados pelo gateway ${gateway}`).toBe(gateway === "stripe" ? 2 : 1);
+    expect(aplicados.every((e) => e.event_type === "payment_confirmed" && e.gateway === gateway)).toBe(true);
+    const ativacoes = await db.from("notifications" as never).select("id").eq("organization_id", fixture.orgs[lado]).eq("event", "subscription.activated");
+    if (ativacoes.error) throw ativacoes.error;
+    expect((ativacoes.data as unknown[]).length, "ativou mais de uma vez").toBe(1);
     const escritaDepois = await page.request.get("/api/v1/contacts", { timeout: HTTP_TIMEOUT });
     expect(escritaDepois.status()).toBe(200);
     await expect(page.getByTestId("billing-fatura")).toHaveCount(1);

@@ -65,6 +65,16 @@ UPSTASH_REDIS_REST_URL=http://127.0.0.1:3998
 UPSTASH_REDIS_REST_TOKEN=e2e-placeholder-nao-e-segredo
 WHATSAPP_MOCK_HMAC_SECRET=$(ler WHATSAPP_MOCK_HMAC_SECRET)
 BILLING_MOCK_WEBHOOK_SECRET=$(ler BILLING_MOCK_WEBHOOK_SECRET)
+# F19 (ADR-043 §4): o gate roda com o gateway REAL apontado para o Stripe FALSO
+# da bancada (o playwright.config sobe o falso em E2E_PORT+1000 e injeta
+# STRIPE_API_BASE no app). Chaves FICTÍCIAS, rotuladas — nunca credencial.
+BILLING_GATEWAY=stripe
+STRIPE_MODE=test
+STRIPE_SECRET_KEY=sk_test_falso_da_bancada_nao_e_segredo
+STRIPE_WEBHOOK_SECRET=whsec_falso_da_bancada_nao_e_segredo
+STRIPE_PRICE_IDS=price_falsoPlanA:PLAN_A,price_falsoPlanB:PLAN_B,price_falsoPlanC:PLAN_C
+BILLING_TRIAL_DAYS=7
+ADMIN_SUMMARY_TOKEN=e2e-admin-summary-token-placeholder-nao-e-segredo
 AI_PROVIDER=mock
 WHATSAPP_MODE=mock
 NEXT_TELEMETRY_DISABLED=1

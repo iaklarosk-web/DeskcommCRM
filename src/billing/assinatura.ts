@@ -405,7 +405,12 @@ export async function aplicarEventoDoGateway(
             [ctx.organization_id, assinatura.id, plano.code, ocorrido, fim, plano.price_cents, plano.currency, evento.event_ref],
           );
         }
-        await avisar(db, ctx, "subscription.activated", { plan_code: plano.code, current_period_end: fim.toISOString() });
+        // F19: renovação (active → active) não é ativação — o Stripe manda
+        // `invoice.paid` a cada ciclo, e avisar "ativada" a cada mês seria ruído
+        // que esconde a ativação de verdade (pending/past_due/blocked → active).
+        if (assinatura.status !== "active") {
+          await avisar(db, ctx, "subscription.activated", { plan_code: plano.code, current_period_end: fim.toISOString() });
+        }
       } else if (evento.event_type === "cancelled") {
         // F19 (ADR-042 §2, D44): o gateway avisa que a assinatura acabou no
         // Portal — mesmo desfecho do `cancelar()` humano: dados preservados,

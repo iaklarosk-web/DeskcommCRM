@@ -28,6 +28,7 @@
  */
 import { test as base, expect, type Page } from "@playwright/test";
 
+import { pagarNoCheckout } from "./utils/checkout";
 import { f02E2eSandbox } from "./utils/f02-crm-cadastros";
 import { cleanupF11F12, seedF11F12, type F11F12Fixture, type LadoDoTeste } from "./utils/f11-f12-fixture";
 
@@ -203,14 +204,9 @@ test("depois do pagamento mock o wizard conclui só pela UI: telefone de teste, 
     if (vinculo.error || !vinculo.data) throw vinculo.error ?? new Error("organização do wizard não provisionada");
     const orgId = vinculo.data.organization_id as string;
     orgsCriadas.push(orgId);
-    await Promise.all([
-      page.waitForURL("**/app/billing/mock-checkout/**", { timeout: HTTP_TIMEOUT, waitUntil: "domcontentloaded" }),
-      page.getByTestId("billing-checkout-PLAN_A").click(),
-    ]);
-    await Promise.all([
-      page.waitForResponse((r) => r.request().method() === "POST" && new URL(r.url()).pathname === "/api/v1/billing/mock-checkout", { timeout: HTTP_TIMEOUT }),
-      page.getByTestId("mock-checkout-pagar").click(),
-    ]);
+    // Paga no checkout do GATEWAY CONFIGURADO (mock ou o Stripe falso — F19,
+    // ADR-042 §4). "Sem cartão no Checkout = sem acesso": quem ativa é o webhook.
+    await pagarNoCheckout(page, "PLAN_A");
     await expect.poll(async () => (await assinaturaNoBanco(orgId)).status, { timeout: HTTP_TIMEOUT }).toBe("active");
 
     // Act — o wizard, passo a passo, pela UI.

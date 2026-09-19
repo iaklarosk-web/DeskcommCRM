@@ -101,6 +101,12 @@ function publicarNoProcesso(env: Record<string, string>): Record<string, string>
 // a 3001 já estiver ocupada por outro checkout/worktree.
 const PORT = process.env.E2E_PORT ?? "3001";
 const BASE_URL = `http://localhost:${PORT}`;
+// F19 (ADR-043 §4): o Stripe FALSO da bancada sobe como segundo webServer, em
+// E2E_PORT+1000, e o app sob teste recebe STRIPE_API_BASE apontado para ele —
+// injetado AQUI (o `env:` do config vence o `.env.e2e`), porque só este
+// arquivo sabe a porta. As chaves fictícias vêm do `.env.e2e`.
+const PORTA_DO_STRIPE_FALSO = String(Number(PORT) + 1000);
+const STRIPE_FALSO_BASE = `http://127.0.0.1:${PORTA_DO_STRIPE_FALSO}`;
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -142,7 +148,7 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
-  webServer: {
+  webServer: [{
     // Produção (`next build` antes!): dev-server compila por rota (40-80s) e
     // Turbopack dev quebra cookies() fora do request scope — inviável p/ e2e.
     command: `pnpm exec next start --port ${PORT}`,
@@ -158,7 +164,7 @@ export default defineConfig({
     // `publicarNoProcesso` acima que garante que o `process.env` do runner tenha
     // o que aquele conserto precisa: sem ele, num worktree sem `.env.local`, o
     // seed não tinha NENHUMA das duas fontes.
-    env: publicarNoProcesso(envDoE2E()),
+    env: { ...publicarNoProcesso(envDoE2E()), STRIPE_API_BASE: STRIPE_FALSO_BASE },
     url: BASE_URL,
     // false: reusar um server que já ocupa a porta pode ser OUTRO processo
     // (ex.: bundle do Remotion na 3000) — o teste precisa do NOSSO next start.
@@ -180,6 +186,20 @@ export default defineConfig({
     // `.env.e2e` inteiro no ambiente do job em vez de redigitar valores: uma
     // fonte não colide consigo mesma.
     timeout: 120_000,
-  },
+  }, {
+    // O Stripe FALSO (tests/lib/stripe-falso.mjs): responde ao adapter, serve a
+    // página de checkout e entrega ao app os webhooks assinados com o whsec
+    // fictício do `.env.e2e`. Sem ele, o checkout da F11/F12/F19 não abre.
+    command: `node tests/lib/stripe-falso.mjs`,
+    env: {
+      STRIPE_FALSO_PORTA: PORTA_DO_STRIPE_FALSO,
+      STRIPE_FALSO_CHAVE: process.env.STRIPE_SECRET_KEY ?? "sk_test_falso_da_bancada_nao_e_segredo",
+      STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET ?? "whsec_falso_da_bancada_nao_e_segredo",
+      STRIPE_FALSO_APP: BASE_URL,
+    },
+    url: `${STRIPE_FALSO_BASE}/health`,
+    reuseExistingServer: false,
+    timeout: 30_000,
+  }],
   projects: [{ name: "chromium", use: { browserName: "chromium" } }],
 });
