@@ -380,6 +380,15 @@ notificação atualiza a lista da guarda no mesmo commit; toda prova real que gr
 tropeçar na subida seguinte — o `up.sh` devia listar os eventos presentes ANTES de aplicar. Custo: uma linha
 na guarda; a checagem prévia no `up.sh`, dez.
 
+### B22. Prova de shell herdada pode PENDURAR para sempre dentro do gate (18/09/2026)
+`tests/shell/owner-id-por-email.test.sh` ficou 1h25 parada num `head -1` esperando stdin, no passo
+`shell` do f18-gate-02 — a mesma prova tinha passado em 58 s no gate 01, duas horas antes. Nenhum
+passo do `verify.sh` tem `timeout`: um comando que nunca volta não reprova, ele PENDURA, e o gate
+fica vivo sem produzir nada (o sintoma é log parado, não erro). Conserto proposto: `timeout` por
+passo no `step` do `verify.sh` (o teto dá para ser generoso — 40 min cobre o mais lento com folga)
+e `</dev/null` nas provas de shell, que não leem entrada. Custo: baixo. **Risco enquanto durar:**
+um gate que pendura à noite custa a janela inteira e parece que "ainda está rodando".
+
 ## C. Portões do proprietário — o que a engenharia não pode abrir sozinha
 
 D49 suspendeu a pausa por fase de D47, mas preservou D11–D13. Estes itens não

@@ -61,11 +61,24 @@ export VERIFY_LOG_DIR="$LOG_DIR"
 mkdir -p "$LOG_DIR/metrics" "$LOG_DIR/mutants"
 echo "[verify] evidence=$LOG_DIR" >&2
 
+# F18-T05 (ADR-041 §5, §B22): TETO por passo, e entrada fechada.
+#
+# Um passo que nunca volta não reprova — ele PENDURA, e o gate fica vivo sem
+# produzir nada (medido: uma prova de shell herdada parou 1h25 num `head -1`
+# esperando stdin, depois de ter passado em 58 s duas horas antes). O teto é
+# generoso de propósito: ele existe para transformar "pendurado" em "reprovado
+# com nome", não para apertar passo lento. `</dev/null` fecha a entrada: nenhum
+# passo do gate lê do teclado, e quem tentar lê EOF em vez de esperar.
+VERIFY_STEP_TIMEOUT="${VERIFY_STEP_TIMEOUT:-3600}"
+
 step() {
   local name=$1; shift
   local started; started=$(date +%s)
-  "$@" >"$LOG_DIR/$name.log" 2>&1
+  timeout --kill-after=30s "$VERIFY_STEP_TIMEOUT" "$@" >"$LOG_DIR/$name.log" 2>&1 </dev/null
   local result=$?
+  if [ "$result" = 124 ] || [ "$result" = 137 ]; then
+    echo "[verify] $name: TETO de ${VERIFY_STEP_TIMEOUT}s estourado — passo pendurado, não lento (§B22)" >&2
+  fi
   echo "$result" >"$LOG_DIR/$name.exit"
   echo "[verify] $name: exit=$result $(( $(date +%s)-started ))s" >&2
   return "$result"

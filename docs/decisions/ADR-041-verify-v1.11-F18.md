@@ -67,6 +67,18 @@ gate não a roda. A T04 conserta o arquivo e o `verify.sh` passa a rodar
 `pnpm lint:channels` no passo `lint`. Campo novo: nenhum — o passo já é medido
 por `lint=ok`.
 
+### 5. Teto por passo, e entrada fechada (§B22)
+
+`step` passa a rodar cada passo sob `timeout --kill-after=30s ${VERIFY_STEP_TIMEOUT:-3600}`
+e com `</dev/null`. Motivo medido no f18-gate-02: a prova herdada
+`tests/shell/owner-id-por-email.test.sh` ficou 1h25 parada num `head -1`
+esperando stdin — tendo passado em 58 s duas horas antes. Sem teto, um passo
+que não volta não reprova: ele **pendura**, e o gate fica vivo sem produzir
+nada. O teto é generoso de propósito (uma hora cobre o passo mais lento com
+folga); ele existe para transformar "pendurado" em "reprovado com nome", não
+para apertar passo lento. `</dev/null` fecha a entrada porque nenhum passo do
+gate lê do teclado — quem tentar lê EOF em vez de esperar para sempre.
+
 ## Consequências
 
 - `EXPECTED_SPECS` 15 → 16 e `e2e` 72 → 79 por passe; o gate ganha ~6 min.
