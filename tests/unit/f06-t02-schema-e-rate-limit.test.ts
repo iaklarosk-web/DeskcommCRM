@@ -49,6 +49,7 @@ const VALIDADORES_DELEGADOS: ReadonlyArray<{ chamada: RegExp; onde: string }> = 
   // confere a assinatura HMAC ANTES de ler qualquer campo e só então o valida
   // por zod (`lerCorpoDoEventoMock`, allowlist de campos — G-42).
   { chamada: /\breceberEventoMock\(/, onde: "src/billing/webhook-mock.ts (HMAC → src/billing/gateway/mock.ts corpoDoEventoSchema, zod)" },
+  { chamada: /\breceberEventoStripe\(/, onde: "src/billing/webhook-stripe.ts (Stripe-Signature HMAC → src/billing/gateway/stripe.ts lerEventoDoStripe, allowlist; F19)" },
 ];
 
 /**

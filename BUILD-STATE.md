@@ -5,7 +5,7 @@ f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskco
 plan_version: "2.12 (2026-09-19); D38–D57; ADR-006…043"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
 current_phase: F19
-next_task: F19-T02             # F19 (D57): T00 e T01 concluídas (ADR-042/043, D57, §B23 b, verify v1.12; migration 9033 + apêndice + MANIFEST + prova f19-t01); segue T02 (adapter stripe, webhook, checkout)
+next_task: F19-T03             # F19 (D57): T00–T02 concluídas (ADRs, D57, §B23 b, verify v1.12; migration 9033; adapter stripe + webhook + checkout); segue T03 (carência, Portal, cancelamento preservando dados)
 status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26); F19 em construção (D57) sobre a F18 fechada (READY (staging) em e5c26c4e)
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
@@ -734,7 +734,7 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 | F16 | Marca do SaaS e presets configuráveis; profundidade de templates, white-label e domínios por cliente a definir | pending |
 | F17 | Operação, capacidade/recuperação, suporte, atualização, regressão e aceite comercial pelo proprietário | pending |
 | F18 | Um motor de IA só: o turno SaaS assume o despacho (unificação do §B8) | done(verify=2026-09-19 e5c26c4e) — READY (staging) no f18-gate-04 (16 specs, linha `engine:`; ADR-040/041); T00–T05 concluídas; produção com o código da F18 (`prod:`/`engine_real:`) |
-| F19 | Cobrança real por Stripe + padrão KN do `/admin` (D57; ADR-042/043) | in_progress — T00–T01 concluídas (19/09/2026); T02–T05 pendentes; produção fica `BILLING_GATEWAY=mock` nesta fase (D57 f) |
+| F19 | Cobrança real por Stripe + padrão KN do `/admin` (D57; ADR-042/043) | in_progress — T00–T02 concluídas (19/09/2026); T03–T05 pendentes; produção fica `BILLING_GATEWAY=mock` nesta fase (D57 f) |
 
 Dependência técnica: F00/F01 → F02 → F03 → F04 → F05 → F06 → F07 → (D51) F11+F12. F11/F12 fecharam juntas o onboarding pago em staging (13/09/2026); F13 fechou em 14/09/2026; F15 fechou em 15/09/2026 (D54); F14 fechou em 18/09/2026 (D55); F16 avança com contratos definidos. F08 depende das entradas/autorização para serviços reais. D48 permite concluir a construção F11–F17 antes das evidências reais F09/F10; piloto e validação de mercado permanecem marcos separados, sem bloquear o software. F17 reúne a jornada comercial e os critérios de operação. Nenhuma fase futura recebe `done` por existir código equivalente no upstream.
 

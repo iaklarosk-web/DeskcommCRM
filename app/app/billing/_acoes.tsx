@@ -33,7 +33,9 @@ export function BotaoDeCheckout({ planCode, rotulo }: { planCode: string; rotulo
         setBusy(false);
         if (!r.ok) return void toast.error(r.message ? t(r.message) : t("Não foi possível iniciar a contratação."));
         const url = (r.data?.checkout as { url?: string } | undefined)?.url;
-        if (url) router.push(url);
+        // F19: o checkout do Stripe é outro site — navegação inteira, não a do router.
+        if (url && /^https?:\/\//.test(url)) window.location.assign(url);
+        else if (url) router.push(url);
         else router.refresh();
       }}
     >

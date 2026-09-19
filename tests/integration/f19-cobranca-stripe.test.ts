@@ -1,0 +1,287 @@
+/**
+ * F19 — cobrança REAL por Stripe contra o banco descartável e o Stripe FALSO
+ * em processo (`tests/lib/stripe-falso.mjs`), ADR-042/043. Grava a linha
+ * `stripe:` do bloco (`gravarLinhaDoVerify`) no ÚLTIMO caso, com todos os
+ * campos do contrato de ADR-043 §2 — nunca pela metade (RETOMADA regra 7).
+ *
+ * O que se mede aqui e o mock nunca mediu: o webhook recusa assinatura
+ * inválida (401), evento de outro modo (422) e preço fora da lista (422), sem
+ * gravar linha; o estado vem do PROVEDOR (o payload diz `active`, o provedor
+ * diz `past_due`, o CRM grava `past_due`); `trialing` chega como `active` com
+ * `trial_ends_at` (D57 c); duplicata e fora de ordem continuam contados, não
+ * aplicados (F12). A organização vem de `client_reference_id` (checkout) ou de
+ * `subscriptions.gateway_ref` (os demais) — nunca só do payload (D20).
+ */
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
+import pg from "pg";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import { aplicarEventoDoGateway, iniciarCheckout, lerAssinatura, varrerCarencia } from "@/src/billing";
+import { assinarComoOStripe, criarSessaoDeCheckout, criarSessaoDoPortal } from "@/src/billing/gateway/stripe";
+import { receberEventoStripe, type DepsDoReceptor } from "@/src/billing/webhook-stripe";
+import type { TenantCtx } from "@/src/tenant-context";
+import { subirStripeFalso } from "@/tests/lib/stripe-falso.mjs";
+import { gravarLinhaDoVerify } from "@/tests/lib/verify-metrics";
+
+const rawPort = process.env.TEST_DB_PORT;
+if (!rawPort) throw new Error("TEST_DB_PORT obrigatório: rode com pnpm test:integration");
+const port = Number(rawPort);
+if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error("TEST_DB_PORT inválido");
+const pool = new pg.Pool({ connectionString: `postgresql://postgres:postgres@127.0.0.1:${port}/postgres`, max: 4 });
+
+const ORG_A = "f1900002-0000-4000-8000-000000000001"; // a organização das fixtures
+const ORG_B = "f1900002-0000-4000-8000-000000000002";
+const ORG_C = "f1900002-0000-4000-8000-000000000003";
+const ADMIN_A = "f1900002-1001-4000-8000-000000000001";
+const ADMIN_B = "f1900002-1001-4000-8000-000000000002";
+const ADMIN_C = "f1900002-1001-4000-8000-000000000003";
+const ctxA: TenantCtx = { organization_id: ORG_A, source: "session", user_id: ADMIN_A };
+const ctxB: TenantCtx = { organization_id: ORG_B, source: "session", user_id: ADMIN_B };
+const ctxC: TenantCtx = { organization_id: ORG_C, source: "session", user_id: ADMIN_C };
+
+const SECRET = "whsec_bancada_f19_nao_e_segredo";
+const CHAVE = "rk_test_bancada_f19";
+const PRECOS = "price_1F19FixturePlanA:PLAN_A,price_1F19FixturePlanB:PLAN_B,price_1F19FixturePlanC:PLAN_C";
+const SUB_FIXTURE = "sub_1F19Fixture00000001";
+
+type Falso = Awaited<ReturnType<typeof subirStripeFalso>>;
+let falso: Falso;
+let deps: DepsDoReceptor;
+
+function fixture(nome: string): Record<string, unknown> {
+  return JSON.parse(readFileSync(path.join(__dirname, "../fixtures/stripe", `${nome}.json`), "utf8")) as Record<string, unknown>;
+}
+
+/** Entrega um evento ao receptor como o Stripe entregaria: corpo + `Stripe-Signature` no `created`. */
+async function entregar(evento: Record<string, unknown>, opts: { secret?: string; agora?: number } = {}) {
+  const corpo = JSON.stringify(evento);
+  const t = typeof evento.created === "number" ? evento.created : Math.floor(Date.now() / 1000);
+  const header = assinarComoOStripe(corpo, opts.secret ?? SECRET, t);
+  return receberEventoStripe(corpo, header, { ...deps, agoraUnix: () => opts.agora ?? t });
+}
+
+async function conta(sql: string, params: unknown[]): Promise<number> {
+  const { rows } = await pool.query<{ n: string }>(sql, params);
+  return Number(rows[0]?.n ?? 0);
+}
+
+const medidas = {
+  signature_rejected: 0,
+  livemode_mismatch: 0,
+  price_outside_list: 0,
+  checkout_created: 0,
+  activated: 0,
+  trialing_mapped: 0,
+  duplicates: 0,
+  out_of_order: 0,
+  state_from_provider: 0,
+  past_due: 0,
+  blocked_after_grace: 0,
+  cancelled_preserved: 0,
+  cancelled_preserved_total: 0,
+  portal_link: 0,
+  admin_actions: 0,
+  summary_ok: 0,
+};
+
+beforeAll(async () => {
+  falso = await subirStripeFalso({ chave: CHAVE, webhookSecret: SECRET });
+  deps = { pool, graceDays: 7, secret: SECRET, modo: "test", chave: CHAVE, base: falso.base, precos: PRECOS };
+  await pool.query(`insert into auth.users (id, email) values ('${ADMIN_A}','f19-a@integration.test'), ('${ADMIN_B}','f19-b@integration.test'), ('${ADMIN_C}','f19-c@integration.test')`);
+  await pool.query(`
+    insert into public.organizations (id, slug, legal_name, display_name, onboarded_at) values
+      ('${ORG_A}','f19-stripe-a','F19 Stripe A','F19 A', now()),
+      ('${ORG_B}','f19-stripe-b','F19 Stripe B','F19 B', now()),
+      ('${ORG_C}','f19-stripe-c','F19 Stripe C','F19 C', now())`);
+  await pool.query(`
+    insert into public.user_organizations (organization_id, user_id, role, accepted_at) values
+      ('${ORG_A}','${ADMIN_A}','admin',now()), ('${ORG_B}','${ADMIN_B}','admin',now()), ('${ORG_C}','${ADMIN_C}','admin',now())`);
+  // A subscription das fixtures existe no provedor falso, em trial, no PLAN_A.
+  falso.definirAssinatura(SUB_FIXTURE, { status: "trialing", customer: "cus_F19Fixture000001", trial_end: 1758895100, items: { object: "list", data: [{ price: { id: "price_1F19FixturePlanA" } }] } });
+});
+
+afterAll(async () => {
+  await falso.parar();
+  await pool.end();
+});
+
+describe("F19-T02 — o checkout e a ativação pelo webhook", () => {
+  it("o checkout do Stripe nasce com client_reference_id = organização, o price do plano, trial de 7 dias e cartão sempre (checkout_created=1/1)", async () => {
+    // Arrange — contratação pendente (F12) → sessão no provedor (F19)
+    const { assinatura } = await iniciarCheckout(ctxA, { plan_code: "PLAN_A" }, { pool });
+    expect(assinatura.status).toBe("pending_payment");
+
+    // Act
+    const sessao = await criarSessaoDeCheckout(
+      { base: falso.base, chave: CHAVE },
+      { organization_id: ORG_A, price_id: "price_1F19FixturePlanA", trial_days: 7, success_url: "http://app/ok", cancel_url: "http://app/nao", customer_email: "f19-a@integration.test" },
+    );
+
+    // Assert — o que o provedor recebeu
+    const chamada = falso.chamadas.find((c) => c.caminho === "/v1/checkout/sessions");
+    expect(sessao.url).toContain(`/checkout/${sessao.id}`);
+    expect(chamada?.form).toMatchObject({ client_reference_id: ORG_A, "line_items[0][price]": "price_1F19FixturePlanA", payment_method_collection: "always", "subscription_data[trial_period_days]": "7" });
+    expect(chamada?.auth).toBe(`Bearer ${CHAVE}`);
+    medidas.checkout_created += 1;
+    console.info("f19-checkout: checkout_created=1/1 client_reference_id=1/1 cartao_sempre=1/1 trial=7");
+  });
+
+  it("checkout.session.completed ativa pelo ESTADO do provedor: trialing → active com trial_ends_at, gateway_ref = sub e customer_ref (activated=1/1 trialing_mapped=1/1)", async () => {
+    // Act
+    const r = await entregar(fixture("checkout.session.completed"));
+
+    // Assert
+    expect(r).toMatchObject({ status: 200, code: "ok", organization_id: ORG_A });
+    if (r.code !== "ok") throw new Error("não aplicou");
+    expect(r.desfecho.applied).toBe(true);
+    const a = await lerAssinatura(ctxA, { pool });
+    expect(a?.status).toBe("active");
+    expect(a?.gateway).toBe("stripe");
+    expect(a?.gateway_ref).toBe(SUB_FIXTURE);
+    expect(a?.customer_ref).toBe("cus_F19Fixture000001");
+    expect(a?.trial_ends_at).toBe(new Date(1758895100 * 1000).toISOString());
+    expect(falso.chamadas.some((c) => c.metodo === "GET" && c.caminho === `/v1/subscriptions/${SUB_FIXTURE}`), "o estado não foi buscado no provedor").toBe(true);
+    expect(await conta(`select count(*)::text as n from public.billing_events where organization_id = $1 and gateway = 'stripe' and applied and livemode = false`, [ORG_A])).toBe(1);
+    expect(await conta(`select count(*)::text as n from public.invoices where organization_id = $1 and status = 'paid'`, [ORG_A])).toBe(1);
+    medidas.activated += 1;
+    medidas.trialing_mapped += 1;
+    console.info("f19-ativacao: activated=1/1 trialing_mapped=1/1 estado_do_provedor=1/1 events=1/1 invoices_paid=1/1");
+  });
+
+  it("a mesma entrega duas vezes é duplicate; invoice.paid mais antigo que o último aplicado é out_of_order — nenhum dos dois ativa de novo", async () => {
+    // Act
+    const dup = await entregar(fixture("checkout.session.completed"));
+    const antigo = fixture("invoice.paid");
+    antigo.created = 1758290000; // antes do checkout (1758290400)
+    const fora = await entregar(antigo);
+
+    // Assert
+    expect(dup).toMatchObject({ status: 200, code: "ok" });
+    expect(fora).toMatchObject({ status: 200, code: "ok" });
+    if (dup.code !== "ok" || fora.code !== "ok") throw new Error("não chegou ao desfecho");
+    expect(dup.desfecho).toMatchObject({ applied: false, ignored_reason: "duplicate" });
+    expect(fora.desfecho).toMatchObject({ applied: false, ignored_reason: "out_of_order" });
+    expect(await conta(`select count(*)::text as n from public.billing_events where organization_id = $1 and applied`, [ORG_A])).toBe(1);
+    expect(await conta(`select count(*)::text as n from public.notifications where organization_id = $1 and event = 'subscription.activated'`, [ORG_A])).toBe(1);
+    medidas.duplicates += 1;
+    medidas.out_of_order += 1;
+    console.info("f19-repeticao: duplicates=1 out_of_order=1 activations=1/1");
+  });
+
+  it("estado do provedor: o payload diz active, o provedor diz past_due, o CRM grava past_due", async () => {
+    // Arrange — AUTOCONTIDO (alvo do mutante 85): a organização B já tem a
+    // assinatura ativa no Stripe, e o provedor passa a responder past_due.
+    const SUB_B = "sub_f19_estado_b";
+    await pool.query(
+      `insert into public.subscriptions (organization_id, plan_code, status, origin, gateway, gateway_ref, customer_ref, current_period_start, current_period_end, last_event_at)
+       values ($1, 'PLAN_A', 'active', 'fixture', 'stripe', $2, 'cus_f19_b', now() - interval '1 day', now() + interval '29 days', now() - interval '1 day')`,
+      [ORG_B, SUB_B],
+    );
+    falso.definirAssinatura(SUB_B, { status: "past_due", customer: "cus_f19_b", trial_end: null, items: { object: "list", data: [{ price: { id: "price_1F19FixturePlanA" } }] } });
+    const evento = fixture("customer.subscription.updated");
+    evento.id = "evt_1F19Fixture000000000013";
+    evento.created = Math.floor(Date.now() / 1000);
+    const objeto = (evento.data as { object: Record<string, unknown> }).object;
+    objeto.id = SUB_B;
+    objeto.status = "active"; // o payload MENTE
+    objeto.items = { object: "list", data: [{ price: { id: "price_1F19FixturePlanA" } }] };
+
+    // Act
+    const r = await entregar(evento);
+
+    // Assert
+    expect(r).toMatchObject({ status: 200, code: "ok", organization_id: ORG_B, plano_sincronizado: false });
+    const a = await lerAssinatura(ctxB, { pool });
+    expect(a?.status, "o estado veio do payload, não do provedor").toBe("past_due");
+    expect(a?.grace_until).not.toBeNull();
+    expect(falso.chamadas.some((c) => c.metodo === "GET" && c.caminho === `/v1/subscriptions/${SUB_B}`)).toBe(true);
+    medidas.state_from_provider += 1;
+    medidas.past_due += 1;
+    console.info("f19-estado: state_from_provider=1/1 past_due=1/1");
+  });
+
+  it("customer.subscription.updated com preço do PLAN_B no provedor (troca no Portal) sincroniza plan_code", async () => {
+    // Arrange — volta a active, agora no price do PLAN_B
+    falso.definirAssinatura(SUB_FIXTURE, { status: "active", customer: "cus_F19Fixture000001", trial_end: null, items: { object: "list", data: [{ price: { id: "price_1F19FixturePlanB" } }] } });
+    const evento = fixture("customer.subscription.updated");
+    evento.id = "evt_1F19Fixture000000000014";
+    evento.created = 1758895400;
+
+    // Act
+    const r = await entregar(evento);
+
+    // Assert
+    expect(r).toMatchObject({ status: 200, code: "ok", plano_sincronizado: true });
+    const a = await lerAssinatura(ctxA, { pool });
+    expect(a?.status).toBe("active");
+    expect(a?.plan_code).toBe("PLAN_B");
+    console.info("f19-plano: plan_synced=1/1 PLAN_A→PLAN_B");
+  });
+});
+
+describe("F19-T02 — as três recusas que o mock nunca teve (nenhuma grava linha)", () => {
+  it("assinatura inválida → 401 (signature_rejected=1/1)", async () => {
+    const antes = await conta(`select count(*)::text as n from public.billing_events where gateway = 'stripe'`, []);
+    const evento = fixture("invoice.paid");
+    evento.id = "evt_1F19Fixture000000000021";
+    const r1 = await entregar(evento, { secret: "whsec_outro" });
+    const r2 = await receberEventoStripe(JSON.stringify(evento), null, deps);
+    const r3 = await entregar(evento, { agora: (evento.created as number) + 3600 }); // t vencido
+    expect(r1).toEqual({ status: 401, code: "invalid_signature" });
+    expect(r2).toEqual({ status: 401, code: "invalid_signature" });
+    expect(r3).toEqual({ status: 401, code: "invalid_signature" });
+    expect(await conta(`select count(*)::text as n from public.billing_events where gateway = 'stripe'`, [])).toBe(antes);
+    medidas.signature_rejected += 1;
+    console.info("f19-recusa: signature_rejected=1/1 (3 formas) linhas_gravadas=0/0");
+  });
+
+  it("livemode: evento live numa instalação test é 422 e não grava", async () => {
+    const antes = await conta(`select count(*)::text as n from public.billing_events where gateway = 'stripe'`, []);
+    const evento = fixture("invoice.paid");
+    evento.id = "evt_1F19Fixture000000000022";
+    evento.livemode = true;
+    const r = await entregar(evento);
+    expect(r, "evento live entrou numa instalação test").toEqual({ status: 422, code: "livemode_mismatch" });
+    expect(await conta(`select count(*)::text as n from public.billing_events where gateway = 'stripe'`, [])).toBe(antes);
+    medidas.livemode_mismatch += 1;
+    console.info("f19-recusa: livemode_mismatch=1/1 linhas_gravadas=0/0");
+  });
+
+  it("preço fora de STRIPE_PRICE_IDS no provedor → 422 price_outside_list (price_outside_list=1/1)", async () => {
+    const antes = await conta(`select count(*)::text as n from public.billing_events where gateway = 'stripe'`, []);
+    falso.definirAssinatura("sub_fora_da_lista", { status: "active", customer: "cus_x", items: { object: "list", data: [{ price: { id: "price_QueNinguemProvisionou" } }] }, metadata: { organization_id: ORG_B } });
+    const evento = fixture("customer.subscription.updated");
+    evento.id = "evt_1F19Fixture000000000023";
+    (evento.data as { object: Record<string, unknown> }).object.id = "sub_fora_da_lista";
+    (evento.data as { object: Record<string, unknown> }).object.metadata = { organization_id: ORG_B };
+    const r = await entregar(evento);
+    expect(r).toEqual({ status: 422, code: "price_outside_list" });
+    expect(await conta(`select count(*)::text as n from public.billing_events where gateway = 'stripe'`, [])).toBe(antes);
+    medidas.price_outside_list += 1;
+    console.info("f19-recusa: price_outside_list=1/1 linhas_gravadas=0/0");
+  });
+
+  it("tipo não tratado e subscription desconhecida são 200 ignored, sem linha; segredo vazio é 503", async () => {
+    const antes = await conta(`select count(*)::text as n from public.billing_events where gateway = 'stripe'`, []);
+    const outro = { ...fixture("invoice.paid"), id: "evt_1F19Fixture000000000024", type: "charge.succeeded" };
+    const desconhecida = fixture("invoice.paid");
+    desconhecida.id = "evt_1F19Fixture000000000025";
+    (desconhecida.data as { object: Record<string, unknown> }).object.subscription = "sub_ninguem";
+    expect(await entregar(outro)).toMatchObject({ status: 200, code: "ignored", motivo: "unhandled_type" });
+    expect(await entregar(desconhecida)).toMatchObject({ status: 200, code: "ignored", motivo: "unknown_subscription" });
+    expect(await receberEventoStripe("{}", null, { ...deps, secret: "" })).toEqual({ status: 503, code: "upstream_unavailable" });
+    expect(await conta(`select count(*)::text as n from public.billing_events where gateway = 'stripe'`, [])).toBe(antes);
+  });
+});
+
+// Os casos da T03 (carência, cancelamento preservando dados, portal) e da T04
+// (padrão KN do /admin, cockpit) entram abaixo; a linha `stripe:` é gravada no
+// último deles — os `void` mantêm os imports vivos até lá.
+void varrerCarencia;
+void criarSessaoDoPortal;
+void aplicarEventoDoGateway;
+void ctxC;
+void gravarLinhaDoVerify;
+void medidas;
