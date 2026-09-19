@@ -46,6 +46,10 @@ case "$PHASE" in
   # a spec f14-canais-e-agenda (+7 testes) ao inventário de F15; mede `channels:`.
   F14) CLOSED_E2E=1; EXPECTED_SPECS=15; REPLICABILITY_TENANTS="deka,demo2" ;;
   F18) CLOSED_E2E=1; EXPECTED_SPECS=16; REPLICABILITY_TENANTS="deka,demo2" ;;
+  # ADR-043: F19 (cobrança real por Stripe + padrão KN do /admin) fecha DEPOIS da
+  # F18 e acrescenta a spec f19-cobranca-stripe (+7 testes) ao inventário de F18;
+  # mede a linha `stripe:`.
+  F19) CLOSED_E2E=1; EXPECTED_SPECS=17; REPLICABILITY_TENANTS="deka,demo2" ;;
   *)   CLOSED_E2E=0; EXPECTED_SPECS=0 ;;
 esac
 REPLICABILITY_TENANTS="${REPLICABILITY_TENANTS:-}"

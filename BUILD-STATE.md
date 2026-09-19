@@ -2,11 +2,11 @@
 updated_at: 2026-09-19T06:30:00Z
 head_commit: 65219c22   # commit VALIDADO DO ZERO pelo from-scratch (READY (F18), verify inteiro no clone); o fechamento (docs) vem depois dele. Código validado pelo gate f18-gate-04 (READY (staging), F18 — ADR-040/041) = e5c26c4e; código VALIDADO pelo gate f18-gate-04 (READY (staging), dentro do staging, F18 — ADR-040/041) = e5c26c4e; depois dele entraram o conserto do drain (sem ele a unificação valia só para quem já tinha agente herdado), a jornada do motor e docs
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
-plan_version: "2.11 (2026-09-19); D38–D56; ADR-006…041"
+plan_version: "2.12 (2026-09-19); D38–D57; ADR-006…043"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
-current_phase: F18
-next_task: F16-T00             # F18 (D56) FECHADA em 19/09/2026 (READY (staging), f18-gate-04 sobre e5c26c4e; produção com o código da F18; engine_real:). Próxima construção só com o proprietário (D50 c): F16 / Stripe + padrão KN do /admin / F17 / as 41 ferramentas da fila de espera — ver COMECE-AQUI no CRM-OS
-status: READY_STAGING          # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26); F18 fechada com READY (staging) em e5c26c4e (bloco abaixo); F16+ aguarda o proprietário
+current_phase: F19
+next_task: F19-T01             # F19 (D57, 19/09/2026): cobrança real por Stripe + padrão KN do /admin — ADR-042 decompõe, ADR-043 põe no gate (spec f19-cobranca-stripe, linha stripe:). T00 concluída (ADR-042/043, D57, §B23 b, verify v1.12, env vars); segue T01 (migration 9033)
+status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26); F19 em construção (D57) sobre a F18 fechada (READY (staging) em e5c26c4e)
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
 hosting_confirmed: yes         # D50 (11/09/2026): staging nesta VPS, Docker Compose com Supabase local, acesso só por Tailscale — ADR-027
@@ -733,6 +733,8 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 | F15 | Automações e autonomia de IA por empresa/ação, aprovação/handoff, limites, auditoria e conhecimento | done(verify=2026-09-15 4c7bfcdf) — READY (staging) no f15-gate-03 (14 specs, linha `autonomy:`; ADR-036/037); T00–T06 concluídas; produção com o código da F15 (linhas `prod:`/`ai_real:`); §B16 reescrito e medido; §B5/§C6 fechados |
 | F16 | Marca do SaaS e presets configuráveis; profundidade de templates, white-label e domínios por cliente a definir | pending |
 | F17 | Operação, capacidade/recuperação, suporte, atualização, regressão e aceite comercial pelo proprietário | pending |
+| F18 | Um motor de IA só: o turno SaaS assume o despacho (unificação do §B8) | done(verify=2026-09-19 e5c26c4e) — READY (staging) no f18-gate-04 (16 specs, linha `engine:`; ADR-040/041); T00–T05 concluídas; produção com o código da F18 (`prod:`/`engine_real:`) |
+| F19 | Cobrança real por Stripe + padrão KN do `/admin` (D57; ADR-042/043) | in_progress — T00 concluída (19/09/2026); T01–T05 pendentes; produção fica `BILLING_GATEWAY=mock` nesta fase (D57 f) |
 
 Dependência técnica: F00/F01 → F02 → F03 → F04 → F05 → F06 → F07 → (D51) F11+F12. F11/F12 fecharam juntas o onboarding pago em staging (13/09/2026); F13 fechou em 14/09/2026; F15 fechou em 15/09/2026 (D54); F14 fechou em 18/09/2026 (D55); F16 avança com contratos definidos. F08 depende das entradas/autorização para serviços reais. D48 permite concluir a construção F11–F17 antes das evidências reais F09/F10; piloto e validação de mercado permanecem marcos separados, sem bloquear o software. F17 reúne a jornada comercial e os critérios de operação. Nenhuma fase futura recebe `done` por existir código equivalente no upstream.
 

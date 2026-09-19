@@ -47,6 +47,17 @@ const EMBEDDING_3_SMALL: PrecoDoModelo = {
  * de inventar um desconto que ninguém mediu.
  */
 const USD_PER_MTOK: Record<string, PrecoDoModelo> = {
+  // F19-T00 (§B23 b): a geração 5 da Anthropic faltava aqui — `claude-sonnet-5`
+  // (o padrão da organização, `ai_models.is_default_for_provider`) e
+  // `claude-opus-5` caíam em `null`, e o livro-razão gravava custo ZERO para
+  // cada turno (medido em produção na jornada da F18: 5 chamadas, 61.154 tokens
+  // de entrada, cost_cents nulo). Tarifa da tabela do skill `claude-api`
+  // (cacheada em 2026-06-24; mesma de `OS-Template/custo/precos.json`,
+  // conferida em 2026-09-12). A linha do Haiku 4.5 é explícita para que a
+  // cotação não dependa do prefixo `claude-haiku-4` continuar existindo.
+  'claude-opus-5': { input: 5, output: 25, cacheRead: 0.5, cacheWrite1h: 10 }, // MUTANT: preco-opus-5
+  'claude-sonnet-5': { input: 2, output: 10, cacheRead: 0.2, cacheWrite1h: 4 }, // MUTANT: preco-sonnet-5
+  'claude-haiku-4-5': { input: 1, output: 5, cacheRead: 0.1, cacheWrite1h: 2 },
   'claude-sonnet-4': { input: 3, output: 15, cacheRead: 0.3, cacheWrite1h: 6 },
   'claude-haiku-4': { input: 1, output: 5, cacheRead: 0.1, cacheWrite1h: 2 },
   'claude-opus-4': { input: 15, output: 75, cacheRead: 1.5, cacheWrite1h: 30 },

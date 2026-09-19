@@ -250,9 +250,43 @@ const schema = z.object({
    *   o webhook responde 503 (fail closed, G-27), nunca aceita evento sem
    *   assinatura.
    */
-  BILLING_GATEWAY: z.enum(["mock"]).optional().default("mock"),
+  BILLING_GATEWAY: z.enum(["mock", "stripe"]).optional().default("mock"),
   BILLING_GRACE_DAYS: z.coerce.number().int().min(0).max(90).optional().default(7),
   BILLING_MOCK_WEBHOOK_SECRET: z.string().optional().default(""),
+
+  /**
+   * Stripe (F19, ADR-042 §2 — D52 b, D57). Só vale com `BILLING_GATEWAY=stripe`;
+   * com `mock` nada aqui é lido. Nomes e semântica copiados do módulo
+   * `billing/` do OS-Template (DF-33), para que um OS da casa não tenha dois
+   * vocabulários para a mesma conta Stripe.
+   *
+   * - `STRIPE_MODE`: `test` (default) ou `live`. O evento do webhook traz
+   *   `livemode`; quando ele não bate com o modo, o receptor responde 422 e
+   *   NÃO grava (evento live em instalação de teste, e vice-versa).
+   * - `STRIPE_SECRET_KEY`: chave RESTRITA do CRM-OS (`rk_…`). Vazia = checkout,
+   *   portal e leitura de assinatura respondem 503 (fail closed, G-27).
+   * - `STRIPE_WEBHOOK_SECRET`: `whsec_…` do endpoint. Vazio = webhook 503.
+   * - `STRIPE_PRICE_IDS`: `price_x:PLAN_A,price_y:PLAN_B,…` — saída do
+   *   provisionamento (`scripts/stripe-provision.ts`). Preço fora da lista no
+   *   webhook → 422 sem gravar (o Stripe reenvia; corrige-se a lista).
+   * - `STRIPE_PORTAL_CONFIGURATION_ID`: `bpc_…` do Customer Portal (opcional:
+   *   vazio usa a configuração padrão da conta).
+   * - `STRIPE_API_BASE`: base da API. Só o gate e a bancada apontam para o
+   *   Stripe FALSO local (`tests/e2e/utils/stripe-falso.mjs`); em produção é
+   *   o default. Aceita só http(s) em loopback quando não for a API real.
+   * - `BILLING_TRIAL_DAYS`: dias de teste grátis no Checkout (D57 c: 7).
+   *   `0` = sem trial. Cartão é sempre exigido no Checkout, com ou sem trial.
+   * - `ADMIN_SUMMARY_TOKEN`: bearer de `GET /api/admin/summary` (cockpit da
+   *   KN, padrão DF-33). Vazio = a rota responde 503, nunca 200 sem token.
+   */
+  STRIPE_MODE: z.enum(["test", "live"]).optional().default("test"),
+  STRIPE_SECRET_KEY: z.string().optional().default(""),
+  STRIPE_WEBHOOK_SECRET: z.string().optional().default(""),
+  STRIPE_PRICE_IDS: z.string().optional().default(""),
+  STRIPE_PORTAL_CONFIGURATION_ID: z.string().optional().default(""),
+  STRIPE_API_BASE: z.string().url().optional().default("https://api.stripe.com"),
+  BILLING_TRIAL_DAYS: z.coerce.number().int().min(0).max(90).optional().default(7),
+  ADMIN_SUMMARY_TOKEN: z.string().optional().default(""),
 
   /**
    * Resend — o transporte de TODO e-mail transacional (convite, LGPD, alarme).

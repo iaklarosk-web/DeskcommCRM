@@ -22,6 +22,7 @@ const {
   EXPECTED_F15_E2E_TESTS,
   EXPECTED_F14_E2E_TESTS,
   EXPECTED_F18_E2E_TESTS,
+  EXPECTED_F19_E2E_TESTS,
   REQUIRED_F02_E2E_SPECS,
   REQUIRED_F03_E2E_SPECS,
   REQUIRED_F04_E2E_SPECS,
@@ -33,6 +34,7 @@ const {
   REQUIRED_F15_E2E_SPECS,
   REQUIRED_F14_E2E_SPECS,
   REQUIRED_F18_E2E_SPECS,
+  REQUIRED_F19_E2E_SPECS,
   compareF02Inputs,
   snapshotF02Inputs,
   verifyF02Sandbox,
@@ -1402,4 +1404,84 @@ for (const [rotulo, linha] of [
   const result = evaluate(data);
   assert.equal(result.exitCode, 1, rotulo);
   assert.ok(result.errors.some((e) => /^engine fora do contrato/.test(e)), result.errors.join("\n"));
+});
+
+// ─── ADR-043 — verify.sh v1.12: F19 (cobrança real por Stripe) mede `stripe:` ─
+
+const stateF19 = stateF18.replace("current_phase: F18", "current_phase: F19")
+  .replace("| F18 | Um motor de IA só | in_progress |", "| F18 | Um motor de IA só | done(verify=2026-09-19 e5c26c4e) |\n| F19 | Cobrança real por Stripe | in_progress |");
+const F19_SPEC_COUNTS = [...F18_SPEC_COUNTS, 7];
+const STRIPE_OK = "stripe: signature_rejected=1/1 livemode_mismatch=1/1 price_outside_list=1/1 checkout_created=1/1 activated=1/1 trialing_mapped=1/1 duplicates=1 out_of_order=1 state_from_provider=1/1 past_due=1/1 blocked_after_grace=1/1 cancelled_preserved=7/7 portal_link=1/1 admin_actions=5/5 summary_ok=1/1";
+function f19Input() {
+  const data = fasePorTenant("F12", stateF19, REQUIRED_F19_E2E_SPECS, F19_SPEC_COUNTS, EXPECTED_F19_E2E_TESTS);
+  data.metrics.crm = CRM_OK;
+  data.metrics.rbac = RBAC_4;
+  data.metrics.autonomy = AUTONOMY_OK;
+  data.metrics.channels = CHANNELS_OK;
+  data.metrics.engine = ENGINE_OK;
+  data.metrics.stripe = STRIPE_OK;
+  return data;
+}
+
+test("F19 is gated: inventory of 17 specs (86 tests) per tenant, with engine and stripe measured; in staging it prints READY (staging)", () => {
+  const data = f19Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F19)");
+  const bloco = render(data, result);
+  assert.match(bloco, /e2e_scope: F19-required passed=86\/86 specs=17\/17/);
+  assert.match(bloco, /stripe: signature_rejected=1\/1 livemode_mismatch=1\/1 price_outside_list=1\/1 checkout_created=1\/1/);
+  const staging = f19Input();
+  staging.sandbox = stagingEvidence();
+  assert.equal(evaluate(staging).status, "READY (staging)");
+});
+
+test("missing stripe line makes otherwise green F19 fail", () => {
+  const data = f19Input();
+  delete data.metrics.stripe;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.some((e) => /Métrica obrigatória ausente: stripe/.test(e)), result.errors.join("\n"));
+});
+
+test("F19 still requires engine, channels, autonomy, crm and billing (it closes after all of them)", () => {
+  for (const campo of ["engine", "channels", "autonomy", "crm", "billing"]) {
+    const data = f19Input();
+    delete data.metrics[campo];
+    assert.ok(
+      evaluate(data).errors.some((e) => new RegExp(`Métrica obrigatória ausente: ${campo}`).test(e)),
+      campo,
+    );
+  }
+});
+
+test("stripe line stays pending before F19 (F18) and is not required there", () => {
+  const data = f18Input();
+  assert.deepEqual(evaluate(data).errors, []);
+  assert.match(render(data, evaluate(data)), /stripe: signature_rejected=pending/);
+});
+
+for (const [rotulo, linha] of [
+  ["webhook sem assinatura aceito", STRIPE_OK.replace("signature_rejected=1/1", "signature_rejected=0/1")],
+  ["evento live aceito em modo test", STRIPE_OK.replace("livemode_mismatch=1/1", "livemode_mismatch=0/1")],
+  ["preço fora da lista gravado", STRIPE_OK.replace("price_outside_list=1/1", "price_outside_list=0/1")],
+  ["checkout não criado", STRIPE_OK.replace("checkout_created=1/1", "checkout_created=0/1")],
+  ["webhook não ativou", STRIPE_OK.replace("activated=1/1", "activated=0/1")],
+  ["trial não mapeado", STRIPE_OK.replace("trialing_mapped=1/1", "trialing_mapped=0/1")],
+  ["duplicata não medida", STRIPE_OK.replace("duplicates=1", "duplicates=0")],
+  ["fora de ordem não medido", STRIPE_OK.replace("out_of_order=1", "out_of_order=0")],
+  ["estado lido do payload", STRIPE_OK.replace("state_from_provider=1/1", "state_from_provider=0/1")],
+  ["falha de pagamento não avisou", STRIPE_OK.replace("past_due=1/1", "past_due=0/1")],
+  ["carência não bloqueou", STRIPE_OK.replace("blocked_after_grace=1/1", "blocked_after_grace=0/1")],
+  ["cancelamento perdeu dado", STRIPE_OK.replace("cancelled_preserved=7/7", "cancelled_preserved=6/7")],
+  ["portal sem link", STRIPE_OK.replace("portal_link=1/1", "portal_link=0/1")],
+  ["ação do painel a menos", STRIPE_OK.replace("admin_actions=5/5", "admin_actions=4/5")],
+  ["denominador das ações encolhido", STRIPE_OK.replace("admin_actions=5/5", "admin_actions=4/4")],
+  ["cockpit sem resposta", STRIPE_OK.replace("summary_ok=1/1", "summary_ok=0/1")],
+]) test(`F19 rejects a stripe line out of contract: ${rotulo}`, () => {
+  const data = f19Input();
+  data.metrics.stripe = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, rotulo);
+  assert.ok(result.errors.some((e) => /^stripe fora do contrato/.test(e)), result.errors.join("\n"));
 });
