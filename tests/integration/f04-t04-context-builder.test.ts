@@ -348,7 +348,9 @@ describe("F04-T04: o contexto do turno tem um único tenant", () => {
     expect(contexto.cliente?.display_name).toBe("Padaria Aurora");
     expect(contexto.settings["ai.unknown_answer"]).toBe(A.settings["ai.unknown_answer"]);
     expect(contexto.settings["business.hours"]).toBe("segunda a sexta, das 8h às 18h");
-    expect(contexto.tools.length, "o modelo deixou de ver as dez tools").toBe(10);
+    // Vinte e quatro desde a F18 (ADR-040 §2): as dez de antes mais as catorze
+    // que saíram do MCP herdado. O número é afirmação, não derivado do catálogo.
+    expect(contexto.tools.length, "o modelo deixou de ver as vinte e quatro tools").toBe(24);
     expect(contexto.acervo.fontes_consultadas).toBe(A.materiais.length);
 
     // A janela de 20 é a de §5.9, e ela corta o histórico de 25.

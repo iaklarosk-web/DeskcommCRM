@@ -454,7 +454,7 @@ export function collect(root, directory, context) {
   // reprova), enquanto §8.3 fixa o rótulo do campo com underscore. O mapa é o
   // único lugar onde essa diferença existe.
   const ARQUIVO_DA_METRICA = { ai_eval: "ai-eval" };
-  for (const name of ["isolation", "rls-coverage", "rbac", "entitlement", "webhook", "ai_eval", "handoff", "reminder", "logs", "rate-limit", "lgpd", "admin", "billing", "crm", "autonomy", "channels"]) {
+  for (const name of ["isolation", "rls-coverage", "rbac", "entitlement", "webhook", "ai_eval", "handoff", "reminder", "logs", "rate-limit", "lgpd", "admin", "billing", "crm", "autonomy", "channels", "engine"]) {
     metrics[name] = read(path.join(directory, "metrics", `${ARQUIVO_DA_METRICA[name] ?? name}.line`));
   }
   metrics.secrets = read(path.join(directory, "secrets.log"));

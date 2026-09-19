@@ -3788,44 +3788,6 @@ export function createInboundTurnHandler(deps: InboundTurnDeps) {
     const payload = inboundTurnPayloadSchema.parse(job.payload);
     if (!job.contact_id) throw new Error('reply_without_contact');
 
-    // F18-T01 (ADR-040 §1): a bifurcação do §B8. Com `ai.engine=saas` (padrão),
-    // quem responde é o turno que o gate mede — política por ação, teto diário
-    // e auditoria da F15 valendo em TODO canal, não só no chat do site. Com
-    // `legacy`, segue o motor herdado abaixo, sem uma linha alterada.
-    //
-    // A leitura é por organização e por turno de propósito: a volta atrás tem
-    // de valer na mensagem seguinte, não no próximo release.
-    const tenant = { organization_id: job.organization_id, source: 'job' as const };
-    const motor = await motorDaOrganizacao(tenant, { pool });
-    if (motor === 'saas') {
-      const texto = await textoDaMensagemDeEntrada(pool, job.organization_id, payload.inbound_message_id);
-      if (texto === null) {
-        deps.log.warn('inbound_turn: mensagem de entrada sem texto — turno SaaS não roda', {
-          organization_id: job.organization_id,
-          conversation_id: payload.conversation_id,
-          inbound_message_id: payload.inbound_message_id,
-        });
-        return;
-      }
-      const resultado = await responderTurno(
-        tenant,
-        { conversation_id: payload.conversation_id, mensagem_do_cliente: texto },
-        {
-          pool,
-          cfg: deps.llmCfg,
-          log: deps.log,
-          ...(deps.registry === undefined ? {} : { registry: deps.registry }),
-        },
-      );
-      deps.log.info('inbound_turn: turno SaaS respondeu (ai.engine=saas)', {
-        organization_id: job.organization_id,
-        conversation_id: payload.conversation_id,
-        status: resultado.status,
-        motivo: resultado.motivo,
-        worker_id: ctx.workerId,
-      });
-      return;
-    }
     const resolvedAgent = await resolveConversationTurn(pool, deps.llmCfg, {
       tenantId: job.organization_id,
       leadId: job.contact_id,
@@ -3894,6 +3856,66 @@ export function createInboundTurnHandler(deps: InboundTurnDeps) {
       return;
     }
     if (operationAgent?.pausedAt) return;
+
+    // F18-T01 (ADR-040 §1): a bifurcação do §B8, e ela fica AQUI de propósito.
+    //
+    // Depois do ramo assistido: a F18 troca quem responde AUTOMATICAMENTE, não
+    // o rascunho que uma pessoa revisa — o assistido é outra superfície de
+    // produto, e o gate 03 mostrou o custo de confundir as duas (as provas do
+    // assistido dublam o pool e nem chegam a ter banco para ler a chave).
+    //
+    // Com `ai.engine=saas` (padrão) quem responde é o turno que o gate mede:
+    // política por ação, teto diário e auditoria valendo em TODO canal. Com
+    // `legacy`, segue o motor herdado abaixo, sem uma linha alterada. A leitura
+    // é por organização e por turno: a volta atrás vale na mensagem seguinte,
+    // não no próximo release.
+    const tenant = { organization_id: job.organization_id, source: 'job' as const };
+    // Ler a chave não pode DERRUBAR o turno (lição 28 da F14: as provas
+    // herdadas dublam o pool, e em produção uma leitura pode falhar por
+    // infraestrutura). Exceção aqui não é escolha da organização — é "não deu
+    // para perguntar" —, e nesse caso segue o caminho que existia antes da
+    // F18, com aviso no log. Valor ESTRANHO é outra coisa: esse cai no padrão
+    // declarado (`motorDeclarado`), porque "não entendi o que está escrito"
+    // nunca pode significar "responda sem política".
+    let motor: 'saas' | 'legacy' = 'legacy';
+    try {
+      motor = await motorDaOrganizacao(tenant, { pool });
+    } catch (erro) {
+      deps.log.warn('inbound_turn: não deu para ler ai.engine — seguindo pelo motor herdado', {
+        organization_id: job.organization_id,
+        conversation_id: payload.conversation_id,
+        erro: erro instanceof Error ? erro.message : String(erro),
+      });
+    }
+    if (motor === 'saas') {
+      const texto = await textoDaMensagemDeEntrada(pool, job.organization_id, payload.inbound_message_id);
+      if (texto === null) {
+        deps.log.warn('inbound_turn: mensagem de entrada sem texto — turno SaaS não roda', {
+          organization_id: job.organization_id,
+          conversation_id: payload.conversation_id,
+          inbound_message_id: payload.inbound_message_id,
+        });
+        return;
+      }
+      const resultado = await responderTurno(
+        tenant,
+        { conversation_id: payload.conversation_id, mensagem_do_cliente: texto },
+        {
+          pool,
+          cfg: deps.llmCfg,
+          log: deps.log,
+          ...(deps.registry === undefined ? {} : { registry: deps.registry }),
+        },
+      );
+      deps.log.info('inbound_turn: turno SaaS respondeu (ai.engine=saas)', {
+        organization_id: job.organization_id,
+        conversation_id: payload.conversation_id,
+        status: resultado.status,
+        motivo: resultado.motivo,
+        worker_id: ctx.workerId,
+      });
+      return;
+    }
     await runAgentTurn(deps, job, pool, ctx, {
       resolvedAgent,
       channelSessionId: payload.channel_session_id,
