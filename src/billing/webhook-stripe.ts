@@ -118,7 +118,12 @@ async function acharAlvo(pool: ServicePool, evento: EventoDoStripe): Promise<Alv
     const subscription = idDe(o.subscription);
     if (ref === null || !UUID.test(ref)) return null;
     if (o.mode !== "subscription" || subscription === null) return "sem_subscription";
-    return { organization_id: ref, subscription_id: subscription, customer: idDe(o.customer), plan_code_atual: null };
+    // A organização tem de existir COM assinatura (a contratação da F11/F12
+    // criou a linha pending_payment antes do Checkout): referência que não
+    // bate no banco é `ignored`, nunca 500 por FK.
+    const { rows } = await pool.query<{ plan_code: string }>(`select plan_code from public.subscriptions where organization_id = $1`, [ref]);
+    if (rows.length === 0) return null;
+    return { organization_id: ref, subscription_id: subscription, customer: idDe(o.customer), plan_code_atual: rows[0]!.plan_code };
   }
   const subscription = evento.type.startsWith("invoice.") ? idDe(o.subscription) : idDe(o.id);
   if (subscription === null) return "sem_subscription";
@@ -209,6 +214,9 @@ export async function receberEventoStripe(
 
   const ctx: TenantCtx = { organization_id: alvo.organization_id, source: "webhook" };
   const amount = typeof evento.objeto.amount_paid === "number" ? evento.objeto.amount_paid : null;
+  // A fatura do CRM segue a FATURA do Stripe (`in_…`), não o evento: o checkout
+  // e o `invoice.paid` do mesmo ciclo apontam para a mesma linha, em qualquer ordem.
+  const invoiceRef = evento.type.startsWith("invoice.") ? idDe(evento.objeto.id) : (noProvedor?.latest_invoice ?? null);
   const trialEndsAt =
     noProvedor === null
       ? undefined
@@ -231,6 +239,7 @@ export async function receberEventoStripe(
         ...(noProvedor ? { provider_status: noProvedor.status, price_id: noProvedor.price_id } : {}),
       },
       subscription_ref: alvo.subscription_id,
+      invoice_ref: invoiceRef,
       customer_ref: alvo.customer ?? noProvedor?.customer ?? null,
       ...(trialEndsAt === undefined ? {} : { trial_ends_at: trialEndsAt }),
       livemode: evento.livemode,

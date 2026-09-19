@@ -102,7 +102,7 @@ beforeAll(async () => {
     insert into public.user_organizations (organization_id, user_id, role, accepted_at) values
       ('${ORG_A}','${ADMIN_A}','admin',now()), ('${ORG_B}','${ADMIN_B}','admin',now()), ('${ORG_C}','${ADMIN_C}','admin',now())`);
   // A subscription das fixtures existe no provedor falso, em trial, no PLAN_A.
-  falso.definirAssinatura(SUB_FIXTURE, { status: "trialing", customer: "cus_F19Fixture000001", trial_end: 1758895100, items: { object: "list", data: [{ price: { id: "price_1F19FixturePlanA" } }] } });
+  falso.definirAssinatura(SUB_FIXTURE, { status: "trialing", customer: "cus_F19Fixture000001", trial_end: 1758895100, latest_invoice: "in_1F19Fixture00000001", items: { object: "list", data: [{ price: { id: "price_1F19FixturePlanA" } }] } });
 });
 
 afterAll(async () => {
@@ -153,10 +153,30 @@ describe("F19-T02 — o checkout e a ativação pelo webhook", () => {
     console.info("f19-ativacao: activated=1/1 trialing_mapped=1/1 estado_do_provedor=1/1 events=1/1 invoices_paid=1/1");
   });
 
+  it("invoice.paid do MESMO ciclo (in_… = latest_invoice) depois do checkout renova sem abrir segunda fatura: uma fatura paga por fatura do provedor", async () => {
+    // Arrange — o invoice.paid que o Stripe manda logo depois do checkout, mais novo que ele
+    const pago = fixture("invoice.paid");
+    pago.created = 1758290401;
+
+    // Act
+    const r = await entregar(pago);
+
+    // Assert — aplicado (renova), mas a fatura do CRM continua UMA
+    expect(r).toMatchObject({ status: 200, code: "ok" });
+    if (r.code !== "ok") throw new Error("não aplicou");
+    expect(r.desfecho.applied).toBe(true);
+    expect(await conta(`select count(*)::text as n from public.invoices where organization_id = $1 and status = 'paid'`, [ORG_A])).toBe(1);
+    expect(await conta(`select count(*)::text as n from public.invoices where organization_id = $1 and gateway_ref = 'in_1F19Fixture00000001'`, [ORG_A])).toBe(1);
+    expect(await conta(`select count(*)::text as n from public.billing_events where organization_id = $1 and applied`, [ORG_A])).toBe(2);
+    expect(await conta(`select count(*)::text as n from public.notifications where organization_id = $1 and event = 'subscription.activated'`, [ORG_A])).toBe(1);
+    console.info("f19-fatura: uma_por_fatura_do_provedor=1/1 eventos_aplicados=2/2 ativacoes=1/1");
+  });
+
   it("a mesma entrega duas vezes é duplicate; invoice.paid mais antigo que o último aplicado é out_of_order — nenhum dos dois ativa de novo", async () => {
     // Act
     const dup = await entregar(fixture("checkout.session.completed"));
     const antigo = fixture("invoice.paid");
+    antigo.id = "evt_1F19Fixture000000000012";
     antigo.created = 1758290000; // antes do checkout (1758290400)
     const fora = await entregar(antigo);
 
@@ -166,7 +186,7 @@ describe("F19-T02 — o checkout e a ativação pelo webhook", () => {
     if (dup.code !== "ok" || fora.code !== "ok") throw new Error("não chegou ao desfecho");
     expect(dup.desfecho).toMatchObject({ applied: false, ignored_reason: "duplicate" });
     expect(fora.desfecho).toMatchObject({ applied: false, ignored_reason: "out_of_order" });
-    expect(await conta(`select count(*)::text as n from public.billing_events where organization_id = $1 and applied`, [ORG_A])).toBe(1);
+    expect(await conta(`select count(*)::text as n from public.billing_events where organization_id = $1 and applied`, [ORG_A])).toBe(2);
     expect(await conta(`select count(*)::text as n from public.notifications where organization_id = $1 and event = 'subscription.activated'`, [ORG_A])).toBe(1);
     medidas.duplicates += 1;
     medidas.out_of_order += 1;
@@ -292,6 +312,7 @@ describe("F19-T03 — D44 sobre eventos reais, o Portal e o cancelamento que pre
     );
     const evento = fixture("invoice.payment_failed");
     (evento.data as { object: Record<string, unknown> }).object.subscription = SUB_C;
+    (evento.data as { object: Record<string, unknown> }).object.id = "in_1F19Fixture00000030";
 
     // Act
     const r = await entregar(evento);
@@ -327,13 +348,14 @@ describe("F19-T03 — D44 sobre eventos reais, o Portal e o cancelamento que pre
     pago.id = "evt_1F19Fixture000000000031";
     pago.created = T_FALHA + 9 * 86_400;
     (pago.data as { object: Record<string, unknown> }).object.subscription = SUB_C;
+    (pago.data as { object: Record<string, unknown> }).object.id = "in_1F19Fixture00000031"; // a fatura é outra (ids do Stripe são únicos)
 
     // Act
     const r = await entregar(pago);
     const portal = await criarSessaoDoPortal({ base: falso.base, chave: CHAVE }, { customer_ref: "cus_f19_c", return_url: "http://app/billing" });
 
     // Assert
-    expect(r).toMatchObject({ status: 200, code: "ok" });
+    expect(r, JSON.stringify(r)).toMatchObject({ status: 200, code: "ok" });
     expect((await lerAssinatura(ctxC, { pool }))?.status).toBe("active");
     expect(portal.url).toContain("/portal/cus_f19_c");
     const chamada = falso.chamadas.find((c) => c.caminho === "/v1/billing_portal/sessions");

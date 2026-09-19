@@ -75,13 +75,15 @@ export async function subirStripeFalso(opts) {
         const desfecho = form.outcome ?? "paid";
         const sub = assinaturas.get(sessao.subscription);
         const t = Math.floor(Date.now() / 1000);
+        // Ids como os do Stripe: prefixo + alfanumérico (o receptor recusa `evt_` com sublinhado no meio).
+        const raiz = id.replace(/[^A-Za-z0-9]/g, "");
         const eventos =
           desfecho === "paid"
             ? [
-                evento(`evt_falso_${id}_1`, "checkout.session.completed", { id, object: "checkout.session", mode: "subscription", client_reference_id: sessao.organization_id, customer: sub.customer, subscription: sessao.subscription, status: "complete" }, t),
-                evento(`evt_falso_${id}_2`, "invoice.paid", { id: `in_falso_${id}`, object: "invoice", subscription: sessao.subscription, customer: sub.customer, amount_paid: 0, status: "paid" }, t + 1),
+                evento(`evt_${raiz}a`, "checkout.session.completed", { id, object: "checkout.session", mode: "subscription", client_reference_id: sessao.organization_id, customer: sub.customer, subscription: sessao.subscription, status: "complete" }, t),
+                evento(`evt_${raiz}b`, "invoice.paid", { id: `in_${raiz}`, object: "invoice", subscription: sessao.subscription, customer: sub.customer, amount_paid: 0, status: "paid" }, t + 1),
               ]
-            : [evento(`evt_falso_${id}_3`, "invoice.payment_failed", { id: `in_falso_${id}`, object: "invoice", subscription: sessao.subscription, customer: sub.customer, amount_paid: 0, status: "open" }, t)];
+            : [evento(`evt_${raiz}c`, "invoice.payment_failed", { id: `in_${raiz}`, object: "invoice", subscription: sessao.subscription, customer: sub.customer, amount_paid: 0, status: "open" }, t)];
         const entregues = [];
         for (const ev of eventos) {
           const texto = JSON.stringify(ev);
@@ -93,6 +95,7 @@ export async function subirStripeFalso(opts) {
           entregues.push({ type: ev.type, status: r.status });
         }
         chamadas.push({ metodo: "WEBHOOKS", caminho: url.pathname, form: { entregues: JSON.stringify(entregues) }, auth: null });
+        console.info(`[stripe-falso] checkout ${id} ${desfecho}: webhooks ${JSON.stringify(entregues)}`);
         res.writeHead(303, { location: desfecho === "paid" ? sessao.success_url : sessao.cancel_url });
         return res.end();
       }
@@ -134,6 +137,8 @@ export async function subirStripeFalso(opts) {
         current_period_end: agora + 30 * 86_400,
         items: { object: "list", data: [{ id: `si_${subscription}`, object: "subscription_item", price: { id: price, object: "price" }, quantity: 1 }] },
         metadata: { organization_id },
+        // A fatura do ciclo: o mesmo `in_…` que o `invoice.paid` da página de checkout entrega.
+        latest_invoice: `in_${id.replace(/[^A-Za-z0-9]/g, "")}`,
       });
       const base = opts.app ? `http://127.0.0.1:${servidor.address().port}` : `http://127.0.0.1:${servidor.address().port}`;
       return responder(200, { id, object: "checkout.session", url: `${base}/checkout/${id}`, client_reference_id: organization_id, mode: "subscription", subscription });

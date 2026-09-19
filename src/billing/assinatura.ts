@@ -301,6 +301,12 @@ export interface EventoDoGateway {
    * organização) e o `event_ref` é só o id do evento.
    */
   readonly subscription_ref?: string | null;
+  /**
+   * F19: a referência ESTÁVEL da fatura no provedor (`in_…`). Dois eventos do
+   * mesmo ciclo (checkout.session.completed e invoice.paid) apontam para a
+   * mesma fatura do CRM; sem ela (mock) a fatura recebe o `event_ref`.
+   */
+  readonly invoice_ref?: string | null;
   readonly customer_ref?: string | null;
   /** ISO; só quando o provedor diz `trialing` (D57 c). `null` apaga. */
   readonly trial_ends_at?: string | null;
@@ -390,19 +396,26 @@ export async function aplicarEventoDoGateway(
           ],
         );
         atualizada = normalizar(rows[0]!);
+        const refDaFatura = evento.invoice_ref ?? evento.event_ref;
         const aberta = await faturaAbertaEm(db, ctx, assinatura.id);
+        const jaPaga = await db.query<{ id: string }>(
+          `select id from public.invoices where organization_id = $1 and subscription_id = $2 and gateway_ref = $3 and status = 'paid'`,
+          [ctx.organization_id, assinatura.id, refDaFatura],
+        );
         if (aberta !== null) {
           await db.query(
             `update public.invoices set status = 'paid', paid_at = $3, gateway_ref = $4
               where id = $1 and organization_id = $2`,
-            [aberta.id, ctx.organization_id, ocorrido, evento.event_ref],
+            [aberta.id, ctx.organization_id, ocorrido, refDaFatura],
           );
-        } else {
+        } else if (jaPaga.rows.length === 0) {
+          // Renovação sem fatura aberta: abre uma já paga — UMA por fatura do
+          // provedor (o segundo evento do mesmo ciclo não duplica).
           await db.query(
             `insert into public.invoices
                (organization_id, subscription_id, plan_code, period_start, period_end, amount_cents, currency, status, due_at, paid_at, gateway_ref)
              values ($1, $2, $3, $4, $5, $6, $7, 'paid', $4, $4, $8)`,
-            [ctx.organization_id, assinatura.id, plano.code, ocorrido, fim, plano.price_cents, plano.currency, evento.event_ref],
+            [ctx.organization_id, assinatura.id, plano.code, ocorrido, fim, plano.price_cents, plano.currency, refDaFatura],
           );
         }
         // F19: renovação (active → active) não é ativação — o Stripe manda

@@ -151,6 +151,8 @@ export interface AssinaturaDoStripe {
   readonly price_id: string | null;
   readonly trial_end: number | null;
   readonly current_period_end: number | null;
+  /** `in_…` da fatura do ciclo corrente — a referência ESTÁVEL da fatura no CRM. */
+  readonly latest_invoice: string | null;
 }
 
 export function lerAssinaturaDoStripe(bruto: unknown): AssinaturaDoStripe | null {
@@ -167,6 +169,7 @@ export function lerAssinaturaDoStripe(bruto: unknown): AssinaturaDoStripe | null
     price_id: typeof priceId === "string" ? priceId : null,
     trial_end: typeof s.trial_end === "number" ? s.trial_end : null,
     current_period_end: typeof s.current_period_end === "number" ? s.current_period_end : null,
+    latest_invoice: typeof s.latest_invoice === "string" ? s.latest_invoice : typeof (s.latest_invoice as { id?: unknown })?.id === "string" ? String((s.latest_invoice as { id: string }).id) : null,
   };
 }
 

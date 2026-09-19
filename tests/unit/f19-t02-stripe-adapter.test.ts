@@ -80,7 +80,7 @@ describe("F19-T02: lista de preços e allowlist do evento", () => {
 
   it("lerAssinaturaDoStripe pega status, customer, price e trial_end; customer expandido também", () => {
     const s = lerAssinaturaDoStripe(subscriptionTrialing);
-    expect(s).toEqual({ id: "sub_1F19Fixture00000001", status: "trialing", customer: "cus_F19Fixture000001", price_id: "price_1F19FixturePlanA", trial_end: 1758895100, current_period_end: 1760882300 });
+    expect(s).toEqual({ id: "sub_1F19Fixture00000001", status: "trialing", customer: "cus_F19Fixture000001", price_id: "price_1F19FixturePlanA", trial_end: 1758895100, current_period_end: 1760882300, latest_invoice: "in_1F19Fixture00000001" });
     expect(lerAssinaturaDoStripe({ ...subscriptionTrialing, customer: { id: "cus_exp", object: "customer" } })?.customer).toBe("cus_exp");
     expect(lerAssinaturaDoStripe({ id: "sub_x" })).toBeNull();
   });
