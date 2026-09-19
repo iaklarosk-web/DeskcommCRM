@@ -11,7 +11,7 @@
  * banco. Cada ação é auditada pela rota (`billing.admin.*`).
  *
  * `provisionar na mão` é a única que cria: assinatura `operator` ativa no
- * plano pedido, ou reativa a existente — é como KN Tecnologia e `deka` vivem
+ * plano pedido, ou reativa a existente — é como as organizações de origem `operator` vivem
  * na produção (D53), sem cliente no Stripe.
  */
 import { incrementCounter } from "@/src/obs/counters";

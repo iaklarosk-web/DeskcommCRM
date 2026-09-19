@@ -63,7 +63,9 @@ describe("F12 — eventos do gateway e bloqueio, autocontidos", () => {
 
     // Assert
     expect(primeira.applied).toBe(true);
-    expect(segunda).toMatchObject({ applied: false, ignored_reason: "duplicate" });
+    // A mensagem nomeia o invariante: o mutante 63 procura "duplicate" na falha, e o
+    // vitest abrevia o objeto esperado quando a assinatura tem muitos campos (F19).
+    expect(segunda, "a segunda entrega do mesmo evento não foi recusada como duplicate").toMatchObject({ applied: false, ignored_reason: "duplicate" });
     expect(await conta(`select count(*)::text as n from public.billing_events where organization_id = $1`, [ORG_DUP])).toBe(1);
     expect(await conta(`select count(*)::text as n from public.invoices where organization_id = $1 and status = 'paid'`, [ORG_DUP])).toBe(1);
     expect(await conta(`select count(*)::text as n from public.notifications where organization_id = $1 and event = 'subscription.activated'`, [ORG_DUP])).toBe(1);
