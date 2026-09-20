@@ -1,12 +1,12 @@
 ---
-updated_at: 2026-09-19T23:30:00Z
+updated_at: 2026-09-20T13:21:34Z
 head_commit: e3c34195   # código VALIDADO pelo gate f19-gate-03 (READY (staging), dentro do staging, F19 — ADR-042/043) = e3c34195; o fechamento (docs) vem depois dele; from-scratch: ver a linha from-scratch:
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
-plan_version: "2.12 (2026-09-19); D38–D57; ADR-006…043"
+plan_version: "2.13 (2026-09-20); D38–D58; ADR-006…044"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
 current_phase: F19
-next_task: F16-T00             # F19 (D57) FECHADA em 19/09/2026 (READY (staging), f19-gate-03 sobre e3c34195; produção com o código da F19 e BILLING_GATEWAY=mock — D57 f). Próxima construção só com o proprietário (D50 c): F16 / F17 / prova real do Stripe (chave) / as 41 ferramentas da fila / consertos — ver COMECE-AQUI no CRM-OS
-status: READY_STAGING          # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26); F19 fechada com READY (staging) em e3c34195 (bloco abaixo); F16+ aguarda o proprietário
+next_task: F19-T06             # D58 (20/09/2026): nome e preço reais dos planos (D14) + Stripe LIVE na produção — ADR-044; prova no staging pulada por decisão do proprietário
+status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING — F19-T06 em construção (ADR-044, D58); a F19 fechou READY (staging) em e3c34195 (bloco abaixo); BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26)
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
 hosting_confirmed: yes         # D50 (11/09/2026): staging nesta VPS, Docker Compose com Supabase local, acesso só por Tailscale — ADR-027
