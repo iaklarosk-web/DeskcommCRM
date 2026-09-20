@@ -1,0 +1,81 @@
+== F19-T06 — planos reais (D14) e Stripe LIVE na produção (ADR-044; D58) — evidência de construção, 20/09/2026 — CHECKPOINT DE PAUSA ==
+
+Branch feat/F19-cobranca-stripe a partir de b03eefbe (fechamento da F19). Commits da T06: ecee85ae
+(ADR-044, D58, next_task) e a3a5a01e (9034, provisionar, stripe-live, suítes). Autorização: mensagem
+do proprietário de 20/09/2026 (prompt de retomada) + três blocos de cards:
+  1. construção = prova real do Stripe; fixtures = capturar e trocar; produção = "sim modo live, a
+     chave que gravei já é a oficial"; depois = parar e reportar.
+  2. FATO apurado antes de aceitar: a chave em crm-staging.env era rk_live_ (107 chars; conferido
+     por contagem de prefixo, valor nunca exibido). Cards: pular a prova no staging; D14 = "me
+     recomende"; endpoint de webhook = eu registro pela API; chave = eu movo.
+  3. Brief F19-T06 aprovado ("Aprovo"); objeção 2 = consertar agora; D14 = Essencial 197 /
+     Profissional 597 / Empresarial 1.497 (tabela recomendada sobre custo de IA medido e mercado).
+  Durante a construção: o proprietário gravou a chave live em crm-prod.env (`segredo`) — é OUTRA
+  chave (hash diferente da do staging); ele revogou a antiga no Dashboard e mandou apagar a linha do
+  staging (feito; backup temporário apagado). Às 14:3xZ pediu PAUSA da frente: terminar o gate e
+  parar antes de qualquer etapa seguinte.
+
+== Gate f19-gate-04 (staging, 13:46Z → 15:57Z, 6658 s de passos, PRIMEIRA tentativa) ==
+Receita: baseline reaplicado no staging por psql (9034: 3/3 planos owner) + docker restart
+crm-staging-rest; env-e2e.sh; VERIFY_ENVIRONMENT=staging F02_E2E_SANDBOX_ID=crm-staging E2E_PORT=3202
+VERIFY_LOG_DIR=.verify-logs/f19-gate-04 NODE_OPTIONS=--max-old-space-size=3072 bash scripts/verify.sh
+(4,9 GB disponíveis; as duas outras sessões locais confirmaram pausa — D51 c).
+Passos: inputs-before 1s · sandbox 0s · typecheck 14s · lint 93s · lint-channels 1s · build 324s ·
+shell 57s · unit 1598s · integration 118s · db 899s · secrets 0s · e2e-plan 3s · e2e-deka 1729s ·
+e2e-demo2 1819s · replicability 0s · mutantes 83/83 · inputs 2s — todos exit=0.
+Árvore sob o gate: a3a5a01e (nada mudou na árvore durante o gate; inputs before/after iguais).
+
+VERIFY SUMMARY
+scope=phase phase=F19 current_phase=F19 environment=staging
+build=ok lint=ok typecheck=ok shell=ok
+unit=8582/8582 integration=262/262 db=1686/1686 e2e=86/86 baseline_n0=8997
+baseline_comparable: scope=unit+db passed=10268 required=8738 full_n0=pending
+e2e_scope: F19-required passed=86/86 specs=17/17
+isolation: tables=139 ops=4 dirs=2 leaks=0 (material_cross_org=98/139)
+rls-coverage: tables_with_org_id=139 policies_found=116 missing=0 service_only_with_grant=0
+rbac: roles=4 denied_expected=32 denied_actual=32
+entitlement: usage_events_written=23
+ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0
+handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3 notify=3 notify_rows=6 msgs_after=3 provider_calls_after=0
+reminder: runs=2 sent=1 duplicates=0 tables_summed=3
+webhook: replay=2 stored=1 tables_checked=7
+logs: routes=295 routes_logged=295 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
+rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=295 routes_with_schema=295 routes_reading_input=162 validated=162
+lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2
+admin: tenants_listed=3/3 support_sessions=2 support_reason=2/2 support_scope_denied=25/32 support_writes_denied=5/5 full_mode_rejected=1/1 signup_awaiting_payment=1/1 orgs_without_subscription=0/3
+billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1/1 blocked_writes_denied=5/5 grace_days=7 reconciliation_mismatch=0/3 cancellations=1/1 data_preserved=7/7
+crm: fields_defined=6 values_rejected=3/3 values_preserved=4/4 queue_size=5 distributed=5/5 balanced=1 second_claim_rejected=1/1 history_types=3 orders_linked=1/1 cross_org_link_denied=1/1 report_indicators=14/14 roles_denied=3/3
+autonomy: policy_modes=4/4 ai_task_created=1/1 limit_hits=1/1 calls_after_limit=0/3 paused=1/1 resumed=1/1 handoffs=4 balanced=1 assignees_distinct=3 rules=4 runs=4/4 replays=4 duplicate_runs=0 outside_catalog_denied=1/1 reindexed=2/2 unchanged_skipped=4/4 sources_cited=1/1 roles_denied=3/3
+channels: webchat_sessions=96 identified=12/12 contacts_created=11/11 messages_in=56 ai_replies=1/1 ai_outside_window=1/1 handoff_queued=1/1 ip_limited=1/1 org_limited=1/1 flood_calls_capped=1/1 cross_org_denied=1/1 appointments=7 conflicts_blocked=1/1 revoked_blocked=1/1 tz_ok=1/1 proposed=2/2 approved=1/1 denied_by_policy=1/1 roles_denied=2/2
+engine: saas_turns=1 legacy_turns=1 volta_atras=1/1 heranca_prompt=1/1 heranca_acervo=1/1 limite_diario_nega=1/1 cancel_allow=1/1 cancel_passado_negado=1/1 cancel_auditado=1/1 policy_approve_pendura=1/1 tools_migradas=13/13 auditoria=5/5 roles_denied=2/2 fora_do_catalogo_negado=1/1 inventadas_descartadas=1/1
+stripe: signature_rejected=1/1 livemode_mismatch=1/1 price_outside_list=1/1 checkout_created=1/1 activated=1/1 trialing_mapped=1/1 duplicates=1 out_of_order=1 state_from_provider=1/1 past_due=1/1 blocked_after_grace=1/1 cancelled_preserved=7/7 portal_link=1/1 admin_actions=5/5 summary_ok=1/1
+replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=86/86 demo2=86/86 specs=17/17 org_a=seed-replica)
+secrets: files_scanned=583 findings=0
+tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=83/83
+debt_known=0 skip_only_occurrences=15 violations=0
+STATUS: READY (staging)
+
+O que o gate mediu de novo nesta task: unit 8578→8582 (+4: planos do dono no provisionamento),
+integração 260→262 (+2: planos do dono/legado; endpoint de webhook idempotente), db 1683→1686 (+3:
+f19-t06-planos-do-dono), mutantes 82→83 (86-f19-provision-ignora-o-dono), e2e 86/86 com a f12
+afirmando owner/BRL 197.00 e sem selo placeholder; `billing: plans=3` inalterada.
+
+== O que NÃO aconteceu (pausa pedida pelo proprietário) ==
+- demo3 e from-scratch (regra 12: a migration 9034 mudou o baseline) — NÃO rodados.
+- Produção: NADA. Continua com o código da F19 (sha e3c341958), BILLING_GATEWAY=mock, sem
+  STRIPE_WEBHOOK_SECRET/STRIPE_PRICE_IDS/STRIPE_PORTAL_CONFIGURATION_ID/STRIPE_MODE. A chave live
+  está em crm-prod.env (107 chars) e NÃO foi usada para escrever nada: só uma sonda de LEITURA
+  (GET products/search → 200, 0 Products do crm-os; GET webhook_endpoints → 200, 5 endpoints de
+  outros OS da conta KN, nenhum do CRM; GET billing_portal/configurations → 200). Permissão de
+  escrita em webhook_endpoints continua hipótese.
+- `stripe_live:` — PENDENTE / NÃO COMPROVADO (não existe linha; configuração e provisionamento,
+  quando vierem, sozinhos não comprovam funcionamento — comprova o `provar` + o primeiro Checkout).
+- `stripe_real:` (staging, modo test) — NOT VALIDATED (real) por decisão (D58 a); separado do
+  stripe_live.
+- Teste visual das telas; nome/limites por plano além do preço; capturar fixtures.
+
+== Estado do staging ao pausar ==
+Banco com a 9034 (3/3 owner); app do staging AINDA na imagem da F19 (e3c34195) — a tela
+/app/billing do staging mostra os preços reais (vêm do banco) sem o aviso condicional (código
+novo só no gate, porta 3202, já encerrado). Fixtures do gate (`slug like 'f02-%'`) removidas pelo
+próprio verify (exit 0). .env.e2e restaurado para o sandbox.

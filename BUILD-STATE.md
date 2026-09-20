@@ -1,12 +1,12 @@
 ---
-updated_at: 2026-09-20T13:21:34Z
+updated_at: 2026-09-20T15:59:20Z
 head_commit: e3c34195   # código VALIDADO pelo gate f19-gate-03 (READY (staging), dentro do staging, F19 — ADR-042/043) = e3c34195; o fechamento (docs) vem depois dele; from-scratch: ver a linha from-scratch:
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
 plan_version: "2.13 (2026-09-20); D38–D58; ADR-006…044"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
 current_phase: F19
-next_task: F19-T06             # D58 (20/09/2026): nome e preço reais dos planos (D14) + Stripe LIVE na produção — ADR-044; prova no staging pulada por decisão do proprietário
-status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING — F19-T06 em construção (ADR-044, D58); a F19 fechou READY (staging) em e3c34195 (bloco abaixo); BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26)
+next_task: F19-T06             # PAUSADA pelo proprietário em 20/09/2026 16:00Z DEPOIS do gate f19-gate-04 (READY (staging) sobre a3a5a01e — bloco na evidência construction-f19-t06-20260920.txt) e ANTES de demo3/from-scratch/produção. Retomar pelo passo 3 do prompt em COMECE-AQUI (CRM-OS). Nada da T06 em produção; stripe_live: PENDENTE
+status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING — F19-T06 PAUSADA (D58; ADR-044): código validado pelo f19-gate-04 (READY (staging), a3a5a01e), faltam demo3 + from-scratch + produção live + stripe_live:; a F19 fechou READY (staging) em e3c34195 (bloco abaixo); BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26)
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
 hosting_confirmed: yes         # D50 (11/09/2026): staging nesta VPS, Docker Compose com Supabase local, acesso só por Tailscale — ADR-027
@@ -56,9 +56,33 @@ webchat_real: sessions=1/1 identified=1/1 turns=3/3 delivered=3/3 visible=3/3 pr
 engine_real: dispatch_turns=2/2 delivered=2/2 visible=2/2 handoff_na_segunda=0/1 volta_atras=1/1 provider=anthropic model=claude-sonnet-5 cost_cents=nao_precificado limite_segurou=1/1 calls_after_limit=0/1 cleaned=1/1 settings_rows_restored=1/1 at=2026-09-19T06:02:59Z   # F18-T05 (ADR-040 §1, D56 f): scripts/prod/jornada-motor.ts no crm-prod-worker — a mensagem entra pela rota pública, o DESPACHO decide o motor e o turno com política/teto/auditoria responde; com legacy ninguém responde. Modelo saiu em sonnet-5 (padrão da organização, não Haiku) e custo não precificado: §B23
 demo3: created=1 smoke=pass=10/10 e2e[demo3]=41/41 specs=10/10 removed=1 tenants=3   # F19 fechamento, 19/09 22:35Z→22:47Z, staging com o código da F19; primeira rodada verde
 from-scratch: steps=7 pass=7/7 verify_exit=0 status="READY (F19)" clone=.from-scratch-0FJk commit=e3c34195   # F19 fechamento, 20/09 00:26Z→02:37Z (verify 7750 s no clone, fase F19 lida da origem; violations=0, mutants 82/82); segunda tentativa — a 01 (23:02Z) morreu por OOM no `next build` do clone (anon-rss 4,2 GB com o sandbox e os dois stacks de pé; unit/integração/db verdes no clone); a 02 rodou com o staging derrubado (volumes ficam — FINAL-VALIDATION §8 risco 16) e o staging voltou depois (up.sh 15/15, smoke 10/10)
+t06_gate: f19-gate-04 status="READY (staging)" commit=a3a5a01e steps_s=6658 unit=8582/8582 integration=262/262 db=1686/1686 e2e=86/86 mutants=83/83 violations=0 at=2026-09-20T15:57Z   # F19-T06 (ADR-044, D58): PRIMEIRA tentativa; PAUSADA aqui a pedido do proprietário — demo3/from-scratch NÃO rodados (migration 9034 mudou o baseline: regra 12 pendente), produção NÃO tocada (prod: continua sha=e3c341958 billing_gateway=mock), stripe_live: PENDENTE/NÃO COMPROVADO, stripe_real: NOT VALIDATED (real) por decisão (D58 a)
 ---
 
 # BUILD-STATE
+
+## Checkpoint — F19-T06 PAUSADA em 20/09/2026 (ADR-044, D58): planos reais e Stripe LIVE na produção
+
+Autorizada em 20/09/2026 pela entrevista em três blocos de cards (ver ADR-044 e a
+[evidência T06](docs/migration/evidence/construction-f19-t06-20260920.txt)).
+**Feito**: ADR-044 + D58 (`ecee85ae`); migration 9034 (Essencial 19700 /
+Profissional 59700 / Empresarial 149700, `source='owner'`), provisionamento pelos
+planos do banco com preço antigo como legado, cliente Stripe com endpoint de
+webhook, `scripts/prod/stripe-live.{sh,ts}` (ligar/provar), `prova.sh` com
+`billing_gateway=stripe/<modo>`, suítes da F12 declarando `owner` (`a3a5a01e`);
+**gate f19-gate-04 READY (staging) sobre `a3a5a01e`** na primeira tentativa
+(6658 s; unit 8582, integração 262, banco 1686, navegador 86 ×2, mutantes 83/83,
+zero violações — linha `t06_gate:` no cabeçalho). A chave live do proprietário
+está em `crm-prod.env` (107 chars; a antiga do staging foi revogada por ele e
+apagada do arquivo); só uma sonda de LEITURA foi feita com ela.
+**NÃO feito (pausa pedida pelo proprietário às 14:3xZ, cumprida ao fim do gate
+às 15:57Z)**: `demo3` + `from-scratch` (regra 12 — a 9034 mudou o baseline);
+`stripe-live.sh ligar` (endpoint LIVE + Products/Prices live); `up.sh`/`prova.sh`
+da produção; `stripe-live.sh provar` → `stripe_live:` (**PENDENTE / NÃO
+COMPROVADO**); fechamento (FINAL-VALIDATION com números, RETOMADA, COMECE-AQUI,
+custo). A T06 **não está fechada**; a produção continua com o código da F19 e
+`billing_gateway=mock`. `stripe_real:` (staging, modo test) continua NOT
+VALIDATED (real) por decisão (D58 a) — separado do `stripe_live:`.
 
 ## Estado vigente — F19 concluída em 19/09/2026 (READY (staging), f19-gate-03); produção com o código da F19 (gateway `mock`, D57 f); F16+ aguarda o proprietário (D50 c)
 
@@ -799,7 +823,7 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 | F16 | Marca do SaaS e presets configuráveis; profundidade de templates, white-label e domínios por cliente a definir | pending |
 | F17 | Operação, capacidade/recuperação, suporte, atualização, regressão e aceite comercial pelo proprietário | pending |
 | F18 | Um motor de IA só: o turno SaaS assume o despacho (unificação do §B8) | done(verify=2026-09-19 e5c26c4e) — READY (staging) no f18-gate-04 (16 specs, linha `engine:`; ADR-040/041); T00–T05 concluídas; produção com o código da F18 (`prod:`/`engine_real:`) |
-| F19 | Cobrança real por Stripe + padrão KN do `/admin` (D57; ADR-042/043) | done(verify=2026-09-19 e3c34195) — READY (staging) no f19-gate-03 (17 specs, linha `stripe:`; mutantes 82/82); T00–T05 concluídas; produção com o código da F19 e `billing_gateway=mock` (D57 f); Stripe REAL continua NOT VALIDATED (real) (chave do proprietário) |
+| F19 | Cobrança real por Stripe + padrão KN do `/admin` (D57; ADR-042/043) | done(verify=2026-09-19 e3c34195) — READY (staging) no f19-gate-03 (17 specs, linha `stripe:`; mutantes 82/82); T00–T05 concluídas; produção com o código da F19 e `billing_gateway=mock` (D57 f); **T06 (ADR-044, D58: planos reais + Stripe LIVE) EM ANDAMENTO/PAUSADA** — gate f19-gate-04 READY (staging) sobre a3a5a01e; faltam demo3, from-scratch, produção live e `stripe_live:` |
 
 Dependência técnica: F00/F01 → F02 → F03 → F04 → F05 → F06 → F07 → (D51) F11+F12. F11/F12 fecharam juntas o onboarding pago em staging (13/09/2026); F13 fechou em 14/09/2026; F15 fechou em 15/09/2026 (D54); F14 fechou em 18/09/2026 (D55); F16 avança com contratos definidos. F08 depende das entradas/autorização para serviços reais. D48 permite concluir a construção F11–F17 antes das evidências reais F09/F10; piloto e validação de mercado permanecem marcos separados, sem bloquear o software. F17 reúne a jornada comercial e os critérios de operação. Nenhuma fase futura recebe `done` por existir código equivalente no upstream.
 

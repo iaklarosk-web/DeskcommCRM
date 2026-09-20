@@ -195,11 +195,12 @@ Cada item com a marcação e o dono humano (§8.6, D11, D12, D26).
 | Turno de IA dentro da janela de envio (7h–22h, pacing do canal) | VALIDADO — `ai_turn: ok` às 07:01 BRT (231 chars, dry run da versão em rascunho); fora da janela o turno roda e a resposta fica agendada (`ai_turn: window`, 04:14 BRT) | agente/proprietário |
 | Caixa de entrada do proprietário (os dois e-mails de F08-T06 chegaram?) | NOT VALIDATED — o agente vê o id da Resend e o audit do GoTrue, não a caixa | proprietário |
 | Backup diário pelo cron (03:20) — a primeira execução agendada | NOT VALIDATED — o script rodou à mão (1/1 confirmado no remoto); o cron ainda não disparou | proprietário (`~/backup.log`, marcador `/var/tmp/crm-os-backup-success.marker`) |
-| Stripe REAL em modo test (Checkout pago com o cartão 4242, webhook pela CLI, Portal, cancelamento pelo provedor) — `stripe_real:` | NOT VALIDATED (real) — a chave restrita não foi gravada durante a sessão (`segredo crm-staging.env STRIPE_SECRET_KEY`); a fase está provada contra o Stripe FALSO da bancada (`stripe:` no gate, 17 specs no staging) e o script da prova real existe (`scripts/staging/jornada-stripe.ts`, runbook `docs/ops/staging.md`); objeção 1 do contraponto (a CLI com chave restrita, sem `stripe login`) continua hipótese | proprietário (chave) + agente (rodar a jornada) |
-| Stripe na PRODUÇÃO | NOT VALIDATED (real) por decisão (D57 f): `BILLING_GATEWAY=mock`, `prod: … billing_gateway=mock`; ligar = endpoint de webhook no domínio + chaves + `up.sh` (`docs/ops/prod.md`) | proprietário |
+| Stripe REAL em modo test (Checkout pago com o cartão 4242, webhook pela CLI, Portal, cancelamento pelo provedor) — `stripe_real:` | NOT VALIDATED (real) — **pulada por decisão do proprietário em 20/09 (D58 a)**: a chave que ele gravou era `rk_live_`, não `rk_test_`; a fase está provada contra o Stripe FALSO da bancada (`stripe:` no gate) e o script da prova (`scripts/staging/jornada-stripe.ts`, runbook `docs/ops/staging.md`) continua pronto para uma `rk_test_` nova (10 min, US$ 0) | proprietário (chave de teste) + agente (rodar a jornada) |
+| Stripe na PRODUÇÃO (LIVE) — `stripe_live:` | **PENDENTE / NÃO COMPROVADO** (F19-T06 pausada em 20/09 pelo proprietário DEPOIS do gate f19-gate-04 e ANTES de ligar): produção continua com o código da F19, `billing_gateway=mock`, sem endpoint LIVE, sem Products live; a chave live está em `crm-prod.env` e só foi usada em LEITURA. Quando a T06 retomar: `stripe-live.sh ligar` + `up.sh` + `prova.sh` + `stripe-live.sh provar` produzem a linha (chave responde, 3 Products/3 Prices com o preço do banco, Portal, endpoint LIVE com os 7 tipos, webhook sem assinatura = 401, cockpit `stripe/live ok=true`) — configuração/provisionamento sozinhos NÃO comprovam funcionamento; o que fica NOT VALIDATED (real) mesmo depois: **um Checkout live pago** (`checkout_paid=0/0`) até um cliente (ou o proprietário, com o próprio cartão: trial 7 dias → R$ 0 no ato) pagar | agente (retomada da T06) + proprietário (Checkout) |
+| Fixtures do Stripe capturadas do provedor (regra 13 do AGENTS) | NOT VALIDATED — continuam MODELADAS (`tests/fixtures/stripe/README.md`): sem `rk_test_` não há evento de teste para capturar, e em live só um Checkout pago produz eventos | proprietário (chave de teste) + agente |
 | Checkout do Stripe REAL por navegador (seletores `#cardNumber`, `#cardExpiry`, `#cardCvc`, `#billingName` da página do Stripe) | NOT VALIDATED — hipótese do `jornada-stripe.ts`; se a página mudar, a prova real cai para "criar a subscription pela API com `pm_card_visa`" (o receptor já trata `customer.subscription.created`) | agente, quando a chave existir |
 | Teste visual das telas da F19 (`/app/billing` com Portal e trial; `/admin/billing` com as cinco ações; `/api/admin/summary` no cockpit da KN) | NOT VALIDATED — provadas por navegador com organizações fictícias (7 testes × 2 tenants) | proprietário |
-| Nome e preço REAIS dos planos (D14): `plans.price_cents=0` na tela × Products placeholder R$ 10/20/30 em modo test | não decididos — as duas verdades de preço estão declaradas (ADR-042 Consequências) e mudam juntas (migration `source='owner'` + `stripe:provision`) | proprietário |
+| Nome e preço REAIS dos planos (D14) | **DECIDIDOS em 20/09 (D58 b)**: Essencial R$ 197 / Profissional R$ 597 / Empresarial R$ 1.497 por mês (BRL) — migration 9034 (`source='owner'`), `plans.price_cents` e o Price live nascem da mesma linha (`stripe:provision` lê o banco); limites por plano continuam os da 9023 (placeholder de capacidade, não de preço) | — (feito); limites: proprietário quando quiser |
 
 ## 4. ADRs
 
@@ -280,12 +281,13 @@ no `psql` da produção (negado ao agente pelo classificador); ligar
 `webchat.enabled` e cadastrar `webchat.allowed_origins` na organização que for
 usar o chat (`/app/settings/tenant/webchat`); Google OAuth real por membro
 (D41: NOT VALIDATED (real)); §B8 foi FECHADO na F18 (ADR-040). Da F19:
-ligar o Stripe na produção é do proprietário (D57 f — `docs/ops/prod.md`:
-endpoint de webhook em `crm.kntecnologia.app/api/v1/webhooks/stripe`,
-`STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`/`STRIPE_PRICE_IDS`/
-`STRIPE_PORTAL_CONFIGURATION_ID`, `BILLING_GATEWAY=stripe`, `up.sh`); o
-`ADMIN_SUMMARY_TOKEN` gerado por `secrets.sh` é o bearer do cockpit da KN;
-nome e preço reais dos planos (D14) continuam placeholder.
+ligar o Stripe em LIVE na produção é o que resta da F19-T06 (D58; pausada em
+20/09 depois do gate): `scripts/prod/stripe-live.sh ligar` → `up.sh` → `prova.sh`
+→ `stripe-live.sh provar` (runbook `docs/ops/prod.md`), com os planos reais de
+D14 já no banco (9034); o `ADMIN_SUMMARY_TOKEN` gerado por `secrets.sh` é o
+bearer do cockpit da KN; o primeiro Checkout live pago continuará NOT VALIDATED
+(real); a prova em modo test no staging pede uma `rk_test_` (D58 a); os limites
+por plano (usuários, respostas de IA) continuam os placeholders da 9023.
 
 ## 6. Como criar um tenant novo
 
@@ -393,4 +395,7 @@ P2 = degrada operação; P3 = melhoria. **P0 = 0, P1 = 0.**
 | 32 | P3 | Produção com o código do Stripe e `BILLING_GATEWAY=mock` (D57 f): a cobrança real continua NOT VALIDATED (real) em produção; o cockpit responde `gateway ok=false` de propósito | ADR-042 §7; `docs/ops/prod.md` | declarado; ligar é do proprietário (endpoint + chaves + `up.sh`) |
 | 33 | P3 | `next build` na VPS morre por OOM (anon-rss 3,4–3,9 GB) quando outra sessão roda vitest/eslint em paralelo — duas tentativas perdidas nesta fase | evidência F19 | avisar as sessões antes (D51 c) e limitar o heap a 3 GB como o verify já faz; medir `free -m` antes do build |
 | 34 | P3 | Preços placeholder em duas verdades: `plans.price_cents=0` (tela) × Products do Stripe R$ 10/20/30 em modo test (D57 d) | ADR-042 Consequências | quando D14 fechar, migration `source='owner'` e `stripe:provision` mudam juntos |
+| 35 | P2 | Stripe LIVE na produção (quando ligado) sem nenhum Checkout real medido: a página real do Checkout, a assinatura do webhook live e a ativação por evento real só acontecem quando alguém pagar (`checkout_paid=0/0`); o gate mediu tudo contra o Stripe falso. Em 20/09 a T06 está PAUSADA antes de ligar: `stripe_live:` pendente/não comprovado | ADR-044 §4; `stripe_live:` | prova em modo test com uma `rk_test_` (10 min) ou 1 Checkout do proprietário com o próprio cartão (trial → R$ 0) e cancelamento no Portal, registrado como `owner_validated` |
+| 36 | P3 | Profissional (R$ 597) com 5.000 respostas de IA/mês em `claude-sonnet-5` custa até R$ 850/mês: o plano perde dinheiro no pior caso | ADR-044 §1 | a organização liga `ai.limits.daily_turns` (F15); modelo padrão dos tenants é configuração; limites por plano são placeholder da 9023 |
+| 37 | P3 | Chave restrita LIVE dentro do app de produção com as permissões que o proprietário deu (inclusive `webhook_endpoints: write`, se deu): mais poder do que o webhook precisa em operação | ADR-044 §4 | depois de ligado, o proprietário pode trocar por uma chave só de operação (Checkout/Subscriptions/Customers/Portal write, Products/Prices read, Webhook Endpoints read) e regravar com `segredo`; o gate nunca lê a chave (`.env.e2e` fictício) |
 | — | [DEFAULT] ainda não confirmados | D27 (meta do piloto), D28 (nome/domínio), D03 para produção (hosting de produção — o staging está decidido por D50) | §2.2 | pendências declaradas; nenhuma assumida |
