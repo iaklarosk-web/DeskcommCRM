@@ -4,3 +4,4 @@ restore: tables=183 tables_restored=183 rows=461 rows_diff=0 dump=prod-20260915T
 restore: tables=184 tables_restored=184 rows=646 rows_diff=0 dump=prod-20260918T142544Z.dump target=restore_20260918_142545 seconds=19 at=20260918T142545Z
 restore: tables=184 tables_restored=184 rows=833 rows_diff=0 dump=prod-20260919T051008Z.dump target=restore_20260919_051009 seconds=10 at=20260919T051009Z
 restore: tables=184 tables_restored=184 rows=833 rows_diff=0 dump=prod-20260919T051008Z.dump target=restore_20260919_051009 seconds=10 at=20260919T051009Z
+restore: tables=184 tables_restored=184 rows=997 rows_diff=0 dump=prod-20260919T230038Z.dump target=restore_20260919_230046 seconds=40 at=20260919T230046Z

@@ -7,3 +7,4 @@ restore: tables=183 tables_restored=183 rows=14873 rows_diff=0 dump=staging-2026
 restore: tables=184 tables_restored=184 rows=21623 rows_diff=0 dump=staging-20260918T141329Z.dump target=restore_20260918_141339 seconds=12 at=20260918T141339Z
 restore: tables=184 tables_restored=184 rows=27296 rows_diff=0 dump=staging-20260919T045640Z.dump target=restore_20260919_045641 seconds=7 at=20260919T045641Z
 restore: tables=184 tables_restored=184 rows=27296 rows_diff=0 dump=staging-20260919T045640Z.dump target=restore_20260919_045641 seconds=7 at=20260919T045641Z
+restore: tables=184 tables_restored=184 rows=33004 rows_diff=0 dump=staging-20260919T223051Z.dump target=restore_20260919_223052 seconds=13 at=20260919T223052Z

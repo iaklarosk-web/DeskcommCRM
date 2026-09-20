@@ -1,25 +1,25 @@
 ---
-updated_at: 2026-09-19T06:30:00Z
-head_commit: 65219c22   # commit VALIDADO DO ZERO pelo from-scratch (READY (F18), verify inteiro no clone); o fechamento (docs) vem depois dele. Código validado pelo gate f18-gate-04 (READY (staging), F18 — ADR-040/041) = e5c26c4e; código VALIDADO pelo gate f18-gate-04 (READY (staging), dentro do staging, F18 — ADR-040/041) = e5c26c4e; depois dele entraram o conserto do drain (sem ele a unificação valia só para quem já tinha agente herdado), a jornada do motor e docs
+updated_at: 2026-09-19T23:30:00Z
+head_commit: e3c34195   # código VALIDADO pelo gate f19-gate-03 (READY (staging), dentro do staging, F19 — ADR-042/043) = e3c34195; o fechamento (docs) vem depois dele; from-scratch: ver a linha from-scratch:
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
 plan_version: "2.12 (2026-09-19); D38–D57; ADR-006…043"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
 current_phase: F19
-next_task: F19-T05             # F19 (D57): T00–T04 concluídas; segue T05 (Stripe falso no gate, spec f19-cobranca-stripe, helper de checkout nas specs herdadas, prova real, fechamento)
-status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26); F19 em construção (D57) sobre a F18 fechada (READY (staging) em e5c26c4e)
+next_task: F16-T00             # F19 (D57) FECHADA em 19/09/2026 (READY (staging), f19-gate-03 sobre e3c34195; produção com o código da F19 e BILLING_GATEWAY=mock — D57 f). Próxima construção só com o proprietário (D50 c): F16 / F17 / prova real do Stripe (chave) / as 41 ferramentas da fila / consertos — ver COMECE-AQUI no CRM-OS
+status: READY_STAGING          # IN_PROGRESS | BLOCKED | READY_STAGING — BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26); F19 fechada com READY (staging) em e3c34195 (bloco abaixo); F16+ aguarda o proprietário
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
 hosting_confirmed: yes         # D50 (11/09/2026): staging nesta VPS, Docker Compose com Supabase local, acesso só por Tailscale — ADR-027
 build_env: "Claude Code na VPS (4 núcleos/16 GB), worktree DeskcommCRM-v1.17.0; validação em serviços/bancos descartáveis e no staging; WHATSAPP_MODE=mock AI_PROVIDER=mock; F15: 3 chamadas reais à Anthropic (ai_real:); F14: 12 turnos Haiku reais no chat do site da organização do dono (webchat_real:, teto 20)"
-verify_summary_last_context: "f18-gate-04 aprovado em 19/09/2026 sobre e5c26c4e, ≈7000 s (02:5xZ→04:51Z), exit 0, DENTRO do staging (VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202), current_phase=F18 com a spec f18-motor-unico (16 specs, 79 testes, ADR-041 §1) e a linha engine: (ADR-041 §2). Quatro tentativas: 01 as seis suítes do turno herdado viam 'nenhuma mensagem saiu' porque o padrão virou o motor novo (cada uma passa a declarar ai.engine=legacy) + a spec da F15 contava 14 ações (são 28); 02 o passo shell PENDUROU 1h25 num head -1 esperando stdin — nenhum passo tinha timeout (ADR-041 §5, §B22); 03 o desvio pegava o modo assistido, ler a chave derrubava o turno com pool dublado, e o report ignorava a linha engine (gravada e não lida); 04 READY. mutants_killed=77/77. Produção recebeu o código DEPOIS do READY (prod:); engine_real: o despacho respondendo pelo motor novo, medido em produção (D56 f). READY (staging) = verificado em staging; owner_validated em branco; BLOCKER-PROD aberto (liberado só para o tenant Deka, D53)."
+verify_summary_last_context: "f19-gate-03 aprovado em 19/09/2026 sobre e3c34195, 6011 s de passos (20:20Z→22:20Z), exit 0, DENTRO do staging (VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202 + Stripe FALSO em 4202), current_phase=F19 com a spec f19-cobranca-stripe (17 specs, 86 testes, ADR-043 §1) e a linha stripe: (ADR-043 §2). Três tentativas: 01 interrompida em db — unit 8576/8578 por duas réguas (spec fora da lista do CI; `rounded` puro); 02 NOT READY por tenantReferences=1 (a palavra do tenant num comentário) e mutante 63 vivo por FORMATAÇÃO (o vitest abrevia o objeto esperado com os campos novos da assinatura) — tudo o mais verde; 03 READY. mutants_killed=82/82. Produção recebeu o código DEPOIS do READY (prod:), com BILLING_GATEWAY=mock (D57 f). Stripe REAL: NOT VALIDATED (real) — a chave não foi gravada. READY (staging) = verificado em staging; owner_validated em branco; BLOCKER-PROD aberto (liberado só para o tenant Deka, D53)."
 verify_summary_last: |
   VERIFY SUMMARY
-  scope=phase phase=F18 current_phase=F18 environment=staging
+  scope=phase phase=F19 current_phase=F19 environment=staging
   build=ok lint=ok typecheck=ok shell=ok
-  unit=8561/8561 integration=240/240 db=1677/1677 e2e=79/79 baseline_n0=8997
-  baseline_comparable: scope=unit+db passed=10238 required=8738 full_n0=pending
-  e2e_scope: F18-required passed=79/79 specs=16/16
-  isolation: tables=139 ops=4 dirs=2 leaks=0 (material_cross_org=97/139)
+  unit=8578/8578 integration=260/260 db=1683/1683 e2e=86/86 baseline_n0=8997
+  baseline_comparable: scope=unit+db passed=10261 required=8738 full_n0=pending
+  e2e_scope: F19-required passed=86/86 specs=17/17
+  isolation: tables=139 ops=4 dirs=2 leaks=0 (material_cross_org=98/139)
   rls-coverage: tables_with_org_id=139 policies_found=116 missing=0 service_only_with_grant=0
   rbac: roles=4 denied_expected=32 denied_actual=32
   entitlement: usage_events_written=23
@@ -27,8 +27,8 @@ verify_summary_last: |
   handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3 notify=3 notify_rows=6 msgs_after=3 provider_calls_after=0
   reminder: runs=2 sent=1 duplicates=0 tables_summed=3
   webhook: replay=2 stored=1 tables_checked=7
-  logs: routes=290 routes_logged=290 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
-  rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=290 routes_with_schema=290 routes_reading_input=159 validated=159
+  logs: routes=295 routes_logged=295 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
+  rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=295 routes_with_schema=295 routes_reading_input=162 validated=162
   lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2
   admin: tenants_listed=3/3 support_sessions=2 support_reason=2/2 support_scope_denied=25/32 support_writes_denied=5/5 full_mode_rejected=1/1 signup_awaiting_payment=1/1 orgs_without_subscription=0/3
   billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1/1 blocked_writes_denied=5/5 grace_days=7 reconciliation_mismatch=0/3 cancellations=1/1 data_preserved=7/7
@@ -36,28 +36,93 @@ verify_summary_last: |
   autonomy: policy_modes=4/4 ai_task_created=1/1 limit_hits=1/1 calls_after_limit=0/3 paused=1/1 resumed=1/1 handoffs=4 balanced=1 assignees_distinct=3 rules=4 runs=4/4 replays=4 duplicate_runs=0 outside_catalog_denied=1/1 reindexed=2/2 unchanged_skipped=4/4 sources_cited=1/1 roles_denied=3/3
   channels: webchat_sessions=96 identified=12/12 contacts_created=11/11 messages_in=56 ai_replies=1/1 ai_outside_window=1/1 handoff_queued=1/1 ip_limited=1/1 org_limited=1/1 flood_calls_capped=1/1 cross_org_denied=1/1 appointments=7 conflicts_blocked=1/1 revoked_blocked=1/1 tz_ok=1/1 proposed=2/2 approved=1/1 denied_by_policy=1/1 roles_denied=2/2
   engine: saas_turns=1 legacy_turns=1 volta_atras=1/1 heranca_prompt=1/1 heranca_acervo=1/1 limite_diario_nega=1/1 cancel_allow=1/1 cancel_passado_negado=1/1 cancel_auditado=1/1 policy_approve_pendura=1/1 tools_migradas=13/13 auditoria=5/5 roles_denied=2/2 fora_do_catalogo_negado=1/1 inventadas_descartadas=1/1
-  replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=79/79 demo2=79/79 specs=16/16 org_a=seed-replica)
-  secrets: files_scanned=571 findings=0
-  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=77/77
+  stripe: signature_rejected=1/1 livemode_mismatch=1/1 price_outside_list=1/1 checkout_created=1/1 activated=1/1 trialing_mapped=1/1 duplicates=1 out_of_order=1 state_from_provider=1/1 past_due=1/1 blocked_after_grace=1/1 cancelled_preserved=7/7 portal_link=1/1 admin_actions=5/5 summary_ok=1/1
+  replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=86/86 demo2=86/86 specs=17/17 org_a=seed-replica)
+  secrets: files_scanned=580 findings=0
+  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=82/82
   debt_known=0 skip_only_occurrences=15 violations=0
   STATUS: READY (staging)
   exit=0
-restore: tables=184 tables_restored=184 rows=27296 rows_diff=0 dump=staging-20260919T045640Z.dump target=restore_20260919_045641 seconds=7 at=20260919T045641Z
-smoke: steps=9 pass=9/9 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 owner_login=1/1 subscriptions[deka]=active/full subscriptions[demo2]=active/full orgs_without_subscription=0/3 webchat_disabled_denied=2/2 engine_saas=2/2 tenants=deka,demo2
-p95_ms: endpoints=3/3 health=24 contacts=383 conversations=352 samples=20 url=http://127.0.0.1:3200
-staging: compose=crm-staging services_running=15/15 memory_mib=2053 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F18(e5c26c4e)
-prod: compose=crm-prod services_running=14/14 config_vars=27/27 placeholders=0/27 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=2 orgs_without_subscription=0/2 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only backup=1/1 restore_rows_diff=0 sha=e5c26c4e8
+restore: tables=184 tables_restored=184 rows=33004 rows_diff=0 dump=staging-20260919T223051Z.dump target=restore_20260919_223052 seconds=13 at=20260919T223052Z
+smoke: steps=10 pass=10/10 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 owner_login=1/1 subscriptions[deka]=active/full subscriptions[demo2]=active/full orgs_without_subscription=0/3 webchat_disabled_denied=2/2 engine_saas=2/2 webhook_stripe_unsigned_rejected=1/1 tenants=deka,demo2
+p95_ms: endpoints=3/3 health=21 contacts=394 conversations=510 samples=20 url=http://127.0.0.1:3200
+staging: compose=crm-staging services_running=15/15 memory_mib=1414 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F19(e3c34195)
+prod: compose=crm-prod services_running=14/14 config_vars=29/29 placeholders=0/29 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=2 orgs_without_subscription=0/2 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only billing_gateway=mock backup=1/1 restore_rows_diff=0 sha=e3c341958
 tenant_deka: created=1 plan=PLAN_C subscription=active origin=operator admin=platform_admin invites_sent=0/0 orgs=2 orgs_without_subscription=0/2 (D53, 14/09/2026 10:40Z)
-prod_stack: compose=crm-prod services_running=14/14 memory_mib=2074 ports=127.0.0.1+tailscale(3300,56431,56432) public_ports=0   # F18: scripts/prod/up.sh DEPOIS do READY; o apêndice 9032 aplicou-se no banco que ATUALIZA — o ponto que havia reprovado no staging; 9032 em produção 1/1
-restore_prod: tables=184 tables_restored=184 rows=833 rows_diff=0 dump=prod-20260919T051008Z.dump target=restore_20260919_051009 seconds=10 at=20260919T051009Z
+prod_stack: compose=crm-prod services_running=14/14 memory_mib=1574 ports=127.0.0.1+tailscale(3300,56431,56432) public_ports=0   # F19: scripts/prod/up.sh DEPOIS do READY; o apêndice 9033 aplicou-se no banco que ATUALIZA (3/3 CHECKs com stripe/cancelled, 3/3 colunas); BILLING_GATEWAY=mock gravado por secrets.sh (D57 f); webhook do Stripe responde 503 (fechado) no domínio
+restore_prod: tables=184 tables_restored=184 rows=997 rows_diff=0 dump=prod-20260919T230038Z.dump target=restore_20260919_230046 seconds=40 at=20260919T230046Z
 ai_real: turns=3/3 usage_delta=3/3 provider=anthropic model=claude-haiku-4-5 cost_cents=0.0162 limit_hit=1/1 denied=3/3 calls_after_limit=0/3 paused=1/1 notified=1 limit_restored=1/1 day=2026-09-15 at=2026-09-15T03:56:08Z   # F15-T06 (ADR-036 §3, D54 g): scripts/prod/jornada-limite-ia.ts no crm-prod-worker, organização do dono, FORA do bloco (o verify força mock)
 webchat_real: sessions=1/1 identified=1/1 turns=3/3 delivered=3/3 visible=3/3 provider=anthropic model=claude-haiku-4-5 cost_cents=0.34357 flood_capped=1/1 calls_after_limit=0/1 cleaned=1/1 settings_rows_restored=1/1 at=2026-09-18T14:38:04Z   # F14-T05 (ADR-038 §2, D55 f): scripts/prod/jornada-webchat.ts no crm-prod-worker, organização do dono, FORA do bloco; rodada 4 de 4 (12 turnos reais no dia, teto 20; rodadas 1–2 mediram ai.enabled ausente, rodada 3 gravou o padrão como linha — ver evidência)
 engine_real: dispatch_turns=2/2 delivered=2/2 visible=2/2 handoff_na_segunda=0/1 volta_atras=1/1 provider=anthropic model=claude-sonnet-5 cost_cents=nao_precificado limite_segurou=1/1 calls_after_limit=0/1 cleaned=1/1 settings_rows_restored=1/1 at=2026-09-19T06:02:59Z   # F18-T05 (ADR-040 §1, D56 f): scripts/prod/jornada-motor.ts no crm-prod-worker — a mensagem entra pela rota pública, o DESPACHO decide o motor e o turno com política/teto/auditoria responde; com legacy ninguém responde. Modelo saiu em sonnet-5 (padrão da organização, não Haiku) e custo não precificado: §B23
-demo3: created=1 smoke=pass=9/9 e2e[demo3]=41/41 specs=10/10 removed=1 tenants=3   # F18 fechamento, 19/09 06:26Z→06:40Z, staging com o código da F18; a 1ª rodada reprovou por 1 caso (total=509 onde a spec afirma 501) — resíduo da própria rodada, verde sem tocar em código na 2ª
-from-scratch: steps=7 pass=7/7 verify_exit=0 status="READY (F18)" clone=.from-scratch-sc8H commit=65219c22   # F18 fechamento, 19/09 07:5xZ→09:4xZ (verify 6631 s no clone, fase=F18 lida da origem; violations=0, mutants 77/77); segunda tentativa — a 01 pegou uma REGRESSÃO REAL: o conserto do drain passava por cima de agente pausado/arquivado (invariante "pausar tem que parar o gasto"), e a exceção passou a valer só para quem não tem agente nenhum
+demo3: created=1 smoke=pass=10/10 e2e[demo3]=41/41 specs=10/10 removed=1 tenants=3   # F19 fechamento, 19/09 22:35Z→22:47Z, staging com o código da F19; primeira rodada verde
+from-scratch: steps=7 pass=7/7 verify_exit=0 status="READY (F19)" clone=.from-scratch-0FJk commit=e3c34195   # F19 fechamento, 20/09 00:26Z→02:37Z (verify 7750 s no clone, fase F19 lida da origem; violations=0, mutants 82/82); segunda tentativa — a 01 (23:02Z) morreu por OOM no `next build` do clone (anon-rss 4,2 GB com o sandbox e os dois stacks de pé; unit/integração/db verdes no clone); a 02 rodou com o staging derrubado (volumes ficam — FINAL-VALIDATION §8 risco 16) e o staging voltou depois (up.sh 15/15, smoke 10/10)
 ---
 
 # BUILD-STATE
+
+## Estado vigente — F19 concluída em 19/09/2026 (READY (staging), f19-gate-03); produção com o código da F19 (gateway `mock`, D57 f); F16+ aguarda o proprietário (D50 c)
+
+Construída em 19/09/2026 na branch `feat/F19-cobranca-stripe` (a partir de
+`a1372de3`), com tasks e critérios em ADR-042 e o verificador v1.12 em
+ADR-043, autorizada por D57 (entrevista em dois blocos de cards + contraponto;
+objeção 1 aceita como teste, 2 resolvida pela opção (a), 3 aceita como teste).
+Entregue: **§B23 (b)** — `claude-sonnet-5`/`claude-opus-5`/`claude-haiku-4-5`
+com preço na tabela do motor (T00); **migration 9033** — `stripe` nos CHECKs
+de gateway, `cancelled` como evento do gateway, `customer_ref`, `trial_ends_at`,
+`livemode`, índice `(gateway, gateway_ref)` (T01); **gateway `stripe`** sobre a
+máquina de estados da F12 — assinatura `Stripe-Signature` em tempo constante
+com tolerância de 5 min, `livemode` × `STRIPE_MODE`, preço fora de
+`STRIPE_PRICE_IDS`, ESTADO buscado no provedor, uma fatura do CRM por fatura
+do provedor (`invoice_ref`), organização por `client_reference_id` ou
+`gateway_ref`, `customer.subscription.created/updated/deleted`,
+`invoice.paid/payment_failed`; rota `POST /api/v1/webhooks/stripe`; checkout
+pelo Stripe com trial de 7 dias e cartão obrigatório (D57 c); página-ponte
+`GET /api/v1/billing/retorno` na volta (cookie `SameSite=Strict`) (T02);
+**D44 sobre eventos reais** + **Customer Portal** (`POST /api/v1/billing/portal`;
+`mudarPlano`/`cancelar` respondem 409 `use_portal` para `stripe` — D57 b);
+tela `/app/billing` com "Gerenciar assinatura", trial, gateway e os avisos de
+retorno (T03); **padrão KN do `/admin`** — suspender/reativar (transições
+`admin_suspended`/`admin_resumed`, 10 → 13), estender trial 1..90, provisionar
+na mão, abrir no Stripe (`src/billing/admin.ts`, `POST /api/v1/admin/billing/[org]`,
+audit `billing.admin.*`), cockpit `GET /api/admin/summary` por
+`ADMIN_SUMMARY_TOKEN`, `pnpm stripe:provision` (um Product por plano placeholder
+R$ 10/20/30 — D57 d), secrets de staging/prod, smoke +1 (T04); **Stripe falso**
+no gate (segundo `webServer`, `BILLING_GATEWAY=stripe` no `.env.e2e`), helper
+`pagarNoCheckout` nas specs herdadas (objeção 3), spec `f19-cobranca-stripe`
+(7 testes), linha `stripe:`, mutantes 81–85, `jornada-stripe.ts` (prova real,
+pronta), runbooks (T05).
+
+`./scripts/verify.sh` com `VERIFY_ENVIRONMENT=staging` e `current_phase: F19` saiu 0
+com `STATUS: READY (staging)` sobre `e3c34195` (gate f19-gate-03, 6011 s de
+passos), zero violações: unit 8578/8578, integração 260/260, banco 1683/1683,
+navegador 86/86 em DEZESSETE specs duas vezes (`E2E_TENANT=deka` e `demo2`,
+mesma árvore, `src_diff_lines=0`), mutantes 82/82, `rbac: roles=4`, `engine:`
+inalterada, linha nova `stripe: signature_rejected=1/1 livemode_mismatch=1/1
+price_outside_list=1/1 checkout_created=1/1 activated=1/1 trialing_mapped=1/1
+duplicates=1 out_of_order=1 state_from_provider=1/1 past_due=1/1
+blocked_after_grace=1/1 cancelled_preserved=7/7 portal_link=1/1
+admin_actions=5/5 summary_ok=1/1`. Três tentativas (01 interrompida: duas
+réguas — spec fora da lista do CI e `rounded` puro; 02 NOT READY: a palavra do
+tenant num comentário e o mutante 63 vivo por formatação; 03 READY) — detalhe
+na [evidência F19](docs/migration/evidence/construction-f19-20260919.txt).
+Fora do bloco: `restore:`/`smoke:`/`p95_ms:`/`staging:` (staging com a imagem
+da F19, cockpit respondendo), `prod:`/`prod_stack:`/`restore_prod:` (produção
+com o código da F19, subida DEPOIS do READY, `billing_gateway=mock`), `demo3:`
+e `from-scratch:` no cabeçalho. **Sem `stripe_real:`** — a chave restrita de
+teste não foi gravada na sessão; a prova real fica pronta para a próxima.
+
+Defaults declarados, nunca fato (ADR-042 §9): `STRIPE_MODE=test`;
+`BILLING_TRIAL_DAYS=7` (D57 c — decisão); moeda `BRL`; placeholders R$ 10/20/30
+em modo test (D57 d) — `plans.price_cents` continua 0 na tela (duas verdades de
+preço, declaradas); carência 7 dias e sem pró-rata (D52 b); produção `mock`
+(D57 f).
+
+O que NÃO é fato: Stripe REAL (chave, CLI, Checkout pago por navegador, Portal
+real) — NOT VALIDATED (real); Stripe na produção (por decisão); o Checkout real
+por Playwright (seletores da página do Stripe são hipótese até rodar); teste
+visual das telas novas (`/app/billing`, `/admin/billing`, cockpit); nome e
+preço reais dos planos (D14); WhatsApp real; Google OAuth real; realtime do
+inbox.
 
 ## Estado vigente — F14 concluída em 18/09/2026 (READY (staging), f14-gate-04); produção com o código da F14; F16+ aguarda o proprietário (D50 c)
 
@@ -734,7 +799,7 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 | F16 | Marca do SaaS e presets configuráveis; profundidade de templates, white-label e domínios por cliente a definir | pending |
 | F17 | Operação, capacidade/recuperação, suporte, atualização, regressão e aceite comercial pelo proprietário | pending |
 | F18 | Um motor de IA só: o turno SaaS assume o despacho (unificação do §B8) | done(verify=2026-09-19 e5c26c4e) — READY (staging) no f18-gate-04 (16 specs, linha `engine:`; ADR-040/041); T00–T05 concluídas; produção com o código da F18 (`prod:`/`engine_real:`) |
-| F19 | Cobrança real por Stripe + padrão KN do `/admin` (D57; ADR-042/043) | in_progress — T00–T04 concluídas (19/09/2026); T05 pendente; produção fica `BILLING_GATEWAY=mock` nesta fase (D57 f) |
+| F19 | Cobrança real por Stripe + padrão KN do `/admin` (D57; ADR-042/043) | done(verify=2026-09-19 e3c34195) — READY (staging) no f19-gate-03 (17 specs, linha `stripe:`; mutantes 82/82); T00–T05 concluídas; produção com o código da F19 e `billing_gateway=mock` (D57 f); Stripe REAL continua NOT VALIDATED (real) (chave do proprietário) |
 
 Dependência técnica: F00/F01 → F02 → F03 → F04 → F05 → F06 → F07 → (D51) F11+F12. F11/F12 fecharam juntas o onboarding pago em staging (13/09/2026); F13 fechou em 14/09/2026; F15 fechou em 15/09/2026 (D54); F14 fechou em 18/09/2026 (D55); F16 avança com contratos definidos. F08 depende das entradas/autorização para serviços reais. D48 permite concluir a construção F11–F17 antes das evidências reais F09/F10; piloto e validação de mercado permanecem marcos separados, sem bloquear o software. F17 reúne a jornada comercial e os critérios de operação. Nenhuma fase futura recebe `done` por existir código equivalente no upstream.
 
@@ -761,7 +826,7 @@ As classes abaixo expressam o destino aprovado, não uma nova medição de pront
 | Workers/filas e observabilidade | ADAPTAR | `event_log`, `job_queue`, `workers/`, `lib/audit/`; target-state §5.13/5.17 | Preservar infraestrutura e provar tenant, repetição segura, trabalhos antigos e rastreabilidade nas F03–F06 |
 | Notificações do contrato CRM-OS | CRIAR | target-state §5.16; canais/avisos herdados reaproveitáveis | Completar avisos por usuário e e-mail transacional com mocks na F05; entregas reais continuam pendentes |
 | Banco/RLS/migrations | ADAPTAR | `supabase/baseline.sql`, [MANIFEST](supabase/migrations/MANIFEST.md), ADR-010 | 225 arquivos SQL em migrations no checkpoint 03ec6a3b; instalação/upgrade pelo baseline e reaplicação provados em banco descartável. Gate F02: banco1585/1585, RLS127 tabelas, nenhuma dívida nominal; serviços reais pendentes |
-| Administração, onboarding e cobrança comerciais | ADAPTAR (+ `src/billing` CRIAR) | D38/D39/D44; ADR-009; ADR-030/031; DIRETRIZ §7.9 | F11/F12: painel do dono com estado da assinatura e `/admin/billing`; suporte com motivo/escopo/vencimento só leitura (9024); cadastro nasce `pending_payment`, `/app` e `/onboarding` gateados pela assinatura, `requireRole` nega escrita com 402; wizard conclui pelo canal de teste em mock; planos placeholder, gateway mock, carência 7 (declarados); jornada paga REAL continua `NOT VALIDATED (real)` (gateway, D12) |
+| Administração, onboarding e cobrança comerciais | ADAPTAR (+ `src/billing` CRIAR) | D38/D39/D44; ADR-009; ADR-030/031; DIRETRIZ §7.9 | F11/F12: painel do dono com estado da assinatura e `/admin/billing`; suporte com motivo/escopo/vencimento só leitura (9024); cadastro nasce `pending_payment`, `/app` e `/onboarding` gateados pela assinatura, `requireRole` nega escrita com 402; wizard conclui pelo canal de teste em mock; planos placeholder, gateway mock, carência 7 (declarados); jornada paga REAL continua `NOT VALIDATED (real)` (gateway, D12); **F19 (ADR-042)**: gateway `stripe` ao lado do mock, Customer Portal, padrão KN do `/admin`, cockpit por token — produção em `mock` até o proprietário ligar (D57 f) |
 | Canais comerciais, agenda, automação e marca | ADAPTAR | D40/D41; ADR-009; DIRETRIZ §7.9 | Recorte confirmado para F14–F16; regras de sincronização, limites e profundidade de white-label ainda serão definidos |
 | Produção inicial nesta VPS | CRIAR | `compose.prod.yml`, `scripts/prod/*`, `docs/ops/prod.md`; ADR-032/033; D52 | F08 concluída (14/09): stack `crm-prod` de pé com provedores reais, domínio, dono real, backup diário, linha `prod:`; falta: liberação do BLOCKER-PROD (D13), número de WhatsApp (D12-4), Stripe (D52) |
 
@@ -828,7 +893,7 @@ A integração e as provas com mocks/bancos descartáveis não comprovam as jorn
 | E-mail transacional | Entrega real de autenticação/cobrança e rastreio do provedor | |
 | Piloto Deka com dados reais | Operação autorizada, recorte de pedidos confirmado e indicadores com denominadores | |
 | Segunda empresa e preço aceito | Operação por configuração, sem código específico, e evidência comercial | |
-| Assinatura/pagamento/inadimplência | Confirmação confiável, conciliação, ativação, repetição/ordem de eventos, aviso/carência/bloqueio e cancelamento (F12: provado com gateway MOCK — `billing: duplicates=1 out_of_order=1 activations=1/1`; gateway real e cobrança real são humanos) | |
+| Assinatura/pagamento/inadimplência | Confirmação confiável, conciliação, ativação, repetição/ordem de eventos, aviso/carência/bloqueio e cancelamento (F12: provado com gateway MOCK — `billing: duplicates=1 out_of_order=1 activations=1/1`; F19: provado com o Stripe FALSO — `stripe:` com os 15 campos, 17 specs no staging; o Stripe REAL em modo test depende da chave restrita do proprietário (`stripe_real:`), e o Stripe na produção é decisão dele — D57 f) | |
 | Onboarding e suporte comerciais | Cadastro → contratação → acesso → conexão/configuração, com suporte limitado/auditado (F11: provado em staging com WhatsApp/IA mock — `admin:`; número/IA reais são humanos) | |
 | Chat do site | Mensagens reais, identidade, isolamento e continuidade do atendimento | |
 | Agenda/Google Agenda | Criar/alterar/cancelar, disponibilidade/fuso, conflitos, reconexão e revogação reais | |

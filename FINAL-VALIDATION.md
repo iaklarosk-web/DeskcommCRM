@@ -66,27 +66,28 @@ Fase 1.
 | Flywheel | REUTILIZAR sem tocar | `flywheel/live.ts`, `FLYWHEEL_INTERVAL_MS=0` (OFF) | — |
 | Onboarding wizard | ADAPTAR (era REUTILIZAR sem tocar) | 9 páginas; o loader grava `onboarded_at` (ADR-029 §3); F11-T05: passo do telefone conclui pelo canal de TESTE em `WHATSAPP_MODE=mock` (`conectarCanalMock`), e o wizard só abre com assinatura que permite uso (ADR-030 §1) | F07/F11 |
 | Administração da plataforma e suporte | ADAPTAR | `/admin` herdado + coluna de assinatura, `/admin/billing`; acompanhamento com motivo/escopo/vencimento só leitura (`fn_start_support_saas`, 9024; `rotaNoEscopo` no guarda) — ADR-030 §4 | F11 |
-| 5.3 Entitlement (planos) e cobrança | CRIAR | `src/billing/` (`plans`, `subscriptions`, `billing_events`, `invoices` — 9023; gateway mock, acesso, carência, conciliação) e `src/entitlement/plano.ts` (resolver por plano, D14) — ADR-030 §3 | F12 |
+| 5.3 Entitlement (planos) e cobrança | CRIAR | `src/billing/` (`plans`, `subscriptions`, `billing_events`, `invoices` — 9023; gateway mock, acesso, carência, conciliação) e `src/entitlement/plano.ts` (resolver por plano, D14) — ADR-030 §3; **F19 (ADR-042)**: gateway `stripe` ao lado do mock (`gateway/stripe.ts`, `webhook-stripe.ts`, migration 9033), Customer Portal, padrão KN do `/admin` (`admin.ts`, `summary.ts`, `provisionar.ts`) | F12, F19 |
 | Produção inicial nesta VPS | CRIAR | `compose.prod.yml` (stack `crm-prod`: Supabase local, WAHA real, Resend, Sentry próprio, sem dublê), `scripts/prod/*` (secrets/up/down/status/bootstrap-owner/backup/restore/backup-diario/prova + jornadas reais), `docs/ops/prod.md`; domínio `crm.kntecnologia.app` no Caddy do host (ADR-032) | F08 |
 
 ## 2. VERIFY SUMMARY final
 
 Bloco colado na íntegra, rodado DENTRO do staging (ADR-028 §2), sobre
-`e5c26c4e`, em `2026-09-19 02:5xZ → 04:51Z`, exit `0`, com `current_phase: F18`
-(inventário de F14 + `f18-motor-unico` = 16 specs, 79 testes; linha `engine:`;
-`rbac: roles=4` — ADR-041). Log em `.verify-logs/f18-gate-04/` (não versionado);
-evidência versionada em
-[docs/migration/evidence/construction-f18-20260918.txt](docs/migration/evidence/construction-f18-20260918.txt).
-Os blocos anteriores ficam nas evidências das fases (F07, F11+F12, F08, F13, F15, F14).
+`e3c34195`, em `2026-09-19 20:20Z → 22:20Z` (6011 s de passos), exit `0`, com
+`current_phase: F19` (inventário de F18 + `f19-cobranca-stripe` = 17 specs, 86
+testes; linha `stripe:`; `rbac: roles=4` — ADR-043). O app do gate rodou com
+`BILLING_GATEWAY=stripe` contra o Stripe FALSO da bancada (ADR-043 §4). Log em
+`.verify-logs/f19-gate-03/` (não versionado); evidência versionada em
+[docs/migration/evidence/construction-f19-20260919.txt](docs/migration/evidence/construction-f19-20260919.txt).
+Os blocos anteriores ficam nas evidências das fases (F07, F11+F12, F08, F13, F15, F14, F18).
 
 ```text
 VERIFY SUMMARY
-scope=phase phase=F18 current_phase=F18 environment=staging
+scope=phase phase=F19 current_phase=F19 environment=staging
 build=ok lint=ok typecheck=ok shell=ok
-unit=8561/8561 integration=240/240 db=1677/1677 e2e=79/79 baseline_n0=8997
-baseline_comparable: scope=unit+db passed=10238 required=8738 full_n0=pending
-e2e_scope: F18-required passed=79/79 specs=16/16
-isolation: tables=139 ops=4 dirs=2 leaks=0 (material_cross_org=97/139)
+unit=8578/8578 integration=260/260 db=1683/1683 e2e=86/86 baseline_n0=8997
+baseline_comparable: scope=unit+db passed=10261 required=8738 full_n0=pending
+e2e_scope: F19-required passed=86/86 specs=17/17
+isolation: tables=139 ops=4 dirs=2 leaks=0 (material_cross_org=98/139)
 rls-coverage: tables_with_org_id=139 policies_found=116 missing=0 service_only_with_grant=0
 rbac: roles=4 denied_expected=32 denied_actual=32
 entitlement: usage_events_written=23
@@ -94,8 +95,8 @@ ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_call
 handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3 notify=3 notify_rows=6 msgs_after=3 provider_calls_after=0
 reminder: runs=2 sent=1 duplicates=0 tables_summed=3
 webhook: replay=2 stored=1 tables_checked=7
-logs: routes=290 routes_logged=290 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
-rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=290 routes_with_schema=290 routes_reading_input=159 validated=159
+logs: routes=295 routes_logged=295 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
+rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=295 routes_with_schema=295 routes_reading_input=162 validated=162
 lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2
 admin: tenants_listed=3/3 support_sessions=2 support_reason=2/2 support_scope_denied=25/32 support_writes_denied=5/5 full_mode_rejected=1/1 signup_awaiting_payment=1/1 orgs_without_subscription=0/3
 billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1/1 blocked_writes_denied=5/5 grace_days=7 reconciliation_mismatch=0/3 cancellations=1/1 data_preserved=7/7
@@ -103,60 +104,60 @@ crm: fields_defined=6 values_rejected=3/3 values_preserved=4/4 queue_size=5 dist
 autonomy: policy_modes=4/4 ai_task_created=1/1 limit_hits=1/1 calls_after_limit=0/3 paused=1/1 resumed=1/1 handoffs=4 balanced=1 assignees_distinct=3 rules=4 runs=4/4 replays=4 duplicate_runs=0 outside_catalog_denied=1/1 reindexed=2/2 unchanged_skipped=4/4 sources_cited=1/1 roles_denied=3/3
 channels: webchat_sessions=96 identified=12/12 contacts_created=11/11 messages_in=56 ai_replies=1/1 ai_outside_window=1/1 handoff_queued=1/1 ip_limited=1/1 org_limited=1/1 flood_calls_capped=1/1 cross_org_denied=1/1 appointments=7 conflicts_blocked=1/1 revoked_blocked=1/1 tz_ok=1/1 proposed=2/2 approved=1/1 denied_by_policy=1/1 roles_denied=2/2
 engine: saas_turns=1 legacy_turns=1 volta_atras=1/1 heranca_prompt=1/1 heranca_acervo=1/1 limite_diario_nega=1/1 cancel_allow=1/1 cancel_passado_negado=1/1 cancel_auditado=1/1 policy_approve_pendura=1/1 tools_migradas=13/13 auditoria=5/5 roles_denied=2/2 fora_do_catalogo_negado=1/1 inventadas_descartadas=1/1
-replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=79/79 demo2=79/79 specs=16/16 org_a=seed-replica)
-secrets: files_scanned=571 findings=0
-tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=77/77
+stripe: signature_rejected=1/1 livemode_mismatch=1/1 price_outside_list=1/1 checkout_created=1/1 activated=1/1 trialing_mapped=1/1 duplicates=1 out_of_order=1 state_from_provider=1/1 past_due=1/1 blocked_after_grace=1/1 cancelled_preserved=7/7 portal_link=1/1 admin_actions=5/5 summary_ok=1/1
+replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=86/86 demo2=86/86 specs=17/17 org_a=seed-replica)
+secrets: files_scanned=580 findings=0
+tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=82/82
 debt_known=0 skip_only_occurrences=15 violations=0
 STATUS: READY (staging)
 exit=0
 ```
 
-Fora do bloco, contra o staging de pé, DEPOIS do READY e com a mesma imagem:
+Fora do bloco, contra o staging de pé, DEPOIS do READY e com a mesma imagem
+(o `secrets.sh` acrescentou `ADMIN_SUMMARY_TOKEN`; o cockpit respondeu 401 sem
+token e 200 com ele, com `gateway=mock/test ok=false` de propósito):
 
 ```text
-restore: tables=184 tables_restored=184 rows=27296 rows_diff=0 dump=staging-20260919T045640Z.dump target=restore_20260919_045641 seconds=7 at=20260919T045641Z
-smoke: steps=9 pass=9/9 … webchat_disabled_denied=2/2 engine_saas=2/2 tenants=deka,demo2
-p95_ms: endpoints=3/3 health=24 contacts=383 conversations=352 samples=20 url=http://127.0.0.1:3200
-staging: compose=crm-staging services_running=15/15 memory_mib=2053 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F18(e5c26c4e)
+restore: tables=184 tables_restored=184 rows=33004 rows_diff=0 dump=staging-20260919T223051Z.dump target=restore_20260919_223052 seconds=13 at=20260919T223052Z
+smoke: steps=10 pass=10/10 … webchat_disabled_denied=2/2 engine_saas=2/2 webhook_stripe_unsigned_rejected=1/1 tenants=deka,demo2
+p95_ms: endpoints=3/3 health=21 contacts=394 conversations=510 samples=20 url=http://127.0.0.1:3200
+staging: compose=crm-staging services_running=15/15 memory_mib=1414 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F19(e3c34195)
 ```
 
-Produção (com o código da F18 subido DEPOIS do READY). O apêndice 9032
-aplicou-se no banco que ATUALIZA — exatamente o ponto que havia reprovado no
-staging e que a ADR-041 §5 registra:
+Produção (com o código da F19 subido DEPOIS do READY, `BILLING_GATEWAY=mock`
+por decisão — D57 f). O apêndice 9033 aplicou-se no banco que ATUALIZA (3/3
+CHECKs com `stripe`/`cancelled`, 3/3 colunas), e o webhook do Stripe pelo
+domínio responde 503 (fechado, sem segredo):
 
 ```text
-prod: compose=crm-prod services_running=14/14 config_vars=27/27 placeholders=0/27 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=2 orgs_without_subscription=0/2 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only backup=1/1 restore_rows_diff=0 sha=e5c26c4e8
-prod_stack: compose=crm-prod services_running=14/14 memory_mib=2074 ports=127.0.0.1+tailscale(3300,56431,56432) public_ports=0
-restore_prod: tables=184 tables_restored=184 rows=833 rows_diff=0 dump=prod-20260919T051008Z.dump target=restore_20260919_051009 seconds=10 at=20260919T051009Z
-engine_real: dispatch_turns=2/2 delivered=2/2 visible=2/2 handoff_na_segunda=0/1 volta_atras=1/1 provider=anthropic model=claude-sonnet-5 cost_cents=nao_precificado limite_segurou=1/1 calls_after_limit=0/1 cleaned=1/1 settings_rows_restored=1/1 at=2026-09-19T06:02:59Z
+prod: compose=crm-prod services_running=14/14 config_vars=29/29 placeholders=0/29 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=2 orgs_without_subscription=0/2 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only billing_gateway=mock backup=1/1 restore_rows_diff=0 sha=e3c341958
+prod_stack: compose=crm-prod services_running=14/14 memory_mib=1574 ports=127.0.0.1+tailscale(3300,56431,56432) public_ports=0
+restore_prod: tables=184 tables_restored=184 rows=997 rows_diff=0 dump=prod-20260919T230038Z.dump target=restore_20260919_230046 seconds=40 at=20260919T230046Z
 ```
 
-**`engine_real:` é a linha que fecha o §B8 como fato**, e não como intenção: a
-mensagem do visitante entrou pela rota pública, emitiu
-`ai_agent.dispatch_requested`, o worker de PRODUÇÃO escolheu o motor pela chave
-da organização e o turno com política por ação, teto diário e auditoria
-respondeu — entregue e visível na página. Com `ai.engine=legacy`, ninguém
-respondeu (`volta_atras=1/1`).
-
-Duas coisas dessa prova ficam declaradas, porque medir sem declarar é meia
-medição: (a) o teto autorizado era "até 20 turnos Haiku" e os turnos saíram em
-`claude-sonnet-5` — o turno rodando no worker escolhe o modelo por
-`organizations.settings.llm.default_model`, não pelo `AI_CHAT_MODEL` do script
-(§B23); foram 5 chamadas `agent_turn` no dia (61.154 tokens de entrada, 3.640 de
-saída), dentro do teto em número e fora dele em modelo; (b) o custo desse modelo
-não é precificado — `llm_calls.cost_cents` fica nulo e `ai_usage_events` grava
-zero, então o produto registrou consumo sem conta em dinheiro.
+**Não há `stripe_real:` nesta fase.** A prova real (Stripe de verdade em modo
+test: Checkout pago pelo navegador com o cartão 4242, webhook pela CLI, Portal,
+cancelamento pelo provedor) exige a chave restrita de teste do proprietário
+(`segredo crm-staging.env STRIPE_SECRET_KEY`), pedida no início da sessão e não
+gravada até o fechamento. O script está pronto
+(`scripts/staging/jornada-stripe.ts`), o runbook também (`docs/ops/staging.md`);
+a objeção 1 do contraponto (a CLI com chave restrita, sem `stripe login`)
+continua hipótese. O que o gate mede — assinatura do webhook, `livemode`,
+preço fora da lista, estado buscado no provedor, uma fatura por fatura do
+provedor, trial, Portal, as cinco ações do admin, o cockpit — mede contra o
+Stripe falso, que devolve o que a bancada manda: é o contrato do adapter, não
+o provedor.
 
 Jornadas reais anteriores (uma vez cada, proprietário como único destinatário —
 `docs/ops/prod-jornadas.log`): Sentry, e-mail pela Resend, FAQ indexado, turno
-de IA, sessão do WAHA aguardando QR, limite diário (`ai_real:`, F15) e o chat do
-site com provedor real (`webchat_real:`, F14).
+de IA, sessão do WAHA aguardando QR, limite diário (`ai_real:`, F15), o chat do
+site com provedor real (`webchat_real:`, F14) e o despacho pelo motor novo
+(`engine_real:`, F18 — a linha que fechou o §B8 como fato).
 `demo3:` e `from-scratch:` desta fase estão no cabeçalho do BUILD-STATE
-(`demo3: e2e 41/41`; `from-scratch: 7/7 verify_exit=0 status="READY (F18)"
-commit=65219c22`, verify inteiro de 6631 s num clone do zero). A primeira
-tentativa do from-scratch pegou uma regressão que nenhum outro passo pegou — o
-conserto do drain passando por cima de agente pausado/arquivado —, e é o melhor
-argumento que esta fase produziu para a prova do zero continuar existindo.
+(`demo3: smoke 10/10 e2e 41/41`, primeira rodada verde; `from-scratch: 7/7 verify_exit=0 status="READY (F19)" commit=e3c34195`, verify
+inteiro de 7750 s num clone do zero; a primeira tentativa morreu por OOM no
+`next build` do clone com o sandbox e os dois stacks de pé — a segunda rodou com
+o staging derrubado, como o risco 16 prevê)..
 
 ## 3. O que NÃO foi verificado
 
@@ -194,6 +195,11 @@ Cada item com a marcação e o dono humano (§8.6, D11, D12, D26).
 | Turno de IA dentro da janela de envio (7h–22h, pacing do canal) | VALIDADO — `ai_turn: ok` às 07:01 BRT (231 chars, dry run da versão em rascunho); fora da janela o turno roda e a resposta fica agendada (`ai_turn: window`, 04:14 BRT) | agente/proprietário |
 | Caixa de entrada do proprietário (os dois e-mails de F08-T06 chegaram?) | NOT VALIDATED — o agente vê o id da Resend e o audit do GoTrue, não a caixa | proprietário |
 | Backup diário pelo cron (03:20) — a primeira execução agendada | NOT VALIDATED — o script rodou à mão (1/1 confirmado no remoto); o cron ainda não disparou | proprietário (`~/backup.log`, marcador `/var/tmp/crm-os-backup-success.marker`) |
+| Stripe REAL em modo test (Checkout pago com o cartão 4242, webhook pela CLI, Portal, cancelamento pelo provedor) — `stripe_real:` | NOT VALIDATED (real) — a chave restrita não foi gravada durante a sessão (`segredo crm-staging.env STRIPE_SECRET_KEY`); a fase está provada contra o Stripe FALSO da bancada (`stripe:` no gate, 17 specs no staging) e o script da prova real existe (`scripts/staging/jornada-stripe.ts`, runbook `docs/ops/staging.md`); objeção 1 do contraponto (a CLI com chave restrita, sem `stripe login`) continua hipótese | proprietário (chave) + agente (rodar a jornada) |
+| Stripe na PRODUÇÃO | NOT VALIDATED (real) por decisão (D57 f): `BILLING_GATEWAY=mock`, `prod: … billing_gateway=mock`; ligar = endpoint de webhook no domínio + chaves + `up.sh` (`docs/ops/prod.md`) | proprietário |
+| Checkout do Stripe REAL por navegador (seletores `#cardNumber`, `#cardExpiry`, `#cardCvc`, `#billingName` da página do Stripe) | NOT VALIDATED — hipótese do `jornada-stripe.ts`; se a página mudar, a prova real cai para "criar a subscription pela API com `pm_card_visa`" (o receptor já trata `customer.subscription.created`) | agente, quando a chave existir |
+| Teste visual das telas da F19 (`/app/billing` com Portal e trial; `/admin/billing` com as cinco ações; `/api/admin/summary` no cockpit da KN) | NOT VALIDATED — provadas por navegador com organizações fictícias (7 testes × 2 tenants) | proprietário |
+| Nome e preço REAIS dos planos (D14): `plans.price_cents=0` na tela × Products placeholder R$ 10/20/30 em modo test | não decididos — as duas verdades de preço estão declaradas (ADR-042 Consequências) e mudam juntas (migration `source='owner'` + `stripe:provision`) | proprietário |
 
 ## 4. ADRs
 
@@ -240,6 +246,10 @@ Cada item com a marcação e o dono humano (§8.6, D11, D12, D26).
 | ADR-037 | verify.sh v1.9: F15 no gate com a spec `f15-automacao-e-autonomia`, linha `autonomy:` (17 campos), `requiresAutonomy` pela ordem de fechamento, mutantes 69–72 |
 | ADR-038 | F14: chat do site (canal `webchat` no mesmo modelo; visitante anônimo com identificação; página + embed com `frame-ancestors`; três freios; IA 24 h por `liveVisitor`), agenda herdada ADOTADA por membro (D41) pela fachada `src/agenda`, `schedule_appointment` no catálogo (14) sob a política da F15; migrations 9030/9031; WhatsApp fora da fase; as três objeções do contraponto como testes; achado §B8 reafirmado |
 | ADR-039 | verify.sh v1.10: F14 no FIM de `CLOSING_ORDER` (a cláusula numérica deixa de se somar à posicional), spec `f14-canais-e-agenda`, linha `channels:` (19 campos), mutantes 73–76 |
+| ADR-040 | F18: um motor de IA só (D56) — o turno SaaS assume o despacho pela chave `ai.engine` (`saas` padrão, `legacy` volta atrás), 13 ações migradas do MCP (28 no catálogo), 41 na fila de espera, fail-closed `tool_missing`, herança do agente publicado, `cancel_appointment` em `allow` |
+| ADR-041 | verify.sh v1.11: F18 no FIM de `CLOSING_ORDER`, spec `f18-motor-unico`, linha `engine:` (14 campos), `lint:channels` de volta ao gate, teto por passo + entrada fechada, mutantes 77–80 |
+| ADR-042 | F19: cobrança real por Stripe + padrão KN do `/admin` (D57) — gateway `stripe` sobre a máquina de estados da F12 (assinatura do webhook, livemode, preço fora da lista, estado buscado no provedor, uma fatura por fatura do provedor), migration 9033, trial de 7 dias com cartão, Customer Portal (409 `use_portal` nas rotas da F12), cinco ações do admin + cockpit por token + provisionamento, página-ponte na volta do Checkout, produção fica `mock` (D57 f), §B23 (b) como T00 |
+| ADR-043 | verify.sh v1.12: F19 no FIM de `CLOSING_ORDER`, spec `f19-cobranca-stripe`, linha `stripe:` (15 campos, no contrato, na leitura e no render), gate contra o Stripe falso (`BILLING_GATEWAY=stripe` no `.env.e2e`, segundo `webServer`), smoke +1 (`webhook_stripe_unsigned_rejected`), mutantes 81–85 |
 
 ## 5. Pendências para produção
 
@@ -269,8 +279,13 @@ existiam) — `delete from public.tenant_settings where organization_id='e73f043
 no `psql` da produção (negado ao agente pelo classificador); ligar
 `webchat.enabled` e cadastrar `webchat.allowed_origins` na organização que for
 usar o chat (`/app/settings/tenant/webchat`); Google OAuth real por membro
-(D41: NOT VALIDATED (real)); decidir §B8 (o turno de produção é o motor
-herdado, sem a política da F15 — ADR-038 Consequências).
+(D41: NOT VALIDATED (real)); §B8 foi FECHADO na F18 (ADR-040). Da F19:
+ligar o Stripe na produção é do proprietário (D57 f — `docs/ops/prod.md`:
+endpoint de webhook em `crm.kntecnologia.app/api/v1/webhooks/stripe`,
+`STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`/`STRIPE_PRICE_IDS`/
+`STRIPE_PORTAL_CONFIGURATION_ID`, `BILLING_GATEWAY=stripe`, `up.sh`); o
+`ADMIN_SUMMARY_TOKEN` gerado por `secrets.sh` é o bearer do cockpit da KN;
+nome e preço reais dos planos (D14) continuam placeholder.
 
 ## 6. Como criar um tenant novo
 
@@ -373,4 +388,9 @@ P2 = degrada operação; P3 = melhoria. **P0 = 0, P1 = 0.**
 | 28 | P3 | `WHATSAPP_MODE=mock` dubla todo provider SaaS menos o `webchat` (sem transporte); o mock global sem pool morre com AggregateError se alguém o chamar fora de teste com pool — como aconteceu no gate 02 | `src/channels/index.ts` | o webchat nunca passa pelo mock; o resto continua como antes |
 | 29 | P3 | Reaplicar o baseline por `psql` no staging travou o PostgREST (504 `PGRST003`) até `docker restart crm-staging-rest`; o `up.sh` só reinicia o realtime | VARREDURA §B20 | receita da RETOMADA reinicia o `rest` depois do baseline |
 | 25 | P3 | Provas "do zero" envelhecem quando não rodam a cada fase: `from-scratch.sh` (F07) gravava `current_phase: F07` fixo e reprovou a árvore da F15 por "RBAC fora do contrato" (4 papéis desde a F13) na primeira execução em 8 fases | ADR-029 §4; commit `d2a66fb8` | a fase vem da origem (ou `FROM_SCRATCH_PHASE`); `demo3` e `from-scratch` entram no fechamento de toda fase que mexer em migration ou no verify (RETOMADA regra 12) |
+| 30 | P2 | Volta do Checkout do Stripe com `SameSite=Strict`: um redirect direto para `/app/billing` deslogava a pessoa (medido na bancada, 7/17 specs) | ADR-042; `app/api/v1/billing/retorno/route.ts` | **resolvido na F19-T05**: página-ponte pública ancorada (o mesmo remédio da volta do Google); `success_url`/`cancel_url` apontam para ela |
+| 31 | P2 | Dois eventos do mesmo ciclo (`checkout.session.completed` + `invoice.paid`) abriam duas faturas pagas no CRM | ADR-042 Consequências | **resolvido na F19-T05**: a fatura do CRM segue a fatura do provedor (`invoice_ref`), uma por ciclo em qualquer ordem |
+| 32 | P3 | Produção com o código do Stripe e `BILLING_GATEWAY=mock` (D57 f): a cobrança real continua NOT VALIDATED (real) em produção; o cockpit responde `gateway ok=false` de propósito | ADR-042 §7; `docs/ops/prod.md` | declarado; ligar é do proprietário (endpoint + chaves + `up.sh`) |
+| 33 | P3 | `next build` na VPS morre por OOM (anon-rss 3,4–3,9 GB) quando outra sessão roda vitest/eslint em paralelo — duas tentativas perdidas nesta fase | evidência F19 | avisar as sessões antes (D51 c) e limitar o heap a 3 GB como o verify já faz; medir `free -m` antes do build |
+| 34 | P3 | Preços placeholder em duas verdades: `plans.price_cents=0` (tela) × Products do Stripe R$ 10/20/30 em modo test (D57 d) | ADR-042 Consequências | quando D14 fechar, migration `source='owner'` e `stripe:provision` mudam juntos |
 | — | [DEFAULT] ainda não confirmados | D27 (meta do piloto), D28 (nome/domínio), D03 para produção (hosting de produção — o staging está decidido por D50) | §2.2 | pendências declaradas; nenhuma assumida |

@@ -389,7 +389,7 @@ passo no `step` do `verify.sh` (o teto dá para ser generoso — 40 min cobre o 
 e `</dev/null` nas provas de shell, que não leem entrada. Custo: baixo. **Risco enquanto durar:**
 um gate que pendura à noite custa a janela inteira e parece que "ainda está rodando".
 
-### B23. O turno usa o modelo PADRÃO DA ORGANIZAÇÃO, e o custo dele não é precificado (19/09/2026)
+### B23. O turno usa o modelo PADRÃO DA ORGANIZAÇÃO, e o custo dele não é precificado (19/09/2026) — (b) CONSERTADO na F19-T00; (a) declarado
 Dois lados do mesmo achado, medidos na jornada do motor em produção:
 (a) `responderTurno` rodando no WORKER escolhe o modelo por `organizations.settings.llm.default_model`
 (`origem_da_escolha=padrao_da_organizacao`), não pelo `AI_CHAT_MODEL` que a jornada injeta no
@@ -401,6 +401,20 @@ saída) quando o teto combinado era Haiku. Conserto para a próxima prova: grava
 recebe `coalesce(...,0)` — ou seja, o consumo é registrado com custo ZERO. O teto diário da F15 conta
 TURNOS, então o freio continua valendo; o que não existe é a conta em dinheiro, e a tela de uso de IA
 mostra zero para quem usa esse modelo. **Risco enquanto durar:** o dono não vê o que gasta.
+**F19-T00 (ADR-042 §1):** (b) consertado — `claude-opus-5` (5/25), `claude-sonnet-5` (2/10) e
+`claude-haiku-4-5` (1/5) USD por milhão entraram na tabela do motor (`lib/agent-engine/edge/llm/pricing.ts`,
+tarifa do skill `claude-api`); a jornada da F18 recotada dá 15,87 cents em vez de zero
+(`tests/unit/f19-t00-preco-da-geracao-5.test.ts`, mutante 81). (a) continua como aviso no script da
+jornada: a prova que quiser fixar o modelo grava e devolve `llm.default_model` junto com as chaves.
+
+### B24. `next build` morre por OOM nesta VPS quando outra sessão roda vitest/eslint/build em paralelo (19/09/2026)
+Duas tentativas de `pnpm e2e:build` da F19 foram mortas pelo kernel (anon-rss 3,4–3,9 GB, 4,3 GB
+disponíveis; a segunda com heap limitado a 3 GB — o Turbopack usa memória fora do heap). Um deploy do
+Oferta-OS (`next build`) também rodou no meio do passo `build` do f19-gate-03 e sobreviveu por pouco.
+Conserto proposto: D51 (c) passa a valer para BUILD (avisar as sessões antes de `e2e:build`, conferir
+`free -m` ≥ 4,5 GB, `NODE_OPTIONS=--max-old-space-size=3072`); e um `.envrc`/aviso nos outros OS para
+não rodar `next build` enquanto um gate do CRM-OS estiver de pé. Custo: baixo. **Risco enquanto durar:**
+uma janela de gate (≈2 h) perdida por build alheio.
 
 ## C. Portões do proprietário — o que a engenharia não pode abrir sozinha
 
