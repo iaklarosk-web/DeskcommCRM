@@ -176,8 +176,15 @@ na prova real, em modo **test** (US$ 0), e só com o que é do proprietário:
    teste 4242 por um navegador, espera o webhook ativar (trial de 7 dias),
    abre o Portal, cancela no provedor, espera o webhook cancelar e apaga tudo
    (organização e cliente no Stripe). Imprime a linha `stripe_real:`.
-5. Depois: `BILLING_GATEWAY=mock` de volta no staging (ou deixar `stripe` — é
-   escolha do operador; o smoke aceita os dois: passo 10).
+5. Depois: `BILLING_GATEWAY=mock` de volta no staging — com `stripe`, os
+   webhooks só chegam enquanto o `stripe listen` estiver rodando; sem ele as
+   assinaturas do staging ficam presas em `pending_payment`.
+
+Estado em 20/09/2026 (F19-T06, D58): a prova em modo test NÃO rodou — a chave
+que o proprietário gravou era `rk_live_` (foi para a produção; a cópia do
+staging foi apagada, a chave revogada por ele). Rodar esta prova continua
+possível a qualquer hora com uma `rk_test_` nova (passo 1); até lá,
+`stripe_real:` fica `NOT VALIDATED (real)` e as fixtures continuam MODELADAS.
 
 O que NÃO fazer: chave `live`; registrar endpoint de webhook no Dashboard
 apontando para o staging (é Tailscale-only — a CLI é o caminho).

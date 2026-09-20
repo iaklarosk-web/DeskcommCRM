@@ -384,6 +384,66 @@ export async function criarPreco(cfg: ConfigDoCliente, entrada: { product: strin
   return r;
 }
 
+export interface EndpointDeWebhook {
+  readonly id: string;
+  readonly url: string;
+  readonly status: string;
+  readonly livemode: boolean;
+  readonly enabled_events: readonly string[];
+  /** Só vem na CRIAÇÃO (`whsec_…`); nas listagens é null. */
+  readonly secret: string | null;
+}
+
+function lerEndpoint(bruto: unknown): EndpointDeWebhook | null {
+  const e = bruto as { id?: unknown; url?: unknown; status?: unknown; livemode?: unknown; enabled_events?: unknown; secret?: unknown } | null;
+  if (!e || typeof e.id !== "string" || typeof e.url !== "string") return null;
+  return {
+    id: e.id,
+    url: e.url,
+    status: String(e.status ?? ""),
+    livemode: e.livemode === true,
+    enabled_events: Array.isArray(e.enabled_events) ? e.enabled_events.filter((x): x is string => typeof x === "string") : [],
+    secret: typeof e.secret === "string" ? e.secret : null,
+  };
+}
+
+/** `GET /v1/webhook_endpoints` — os endpoints da conta no modo da chave. */
+export async function listarEndpointsDeWebhook(cfg: ConfigDoCliente): Promise<EndpointDeWebhook[]> {
+  const r = (await chamar(cfg, "GET", "/v1/webhook_endpoints?limit=100")) as { data?: unknown[] };
+  return (r.data ?? []).map(lerEndpoint).filter((e): e is EndpointDeWebhook => e !== null);
+}
+
+/**
+ * `POST /v1/webhook_endpoints` (F19-T06, ADR-044 §4; D58 c) — registra o
+ * endpoint da instalação com os tipos tratados. Idempotente por URL: se já
+ * existe um endpoint habilitado nessa URL, devolve-o SEM segredo (o `whsec_`
+ * só sai na criação — quem perdeu o segredo apaga e registra de novo).
+ * Exige `webhook_endpoints: write` na chave restrita; sem isso o Stripe
+ * responde 403 e a chamada lança `StripeIndisponivel`.
+ */
+export async function registrarEndpointDeWebhook(cfg: ConfigDoCliente, entrada: { url: string; eventos: readonly string[]; descricao?: string }): Promise<{ endpoint: EndpointDeWebhook; criado: boolean }> {
+  const existente = (await listarEndpointsDeWebhook(cfg)).find((e) => e.url === entrada.url && e.status === "enabled") ?? null;
+  if (existente !== null) return { endpoint: existente, criado: false };
+  const params: Record<string, string | number | boolean | undefined> = { url: entrada.url, description: entrada.descricao };
+  entrada.eventos.forEach((ev, i) => {
+    params[`enabled_events[${i}]`] = ev;
+  });
+  const r = lerEndpoint(await chamar(cfg, "POST", "/v1/webhook_endpoints", paraForm(params)));
+  if (r === null) throw new StripeIndisponivel(502, "webhook_endpoint fora da forma");
+  return { endpoint: r, criado: true };
+}
+
+/** `GET /v1/billing_portal/configurations/{id}` — a configuração existe e está ativa? */
+export async function buscarConfiguracaoDoPortal(cfg: ConfigDoCliente, id: string): Promise<{ id: string; active: boolean } | null> {
+  try {
+    const r = (await chamar(cfg, "GET", `/v1/billing_portal/configurations/${encodeURIComponent(id)}`)) as { id?: unknown; active?: unknown };
+    return typeof r.id === "string" ? { id: r.id, active: r.active !== false } : null;
+  } catch (erro) {
+    if (erro instanceof StripeIndisponivel && erro.status === 404) return null;
+    throw erro;
+  }
+}
+
 /**
  * `POST /v1/billing_portal/configurations` — o Portal que troca entre os
  * preços listados, cancela ao fim do período e atualiza o cartão (D57 b).

@@ -156,9 +156,11 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
 
       <section className="rounded-lg border p-4" aria-labelledby="billing-planos">
         <h2 id="billing-planos" className="text-sm font-medium">{t("Planos")}</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {t("Nome, preço e limites marcados como placeholder ainda não foram decididos pelo proprietário da plataforma.")}
-        </p>
+        {planos.some((p) => p.source === "placeholder") ? (
+          <p className="mt-1 text-xs text-muted-foreground" data-testid="billing-planos-aviso-placeholder">
+            {t("Nome, preço e limites marcados como placeholder ainda não foram decididos pelo proprietário da plataforma.")}
+          </p>
+        ) : null}
         <ul className="mt-3 grid gap-3 sm:grid-cols-3">
           {planos.map((p) => (
             <li key={p.code} className="rounded-md border p-3 text-sm" data-testid={`billing-plano-card-${p.code}`}>

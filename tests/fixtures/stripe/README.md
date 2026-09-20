@@ -19,3 +19,10 @@ reais de teste, e este parágrafo sai.
 | `invoice.payment_failed.json` | `payment_failed` → `past_due` + carência |
 | `customer.subscription.updated.json` | busca a subscription; `active` + preço do PLAN_B → renova e sincroniza `plan_code` |
 | `customer.subscription.deleted.json` | `cancelled`, dados preservados |
+
+Estado em 20/09/2026 (F19-T06, ADR-044): continuam MODELADOS. A chave gravada
+pelo proprietário era LIVE (foi para a produção, D58); sem `rk_test_` não há
+`stripe listen`/`stripe trigger` em modo test para capturar, e em live só um
+Checkout pago produz eventos. A captura fica para quando houver chave de
+teste (ou o primeiro webhook live, lido de `billing_events.payload` e
+anonimizado).

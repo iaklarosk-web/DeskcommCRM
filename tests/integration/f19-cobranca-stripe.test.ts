@@ -20,9 +20,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { cancelar, iniciarCheckout, lerAssinatura, mudarPlano, TransicaoIlegal, UsePortal, varrerCarencia } from "@/src/billing";
 import { DiasForaDaFaixa, estenderTrial, linkNoStripe, provisionarNaMao, reativar, suspender } from "@/src/billing/admin";
-import { PLANOS_PLACEHOLDER, provisionar } from "@/src/billing/provisionar";
+import { PLANOS_PLACEHOLDER, planosAProvisionar, provisionar, type LinhaDePlano } from "@/src/billing/provisionar";
 import { montarCockpit } from "@/src/billing/summary";
-import { assinarComoOStripe, criarSessaoDeCheckout, criarSessaoDoPortal } from "@/src/billing/gateway/stripe";
+import { assinarComoOStripe, buscarConfiguracaoDoPortal, criarSessaoDeCheckout, criarSessaoDoPortal, lerListaDePrecos, listarEndpointsDeWebhook, precoDoPlano, registrarEndpointDeWebhook, TIPOS_TRATADOS } from "@/src/billing/gateway/stripe";
 import { receberEventoStripe, type DepsDoReceptor } from "@/src/billing/webhook-stripe";
 import type { TenantCtx } from "@/src/tenant-context";
 import { subirStripeFalso } from "@/tests/lib/stripe-falso.mjs";
@@ -493,6 +493,64 @@ describe("F19-T04 — o padrão KN do /admin e o cockpit", () => {
     expect(segunda.env).toEqual(primeira.env);
     expect([...falso.produtos.values()].filter((p) => (p.metadata as { os: string }).os === "crm-os")).toHaveLength(3);
     console.info("f19-provision: provision=1/1 criados=7/7 segunda_rodada_criados=0/0 reaproveitados=7/7");
+  });
+
+  it("planos do dono no provisionamento: nome e preco reais, preco antigo vira legado aceito pelo webhook", async () => {
+    // Arrange — o banco da bancada tem a 9034: os três planos são do dono (D58 b)
+    const { rows } = await pool.query<LinhaDePlano>(`select code, name, price_cents::int as price_cents, currency, source, active from public.plans where code in ('PLAN_A','PLAN_B','PLAN_C') order by code`);
+    const { origem, planos } = planosAProvisionar(rows);
+    expect(origem).toBe("owner");
+    expect(planos.map((p) => `${p.nome}@${p.unit_amount}`)).toEqual(["Essencial@19700", "Profissional@59700", "Empresarial@149700"]);
+    const stripe = { base: falso.base, chave: CHAVE };
+
+    // Act 1 — provisiona com os planos do dono (os próprio, para não colidir com os placeholders do caso anterior)
+    const primeira = await provisionar(stripe, { os: "crm-os-dono", headline: "CRM OS", planos, origem });
+    const produtosDoDono = [...falso.produtos.values()].filter((p) => (p.metadata as { os: string }).os === "crm-os-dono");
+    expect(produtosDoDono.map((p) => p.name).sort()).toEqual(["Empresarial", "Essencial", "Profissional"]);
+    expect(primeira.origem).toBe("owner");
+    expect(primeira.produtos.every((p) => p.precos_legado.length === 0)).toBe(true);
+
+    // Act 2 — o dono muda o preço do Essencial depois: Price novo, o antigo fica como legado
+    const precoAntigo = primeira.produtos[0]!.price;
+    const mudados = planos.map((p) => (p.plan_code === "PLAN_A" ? { ...p, unit_amount: 24700 } : p));
+    const segunda = await provisionar(stripe, { os: "crm-os-dono", headline: "CRM OS", planos: mudados, origem, portal_configuration: primeira.portal_configuration });
+    const essencial = segunda.produtos.find((p) => p.plan_code === "PLAN_A")!;
+    expect(essencial.criado_price).toBe(true);
+    expect(essencial.price).not.toBe(precoAntigo);
+    expect(essencial.precos_legado).toEqual([precoAntigo]);
+    const lista = lerListaDePrecos(segunda.env.STRIPE_PRICE_IDS);
+    expect(precoDoPlano(lista, "PLAN_A")).toBe(essencial.price); // o Checkout oferece o vigente
+    expect(lista.get(precoAntigo)).toBe("PLAN_A"); // o webhook aceita o antigo
+
+    // Act 3 — quem assinou no preço antigo manda customer.subscription.updated: NÃO é price_outside_list
+    falso.definirAssinatura("sub_no_preco_antigo", { status: "active", customer: "cus_legado", items: { object: "list", data: [{ price: { id: precoAntigo } }] }, metadata: { organization_id: ORG_B } });
+    const evento = fixture("customer.subscription.updated");
+    evento.id = "evt_1F19Fixture000000000086";
+    (evento.data as { object: Record<string, unknown> }).object.id = "sub_no_preco_antigo";
+    (evento.data as { object: Record<string, unknown> }).object.metadata = { organization_id: ORG_B };
+    const corpo = JSON.stringify(evento);
+    const t = evento.created as number;
+    const r = await receberEventoStripe(corpo, assinarComoOStripe(corpo, SECRET, t), { ...deps, precos: segunda.env.STRIPE_PRICE_IDS, agoraUnix: () => t });
+    expect(r.status).toBe(200);
+    expect(r.code).not.toBe("price_outside_list");
+    console.info(`f19-t06-provision: planos_owner=3/3 legado_aceito=1/1 vigente_no_checkout=1/1 webhook_no_preco_antigo=${r.status}/200`);
+  });
+
+  it("registrar o endpoint de webhook pela API e idempotente por URL e o segredo so sai na criacao", async () => {
+    const stripe = { base: falso.base, chave: CHAVE };
+    const url = "https://crm.exemplo.test/api/v1/webhooks/stripe";
+    const primeira = await registrarEndpointDeWebhook(stripe, { url, eventos: TIPOS_TRATADOS, descricao: "CRM OS" });
+    const segunda = await registrarEndpointDeWebhook(stripe, { url, eventos: TIPOS_TRATADOS });
+    expect(primeira.criado).toBe(true);
+    expect(primeira.endpoint.secret).toMatch(/^whsec_/);
+    expect([...primeira.endpoint.enabled_events].sort()).toEqual([...TIPOS_TRATADOS].sort());
+    expect(segunda.criado).toBe(false);
+    expect(segunda.endpoint.id).toBe(primeira.endpoint.id);
+    expect(segunda.endpoint.secret).toBeNull();
+    expect((await listarEndpointsDeWebhook(stripe)).filter((e) => e.url === url)).toHaveLength(1);
+    const portal = await buscarConfiguracaoDoPortal(stripe, "bpc_falsoNaoExiste");
+    expect(portal).toBeNull();
+    console.info(`f19-t06-webhook-endpoint: criado=1/1 idempotente=1/1 segredo_so_na_criacao=1/1 eventos=${primeira.endpoint.enabled_events.length}/${TIPOS_TRATADOS.length}`);
   });
 
   it("grava a linha stripe: do bloco com todos os campos do contrato (ADR-043 §2)", () => {

@@ -53,6 +53,8 @@ export async function subirStripeFalso(opts) {
   /** @type {Map<string, any>} Products e Prices do provisionamento */
   const produtos = new Map();
   const precos = new Map();
+  const endpoints = new Map();
+  const portais = new Map();
   let seq = 0;
 
   const servidor = http.createServer(async (req, res) => {
@@ -183,7 +185,24 @@ export async function subirStripeFalso(opts) {
     }
     if (req.method === "POST" && url.pathname === "/v1/billing_portal/configurations") {
       seq += 1;
-      return responder(200, { id: `bpc_falso${String(seq).padStart(4, "0")}`, object: "billing_portal.configuration", active: true });
+      const portal = { id: `bpc_falso${String(seq).padStart(4, "0")}`, object: "billing_portal.configuration", active: true };
+      portais.set(portal.id, portal);
+      return responder(200, portal);
+    }
+    if (req.method === "GET" && url.pathname.startsWith("/v1/billing_portal/configurations/")) {
+      const portal = portais.get(url.pathname.split("/").pop()) ?? null;
+      return portal ? responder(200, portal) : responder(404, { error: { type: "invalid_request_error", message: "No such configuration" } });
+    }
+    // Endpoints de webhook (F19-T06): o `secret` só sai na criação, como no Stripe.
+    if (req.method === "GET" && url.pathname === "/v1/webhook_endpoints") {
+      return responder(200, { object: "list", data: [...endpoints.values()].map(({ secret: _s, ...resto }) => resto) });
+    }
+    if (req.method === "POST" && url.pathname === "/v1/webhook_endpoints") {
+      seq += 1;
+      const eventos = Object.keys(form).filter((k) => k.startsWith("enabled_events[")).map((k) => form[k]);
+      const endpoint = { id: `we_falso${String(seq).padStart(4, "0")}`, object: "webhook_endpoint", url: form.url, status: "enabled", livemode: false, enabled_events: eventos, secret: `whsec_falso${randomBytes(8).toString("hex")}` };
+      endpoints.set(endpoint.id, endpoint);
+      return responder(200, endpoint);
     }
     if (req.method === "POST" && url.pathname === "/v1/billing_portal/sessions") {
       if (!form.customer) return responder(400, { error: { type: "invalid_request_error", message: "Missing required param: customer." } });

@@ -102,7 +102,7 @@ beforeAll(() => {
   `);
 });
 
-describe("F12-T01 — catálogo: quatro tabelas service_only (D35) e os planos placeholder", () => {
+describe("F12-T01 — catálogo: quatro tabelas service_only (D35) e os planos do dono (placeholder até a 9034)", () => {
   it("RLS ligada, zero policies e nenhum privilégio de cliente nas quatro tabelas", () => {
     let conferidas = 0;
     for (const tabela of ["plans", ...TABELAS]) {
@@ -125,17 +125,20 @@ describe("F12-T01 — catálogo: quatro tabelas service_only (D35) e os planos p
     console.info(`f12-t01-service-only: tabelas=${conferidas}/4 rls=1 policies=0 anon=0 authenticated=0 public=0 service_role=1`);
   });
 
-  it("PLAN_A/B/C existem como placeholder: name = code, price_cents = 0, source = placeholder (D14)", () => {
+  it("PLAN_A/B/C existem com os limites da 9023 e, desde a 9034, com nome/preço do dono (D14 fechado por D58)", () => {
+    // Até a F19-T06 esta prova afirmava placeholder (name = code, price 0). O dono
+    // decidiu em 20/09/2026 (D58 b); a suíte declara o que o banco tem agora — os
+    // limites continuam os da 9023, e é isso que esta prova ainda mede daqui.
     const linhas = sql(`
       select code || '|' || name || '|' || price_cents || '|' || source || '|' || coalesce(limits->>'users.invite','-')
         from public.plans where code in ('PLAN_A','PLAN_B','PLAN_C') order by code;
     `).trim().split("\n").map((l) => l.trim()).filter(Boolean);
-    expect(linhas).toEqual(["PLAN_A|PLAN_A|0|placeholder|3", "PLAN_B|PLAN_B|0|placeholder|10", "PLAN_C|PLAN_C|0|placeholder|-"]);
+    expect(linhas).toEqual(["PLAN_A|Essencial|19700|owner|3", "PLAN_B|Profissional|59700|owner|10", "PLAN_C|Empresarial|149700|owner|-"]);
     const precoNegativo = erroDe(`begin; update public.plans set price_cents = -1 where code='PLAN_A'; rollback;`);
     const codigoLivre = erroDe(`begin; insert into public.plans (code, name) values ('plano básico','x'); rollback;`);
     expect(precoNegativo ?? SEM_ERRO).toContain("plans_price_cents_check");
     expect(codigoLivre ?? SEM_ERRO).toContain("plans_code_check");
-    console.info("f12-t01-planos: placeholders=3/3 preco_zero=3/3 preco_negativo_recusado=1/1 codigo_livre_recusado=1/1");
+    console.info("f12-t01-planos: planos=3/3 limites_da_9023=3/3 preco_negativo_recusado=1/1 codigo_livre_recusado=1/1");
   });
 });
 

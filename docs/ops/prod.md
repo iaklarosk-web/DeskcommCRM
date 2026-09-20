@@ -136,29 +136,51 @@ empresa é pelo painel (`/admin/tenants` → equipe), quando o proprietário
 decidir. Feito em 14/09/2026 para `deka` ("Deka Sucos", PLAN_C) — D53. A busca
 por texto do painel (`?q=`) responde 500 (VARREDURA §B17); a lista sem `q` funciona.
 
-## Ligar o Stripe na produção (F19, ADR-042 §7; D57 f) — é do proprietário
+## Ligar o Stripe na produção (F19, ADR-042 §7; F19-T06, ADR-044 §4; D58)
 
-A produção sai da F19 com o CÓDIGO do Stripe e `BILLING_GATEWAY=mock` (a linha
-`prod:` declara `billing_gateway=mock`). Ligar de verdade, na ordem:
+A produção saiu da F19 com o CÓDIGO do Stripe e `BILLING_GATEWAY=mock`. Em
+20/09/2026 (D58) o proprietário decidiu ligar em modo **LIVE** com a chave
+restrita que ele mesmo gravou. O caminho, na ordem — tudo por script, nada de
+valor no chat:
 
-1. No Dashboard do Stripe (conta KN, DF-33): chave restrita do CRM-OS
-   (`rk_test_…` primeiro; `rk_live_…` só na liberação comercial) e um **endpoint
-   de webhook** em `https://crm.kntecnologia.app/api/v1/webhooks/stripe` com os
-   eventos `checkout.session.completed`, `invoice.paid`,
-   `invoice.payment_succeeded`, `invoice.payment_failed`,
-   `customer.subscription.created`, `customer.subscription.updated`,
-   `customer.subscription.deleted` → o `whsec_…` do endpoint.
-2. `STRIPE_MODE=test pnpm stripe:provision` (ou `--live` com chave live) →
-   `STRIPE_PRICE_IDS` e `STRIPE_PORTAL_CONFIGURATION_ID`.
-3. `segredo crm-prod.env STRIPE_SECRET_KEY`, `segredo crm-prod.env STRIPE_WEBHOOK_SECRET`;
-   `STRIPE_PRICE_IDS`, `STRIPE_PORTAL_CONFIGURATION_ID`, `STRIPE_MODE` e
-   `BILLING_GATEWAY=stripe` no mesmo env; `bash scripts/prod/up.sh`.
-4. `bash scripts/prod/prova.sh` tem de mostrar `billing_gateway=stripe`; o
-   smoke, `webhook_stripe_unsigned_rejected=1/1` com status 401.
+1. **Chave restrita live** (`rk_live_…`, Dashboard → Developers → API keys →
+   Restricted keys): `segredo crm-prod.env STRIPE_SECRET_KEY`. Permissões que
+   o script usa: Checkout Sessions, Subscriptions, Customers, Products/Prices,
+   Billing Portal — write; **Webhook Endpoints — write** (para registrar o
+   endpoint pela API; sem isso, o passo 2 para e pede o registro no Dashboard).
+2. **`bash scripts/prod/stripe-live.sh ligar`** — registra o endpoint LIVE em
+   `https://crm.kntecnologia.app/api/v1/webhooks/stripe` com os 7 tipos
+   tratados (idempotente por URL; o `whsec_` só sai na criação), provisiona um
+   Product por plano do DONO (`plans.source='owner'`, migration 9034 — nunca
+   placeholder em live) com o Price do banco e a configuração do Portal, e
+   grava no env: `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_IDS`,
+   `STRIPE_PORTAL_CONFIGURATION_ID`, `STRIPE_MODE=live`,
+   `BILLING_GATEWAY=stripe`. Preço mudado depois: Price novo entra como
+   vigente e o antigo fica na lista como legado (o webhook de quem assinou
+   no antigo continua aceito).
+3. **`bash scripts/prod/up.sh`** (o app relê o env) e
+   **`bash scripts/prod/prova.sh`** → `billing_gateway=stripe/live`; o smoke,
+   `webhook_stripe_unsigned_rejected=1/1` com status 401.
+4. **`bash scripts/prod/stripe-live.sh provar`** → a linha `stripe_live:`
+   (chave responde, 3 Products, 3 Prices com o preço do banco, Portal,
+   endpoint LIVE habilitado com os 7 tipos, webhook sem assinatura = 401,
+   cockpit `gateway ok=true stripe/live`), **sem nenhum Checkout nem cobrança**:
+   `checkout_paid=0/0` fica declarado até um cliente (ou o proprietário, com
+   o próprio cartão: trial de 7 dias → R$ 0 no ato) pagar.
 5. O cockpit da KN lê `GET /api/admin/summary` com `Authorization: Bearer
    <ADMIN_SUMMARY_TOKEN>` (gerado por `secrets.sh`; o valor é do proprietário).
 
-Nome e preço REAIS dos planos continuam D14: os Products nascem "(placeholder)".
+Registrar o endpoint no Dashboard (se a chave não tiver `webhook_endpoints:
+write`): Developers → Webhooks → Add endpoint, modo LIVE, URL acima, eventos
+`checkout.session.completed`, `invoice.paid`, `invoice.payment_succeeded`,
+`invoice.payment_failed`, `customer.subscription.created`,
+`customer.subscription.updated`, `customer.subscription.deleted`; depois
+`segredo crm-prod.env STRIPE_WEBHOOK_SECRET` e o passo 2 de novo (ele reaproveita
+o endpoint e a chave gravada).
+
+O que NÃO fazer: chave de teste em produção (`stripe-live.ts` recusa);
+placeholder em live (idem); apagar o endpoint com assinaturas vivas (os
+eventos param de chegar e as assinaturas ficam sem sincronizar).
 
 ## Liberar o BLOCKER-PROD geral (é do proprietário, D13)
 

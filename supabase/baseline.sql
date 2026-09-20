@@ -27495,6 +27495,31 @@ end
 $f19_t01_fim$;
 
 
+-- Apêndice 9034 — o nome e o preço REAIS dos planos (F19-T06, ADR-044 §2; D14/D58 b).
+-- Par idempotente da migration 20260920140000_9034_planos_do_dono.sql. Os três
+-- UPDATEs só tocam a linha que AINDA é placeholder (o insert da 9023, acima,
+-- nasce placeholder; o banco que ATUALIZA também): reaplicar nunca sobrescreve
+-- um valor que o dono mude depois. A guarda ao fim é a da migration.
+update public.plans set name = 'Essencial',    price_cents = 19700,  source = 'owner' where code = 'PLAN_A' and source = 'placeholder';
+update public.plans set name = 'Profissional', price_cents = 59700,  source = 'owner' where code = 'PLAN_B' and source = 'placeholder';
+update public.plans set name = 'Empresarial',  price_cents = 149700, source = 'owner' where code = 'PLAN_C' and source = 'placeholder';
+
+do $f19_t06_fim$
+declare
+  v_owner integer;
+  v_placeholder integer;
+begin
+  select count(*) into v_owner from public.plans
+    where code in ('PLAN_A', 'PLAN_B', 'PLAN_C') and source = 'owner' and price_cents > 0 and currency = 'BRL';
+  select count(*) into v_placeholder from public.plans
+    where code in ('PLAN_A', 'PLAN_B', 'PLAN_C') and source = 'placeholder';
+  if v_owner <> 3 or v_placeholder <> 0 then
+    raise exception '9034: esperava 3 planos owner com preço e 0 placeholder, achou owner=% placeholder=%', v_owner, v_placeholder;
+  end if;
+end
+$f19_t06_fim$;
+
+
 
 --
 -- Apêndice 9024 — o acompanhamento (suporte) ganha motivo, escopo e vencimento

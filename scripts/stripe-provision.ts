@@ -1,19 +1,37 @@
 /**
- * `pnpm stripe:provision` (F19-T04, ADR-042 §5; DF-33) — cria no Stripe, em
- * modo TEST, um Product por plano (PLAN_A/B/C placeholder, R$ 10/20/30 — D57 d)
- * com um Price mensal cada, e a configuração do Customer Portal; imprime as
- * duas linhas de env que a instalação precisa. Idempotente: rodar de novo
- * reaproveita o que existe (metadata `os` + `plan_code`).
+ * `pnpm stripe:provision` (F19-T04, ADR-042 §5; DF-33) — cria no Stripe um
+ * Product por plano com um Price mensal cada, e a configuração do Customer
+ * Portal; imprime as duas linhas de env que a instalação precisa. Idempotente:
+ * rodar de novo reaproveita o que existe (metadata `os` + `plan_code`).
  *
- * Nunca decide preço ou nome REAL (D14): os placeholders estão em
- * `src/billing/provisionar.ts` e o nome do Product leva "(placeholder)".
+ * De onde vêm nome e preço (F19-T06, ADR-044 §3): de `public.plans` quando o
+ * dono decidiu (9034: `source='owner'`, lidos por `SUPABASE_DB_URL`); sem
+ * banco no ambiente, ou com algum plano ainda placeholder, valem os
+ * placeholders de D57 d (R$ 10/20/30, "(placeholder)" no nome). O script
+ * imprime a ORIGEM que usou. Preços antigos do mesmo Product entram em
+ * `STRIPE_PRICE_IDS` depois do vigente (objeção 2).
  *
- *   STRIPE_SECRET_KEY=rk_test_… STRIPE_MODE=test tsx scripts/stripe-provision.ts [--os crm-os]
+ *   SUPABASE_DB_URL=postgresql://… STRIPE_SECRET_KEY=rk_… STRIPE_MODE=test|live tsx scripts/stripe-provision.ts [--os crm-os] [--live]
  *
  * Só imprime o NOME e o TAMANHO da chave, nunca o valor. Recusa `live` sem
- * `--live` explícito: provisionar em produção é ação do proprietário.
+ * `--live` explícito: provisionar em produção é ação do proprietário (D58).
  */
-import { PLANOS_PLACEHOLDER, provisionar } from "@/src/billing/provisionar";
+import pg from "pg";
+
+import { type LinhaDePlano, planosAProvisionar, provisionar } from "@/src/billing/provisionar";
+
+/** As linhas de `plans` pelo pool de serviço (a tabela é service_only, D35). */
+async function lerPlanosDoBanco(url: string): Promise<readonly LinhaDePlano[]> {
+  const pool = new pg.Pool({ connectionString: url, max: 1 });
+  try {
+    const r = await pool.query<{ code: string; name: string; price_cents: string | number; currency: string; source: "placeholder" | "owner"; active: boolean }>(
+      `select code, name, price_cents, currency, source, active from public.plans where code in ('PLAN_A','PLAN_B','PLAN_C') order by code`,
+    );
+    return r.rows.map((l) => ({ code: l.code, name: l.name, price_cents: Number(l.price_cents), currency: l.currency, source: l.source, active: l.active }));
+  } finally {
+    await pool.end();
+  }
+}
 
 function argumento(nome: string, padrao: string): string {
   const i = process.argv.indexOf(`--${nome}`);
@@ -35,9 +53,17 @@ async function main(): Promise<void> {
     process.exit(2);
   }
   console.info(`stripe-provision: os=${os} modo=${modo} base=${base} chave=STRIPE_SECRET_KEY(${chave.length} chars, prefixo ${chave.slice(0, 8)}…)`);
-  const r = await provisionar({ base, chave }, { os, headline, planos: PLANOS_PLACEHOLDER, portal_configuration: process.env.STRIPE_PORTAL_CONFIGURATION_ID ?? null });
+  const dbUrl = process.env.SUPABASE_DB_URL ?? "";
+  const linhas = dbUrl.length > 0 ? await lerPlanosDoBanco(dbUrl) : [];
+  const { origem, planos } = planosAProvisionar(linhas);
+  if (modo === "live" && origem !== "owner") {
+    console.error(`stripe-provision: modo live exige os planos do DONO no banco (9034, source=owner) — achou origem=${origem} (linhas lidas=${linhas.length}/3${dbUrl.length === 0 ? ", SUPABASE_DB_URL vazia" : ""}). Nada feito.`);
+    process.exit(2);
+  }
+  console.info(`stripe-provision: origem=${origem} planos=${planos.map((p) => `${p.plan_code}=${p.nome}@${p.unit_amount}${p.currency}`).join(" ")}`);
+  const r = await provisionar({ base, chave }, { os, headline, planos, origem, portal_configuration: process.env.STRIPE_PORTAL_CONFIGURATION_ID ?? null });
   for (const p of r.produtos) {
-    console.info(`  ${p.plan_code}: product=${p.product}${p.criado_product ? " (criado)" : " (reaproveitado)"} price=${p.price}${p.criado_price ? " (criado)" : " (reaproveitado)"}`);
+    console.info(`  ${p.plan_code}: product=${p.product}${p.criado_product ? " (criado)" : " (reaproveitado)"} price=${p.price}${p.criado_price ? " (criado)" : " (reaproveitado)"} legado=${p.precos_legado.length}`);
   }
   console.info(`  portal_configuration=${r.portal_configuration}`);
   console.info(`stripe-provision: criados=${r.criados} reaproveitados=${r.reaproveitados}`);

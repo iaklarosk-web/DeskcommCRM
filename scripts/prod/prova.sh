@@ -105,10 +105,18 @@ if [ -f docs/ops/restore-prod.log ]; then
 fi
 [ "$RESTORE_DIFF" = 0 ] || falha "restore-prod.log: rows_diff=$RESTORE_DIFF"
 
-# F19 (ADR-042 §7, D57 f): a produção declara o gateway que roda. `mock` nesta
-# fase; `stripe` só quando o proprietário registrar o webhook e gravar as chaves.
+# F19 (ADR-042 §7, D57 f): a produção declara o gateway que roda. F19-T06
+# (ADR-044 §4, D58): com `stripe`, as quatro variáveis do Stripe têm de existir
+# e o modo é declarado na linha (`billing_gateway=stripe/live`) — gateway
+# `stripe` sem chave responderia 503 no webhook e 5xx no checkout (G-27).
 BILLING_GATEWAY_PROD=$(prod_env BILLING_GATEWAY)
 [ -n "$BILLING_GATEWAY_PROD" ] || BILLING_GATEWAY_PROD=mock
+if [ "$BILLING_GATEWAY_PROD" = "stripe" ]; then
+  for nome in STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRIPE_PRICE_IDS STRIPE_MODE; do
+    [ -n "$(prod_env "$nome")" ] || falha "gateway stripe sem $nome"
+  done
+  BILLING_GATEWAY_PROD="stripe/$(prod_env STRIPE_MODE)"
+fi
 SHA=$(git rev-parse --short HEAD)
 echo "prod: compose=crm-prod services_running=$RODANDO/$DECLARADOS config_vars=$PRESENTES/$TOTAL_VARS placeholders=$PLACEHOLDERS/$TOTAL_VARS public_ports=$PUBLICAS https=$HTTPS/1 hsts=$HSTS/1 vhosts_ok=$VH_OK/${#VHOSTS[@]} owner_login=$LOGIN/1 platform_admins=$PLATFORM_ADMINS orgs=$ORGS orgs_without_subscription=$ORGS_SEM/$ORGS ai_turn=$AI_TURN/1 embedding=$EMBEDDING/1 email=$EMAIL/1 sentry_event=$SENTRY/1 whatsapp=$WHATSAPP billing_gateway=$BILLING_GATEWAY_PROD backup=$BACKUP/1 restore_rows_diff=$RESTORE_DIFF sha=$SHA"
 [ "$FALHAS" = 0 ] || { echo "==> $FALHAS campo(s) fora do denominador" >&2; exit 1; }

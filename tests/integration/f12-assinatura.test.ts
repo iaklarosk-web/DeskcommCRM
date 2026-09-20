@@ -125,11 +125,13 @@ describe("F12-T02 — a tabela de transições é fechada e espelha o CHECK", ()
 });
 
 describe("F12-T03 — contratação e pagamento pelo gateway mock", () => {
-  it("planos placeholder: 3/3 com price_cents=0 e source=placeholder (D14)", async () => {
+  it("planos do dono: 3/3 com nome e preco reais e source=owner (D14 fechado por D58, migration 9034)", async () => {
+    // Até a F19-T06 esta prova afirmava placeholder (price_cents=0). A suíte
+    // declara o que o banco tem agora (RETOMADA: suíte herdada declara o que mede).
     const planos = await listarPlanos({ pool });
     expect(planos.map((p) => p.code)).toEqual(["PLAN_A", "PLAN_B", "PLAN_C"]);
-    expect(planos.every((p) => p.price_cents === 0 && p.source === "placeholder")).toBe(true);
-    console.info(`f12-planos: placeholders=${planos.length}/3`);
+    expect(planos.map((p) => `${p.name}:${p.price_cents}:${p.source}`)).toEqual(["Essencial:19700:owner", "Profissional:59700:owner", "Empresarial:149700:owner"]);
+    console.info(`f12-planos: planos_owner=${planos.length}/3 placeholders=0/3`);
   });
 
   it("checkout cria a assinatura pending_payment (self_service) com fatura aberta; o acesso é billing_only (D38)", async () => {
@@ -142,7 +144,7 @@ describe("F12-T03 — contratação e pagamento pelo gateway mock", () => {
 
     // Assert — tela contra banco: a linha existe e diz pending_payment.
     expect(assinatura).toMatchObject({ status: "pending_payment", origin: "self_service", plan_code: "PLAN_A" });
-    expect(fatura).toMatchObject({ status: "open", amount_cents: 0, plan_code: "PLAN_A" });
+    expect(fatura).toMatchObject({ status: "open", amount_cents: 19700, plan_code: "PLAN_A" });
     expect(acesso).toMatchObject({ mode: "billing_only", reason: "subscription_pending_payment" });
     expect(escritaPermitida(acesso, "POST", "/api/v1/contacts")).toBe(false);
     expect(escritaPermitida(acesso, "GET", "/api/v1/contacts")).toBe(false);

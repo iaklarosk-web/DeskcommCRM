@@ -117,15 +117,17 @@ for (const lado of ["A", "B"] as LadoDoTeste[]) {
       capability: u.capability, used: u.used, limit: u.limit, remaining: u.remaining,
     }));
     expect(naTela).toEqual(usoApi);
-    // PLAN_A placeholder: users.invite=3 (1 membro → sobram 2), ai.reply=500.
+    // PLAN_A (Essencial, R$ 197 — D58 b; limites da 9023): users.invite=3 (1 membro → sobram 2), ai.reply=500.
     const convites = naTela.find((u) => u.capability === "users.invite");
     expect(convites).toEqual({ capability: "users.invite", used: 1, limit: 3, remaining: 2 });
     expect(naTela.find((u) => u.capability === "ai.reply")?.limit).toBe(500);
     expect(assinaturaPelaApi.status()).toBe(200);
     const s = (await assinaturaPelaApi.json()).data as { subscription: { organization_id: string; status: string }; plan: { source: string; price_cents: number } };
     expect(s.subscription.organization_id).toBe(fixture.orgs[lado]);
-    expect(s.plan).toMatchObject({ source: "placeholder", price_cents: 0 });
-    await expect(page.getByTestId("billing-plano-placeholder-PLAN_A")).toBeVisible();
+    expect(s.plan).toMatchObject({ source: "owner", price_cents: 19700 });
+    await expect(page.getByTestId("billing-plano-placeholder-PLAN_A")).toHaveCount(0);
+    await expect(page.getByTestId("billing-planos-aviso-placeholder")).toHaveCount(0);
+    await expect(page.getByTestId("billing-plano-preco-PLAN_A")).toContainText("BRL 197.00");
     await expect(page.getByTestId("billing-plano-atual")).toHaveCount(1);
     // Recarregar traz o mesmo do servidor.
     await page.reload({ waitUntil: "domcontentloaded" });
