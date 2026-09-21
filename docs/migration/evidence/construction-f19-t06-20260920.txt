@@ -98,3 +98,21 @@ from-scratch tentativa 1 (14:08Z→15:44Z, clone .from-scratch-2t8J de b0577d31,
   staging subido de novo (up.sh 15/15; 9034 = 3/3 owner; smoke 10/10). STATUS NÃO emitido → o from-scratch
   continua PENDENTE (regra 12) e será repetido inteiro numa janela sem concorrência.
   Linha para o BUILD-STATE: from-scratch: steps=7 pass=6/7 verify_exit=interrompido status="PENDENTE (T06)" clone=.from-scratch-2t8J commit=b0577d31
+
+== Janela 2 (21/09, 17:01Z→20:12Z, liberada pela coordenação KN) ==
+from-scratch tentativa 2 (17:01Z→17:54Z): clone .from-scratch-7Qjz; verify verde até db (build 211 s, unit 1563 s,
+  integração 118 s, db 865 s); e2e-deka exit=1 em 6 s — o segundo webServer do Playwright (Stripe falso, porta
+  4102) não subiu: a porta estava com um `node tests/lib/stripe-falso.mjs` ÓRFÃO da tentativa 1 (pid 3076613,
+  cwd do clone já apagado; meu encerramento matou por caminho do clone e o cmdline era relativo). Órfão morto,
+  tentativa encerrada, sandbox derrubado, clone apagado. LIÇÃO: ao encerrar um gate/from-scratch, matar também
+  `stripe-falso.mjs` e `chrome-headless-shell` pelo nome e conferir `ss -ltnp` nas portas 3102/4102.
+from-scratch tentativa 3 (17:55Z→20:09Z): clone .from-scratch-8jQj de 0cf00df1; steps clone 1s · install 8s ·
+  sandbox 47s · env 3s · seeds 5s · verify 7937s · down 4s → steps=7 pass=7/7 verify_exit=0 status="READY (F19)".
+  Passos do verify no clone: typecheck, lint, lint-channels, build 224s, shell 58s, unit 1553s, integration 125s,
+  db 844s, secrets, e2e-plan 4s, e2e-deka 1716s, e2e-demo2 1892s, replicability, mutantes 83/83 — todos exit=0;
+  bloco: unit=8582/8582 integration=262/262 db=1686/1686 e2e=86/86 (deka 86/86, demo2 86/86, specs 17/17,
+  src_diff_lines=0) violations=0. Load 9–11 durante o navegador por eslint do Oferta-OS (a sessão confirmou e
+  parou) e um trade-os python de terceiro — passou mesmo assim. Log guardado em .verify-logs/from-scratch-t06-ok/.
+Depois: clone apagado; staging subido (up.sh exit 0, 15/15; 9034 presente) e smoke 10/10; 0 processos de
+  verify/Playwright/build às 20:12Z — janela devolvida à coordenação KN. A PRODUÇÃO (ligar, up.sh, prova.sh,
+  provar → stripe_live:) fica para a próxima janela pesada; stripe_live: continua PENDENTE / NÃO COMPROVADO.
