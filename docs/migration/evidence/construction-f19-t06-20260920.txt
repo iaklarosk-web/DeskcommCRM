@@ -79,3 +79,22 @@ Banco com a 9034 (3/3 owner); app do staging AINDA na imagem da F19 (e3c34195) �
 /app/billing do staging mostra os preços reais (vêm do banco) sem o aviso condicional (código
 novo só no gate, porta 3202, já encerrado). Fixtures do gate (`slug like 'f02-%'`) removidas pelo
 próprio verify (exit 0). .env.e2e restaurado para o sandbox.
+
+== Retomada em 21/09/2026 (13:47Z) — janela combinada com o proprietário (cards: tudo em sequência; staging derrubado no from-scratch; ligar + up.sh depois do from-scratch verde) ==
+demo3 (13:51Z→14:08Z; .env.e2e do staging; .next do gate): created=1 rows_created=25 →
+  smoke: steps=10 pass=10/10 customers[demo3]=1/1 inbox_new=1 logins=1/1 products[demo3]=2/2 webhook_accepted=1/1 reminder_listed=1/1 owner_login=1/1 subscriptions[demo3]=active/full orgs_without_subscription=0/4 webchat_disabled_denied=1/1 engine_saas=1/1 webhook_stripe_unsigned_rejected=1/1 tenants=demo3
+  demo3: created=1 smoke=pass=10/10 e2e[demo3]=41/41 specs=10/10 removed=1 tenants=3 (primeira rodada verde)
+from-scratch: lançado 14:08Z com o staging DERRUBADO (down.sh; volumes crm-staging_staging-db e _storage preservados; 8,1 GB livres), clone .from-scratch-2t8J da branch feat/F19-cobranca-stripe (b0577d31).
+from-scratch tentativa 1 (14:08Z→15:44Z, clone .from-scratch-2t8J de b0577d31, staging DERRUBADO, 8,1 GB livres):
+  steps clone 2s · install 8s · sandbox 45s · env 2s · seeds 5s → verify no clone: typecheck, lint,
+  lint-channels, build 214s (sem OOM), shell 61s, unit 1623s, integration 121s, db 988s, secrets,
+  e2e-plan 5s TODOS exit=0; e2e-deka exit=1 2140s — 84/86: `f02-daily-checks › daily/checks em B`
+  (toBeVisible 5 s no locator "Linha diária …") e `f18-motor-unico › inbox honesto em A` (`socket hang
+  up` em GET /api/v1/auth/interface). Load 9–11 durante o navegador com processos de OUTRO projeto
+  (python3 a 72 %, container a 100 % — a validação do Núcleo pelo Codex, que o proprietário anunciou
+  às 14:4xZ). Os dois testes passaram 86/86 ×2 no f19-gate-04 sobre o mesmo código: CARGA, não defeito.
+  Encerrado de forma CONTROLADA às 15:44Z a pedido do proprietário (janela reservada ao Codex): verify e
+  Playwright mortos, sandbox do clone derrubado (0 containers), app do clone na 3102 morto, clone apagado,
+  staging subido de novo (up.sh 15/15; 9034 = 3/3 owner; smoke 10/10). STATUS NÃO emitido → o from-scratch
+  continua PENDENTE (regra 12) e será repetido inteiro numa janela sem concorrência.
+  Linha para o BUILD-STATE: from-scratch: steps=7 pass=6/7 verify_exit=interrompido status="PENDENTE (T06)" clone=.from-scratch-2t8J commit=b0577d31
