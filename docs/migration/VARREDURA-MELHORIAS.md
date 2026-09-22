@@ -450,6 +450,21 @@ cópia → leitura) e mutante 88 (mutação em DISCO: a suíte lê arquivo, e mu
 a primeira versão do 88 ficou verde e provou isso). **Enquanto a produção não rodar `up.sh`**, a linha
 dirá `sha=desconhecido`: é o valor honesto para uma imagem construída antes do carimbo.
 
+### B27. O link de convite tem 559 caracteres e o WhatsApp não o torna clicável (22/09/2026) — decidido em D59, construção depois da T06
+O convite é um token **stateless** (`lib/auth/invite-token.ts`): email, `organization_id`, papel, `interface_settings`,
+`invited_by`, `iat`/`exp` e a assinatura HMAC viajam dentro da própria URL. Medido com um payload real:
+JSON 350 chars → body 467 + assinatura 43 = token 511 → **URL de 559 caracteres**. No WhatsApp do
+proprietário (print de 22/09), só `https://crm.kntecnologia.app/team/accept-invite/` saiu como link; o
+resto virou texto em oito linhas, e a pessoa convidada não consegue clicar. Enxugar o payload
+(`interface_settings` é o maior pedaço) levaria a ~323 chars — ainda grande.
+**Segundo efeito, mais sério que o tamanho**: sem linha no banco não há **revogação**. Um link que vazou
+(grupo de WhatsApp, encaminhamento) vale até expirar, e o dono não tem como cancelar nem ver quem está
+pendente. O TTL hoje é 24 h (`INVITE_TTL_SECONDS`).
+**Decidido (D59)**: tabela de convites com id curto (`/i/<id>`, ~60 chars), revogação e lista de
+pendentes, TTL para 7 dias; task própria DEPOIS da F19-T06, com ADR, migration + prova de RLS, rota em
+`PUBLIC_PATHS`, testes e mutante. Enquanto isso, o convite por e-mail funciona (o link longo não
+atrapalha no e-mail) — foi assim que a F08 mediu `email=1/1`.
+
 ## C. Portões do proprietário — o que a engenharia não pode abrir sozinha
 
 D49 suspendeu a pausa por fase de D47, mas preservou D11–D13. Estes itens não
