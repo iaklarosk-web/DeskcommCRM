@@ -10,6 +10,7 @@
  *  - no user        → /login?next=/admin
  *  - no row         → /admin/forbidden
  *  - aal1 + required → /login/mfa?next=/admin
+ *  - query FALHOU   → estoura (auth_permissions_unavailable), nunca /admin/forbidden
  *
  * The middleware already does an early `fn_is_platform_admin` RPC check;
  * this helper performs the authoritative server-side validation inside the
@@ -17,6 +18,7 @@
  * runtime, and we have access to AAL state).
  */
 import { redirect } from "next/navigation";
+import { logger } from "@/lib/logger";
 import type { User } from "@supabase/supabase-js";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
@@ -44,12 +46,41 @@ export async function requirePlatformAdmin(): Promise<PlatformAdminContext> {
   }
 
   // platform_admins RLS: only platform admins read; non-admins get null → forbid.
-  const { data: paRow } = await supabase
+  const { data: paRow, error: paErro } = await supabase
     .from("platform_admins")
     .select("user_id, scope, mfa_required, revoked_at")
     .eq("user_id", user.id)
     .is("revoked_at", null)
     .maybeSingle();
+
+  /**
+   * FALHA ALTO, não baixo — o mesmo princípio de `lib/auth/server.ts` (incidente
+   * de 2026-07-30), no caminho que ficou de fora daquela correção.
+   *
+   * `data: null` é AMBÍGUO nesta consulta: é o que a RLS devolve para quem NÃO é
+   * admin e é também o que sobra quando a query quebra. Descartar o `error` faz
+   * um defeito de infraestrutura chegar ao operador como decisão de autorização.
+   *
+   * Medido em produção (21–22/09/2026): o pool do PostgREST travou
+   * (`PGRST003: Timed out acquiring connection from connection pool`) e ficou 36 h
+   * sem servir; o proprietário — platform_admin ativo, `mfa_required=false` —
+   * recebeu "Acesso negado: esta área é restrita a administradores da plataforma
+   * com MFA ativo". A tela acusava permissão e MFA; a causa era um container.
+   * Conserto da infra: `docker restart crm-prod-rest`. Conserto do código: este.
+   */
+  if (paErro) {
+    logger.error("[admin] não foi possível resolver o platform_admin", {
+      user_id: user.id,
+      onde: "platform_admins",
+      code: paErro.code,
+      message: paErro.message,
+    });
+    throw new Error(
+      `auth_permissions_unavailable: ${paErro.code ?? "sem-codigo"}: ${paErro.message} — ` +
+        `o acesso de administrador NÃO pôde ser resolvido; a sessão NÃO foi rebaixada ` +
+        `por decisão de autorização.`,
+    ); // MUTANT: admin-guard-falha-alto
+  }
 
   if (!paRow) {
     redirect("/admin/forbidden");

@@ -1,5 +1,5 @@
 ---
-updated_at: 2026-09-20T15:59:20Z
+updated_at: 2026-09-22T23:31:51Z
 head_commit: e3c34195   # código VALIDADO pelo gate f19-gate-03 (READY (staging), dentro do staging, F19 — ADR-042/043) = e3c34195; o fechamento (docs) vem depois dele; from-scratch: ver a linha from-scratch:
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
 plan_version: "2.13 (2026-09-20); D38–D58; ADR-006…044"
@@ -48,6 +48,7 @@ smoke: steps=10 pass=10/10 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 
 p95_ms: endpoints=3/3 health=21 contacts=394 conversations=510 samples=20 url=http://127.0.0.1:3200
 staging: compose=crm-staging services_running=15/15 memory_mib=1414 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F19(e3c34195)
 prod: compose=crm-prod services_running=14/14 config_vars=29/29 placeholders=0/29 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=2 orgs_without_subscription=0/2 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only billing_gateway=mock backup=1/1 restore_rows_diff=0 sha=e3c341958
+incidente_prod: fora=36h inicio=2026-09-21T11:08:11Z fim=2026-09-22T23:23:46Z causa=pool_do_postgrest_travado(PGRST003) erros=9628 health_antes=503 health_depois=200 conserto=docker_restart_crm-prod-rest rest_200=20/20 prod_apos=14/14 owner_login=1/1   # VARREDURA §B25: o Postgres estava são (21 conexões/100, nada preso); a tela do /admin culpou permissão/MFA porque requirePlatformAdmin descartava o erro da consulta — consertado na F19-T06 (falha alto, mutante 87). Pendência: crm-prod-rest sem healthcheck (F17)
 tenant_deka: created=1 plan=PLAN_C subscription=active origin=operator admin=platform_admin invites_sent=0/0 orgs=2 orgs_without_subscription=0/2 (D53, 14/09/2026 10:40Z)
 prod_stack: compose=crm-prod services_running=14/14 memory_mib=1574 ports=127.0.0.1+tailscale(3300,56431,56432) public_ports=0   # F19: scripts/prod/up.sh DEPOIS do READY; o apêndice 9033 aplicou-se no banco que ATUALIZA (3/3 CHECKs com stripe/cancelled, 3/3 colunas); BILLING_GATEWAY=mock gravado por secrets.sh (D57 f); webhook do Stripe responde 503 (fechado) no domínio
 restore_prod: tables=184 tables_restored=184 rows=997 rows_diff=0 dump=prod-20260919T230038Z.dump target=restore_20260919_230046 seconds=40 at=20260919T230046Z
@@ -60,6 +61,20 @@ t06_gate: f19-gate-04 status="READY (staging)" commit=a3a5a01e steps_s=6658 unit
 ---
 
 # BUILD-STATE
+
+## Incidente de produção — 21–22/09/2026 (resolvido): PostgREST travado, 36 h fora
+
+O proprietário não conseguia abrir o site e recebia **"Acesso negado — área restrita a
+administradores da plataforma com MFA ativo"**. Não era permissão: ele é `platform_admin`
+ativo com `mfa_required=false`. O `crm-prod-rest` estava com o pool travado desde
+21/09 11:08:11Z (`PGRST003`, 9.628 erros, `/api/v1/health` em 503), e a guarda do `/admin`
+lia a falha como "sem linha em platform_admins". `docker restart crm-prod-rest` (22/09
+23:23:46Z) devolveu o site (rest 200 em 0,14 s; app 200 em 0,07 s; `prod:` 14/14,
+`owner_login=1/1`, `backup=1/1`, `restore_rows_diff=0`). Dois consertos de código entraram
+na F19-T06: a guarda passa a FALHAR ALTO (§B25, mutante 87) e a linha `prod:` passa a citar
+o commit da IMAGEM, não o da árvore (§B26, mutante 88). Pendência do proprietário:
+`crm-prod-rest` não tem healthcheck — um container "Up 8 days" servindo 504 é invisível
+para o Docker e para qualquer alerta (proposta para a F17).
 
 ## Checkpoint — F19-T06 PAUSADA em 20/09/2026 (ADR-044, D58): planos reais e Stripe LIVE na produção
 

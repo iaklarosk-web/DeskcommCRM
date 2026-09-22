@@ -117,6 +117,13 @@ if [ "$BILLING_GATEWAY_PROD" = "stripe" ]; then
   done
   BILLING_GATEWAY_PROD="stripe/$(prod_env STRIPE_MODE)"
 fi
-SHA=$(git rev-parse --short HEAD)
+# F19-T06: o sha é o do CÓDIGO EM EXECUÇÃO, lido do carimbo que `up.sh` põe na
+# imagem — não o HEAD da árvore (que muda a cada commit de docs e jurava um
+# deploy que não houve). Sem carimbo (imagem anterior a esta task): `desconhecido`.
+SHA=$(docker exec crm-prod-app sh -c 'cat /app/COMMIT 2>/dev/null || cat /app/standalone/COMMIT 2>/dev/null' 2>/dev/null | tr -d '\r\n')
+[ -n "$SHA" ] || SHA=desconhecido
+if [ "$SHA" = "desconhecido" ]; then
+  echo "  ! sha: a imagem em execução não tem carimbo de commit (construída antes da F19-T06); rode scripts/prod/up.sh para carimbar" >&2
+fi
 echo "prod: compose=crm-prod services_running=$RODANDO/$DECLARADOS config_vars=$PRESENTES/$TOTAL_VARS placeholders=$PLACEHOLDERS/$TOTAL_VARS public_ports=$PUBLICAS https=$HTTPS/1 hsts=$HSTS/1 vhosts_ok=$VH_OK/${#VHOSTS[@]} owner_login=$LOGIN/1 platform_admins=$PLATFORM_ADMINS orgs=$ORGS orgs_without_subscription=$ORGS_SEM/$ORGS ai_turn=$AI_TURN/1 embedding=$EMBEDDING/1 email=$EMAIL/1 sentry_event=$SENTRY/1 whatsapp=$WHATSAPP billing_gateway=$BILLING_GATEWAY_PROD backup=$BACKUP/1 restore_rows_diff=$RESTORE_DIFF sha=$SHA"
 [ "$FALHAS" = 0 ] || { echo "==> $FALHAS campo(s) fora do denominador" >&2; exit 1; }

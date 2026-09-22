@@ -57,6 +57,12 @@ cp -r .next/standalone .prod/app/standalone
 cp -r .next/static .prod/app/static
 cp -r public .prod/app/public
 cp scripts/staging/Dockerfile.staging .prod/app/Dockerfile.staging
+# F19-T06: carimbo do commit que ESTÁ sendo empacotado. `prova.sh` lê este
+# arquivo DE DENTRO do container — antes ele imprimia o HEAD da árvore, e uma
+# prova rodada depois de novos commits jurava um deploy que não houve.
+# O Dockerfile copia `standalone/` para `/app`, então o carimbo entra ali e a
+# prova o lê em `/app/COMMIT` dentro do container.
+git rev-parse --short HEAD > .prod/app/standalone/COMMIT
 sed -e "s|__ANON_KEY__|$ANON_KEY|" -e "s|__SERVICE_KEY__|$SERVICE_ROLE_KEY|" \
   scripts/staging/kong.template.yml > .prod/kong.yml
 chmod 700 .prod && chmod 644 .prod/kong.yml

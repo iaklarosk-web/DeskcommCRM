@@ -416,6 +416,40 @@ Conserto proposto: D51 (c) passa a valer para BUILD (avisar as sessões antes de
 não rodar `next build` enquanto um gate do CRM-OS estiver de pé. Custo: baixo. **Risco enquanto durar:**
 uma janela de gate (≈2 h) perdida por build alheio.
 
+### B25. O pool do PostgREST da PRODUÇÃO travou e deixou o site 36 h fora — e a tela culpou a permissão do dono (21–22/09/2026) — CONSERTADO (código) na F19-T06; infra reiniciada
+Em 21/09 11:08:11Z o `crm-prod-rest` começou a responder `PGRST003: Timed out acquiring connection from
+connection pool` **em toda requisição** e não se recuperou sozinho: 9.628 ocorrências, `/api/v1/health`
+em 503, PostgREST em 504 por 36 h. O Postgres estava SÃO (21 conexões de 100, nenhuma transação presa,
+checkpoints normais a cada 5 min) — quem travou foi o pool do PostgREST, que mantinha uma única conexão
+ociosa há 8 dias. Nada no banco explica o horário; não houve carga do CRM nesse momento. É o mesmo
+sintoma do §B20 (staging), agora em produção e sem nenhuma reaplicação de baseline por perto.
+**Conserto da infra**: `docker restart crm-prod-rest` (22/09 23:23:46Z) — rest 200 em 0,14 s, app 200 em
+0,07 s, 20/20 requisições verdes, `prod:` completa (14/14, owner_login=1/1).
+**O que agravou**: a tela. `requirePlatformAdmin` (`lib/auth/requirePlatformAdmin.ts`) lia `platform_admins`
+DESCARTANDO o `error`; `data: null` virava "não tem linha" e o proprietário — platform_admin ativo, com
+`mfa_required=false` — recebeu **"Acesso negado: esta área é restrita a administradores da plataforma com
+MFA ativo"**. A tela acusava permissão e MFA; a causa era um container. `lib/auth/server.ts` já fazia o
+certo desde o incidente de 2026-07-30 ("FALHA ALTO, não baixo"); este caminho tinha ficado de fora.
+**Conserto do código (F19-T06)**: erro na consulta agora estoura `auth_permissions_unavailable: <code>: <msg>`
+com log, em vez de redirecionar para `/admin/forbidden`; teste `tests/unit/f19-t06-admin-guard-falha-alto.test.ts`
+(4 casos: erro estoura, mensagem nomeia o código, sem linha continua forbidden, admin com aal2 passa) e
+mutante 87. **Pendência (proprietário)**: o `crm-prod-rest` não tem healthcheck no `compose.prod.yml` — um
+container "Up 8 days" servindo 504 é invisível para o Docker e para qualquer alerta. Propor healthcheck
+(`GET /` no PostgREST) + `restart: unless-stopped` reagindo a ele numa fase de operação (F17).
+
+### B26. A linha `prod:` citava o commit da ÁRVORE, não o que está rodando (22/09/2026) — CONSERTADO na F19-T06
+`scripts/prod/prova.sh` gravava `SHA=$(git rev-parse --short HEAD)`. Rodada em 22/09 com a árvore em
+`e5f11e33` e a imagem de produção construída em **19/09** (código da F19, `e3c34195`), a linha saiu
+`sha=e5f11e331` — um commit que nunca foi para a produção. Evidência que mente é pior que evidência
+ausente: o BUILD-STATE registraria um deploy que não houve (G-04). A imagem `crm-app:prod` também não
+carrega nenhum label de commit. **Conserto**: `up.sh` carimba `git rev-parse --short HEAD` em
+`.prod/app/standalone/COMMIT` (o Dockerfile copia `standalone/` para `/app`), e `prova.sh` lê
+`/app/COMMIT` DE DENTRO do container; sem carimbo, imprime `sha=desconhecido` e avisa — nunca o da
+árvore. Teste `tests/unit/f19-t06-sha-da-producao-e-o-da-imagem.test.ts` (a cadeia inteira: carimbo →
+cópia → leitura) e mutante 88 (mutação em DISCO: a suíte lê arquivo, e mutante em memória não a alcança —
+a primeira versão do 88 ficou verde e provou isso). **Enquanto a produção não rodar `up.sh`**, a linha
+dirá `sha=desconhecido`: é o valor honesto para uma imagem construída antes do carimbo.
+
 ## C. Portões do proprietário — o que a engenharia não pode abrir sozinha
 
 D49 suspendeu a pausa por fase de D47, mas preservou D11–D13. Estes itens não
