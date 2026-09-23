@@ -1,23 +1,23 @@
 ---
-updated_at: 2026-09-22T23:34:59Z
-head_commit: e3c34195   # código VALIDADO pelo gate f19-gate-03 (READY (staging), dentro do staging, F19 — ADR-042/043) = e3c34195; o fechamento (docs) vem depois dele; from-scratch: ver a linha from-scratch:
+updated_at: 2026-09-23T03:23:39Z
+head_commit: b1f69e3e   # código VALIDADO pelo gate f19-gate-05 (READY (staging), dentro do staging, F19-T06 — ADR-044) = b1f69e3e, que é o que a produção RODA (carimbo /app/COMMIT); o fechamento (docs) e o conserto de ordem do stripe-live.ts vêm depois dele
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
 plan_version: "2.15 (2026-09-22); D38–D60; ADR-006…044"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
 current_phase: F19
-next_task: F19-T06             # 21/09/2026 20:12Z: gate f19-gate-04 READY (staging) sobre a3a5a01e, demo3 e from-scratch VERDES; falta a PRODUÇÃO (stripe-live.sh ligar → up.sh → prova.sh → stripe-live.sh provar → stripe_live:) — aguarda janela pesada (build) da coordenação KN; depois fechamento. stripe_live: PENDENTE
-status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING — F19-T06 PAUSADA (D58; ADR-044): código validado pelo f19-gate-04 (READY (staging), a3a5a01e), faltam demo3 + from-scratch + produção live + stripe_live:; a F19 fechou READY (staging) em e3c34195 (bloco abaixo); BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26)
+next_task: D59-D60-T00        # F19-T06 FECHADA em 23/09/2026 (READY (staging) f19-gate-05; produção LIVE com stripe/live e planos reais). Próxima construção decidida: convite curto no banco (D59) + membership do criador (D60), na ordem D59→D60. Só começa com nova mensagem do proprietário (D50 c)
+status: READY_STAGING          # IN_PROGRESS | BLOCKED | READY_STAGING — F19-T06 fechada com READY (staging) em b1f69e3e (bloco abaixo); produção LIVE medida por prod:/stripe_live:; BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26)
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
 hosting_confirmed: yes         # D50 (11/09/2026): staging nesta VPS, Docker Compose com Supabase local, acesso só por Tailscale — ADR-027
 build_env: "Claude Code na VPS (4 núcleos/16 GB), worktree DeskcommCRM-v1.17.0; validação em serviços/bancos descartáveis e no staging; WHATSAPP_MODE=mock AI_PROVIDER=mock; F15: 3 chamadas reais à Anthropic (ai_real:); F14: 12 turnos Haiku reais no chat do site da organização do dono (webchat_real:, teto 20)"
-verify_summary_last_context: "f19-gate-03 aprovado em 19/09/2026 sobre e3c34195, 6011 s de passos (20:20Z→22:20Z), exit 0, DENTRO do staging (VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202 + Stripe FALSO em 4202), current_phase=F19 com a spec f19-cobranca-stripe (17 specs, 86 testes, ADR-043 §1) e a linha stripe: (ADR-043 §2). Três tentativas: 01 interrompida em db — unit 8576/8578 por duas réguas (spec fora da lista do CI; `rounded` puro); 02 NOT READY por tenantReferences=1 (a palavra do tenant num comentário) e mutante 63 vivo por FORMATAÇÃO (o vitest abrevia o objeto esperado com os campos novos da assinatura) — tudo o mais verde; 03 READY. mutants_killed=82/82. Produção recebeu o código DEPOIS do READY (prod:), com BILLING_GATEWAY=mock (D57 f). Stripe REAL: NOT VALIDATED (real) — a chave não foi gravada. READY (staging) = verificado em staging; owner_validated em branco; BLOCKER-PROD aberto (liberado só para o tenant Deka, D53)."
+verify_summary_last_context: "f19-gate-05 aprovado em 23/09/2026 sobre b1f69e3e, 7236 s de passos (00:34Z→02:58Z), exit 0, DENTRO do staging (VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202 + Stripe FALSO em 4202), current_phase=F19 com as 17 specs e a linha stripe:. Segunda tentativa: a 01 (00:11Z) foi INTERROMPIDA POR MIM no passo build — a máquina caiu para 1,1 GB livres (carga de terceiros) e o next build entrou em thrash (3,9 GB RSS, 18 min contra os ~4 min normais), com risco de o OOM killer escolher um container de produção; matei o build, a memória voltou a 4,9 GB e relancei. Unit 8588/8588 (+6 desta task), integração 262/262, banco 1686/1686, navegador 86/86 ×2, mutantes 85/85 (87 e 88 novos), violations=0. Produção recebeu o código DEPOIS do READY (prod:), agora com BILLING_GATEWAY=stripe e STRIPE_MODE=live (D58). READY (staging) = verificado em staging; owner_validated em branco; BLOCKER-PROD aberto (liberado só para o tenant Deka, D53)."
 verify_summary_last: |
   VERIFY SUMMARY
   scope=phase phase=F19 current_phase=F19 environment=staging
   build=ok lint=ok typecheck=ok shell=ok
-  unit=8578/8578 integration=260/260 db=1683/1683 e2e=86/86 baseline_n0=8997
-  baseline_comparable: scope=unit+db passed=10261 required=8738 full_n0=pending
+  unit=8588/8588 integration=262/262 db=1686/1686 e2e=86/86 baseline_n0=8997
+  baseline_comparable: scope=unit+db passed=10274 required=8738 full_n0=pending
   e2e_scope: F19-required passed=86/86 specs=17/17
   isolation: tables=139 ops=4 dirs=2 leaks=0 (material_cross_org=98/139)
   rls-coverage: tables_with_org_id=139 policies_found=116 missing=0 service_only_with_grant=0
@@ -38,16 +38,16 @@ verify_summary_last: |
   engine: saas_turns=1 legacy_turns=1 volta_atras=1/1 heranca_prompt=1/1 heranca_acervo=1/1 limite_diario_nega=1/1 cancel_allow=1/1 cancel_passado_negado=1/1 cancel_auditado=1/1 policy_approve_pendura=1/1 tools_migradas=13/13 auditoria=5/5 roles_denied=2/2 fora_do_catalogo_negado=1/1 inventadas_descartadas=1/1
   stripe: signature_rejected=1/1 livemode_mismatch=1/1 price_outside_list=1/1 checkout_created=1/1 activated=1/1 trialing_mapped=1/1 duplicates=1 out_of_order=1 state_from_provider=1/1 past_due=1/1 blocked_after_grace=1/1 cancelled_preserved=7/7 portal_link=1/1 admin_actions=5/5 summary_ok=1/1
   replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=86/86 demo2=86/86 specs=17/17 org_a=seed-replica)
-  secrets: files_scanned=580 findings=0
-  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=82/82
+  secrets: files_scanned=583 findings=0
+  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=85/85
   debt_known=0 skip_only_occurrences=15 violations=0
   STATUS: READY (staging)
-  exit=0
 restore: tables=184 tables_restored=184 rows=33004 rows_diff=0 dump=staging-20260919T223051Z.dump target=restore_20260919_223052 seconds=13 at=20260919T223052Z
 smoke: steps=10 pass=10/10 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 owner_login=1/1 subscriptions[deka]=active/full subscriptions[demo2]=active/full orgs_without_subscription=0/3 webchat_disabled_denied=2/2 engine_saas=2/2 webhook_stripe_unsigned_rejected=1/1 tenants=deka,demo2
 p95_ms: endpoints=3/3 health=21 contacts=394 conversations=510 samples=20 url=http://127.0.0.1:3200
 staging: compose=crm-staging services_running=15/15 memory_mib=1414 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F19(e3c34195)
-prod: compose=crm-prod services_running=14/14 config_vars=29/29 placeholders=0/29 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=2 orgs_without_subscription=0/2 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only billing_gateway=mock backup=1/1 restore_rows_diff=0 sha=e3c341958
+prod: compose=crm-prod services_running=14/14 config_vars=29/29 placeholders=0/29 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=3 orgs_without_subscription=0/3 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only billing_gateway=stripe/live backup=1/1 restore_rows_diff=0 sha=b1f69e3e3   # F19-T06 (23/09 03:00Z→03:22Z): up.sh DEPOIS do READY do f19-gate-05; baseline levou a 9034 (planos Essencial/Profissional/Empresarial, source=owner) para a produção; o sha agora vem do carimbo /app/COMMIT da imagem (§B26), não do HEAD da árvore
+stripe_live: key_ok=1/1 products=3/3 prices=3/3 portal=1/1 webhook_endpoint=1/1 unsigned_rejected=1/1 summary_ok=1/1 checkout_paid=0/0 mode=live cost_cents=0 at=2026-09-23T03:22:23Z   # F19-T06 (ADR-044 §4, D58): Stripe LIVE ligado na produção — 3 Products + 3 Prices com o preço do BANCO (19700/59700/149700 BRL) + Portal (bpc_1UIgeP…) criados na conta da KN, endpoint de webhook LIVE we_1UIgeQ… com os 7 tipos tratados, POST sem assinatura = 401 no domínio, cockpit gateway=stripe/live ok=true. NENHUMA cobrança: checkout_paid=0/0 é o que fica NOT VALIDATED (real) até alguém pagar. Primeira execução do `ligar` (02:58Z) parou no meio por a 9034 ainda não estar na produção; o endpoint órfão que ela criou foi apagado no provedor e a ORDEM do script foi corrigida (conferência local antes de efeito externo)
 incidente_prod: fora=36h inicio=2026-09-21T11:08:11Z fim=2026-09-22T23:23:46Z causa=pool_do_postgrest_travado(PGRST003) erros=9628 health_antes=503 health_depois=200 conserto=docker_restart_crm-prod-rest rest_200=20/20 prod_apos=14/14 owner_login=1/1   # VARREDURA §B25: o Postgres estava são (21 conexões/100, nada preso); a tela do /admin culpou permissão/MFA porque requirePlatformAdmin descartava o erro da consulta — consertado na F19-T06 (falha alto, mutante 87). Pendência: crm-prod-rest sem healthcheck (F17)
 tenant_deka: created=1 plan=PLAN_C subscription=active origin=operator admin=platform_admin invites_sent=0/0 orgs=2 orgs_without_subscription=0/2 (D53, 14/09/2026 10:40Z)
 prod_stack: compose=crm-prod services_running=14/14 memory_mib=1574 ports=127.0.0.1+tailscale(3300,56431,56432) public_ports=0   # F19: scripts/prod/up.sh DEPOIS do READY; o apêndice 9033 aplicou-se no banco que ATUALIZA (3/3 CHECKs com stripe/cancelled, 3/3 colunas); BILLING_GATEWAY=mock gravado por secrets.sh (D57 f); webhook do Stripe responde 503 (fechado) no domínio
@@ -76,7 +76,30 @@ o commit da IMAGEM, não o da árvore (§B26, mutante 88). Pendência do proprie
 `crm-prod-rest` não tem healthcheck — um container "Up 8 days" servindo 504 é invisível
 para o Docker e para qualquer alerta (proposta para a F17).
 
-## Checkpoint — F19-T06 PAUSADA em 20/09/2026 (ADR-044, D58): planos reais e Stripe LIVE na produção
+## Estado vigente — F19-T06 FECHADA em 23/09/2026 (READY (staging), f19-gate-05); produção LIVE com `stripe/live` e os planos reais de D14
+
+Construída entre 20 e 23/09/2026 na branch `feat/F19-cobranca-stripe`, com decisões
+em ADR-044 e D58. **Entregue**: D14 fechado (Essencial R$ 197 / Profissional R$ 597 /
+Empresarial R$ 1.497 — migration 9034, `source='owner'`); provisionamento no Stripe
+pelos planos do BANCO, com preço antigo mantido como legado em `STRIPE_PRICE_IDS`
+(objeção 2 do contraponto); cliente de endpoints de webhook e
+`scripts/prod/stripe-live.{sh,ts}` (`ligar`/`provar`); `prova.sh` declarando
+`billing_gateway=stripe/<modo>`; e, vindos do incidente de produção de 21–22/09
+(§B25/§B26), a guarda do `/admin` que FALHA ALTO e o sha da linha `prod:` lido do
+carimbo da imagem. **Gate**: `f19-gate-05` READY (staging) sobre `b1f69e3e` (7236 s;
+unit 8588, integração 262, banco 1686, navegador 86 ×2, mutantes 85/85, violações 0)
+— segunda tentativa, porque a primeira foi interrompida por mim no build (máquina de
+terceiros a 1,1 GB livres, thrash de 3,9 GB, risco de OOM killer atingir produção).
+**Produção**: `up.sh` DEPOIS do READY levou o baseline com a 9034 e o código
+`b1f69e3e`; `stripe-live.sh ligar` criou 3 Products + 3 Prices (preço do banco) +
+Portal e o endpoint de webhook LIVE (7/7 tipos); `prod:` mede
+`billing_gateway=stripe/live sha=b1f69e3e3` e `stripe_live:` mede as sete conferências
+sem cobrar nada. **O que continua NOT VALIDATED (real)**: um Checkout LIVE pago
+(`checkout_paid=0/0`) — a página real do Checkout, a assinatura do webhook live e a
+ativação por evento real só acontecem quando alguém pagar; o cadastro público segue
+desligado (D13), então ninguém chega ao Checkout sem convite do painel.
+
+### Checkpoint anterior — F19-T06 pausada em 20/09/2026
 
 Autorizada em 20/09/2026 pela entrevista em três blocos de cards (ver ADR-044 e a
 [evidência T06](docs/migration/evidence/construction-f19-t06-20260920.txt)).

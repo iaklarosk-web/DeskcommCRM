@@ -116,3 +116,43 @@ from-scratch tentativa 3 (17:55Z→20:09Z): clone .from-scratch-8jQj de 0cf00df1
 Depois: clone apagado; staging subido (up.sh exit 0, 15/15; 9034 presente) e smoke 10/10; 0 processos de
   verify/Playwright/build às 20:12Z — janela devolvida à coordenação KN. A PRODUÇÃO (ligar, up.sh, prova.sh,
   provar → stripe_live:) fica para a próxima janela pesada; stripe_live: continua PENDENTE / NÃO COMPROVADO.
+
+== Janela 3 (22–23/09) — incidente de produção, consertos e FECHAMENTO da T06 ==
+Incidente (detalhe em VARREDURA §B25): produção 36 h fora por pool do PostgREST travado (PGRST003
+desde 21/09 11:08:11Z, 9.628 erros, health 503); a guarda do /admin mostrou isso ao proprietário como
+"Acesso negado … MFA". `docker restart crm-prod-rest` (22/09 23:23:46Z) devolveu o site (rest 200 em
+0,14 s; 20/20 requisições; prod: 14/14). Dois consertos de código entraram na T06: guarda que FALHA
+ALTO (mutante 87) e sha da linha prod: lido do carimbo da imagem (mutante 88, mutação em DISCO).
+
+f19-gate-05 (00:34Z→02:58Z, 7236 s, READY (staging) sobre b1f69e3e) — SEGUNDA tentativa:
+  01 (00:11Z) INTERROMPIDA POR MIM no build: a máquina caiu a 1,1 GB livres (carga de terceiros
+     anunciada pela sessão "Separação B do Núcleo") e o next build foi a 3,9 GB RSS / 18 min contra os
+     ~4 min normais — thrash. Matei o build antes que o OOM killer escolhesse a vítima (os candidatos
+     eram containers de produção); available voltou a 4,9 GB no ato. LIÇÃO: em máquina compartilhada,
+     build que passa de ~2× o tempo normal é thrash — matar cedo custa 5 min, deixar correr custa a janela.
+  02 verde: build 675 s (lento, máquina apertada), unit 1581 s, integração 176 s, banco 930 s,
+     e2e-deka 1818 s, e2e-demo2 1881 s, mutantes 85/85 (87 e 88 novos), violations=0.
+  unit 8582 → 8588 (+6: 4 da guarda do /admin, 2 do sha da imagem).
+
+Produção (DEPOIS do READY):
+  03:00Z→03:14Z `scripts/prod/up.sh`: next build no host (258 s até o baseline), baseline aplicado
+    (151 tabelas) levando a 9034 à produção — plans = Essencial|19700|owner, Profissional|59700|owner,
+    Empresarial|149700|owner —, imagens do produto reconstruídas, 14/14 de pé, health 200, e o carimbo
+    /app/COMMIT = b1f69e3e3 (§B26 funcionando na primeira execução real).
+  02:58Z `stripe-live.sh ligar` (1ª execução) PAROU no meio: registrou o endpoint de webhook e só então
+    conferiu os planos, que ainda eram placeholder na produção (a 9034 entra pelo up.sh). O `whsec_` só
+    sai na criação, então o segredo do endpoint órfão se perdeu: apaguei o endpoint no provedor
+    (DELETE /v1/webhook_endpoints/we_1UIgOS…, deleted=true, 0 endpoints do CRM restantes; o env não
+    recebeu nada) e CORRIGI A ORDEM do script — conferência local antes de efeito externo.
+  03:20Z `stripe-live.sh ligar` (2ª): PLAN_A prod_VJJGKmSBELYFhs/price_1UIgeN…, PLAN_B
+    prod_VJJGgZJltoFlpc/price_1UIgeO…, PLAN_C prod_VJJGztHNtKZ9qQ/price_1UIgeP…, portal
+    bpc_1UIgeP…, endpoint we_1UIgeQ… (livemode=true, 7/7 eventos), 5 variáveis gravadas em
+    crm-prod.env (só nomes e tamanhos impressos). `SKIP_BUILD=1 up.sh` para o app reler o env.
+  03:22Z provas: prod: … billing_gateway=stripe/live sha=b1f69e3e3 (14/14, owner_login=1/1,
+    backup=1/1, restore_rows_diff=0) e
+    stripe_live: key_ok=1/1 products=3/3 prices=3/3 portal=1/1 webhook_endpoint=1/1
+    unsigned_rejected=1/1 summary_ok=1/1 checkout_paid=0/0 mode=live cost_cents=0.
+  ERRO MEU, registrado: rodei `scripts/smoke.sh` (instrumento do STAGING, que espera os tenants
+    fictícios deka/demo2 e as fixtures) contra a produção — 4/10, por desenho. Conferi o estrago com
+    denominador: 0 linhas criadas em contacts, conversations, messages, event_log, crm_companies e
+    orders nos 10 min, e 0 entradas novas em api_audit_log. O instrumento da produção é `prova.sh`.

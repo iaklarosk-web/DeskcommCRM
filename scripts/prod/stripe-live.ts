@@ -72,7 +72,34 @@ async function ligar(): Promise<void> {
   const cfg = { base: BASE, chave: CHAVE };
   const linhas: string[] = [];
 
-  // 1 · endpoint de webhook LIVE — exige webhook_endpoints: write na chave
+  /**
+   * 1 · Os planos do DONO vêm ANTES de qualquer chamada ao Stripe.
+   *
+   * Aprendido em 23/09/2026, na primeira execução real: o script registrava o
+   * endpoint de webhook primeiro e só depois lia o banco. Com a 9034 ainda não
+   * aplicada na produção (ela entra pelo `up.sh`, junto do baseline), a
+   * conferência dos planos abortou DEPOIS de o endpoint já existir no Stripe —
+   * e o `whsec_` só sai na criação, então o segredo se perdeu e foi preciso
+   * apagar o endpoint no provedor para poder repetir. Ordem correta: o que é
+   * local e reversível primeiro; efeito externo por último.
+   */
+  const { origem, planos } = planosAProvisionar(await lerPlanos());
+  if (origem !== "owner") {
+    falhar(
+      "os planos do banco não são do dono (9034 aplicada?) — não provisiono placeholder em live. " +
+        "Na produção a 9034 entra pelo baseline pelo `bash scripts/prod/up.sh`; rode-o antes deste script.",
+    );
+  }
+
+  // 2 · Products/Prices/Portal com os planos do dono
+  const r = await provisionar(cfg, { os: OS, headline: "CRM OS — assinatura", planos, origem, portal_configuration: process.env.STRIPE_PORTAL_CONFIGURATION_ID_EXISTENTE || null });
+  for (const p of r.produtos) {
+    console.info(`  ${p.plan_code}: product=${p.product}${p.criado_product ? " (criado)" : " (reaproveitado)"} price=${p.price}${p.criado_price ? " (criado)" : " (reaproveitado)"} legado=${p.precos_legado.length}`);
+  }
+  console.info(`  portal_configuration=${r.portal_configuration} criados=${r.criados} reaproveitados=${r.reaproveitados}`);
+
+  // 3 · endpoint de webhook LIVE — por último: é o único passo cujo segredo não
+  //     se recupera (o `whsec_` só sai na criação).
   let registro: Awaited<ReturnType<typeof registrarEndpointDeWebhook>>;
   try {
     registro = await registrarEndpointDeWebhook(cfg, { url: WEBHOOK_URL, eventos: TIPOS_TRATADOS, descricao: `${OS} — produção` });
@@ -93,14 +120,6 @@ async function ligar(): Promise<void> {
     falhar(`o endpoint ${registro.endpoint.id} já existe em ${WEBHOOK_URL} e o env não tem STRIPE_WEBHOOK_SECRET — o segredo só sai na criação: apague-o no Dashboard e rode de novo, ou grave o segredo dele com \`segredo\``);
   }
 
-  // 2 · Products/Prices/Portal com os planos do DONO (nunca placeholder em live)
-  const { origem, planos } = planosAProvisionar(await lerPlanos());
-  if (origem !== "owner") falhar("os planos do banco não são do dono (9034 não aplicada?) — não provisiono placeholder em live");
-  const r = await provisionar(cfg, { os: OS, headline: "CRM OS — assinatura", planos, origem, portal_configuration: process.env.STRIPE_PORTAL_CONFIGURATION_ID_EXISTENTE || null });
-  for (const p of r.produtos) {
-    console.info(`  ${p.plan_code}: product=${p.product}${p.criado_product ? " (criado)" : " (reaproveitado)"} price=${p.price}${p.criado_price ? " (criado)" : " (reaproveitado)"} legado=${p.precos_legado.length}`);
-  }
-  console.info(`  portal_configuration=${r.portal_configuration} criados=${r.criados} reaproveitados=${r.reaproveitados}`);
   linhas.push(`STRIPE_PRICE_IDS=${r.env.STRIPE_PRICE_IDS}`, `STRIPE_PORTAL_CONFIGURATION_ID=${r.env.STRIPE_PORTAL_CONFIGURATION_ID}`, "STRIPE_MODE=live", "BILLING_GATEWAY=stripe");
   writeFileSync(out, `${linhas.join("\n")}\n`, { mode: 0o600 });
   console.info(`stripe-live: ${linhas.length} variáveis escritas em ${out} (${linhas.map((l) => l.split("=")[0]).join(", ")})`);
