@@ -2770,6 +2770,33 @@ export const DICIONARIO: Traducoes = {
   "API key": { es: "Clave de API" },
 
   // ─── Admin de plataforma: casca (shell, sidebar, banner, impersonate) ───
+  // F20 (D59/D61): o convite deixou de existir só na resposta da criação.
+  "Este link fica guardado: abra a empresa em Empresas › Convites para copiar de novo, reenviar ou cancelar. Reenviar gera um link novo e cancela este.": { es: "Este enlace queda guardado: abra la empresa en Empresas › Invitaciones para copiarlo de nuevo, reenviarlo o cancelarlo. Reenviar genera un enlace nuevo y cancela este." },
+  "Convites": { es: "Invitaciones" },
+  "Papel": { es: "Rol" },
+  "Convidar": { es: "Invitar" },
+  "Reenviar convite": { es: "Reenviar invitación" },
+  "Nenhum convite pendente nesta empresa.": { es: "Ninguna invitación pendiente en esta empresa." },
+  "Não foi possível carregar os convites desta empresa.": { es: "No se pudieron cargar las invitaciones de esta empresa." },
+  "Não foi possível emitir o convite.": { es: "No se pudo emitir la invitación." },
+  "E-mail do responsável": { es: "Correo del responsable" },
+  // F20 (D59/D61): convites pendentes na tela de Equipe.
+  "Convites pendentes": { es: "Invitaciones pendientes" },
+  "Carregando convites…": { es: "Cargando invitaciones…" },
+  "Nenhum convite aguardando aceite.": { es: "Ninguna invitación esperando aceptación." },
+  "Cancelar convite": { es: "Cancelar invitación" },
+  "Não foi possível carregar os convites pendentes.": { es: "No se pudieron cargar las invitaciones pendientes." },
+  "Não foi possível cancelar este convite.": { es: "No se pudo cancelar esta invitación." },
+  "Não foi possível copiar. Selecione o link e copie à mão.": { es: "No se pudo copiar. Seleccione el enlace y cópielo a mano." },
+  // F20: telas de recusa do link curto /i/<token>.
+  "Convite cancelado": { es: "Invitación cancelada" },
+  "Convite expirado": { es: "Invitación vencida" },
+  "Convite já usado": { es: "Invitación ya utilizada" },
+  "Este link não corresponde a nenhum convite. Peça um novo ao administrador da empresa.": { es: "Este enlace no corresponde a ninguna invitación. Solicite una nueva al administrador de la empresa." },
+  "Este convite foi cancelado — em geral porque um link novo foi enviado no lugar. Procure a mensagem mais recente ou peça outro.": { es: "Esta invitación fue cancelada, en general porque se envió un enlace nuevo en su lugar. Busque el mensaje más reciente o solicite otro." },
+  "Este convite passou da validade de 7 dias. Peça um novo ao administrador da empresa.": { es: "Esta invitación superó la validez de 7 días. Solicite una nueva al administrador de la empresa." },
+  "Este convite já foi aceito. Se o acesso é seu, entre normalmente pela tela de login.": { es: "Esta invitación ya fue aceptada. Si el acceso es suyo, ingrese normalmente por la pantalla de inicio de sesión." },
+  "Este convite foi enviado para outro endereço de e-mail.": { es: "Esta invitación fue enviada a otra dirección de correo electrónico." },
   "Acesso negado": { es: "Acceso denegado" },
   "Esta área é restrita a administradores da plataforma com MFA ativo. Se você acredita que isso é um erro, contate o time de operações.": {
     es: "Esta área está restringida a administradores de la plataforma con MFA activo. Si crees que esto es un error, contacta al equipo de operaciones.",
@@ -2877,7 +2904,6 @@ export const DICIONARIO: Traducoes = {
   "Maria da Silva LTDA": { es: "María García LTDA" },
   "E-mail inválido": { es: "Email inválido" },
   Plano: { es: "Plan" },
-  "E-mail do responsável": { es: "Email del responsable" },
   "Criando...": { es: "Creando..." },
   "Criar tenant": { es: "Crear tenant" },
 

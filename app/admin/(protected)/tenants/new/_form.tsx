@@ -181,8 +181,15 @@ export function NewTenantForm() {
               >
                 {t("Copiar convite")}
               </Button>
+              {/*
+                O texto antigo ("abra Equipe na organização para gerar outro")
+                era verdadeiro e inútil: ninguém adivinhava que era preciso
+                TROCAR de organização no seletor, e a partir de D60 o dono nem
+                sempre estará dentro dela. Agora a tela diz onde o convite mora —
+                e ele mora numa lista, não só nesta resposta (F20, D59/D61).
+              */}
               <p className="text-sm text-muted-foreground">
-                {t("Se o convite vencer, abra Equipe na organização para gerar outro.")}
+                {t("Este link fica guardado: abra a empresa em Empresas › Convites para copiar de novo, reenviar ou cancelar. Reenviar gera um link novo e cancela este.")}
               </p>
             </div>
           )}

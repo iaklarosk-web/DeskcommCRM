@@ -43,6 +43,10 @@ interface TabItem {
 const TABS: TabItem[] = [
   { label: "Visão Geral", href: "", disabled: false },
   { label: "Saúde", href: "/health", disabled: false },
+  // F20 (D59/D61): o convite deixou de existir só na resposta da criação —
+  // aqui o dono da plataforma copia de novo, reenvia e cancela, com a própria
+  // autoridade, sem precisar entrar na empresa do cliente.
+  { label: "Convites", href: "/convites", disabled: false },
   { label: "Equipe", href: "/team", disabled: true },
   { label: "Uso", href: "/usage", disabled: true },
 ];

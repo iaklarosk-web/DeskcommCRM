@@ -76,6 +76,9 @@ export const AUDIT_ACTIONS = [
   "member.invited",
   "team.interface_changed",
   "member.accepted",
+  // F20-T03 (D61 b/c): revogar é o que mata um link de convite que vazou — quem
+  // revogou e quando precisa ficar registrado como qualquer outra mudança de acesso.
+  "member.invite_revoked",
   "member.role_changed",
   "member.revoked",
   "token.created",
