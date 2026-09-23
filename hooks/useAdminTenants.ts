@@ -17,6 +17,12 @@ export interface AdminTenantRow {
   suspended_at: string | null;
   created_at: string;
   user_count: Array<{ count: number }> | null;
+  /**
+   * F20-T04 (D60): empresa criada para outra pessoa nasce SEM membros, com o
+   * convite pendente. Sem este número a lista mostraria "0 usuários" e quem
+   * olhasse pensaria em defeito, não em "falta a pessoa aceitar".
+   */
+  convites_pendentes?: Array<{ count: number }> | null;
   conversations_count: Array<{ count: number }> | null;
   /** F11-T01: estado da assinatura (F12); `null` = organização herdada sem linha. */
   subscription: { status: string; plan_code: string; grace_until: string | null } | null;

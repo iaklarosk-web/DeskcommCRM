@@ -18998,11 +18998,19 @@ begin
     values (p_request->>'display_name', p_request->>'slug', coalesce(nullif(p_request->>'legal_name', ''), p_request->>'display_name'),
       p_request->>'cnpj', 'active', jsonb_build_object('plan', p_request->>'plan'), p_actor)
     returning * into org;
-  insert into public.user_organizations(organization_id, user_id, role, accepted_at, interface_settings)
-    values (org.id, p_actor, 'admin', now(), case when lower(p_request->>'owner_email') =
-      (select lower(email) from auth.users where id = p_actor)
-      then coalesce(p_request->'owner_interface_settings', '{"preset":"completa"}'::jsonb)
-      else '{"preset":"completa"}'::jsonb end);
+  -- F20-T04 (ADR-045 §5; D60): a membership do criador nasce SÓ quando o
+  -- convite é para ele mesmo. Para outra pessoa, a empresa nasce com
+  -- assinatura e convite pendente e ZERO membros — o acesso do dono da
+  -- plataforma volta a ser a sessão de suporte de D51, com motivo, escopo e
+  -- vencimento. Antes, esta linha rodava sem condição e fazia do
+  -- `platform_admin` admin definitivo de toda empresa que ele criasse, fora do
+  -- acompanhamento auditado (VARREDURA §B28).
+  if lower(btrim(coalesce(p_request->>'owner_email', ''))) =
+     (select lower(btrim(email)) from auth.users where id = p_actor) then
+    insert into public.user_organizations(organization_id, user_id, role, accepted_at, interface_settings)
+      values (org.id, p_actor, 'admin', now(),
+        coalesce(p_request->'owner_interface_settings', '{"preset":"completa"}'::jsonb));
+  end if;
   result := jsonb_build_object('id', org.id, 'slug', org.slug, 'display_name', org.display_name,
     'invite_id', gen_random_uuid(), 'issued_at', floor(extract(epoch from now()))::bigint);
   insert into public.idempotency_keys(organization_id, key, endpoint, request_hash, status_code, response_body, tenant_creation_trusted)

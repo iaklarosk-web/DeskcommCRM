@@ -99,9 +99,14 @@ export async function GET(req: NextRequest) {
       suspended_at,
       created_at,
       user_count:user_organizations(count),
-      conversations_count:conversations(count)
+      conversations_count:conversations(count),
+      convites_pendentes:team_invites(count)
     `,
     )
+    // F20-T04 (D60): só convite VIVO conta como "aguardando aceite" — aceito
+    // cria membership (e aí user_count > 0) e revogado não espera ninguém.
+    .is("team_invites.accepted_at", null)
+    .is("team_invites.revoked_at", null)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(limit + 1);

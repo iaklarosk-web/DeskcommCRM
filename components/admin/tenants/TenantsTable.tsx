@@ -179,8 +179,24 @@ export function TenantsTable({
                 <TableCell className="text-xs" data-testid="admin-tenant-assinatura" data-org={row.id} data-status={row.subscription?.status ?? "none"}>
                   {row.subscription ? `${row.subscription.plan_code} · ${row.subscription.status}` : t("sem assinatura (herdada)")}
                 </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {extractCount(row.user_count)}
+                <TableCell className="text-right tabular-nums" data-testid="admin-tenant-usuarios" data-org={row.id}>
+                  {/*
+                    F20-T04 (D60): com a regra nova, empresa criada para outra
+                    pessoa nasce com zero membros e um convite pendente. "0" ali
+                    sozinho parece defeito; o que aconteceu é que falta a pessoa
+                    aceitar — e o caminho para agir está na aba Convites.
+                  */}
+                  {extractCount(row.user_count) === 0 && extractCount(row.convites_pendentes) > 0 ? (
+                    <Link
+                      href={`/admin/tenants/${row.id}/convites`}
+                      className="text-xs font-medium text-accent hover:underline"
+                      data-testid="admin-tenant-aguardando-aceite"
+                    >
+                      {t("Aguardando aceite")}
+                    </Link>
+                  ) : (
+                    extractCount(row.user_count)
+                  )}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
                   {extractCount(row.conversations_count)}

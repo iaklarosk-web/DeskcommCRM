@@ -2773,6 +2773,7 @@ export const DICIONARIO: Traducoes = {
   // F20 (D59/D61): o convite deixou de existir só na resposta da criação.
   "Este link fica guardado: abra a empresa em Empresas › Convites para copiar de novo, reenviar ou cancelar. Reenviar gera um link novo e cancela este.": { es: "Este enlace queda guardado: abra la empresa en Empresas › Invitaciones para copiarlo de nuevo, reenviarlo o cancelarlo. Reenviar genera un enlace nuevo y cancela este." },
   "Convites": { es: "Invitaciones" },
+  "Aguardando aceite": { es: "Esperando aceptación" },
   "Papel": { es: "Rol" },
   "Convidar": { es: "Invitar" },
   "Reenviar convite": { es: "Reenviar invitación" },
