@@ -1,3 +1,4 @@
+import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
  * GET  /api/v1/automation-rules — lista as regras de automação da org ativa.
  * POST /api/v1/automation-rules — cria uma regra. is_active NUNCA aceito no
@@ -14,6 +15,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptRuleActionSecrets } from "@/lib/webhooks/secrets";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { regraForaDoVocabulario } from "@/src/automation/regras";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +36,9 @@ export async function GET(): Promise<Response> {
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
+
   const requestId = randomUUID();
   const authz = await requireRole("manager", { requestId, resource: "automation_rules" });
   if (!authz.ok) return authz.response;
@@ -52,6 +57,13 @@ export async function POST(req: NextRequest): Promise<Response> {
       requestId,
       details: parsed.error.flatten(),
     });
+  }
+  // F15-T04 (ADR-036 §2 T04): o vocabulário do SaaS é fechado — só os
+  // gatilhos de GATILHOS_DE_REGRA e ações do catálogo D17 (executor
+  // `automation`). O que está fora é recusado com nome (`outside_catalog`).
+  const foraDoVocabulario = regraForaDoVocabulario(parsed.data.trigger_event, parsed.data.actions);
+  if (foraDoVocabulario !== null) {
+    return fail("outside_catalog", foraDoVocabulario, 422, { requestId });
   }
 
   // Secrets de call_webhook nunca ficam em claro no jsonb (migration 0041).

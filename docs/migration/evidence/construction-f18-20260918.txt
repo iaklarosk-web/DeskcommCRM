@@ -1,0 +1,159 @@
+== F18 — um motor de IA só (ADR-040/041; D56) — evidência de construção, 18/09/2026 ==
+
+Branch feat/F18-motor-unico-de-ia a partir de a3d01f9b (HEAD da F14). Tasks T00–T05 (ADR-040 §5).
+Autorização: mensagem do proprietário de 18/09/2026, depois do fechamento da F14. Ele escolheu
+unificar os dois turnos de IA (§B8) entre F16 / F17 / Stripe / unificação, e escolheu o caminho A
+(o turno SaaS assume o despacho) — eu havia recomendado o B (levar a política ao motor herdado) e
+ele recusou, com o argumento de resolver agora. Quatro decisões em cards, brief com contraponto
+(3 objeções, todas viradas teste) e "Aprovo — comece". Depois pediu, em mensagem própria, que as
+ferramentas que ficassem de fora fossem ANOTADAS para entrar depois: é o inventário abaixo.
+
+== O que a medição na produção mudou no plano (antes de escrever código) ==
+- NENHUM agente publicado: duas versões em `draft` na organização kn-tecnologia, nenhum agente na
+  deka. Como `agenteAtende` exige published_version_id, o motor herdado não respondia a ninguém —
+  o §B8 era risco LATENTE, que viraria real na publicação do primeiro agente.
+- O agente que tem ferramentas declara 19 das 60 servidas pelo MCP (ai_agent_versions.tool_ids).
+- Tráfego real: 1 conversa e 1 mensagem de saída no banco inteiro (sem número de WhatsApp, D12-4).
+  Trocar o motor agora é o momento mais barato que vai existir: não há cliente no meio.
+- A herança (prompt + acervo da versão publicada) é LIGAÇÃO, não reescrita: `buscar()` já aceitava
+  escopo de fontes e o contexto já injetava persona. A objeção 2 deixou de ameaçar o tamanho da fase.
+
+== Inventário (o que o proprietário pediu para ficar anotado) ==
+CRM-OS/docs/f18/FERRAMENTAS-MCP-INVENTARIO-20260918.md — as 60 ferramentas `crm_*` com o que cada
+uma faz e o arquivo onde o herdado a implementa: 13 migradas, 6 já cobertas pelo catálogo, 41 na
+FILA DE ESPERA. A fila é honesta por construção: ferramenta declarada por um agente e não migrada
+vira handoff `tool_missing` com o nome dela no dossiê — nunca silêncio (objeção 1).
+
+== Objeção 1 (fail-closed da ferramenta que falta) ==
+Medida na integração e por mutante: o modelo pede `crm_add_case_note` (declarada pela versão
+publicada, ausente do catálogo) → handoff/tool_missing com `pending_action` = o nome da ferramenta.
+Nome INVENTADO pelo modelo continua descartado e contado — inventar não é falta de produto.
+Migration 9032 abre o nono motivo no CHECK; mutante 79 mata a fila vazia.
+
+== Objeção 2 (herança do agente publicado) ==
+Com `ai.engine=saas` e versão publicada, o contexto usa o `system_prompt` DAQUELA versão (vence o
+`ai.system_prompt` da organização) e restringe o acervo aos `knowledge_source_ids` dela. Medido
+com banco de verdade: `heranca_prompt=1/1 heranca_acervo=1/1`. Com `legacy`, nada disso é lido.
+
+== Objeção 3 (sem número, o canal que motivou o §B8 não é provado) ==
+Aceita e declarada: WhatsApp real continua NOT VALIDATED (real). A fase é provada no chat do site e
+na entrada simulada; o motor unificado no canal que motivou o §B8 depende do número (D12-4).
+
+== Commits ==
+fe0964a4 T00 parte 1: ADR-040/041, D56
+b22400e3 T00 parte 2: herança, fail-closed (tool_missing, migration 9032), chave ai.engine
+7ada269b T00 parte 3: verify v1.11 (16 specs, 79 testes), contrato da linha engine:, 19 casos, mutante 77
+87969051 T01: o despacho escolhe o motor pela chave da organização (saas padrão, legacy volta atrás)
+67a18447 T02/T03: as 14 ações no catálogo (28), fachadas src/crm/funil, src/agenda/leitura, src/crm/proposta
+f9b1cc28 T03: teto diário medido no caminho novo; tool inventada segue descartada
+b27d36cb T04: §B18 (prévia para todo canal) e §B19 (lint:channels verde e no gate)
+8cc9bb20 T05 parte 1: as três decisões puras e os mutantes 78–80
+a938a27b T05 parte 2: motor na rota e na tela de autonomia, spec de navegador, workflow
+b75e75d0 T05 parte 3: apêndice 9032 antes da guarda que o verifica; spec 7/7 no staging; smoke passo 9
+
+== Gate ==
+f18-gate-04 — READY (staging) sobre e5c26c4e, 19/09 02:5xZ→04:51Z, exit 0, DENTRO do staging
+(VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202), current_phase=F18,
+violations=0.
+unit=8561/8561 integration=240/240 db=1677/1677 e2e=79/79 ×2 (16 specs; deka 1917 s, demo2 ~1900 s)
+mutants_killed=77/77 (77–80 novos: linha engine obrigatória, roteamento pela chave, ferramenta que
+falta em silêncio, cancelar o passado)
+
+Quatro tentativas, e cada uma achou coisa diferente:
+  01 (22:34Z, NOT READY) — 20 falhas no passo db, todas do mesmo tipo: as seis suítes herdadas que
+     exercitam `runAgentTurn` viam "nenhuma mensagem saiu", porque o padrão passou a ser o motor
+     novo. Não era regressão: era suíte dependendo de um padrão que mudou. Cada uma passa a gravar
+     `ai.engine=legacy` na organização que semeia — a suíte declara o motor que mede. No navegador,
+     2 falhas: a tela de autonomia mostra o total do catálogo e a spec da F15 afirmava 14 (são 28).
+  02 (22:47Z, interrompido) — o passo `shell` PENDUROU 1h25 num `head -1` esperando stdin, tendo
+     passado em 58 s no gate 01. Nenhum passo do verify tinha `timeout`: passo que não volta não
+     reprova, pendura, e o gate fica vivo sem produzir nada. Conserto: teto de 1 h por passo e
+     `</dev/null` (ADR-041 §5, §B22). No gate seguinte a mesma prova passou em 59 s.
+  03 (02:27Z, NOT READY) — três achados de encaixe, nenhum de produto: (a) o desvio do despacho
+     estava no TOPO do handler e pegava também o modo ASSISTIDO, que é outra superfície — a F18
+     troca quem responde automaticamente, não o rascunho que uma pessoa revisa; foi para depois
+     dele; (b) ler `ai.engine` derrubava o turno quando o pool é dublado (lição 28 da F14) — exceção
+     não é escolha da organização: segue o caminho de antes, com aviso, enquanto valor ESTRANHO
+     continua caindo no padrão declarado; (c) `report.mjs` lia 16 nomes de métrica e `engine` não
+     estava na lista — a linha era gravada pela suíte e IGNORADA pelo relatório, e o bloco saía
+     `pending` com tudo verde. Esse é o furo que faz um gate mentir a favor.
+  04 — READY. Nenhum teste apagado, pulado ou meia-linha (tests_deleted=0 tests_skipped=0
+     tests_pending=0 expected_failures=0).
+Bloco integral em BUILD-STATE.md (verify_summary_last). Logs em .verify-logs/f18-gate-01…04 (fora do git).
+
+== Linhas fora do bloco (BUILD-STATE) ==
+staging (depois do READY, imagem e5c26c4e): up.sh 15/15
+restore: tables=184 tables_restored=184 rows=27296 rows_diff=0 dump=staging-20260919T045640Z.dump target=restore_20260919_045641 seconds=7 at=20260919T045641Z
+smoke: steps=9 pass=9/9 … webchat_disabled_denied=2/2 engine_saas=2/2 tenants=deka,demo2
+p95_ms: endpoints=3/3 health=24 contacts=383 conversations=352 samples=20 url=http://127.0.0.1:3200
+staging: compose=crm-staging services_running=15/15 memory_mib=2053 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F18(e5c26c4e)
+produção (DEPOIS do READY): scripts/prod/up.sh 14/14 — o apêndice 9032 aplicou-se no banco que
+  ATUALIZA (era exatamente o ponto que havia reprovado no staging); 9032 no banco de produção 1/1.
+prod: compose=crm-prod services_running=14/14 config_vars=27/27 placeholders=0/27 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=2 orgs_without_subscription=0/2 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only backup=1/1 restore_rows_diff=0 sha=e5c26c4e8
+prod_stack: compose=crm-prod services_running=14/14 memory_mib=2074 ports=127.0.0.1+tailscale(3300,56431,56432) public_ports=0
+restore_prod: tables=184 tables_restored=184 rows=833 rows_diff=0 dump=prod-20260919T051008Z.dump target=restore_20260919_051009 seconds=10 at=20260919T051009Z
+
+engine_real (D56 f — o DESPACHO em produção, scripts/prod/jornada-motor.ts no crm-prod-worker):
+  engine_real: dispatch_turns=2/2 delivered=2/2 visible=2/2 handoff_na_segunda=0/1 volta_atras=1/1
+  provider=anthropic model=claude-sonnet-5 cost_cents=nao_precificado limite_segurou=1/1
+  calls_after_limit=0/1 cleaned=1/1 settings_rows_restored=1/1 at=2026-09-19T06:02:59Z
+
+  É a linha que fecha o §B8 como FATO: a mensagem do visitante entrou pela rota pública, emitiu
+  `ai_agent.dispatch_requested`, o worker de PRODUÇÃO decidiu o motor pela chave da organização e o
+  turno com política/teto/auditoria respondeu — entregue e visível na página. Com `legacy`, ninguém
+  respondeu (`volta_atras=1/1`): a chave decide, não o acaso.
+
+  O caminho até aqui, inteiro, porque cada tropeço é um fato do produto:
+  1ª rodada: `dispatch_turns=0/3`. O log dizia "drain: nenhum agente publicado para a sessão — turno
+     pulado". O DRAIN descartava o evento antes do job: "tem agente publicado?" é pergunta do motor
+     herdado. Sem conserto, a unificação valeria só para quem JÁ tinha agente herdado — e uma
+     organização nova (o caso do SaaS, e o caso da Deka) continuaria sem atendimento automático, em
+     silêncio. Conserto: o drain deixa passar quando `ai.engine=saas`.
+  2ª rodada: ainda 0/3, e a causa era MINHA — a jornada escrevia `ai.engine=legacy` no passo da volta
+     atrás e não a devolvia (a lista de devolução não tinha a chave nova). A organização do dono
+     ficou no motor ANTIGO até eu apagar a linha. É a lição da F14 (devolver LINHAS) repetida numa
+     chave nova: quem escreve setting numa prova declara a chave no mesmo commit.
+  3ª rodada: o turno rodou e devolveu `handoff/out_of_knowledge` — o acervo do dono é vazio e a
+     pergunta não tinha base. Não era defeito: era a régua da F04 funcionando no caminho novo.
+  4ª rodada (a da linha): com `ai.unknown_answer` configurada, as duas perguntas foram respondidas,
+     entregues e VISTAS na página. `handoff_na_segunda=0/1` é medição honesta, não falha: D19 só
+     manda chamar gente na segunda resposta DESCONHECIDA, e não foi o caso.
+
+  GASTO (a prestação de contas): o teto autorizado era "até 20 turnos Haiku". Os turnos saíram em
+  `claude-sonnet-5`, porque o turno rodando no WORKER escolhe o modelo por
+  `organizations.settings.llm.default_model` e não pelo `AI_CHAT_MODEL` do script (§B23). Foram 5
+  chamadas `agent_turn` no dia: 61.154 tokens de entrada e 3.640 de saída. Dentro do teto em NÚMERO
+  de turnos (5 de 20), fora dele em MODELO — e `cost_cents` fica nulo para esse modelo, então o
+  produto registrou consumo com custo zero.
+
+== demo3 e from-scratch ==
+demo3: created=1 smoke=pass=9/9 e2e[demo3]=41/41 specs=10/10 removed=1 tenants=3 (19/09 06:26Z→06:40Z).
+  A 1ª rodada reprovou por UM caso (`total=509` onde a spec da F02 afirma 501) — resíduo da própria
+  rodada, verde na 2ª sem tocar em código.
+from-scratch: steps=7 pass=7/7 verify_exit=0 status="READY (F18)" commit=65219c22 (verify 6631 s no
+  clone, fase F18 lida da origem; violations=0, mutants 77/77).
+  A 1ª tentativa pegou uma REGRESSÃO REAL que nenhum outro passo pegou: o conserto do drain era
+  grosso demais e passava também por cima de agente PAUSADO ou ARQUIVADO — ou seja, ignorava um
+  "pare de responder" dado pela organização, contra o invariante `pausar tem que parar o gasto`
+  (4 casos vermelhos em `portao-de-capacidade-mede-quem-executa`). A exceção do motor novo passou a
+  valer só quando a organização NÃO TEM AGENTE NENHUM, que é o caso que a motivou.
+
+== Achados registrados nesta fase ==
+- §B18 e §B19 FECHADOS (T04): a prévia da conversa passa a valer para todo canal, e a régua de
+  canal voltou ao gate (`step lint-channels`) depois de quatro fases vermelha sem ninguém rodar.
+- Lição nova (medida no staging): a lição 26 da F14 tem uma segunda ponta — não basta reconstruir a
+  constraint em bloco único; o bloco precisa vir ANTES da guarda que a verifica. O apêndice 9032
+  estava no fim do arquivo e a guarda `do $f05_t01_fim$` reprovava o baseline inteiro no banco que
+  ATUALIZA ("handoffs_reason_check não aceita o motivo tool_missing").
+- Ação que PENDURA precisa de conversa: `execute()` recusa `by_risk` sem `conversation_id`
+  (`conversation_required_for_confirmation`). As três escritas de funil ganharam o campo; sem
+  conversa (automação), a organização precisa declarar `allow` na política.
+- `crm_leads_owner_kind_coherence`: lead criado pela IA nasce SEM dono — inventar um dono ao criar
+  daria a oportunidade a quem não pediu.
+
+== O que NÃO foi verificado (fica em FINAL-VALIDATION §3) ==
+WhatsApp real com o motor novo (sem número); a IA escolhendo a ferramenta a partir do TEXTO (o dublê
+do provedor não decide — o que se mede é execute() → política → fachada); as 41 ferramentas da fila
+de espera (por desenho: quem precisar delas terá handoff nomeado, não silêncio); telas novas no
+navegador HUMANO (o seletor de motor foi provado por Playwright, não por olho); a conversão de uma
+organização REAL de `legacy` para `saas` com cliente em atendimento.

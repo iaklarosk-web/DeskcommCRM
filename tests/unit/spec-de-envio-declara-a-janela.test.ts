@@ -65,7 +65,15 @@ const SEED = "scripts/seed-e2e-numero-conectado.ts";
  * Specs dispensadas, com o motivo escrito. Esta lista SÓ ENCOLHE — cada entrada
  * é dívida declarada.
  */
-const DISPENSADAS: Record<string, string> = {};
+const DISPENSADAS: Record<string, string> = {
+  // F15-T06 (ADR-036): a spec dispara `assign_owner` pelo motor do SaaS
+  // (`src/automation/motor.ts`, ações só do catálogo) — entrega uma oportunidade
+  // pelo rodízio; NENHUM envio de mensagem, nenhum número, nenhuma janela. O
+  // `send_message` do catálogo, quando uma regra o usa, entra na fila de saída
+  // que já respeita a janela do pacing — e a spec não o exercita. Sem rig de
+  // número conectado para declarar.
+  "f15-automacao-e-autonomia.spec.ts": "só assign_owner pelo motor do SaaS: sem envio, a janela do número não entra",
+};
 
 /**
  * Os sinais de que a spec depende de uma automação EXECUTAR.

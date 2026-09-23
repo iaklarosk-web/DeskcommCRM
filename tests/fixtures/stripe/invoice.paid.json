@@ -1,0 +1,32 @@
+{
+  "id": "evt_1F19Fixture000000000002",
+  "object": "event",
+  "api_version": "2025-08-27.basil",
+  "created": 1758290401,
+  "data": {
+    "object": {
+      "id": "in_1F19Fixture00000001",
+      "object": "invoice",
+      "amount_due": 0,
+      "amount_paid": 0,
+      "amount_remaining": 0,
+      "billing_reason": "subscription_create",
+      "collection_method": "charge_automatically",
+      "created": 1758290300,
+      "currency": "brl",
+      "customer": "cus_F19Fixture000001",
+      "livemode": false,
+      "paid": true,
+      "status": "paid",
+      "subscription": "sub_1F19Fixture00000001",
+      "total": 0
+    }
+  },
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": {
+    "id": "req_F19Fixture0001",
+    "idempotency_key": null
+  },
+  "type": "invoice.paid"
+}

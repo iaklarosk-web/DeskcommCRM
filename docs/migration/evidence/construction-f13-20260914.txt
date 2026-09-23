@@ -1,0 +1,104 @@
+F13 — CRM comercial completo sobre a base herdada (campos por organização, papel manager, fila de oportunidades, vínculo com pedido, relatório comercial). Evidência de construção.
+Fechamento: 2026-09-14 (tarde, Brasília). Branch feat/F13-crm-comercial (a partir de 187fde8f, fim da F08/D53).
+Código validado pelo gate: 767d22a6 (ADR-034 tasks T00–T06, verify v1.8 ADR-035, migration 9026, §B17 consertado).
+Autorização: D53 (14/09/2026 — F13 como próxima fase; engenharia em staging; sem número de WhatsApp, sem liberação geral, sem Stripe). BLOCKER-PROD segue aberto (D13).
+
+== GATE INTEGRAL — DENTRO DO STAGING (ADR-028 §2), current_phase=F13 (ADR-035 §1: inventário de F12 + f13-crm-comercial = 13 specs, 58 testes) ==
+./scripts/verify.sh, WHATSAPP_MODE=mock AI_PROVIDER=mock CI=1, um worker, zero retries,
+VERIFY_ENVIRONMENT=staging F02_E2E_SANDBOX_ID=crm-staging E2E_PORT=3202: navegador DUAS vezes contra o Supabase
+do STAGING desta VPS (loopback 56421/56422, app do gate em 3202) — E2E_TENANT=deka e depois demo2, mesma árvore,
+sem commit entre elas; unit/db/integration no Postgres efêmero de scripts/test-db.sh (baseline com o apêndice 9026).
+Execução f13-gate-05, 7111 s (118,5 min; 14:25:34 → 16:24:05 de Brasília, 14/09 = 17:25Z → 19:24Z), exit 0,
+STATUS: READY (staging), violations=0, QUINTA tentativa. Etapas: typecheck 14 s, lint 98 s, build 89 s, shell 58 s,
+unit 1877 s, integration 95 s, db 967 s, e2e-deka 1346 s, e2e-demo2 1334 s, mutantes 65/65.
+inputs: files=3626 sha256 f757980d… antes = depois. Load durante o navegador: 9–13 (o próprio gate + um Codex de outro projeto).
+
+Tentativas (nenhuma de carga na régua do produto; a 02 de carga numa prova herdada):
+01 (sobre 1f643630) — typecheck exit=2 (tsconfig.typecheck.json cobre tests/; o agente conferiu com tsc -p tsconfig.json,
+   que não cobre — 8 erros de tipo nos DOIS testes novos) e unit 8510/8521 em 4 arquivos herdados: companies-client (o
+   formulário fazia uma ida extra a /api/v1/settings/crm-fields e consumia a resposta sequenciada do dublê), crm-empresas-api
+   (as rotas passaram a ler tenant_settings pelo pool), crm-work-placements (react-query na ficha do contato),
+   audit-resource-id-e-uuid (resourceId com chave natural nas rotas novas). Morto por cwd após unit. Conserto a759fd16:
+   definições da empresa lidas no SERVIDOR da página; resourceId uuid ou null com a chave natural no metadata; dublês nas
+   suítes herdadas.
+02 (sobre a759fd16) — shell exit=1: prova herdada do kit HostGator (cron_merge, "o agente do vizinho sobrevive") — o modo
+   de falha por carga documentado na F07 (load 5); isolada 3/3 verde. Morto por cwd. (typecheck ainda exit=2 — ver 03.)
+03 (sobre a759fd16) — typecheck exit=1 (os 8 erros da 01, agora vistos). Morto por cwd. Conserto b42e29f7 (tipos estritos
+   nos testes novos; a partir daqui o agente confere com `pnpm typecheck`/`pnpm lint`, os comandos do gate).
+04 (sobre b42e29f7) — typecheck/lint/build/shell ok, unit 8521/8521 (1721 s), db 1666/1666 (980 s), integration 184/186:
+   tests/integration/commercial-settings.test.ts (F02-T08) — a configuração COMERCIAL é manager+ desde o Deskcomm e o
+   manager novo tinha settings.manage=false. Morto por cwd antes do navegador; 1 fixture órfã da spec interrompida
+   (f02-b-2529dd63 + 2 usuários) apagada do staging. Conserto 767d22a6: manager mantém settings.manage
+   (denied_expected 33→32; ADR-034 §2 T02 registra).
+05 (sobre 767d22a6) — READY (staging).
+
+VERIFY SUMMARY
+scope=phase phase=F13 current_phase=F13 environment=staging
+build=ok lint=ok typecheck=ok shell=ok
+unit=8521/8521 integration=186/186 db=1666/1666 e2e=58/58 baseline_n0=8997
+baseline_comparable: scope=unit+db passed=10187 required=8738 full_n0=pending
+e2e_scope: F13-required passed=58/58 specs=13/13
+isolation: tables=138 ops=4 dirs=2 leaks=0 (material_cross_org=97/138)
+rls-coverage: tables_with_org_id=138 policies_found=116 missing=0 service_only_with_grant=0
+rbac: roles=4 denied_expected=32 denied_actual=32
+entitlement: usage_events_written=23
+ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0
+handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3 notify=3 notify_rows=6 msgs_after=3 provider_calls_after=0
+reminder: runs=2 sent=1 duplicates=0 tables_summed=3
+webhook: replay=2 stored=1 tables_checked=7
+logs: routes=285 routes_logged=285 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
+rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=285 routes_with_schema=285 routes_reading_input=154 validated=154
+lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2
+admin: tenants_listed=3/3 support_sessions=2 support_reason=2/2 support_scope_denied=25/32 support_writes_denied=5/5 full_mode_rejected=1/1 signup_awaiting_payment=1/1 orgs_without_subscription=0/3
+billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1/1 blocked_writes_denied=5/5 grace_days=7 reconciliation_mismatch=0/3 cancellations=1/1 data_preserved=7/7
+crm: fields_defined=6 values_rejected=3/3 values_preserved=4/4 queue_size=5 distributed=5/5 balanced=1 second_claim_rejected=1/1 history_types=3 orders_linked=1/1 cross_org_link_denied=1/1 report_indicators=14/14 roles_denied=3/3
+replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=58/58 demo2=58/58 specs=13/13 org_a=seed-replica)
+secrets: files_scanned=529 findings=0
+tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=65/65
+debt_known=0 skip_only_occurrences=15 violations=0
+STATUS: READY (staging)
+
+== O que a linha crm: mede (tests/integration/f13-crm-comercial.test.ts, 11 casos, duas organizações) ==
+fields_defined=6: 4 definições de empresa + 2 de contato gravadas em tenant_settings (crm.fields.*); lista com chave repetida recusada;
+  o outro tenant lê []. values_rejected=3/3: tipo (number com texto), obrigatório (select required ausente), opção (select fora
+  das options). values_preserved=4/4: 4 valores gravados sobrevivem a apagar 3 das 4 definições; o objeto inteiro continua aceito.
+queue_size=5 distributed=5/5 balanced=1: modo manual (default) não distribui (DistribuicaoManual) e não toca a fila; round_robin
+  distribui 5 entre 3 attendants → 2/2/1, manager/admin fora do rodízio, 5 linhas owner_assigned, B intacta.
+second_claim_rejected=1/1: o primeiro claim fica, o segundo é JaAtribuida; linha owner_claimed. history_types=3: owner_assigned,
+  owner_claimed, order_linked (os herdados lead_created/stage_changed/task_created são de rotas PostgREST — a spec cobre stage_changed).
+orders_linked=1/1 cross_org_link_denied=1/1: pedido criado por executeOrderCommand (ADR-012, 1 evento draft_created, revisão 1),
+  vínculo único por par (repetição devolve o mesmo link), pedido de B recusado (0 linhas).
+report_indicators=14/14: cada indicador de fn_crm_report recalculado por SQL independente sobre a origem (funil abertas/valor,
+  ganhas/perdidas/valores, por dono abertas/ganhas, fila, tarefas abertas/vencidas/concluídas, pedidos contagem/total); B = 0 em A.
+roles_denied=3/3: fields.manage, opportunities.assign, reports.read negadas ao attendant, permitidas ao manager (matriz D15).
+
+== Spec de navegador f13-crm-comercial (7 testes × 2 execuções no gate; antes do gate: 7/7 com A fictícia e 7/7 com E2E_TENANT=deka) ==
+Campos (A e B): campo definido em /app/settings/tenant/crm-fields aparece no formulário de /app/companies; valor volta do banco;
+  POST sem o obrigatório = 422 custom_field_invalid; o outro tenant não tem a definição.
+Fila e histórico (A e B): rodízio ligado pela tela (PATCH /api/v1/settings/crm), +3 na fila pela rota herdada, tela lista, Distribuir
+  esvazia, banco 2/1 entre os dois attendants, 3 linhas owner_assigned; pedido vinculado (201), etapa movida por /move,
+  linha do tempo stage_changed + owner_assigned + order_linked 3/3; attendant 403 em distribute/crm-fields/reports (3/3).
+Relatório (A e B): /app/reports/crm mostra os números de GET /api/v1/reports/crm, que batem com o banco (fila, abertas, ganhas, pedidos).
+§B17: o dono busca /api/v1/admin/tenants?q=<slug de A> e ?q=<nome de B> → 200 com A sem B e com B sem A (respondia 500 em produção).
+Defeitos de PROVA achados e consertados antes do gate: POST /api/v1/contacts devolve {contact, action}; /move exige position_in_stage
+  e expected_updated_at; a criação manual de lead não escreve lead_created (só o nascimento pelo WhatsApp).
+
+== Provas de operação — STAGING (scripts/staging/up.sh com a imagem da F13: 15/15 em 345 s, 19:25Z→19:31Z; baseline reaplicado com o apêndice 9026) ==
+restore: tables=183 tables_restored=183 rows=11450 rows_diff=0 dump=staging-20260914T193108Z.dump target=restore_20260914_193109 seconds=14 at=20260914T193109Z
+smoke: steps=7 pass=7/7 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 owner_login=1/1 subscriptions[deka]=active/full subscriptions[demo2]=active/full orgs_without_subscription=0/2 tenants=deka,demo2
+p95_ms: endpoints=3/3 health=30 contacts=447 conversations=426 samples=20 url=http://127.0.0.1:3200
+staging: compose=crm-staging services_running=15/15 memory_mib=1484 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F13(767d22a6)
+Fixtures do gate apagadas: organizations com slug '%-e2e-%'/'f11-%'/'f13-%'/'f02-%' = 0 após o gate (1 órfã do gate 04 apagada à mão).
+
+== PRODUÇÃO — stack crm-prod (scripts/prod/up.sh + prova.sh DEPOIS do READY, ADR-034 §2 T06) ==
+scripts/prod/up.sh: 14/14 em 315 s (19:33Z→19:38Z; next build no host + baseline idempotente com o apêndice 9026): no banco de produção
+crm_companies.custom_fields=1/1, fn_crm_report=1/1, organizations=2 (KN Tecnologia, deka), platform_admins=1. https://crm.kntecnologia.app/api/v1/health = 200.
+prod: compose=crm-prod services_running=14/14 config_vars=27/27 placeholders=0/27 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=2 orgs_without_subscription=0/2 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only backup=1/1 restore_rows_diff=0 sha=767d22a6
+prod_stack: compose=crm-prod services_running=14/14 memory_mib=2051 ports=127.0.0.1+tailscale(3300,56431,56432) public_ports=0
+restore_prod (banco VAZIO novo, D36): tables=183 tables_restored=183 rows=449 rows_diff=0 dump=prod-20260914T193845Z.dump target=restore_20260914_193846 seconds=11 at=20260914T193846Z
+As jornadas reais (ai_turn/embedding/email/sentry) são as da F08 relidas do banco e do log de jornadas — nenhuma chamada nova a provedor, nenhum e-mail novo, nenhum gasto novo nesta fase.
+
+== O que NÃO foi verificado (fica em FINAL-VALIDATION §3) ==
+Tela das três páginas novas no navegador HUMANO (teste visual é do proprietário); campos configuráveis de OPORTUNIDADE continuam por
+funil (herdado); papéis personalizados (D15) não construídos; handoff.assignment=round_robin (F15); relatório com dados REAIS da Deka;
+WhatsApp real, liberação geral, Stripe (D12-4, D13, D52); demo3/from-scratch nesta fase.

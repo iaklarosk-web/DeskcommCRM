@@ -1,3 +1,4 @@
+import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
  * A imagem do cabeçalho de uma definição — subir do computador, sem colar URL.
  *
@@ -30,6 +31,7 @@ import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +49,9 @@ const TIPOS = new Set(["image/jpeg", "image/png"]);
 const TAMANHO_MAX = 5 * 1024 * 1024;
 
 export async function POST(req: NextRequest): Promise<Response> {
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
+
   const requestId = randomUUID();
 
   const user = await loadAuthUser();
@@ -56,10 +61,12 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (!org) return fail("forbidden", t("Sem organização ativa."), 403, { requestId });
 
   const form = await req.formData().catch(() => null);
-  const file = form?.get("file");
-  if (!(file instanceof File)) {
+  // F06-T02: o formulário passa por schema; tipo e tamanho seguem conferidos abaixo.
+  const lido = z.object({ file: z.instanceof(File) }).safeParse({ file: form?.get("file") ?? undefined });
+  if (!lido.success) {
     return fail("validation_failed", t("Campo 'file' (multipart) obrigatório."), 422, { requestId });
   }
+  const file = lido.data.file;
 
   const mime = file.type || "application/octet-stream";
   if (!TIPOS.has(mime)) {

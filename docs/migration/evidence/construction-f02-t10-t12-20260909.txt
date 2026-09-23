@@ -1,0 +1,65 @@
+F02 T10–T12 — integração local, 09/09/2026; gate final ainda pendente
+
+Contrato: D48/ADR-014. Date+basis obrigatórios, sem critério comercial implícito.
+created_at usa o dia civil no timezone canônico; delivery_date é data literal.
+Uma consulta fornece detalhes/grupos/denominadores/totais completos, sem LIMIT500.
+Rascunhos/cancelados ficam excluídos; dados pendentes aparecem fora dos totais.
+Milésimos e centavos agregados usam BigInt e chegam como strings exatas à UI.
+A via de impressão usa o mesmo DTO e não envia comando comercial.
+
+Conferência: quantidade e unidade do item, por revisão. Zero/menor/igual ao
+vendido -> pendente/parcial/completo. Quantidade positiva sem quantidade vendida
+ou unidade é recusada. Excesso, ator indevido e revisão obsoleta são recusados.
+Pedido/item são bloqueados transacionalmente; evento, recibo e auditoria são
+atômicos. Replay idempotente não repete evento. Revisões antigas permanecem no
+histórico; o estado atual considera somente a revisão atual do pedido.
+
+9012 criada pelo Supabase CLI: 20260909232854_9012_crm_order_checks.sql.
+Aplicada em 0,50s, exit0, somente no sandbox f02-crm-cadastros descartável.
+SHA256: a4fa1a2bf1d5aadc23f2139e597808bebabb39c7e90e6d74f5c96caaece90eb6
+Nenhuma alteração posterior da migration aplicada. Baseline contém o mesmo
+corpo antes da varredura final de anon. Tipos public/graphql_public/storage
+regenerados: 150 linhas adicionadas contra HEAD, zero removidas.
+
+PROVAS OBSERVADAS
+- Diário+UI: 17/17 unitários. Primeiro run16/17: formato exibiu 2,0 para 2.000;
+  corrigido o formatador (sem mudar a expectativa de quantidade humana inteira).
+- Diário integração: 3/3, incluindo 501 itens, grupos/unidades/moedas/status,
+  limite de dia civil, A/B e suporte. Primeiro run teve casos3/3 mas falha no
+  cleanup SQL parametrizado múltiplo; cleanup serial corrigido e processo saiu0.
+- Mutante27: limite500 introduzido na consulta foi detectado,1/1,19,87s.
+  Primeiro runner falhou porque a asserção de denominador precedia a de501;
+  reordenadas as mesmas asserções, sem remover cobertura ou aceitar erro genérico.
+- Mutante29: truncamento de UI detectado,1/1,8,17s.
+- API/schema de conferência unit:21/21.
+- Serviço transacional de conferência:12/12 integração real.
+- Banco:120/120 em três arquivos: schema9012=9, isolamento=53, completudeRLS=58.
+  Instalação e reaplicação do baseline passaram no harness descartável.
+- Export unit:3/3; coletor LGPD final em banco:6/6, com conferências A/B e sem
+  exportar recibos, hashes ou chaves privadas.
+- Mutante28: grant indevido no recibo detectado,1/1,24,12s.
+- i18n/UI/scanners/manifest:24/24; composição atual34 operações,17 escritas de
+  suporte conectadas à guarda, incluindo comercial/relatório/conferência.
+- TypeScript integral3072MB:exit0 após core9012/types; anterior à promoção dos
+  últimos testes/export collector/T13. Nova verificação final continua necessária.
+- Lint focal anterior aos últimos testes:74 arquivos,0 erros,6 warnings.
+
+Os números de casos de isolamento são testes, não número de tabelas/policies.
+O novo verificador coletará separadamente os denominadores do catálogo real.
+A exportação foi inicialmente preparada só no serviço; a revisão exigiu e
+comprovou sua chegada ao payload final de lib/lgpd/export-collector.ts.
+Um patch de teste inválido foi regenerado; não houve alteração de migration
+aplicada, relaxamento de permissões ou teste ignorado para forçar aprovação.
+
+Artefatos persistentes: .verify-logs/f02-t10-t12/*.json e logs com nomes próprios.
+Preparação externa de agentes em /home/klarosk/projetos/.crm-os-work, sem .env.
+Ainda não verificados por este checkpoint: PDF/browser final A/B, novo gate
+integral F02, operação real Deka, WhatsApp/IA reais, publicação e produção.
+
+REVISÃO ANTES DO GATE FINAL
+O relatório inclui organization{id,name} da identidade canônica na mesma consulta,
+para identificar a empresa na via impressa. Rechecagem: diário/UI17/17 e integração
+3/3, incluindo nomes/IDs A/B;9012 imutável. O primeiro gate foi interrompido antes
+do build para recusar '&' no .env.e2e (controle vermelho e43/43 após o reparo).
+O segundo passou em tipos/lint(356 warnings), mas foi interrompido durante build
+para completar a identificação da empresa. Nenhum foi apresentado como aprovado.

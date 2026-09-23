@@ -77,6 +77,13 @@ arma onde há risco de ban.
 - **Verificação:** um teste prova que, com `banRisk: false`, throttle/warm-up/cap **desarmam**
   e horário/domingo/fuso **continuam armados**. Como separar (tipos distintos, flag na decisão)
   é escolha de implementação; o invariante é o teste.
+- **Exceção com origem e física declaradas (F14, ADR-038):** a cortesia existe para não
+  acordar quem está longe do aparelho. No **chat do site** o visitante está NA PÁGINA neste
+  instante — não há quem incomodar — e a IA responde 24 h por decisão do proprietário (D55 d).
+  A capability é `liveVisitor: true` (só o `webchat` a declara); ela desarma a JANELA para a
+  resposta automática, e nada mais. O humano continua seguindo a janela (o handoff fica na
+  fila até o expediente, com aviso ao visitante). Um canal que chega ao celular da pessoa
+  nunca pode declará-la.
 
 ### 4. Restrição não aplicável é registrada, não omitida
 
@@ -131,7 +138,7 @@ transporte externo. Reportar venda para a plataforma que trouxe o lead é o segu
 | O que faz | entrega MENSAGEM a um contato | devolve um FATO sobre um contato |
 | Tem destinatário | sim | não |
 | Física que o governa | janela de 24h, template, ban, intervalo | idade do evento, dedup, formato de identidade |
-| Capabilities | as sete de `capabilities.ts` | nenhuma delas se aplica |
+| Capabilities | as nove de `capabilities.ts` (oito + `liveVisitor`, F14) | nenhuma delas se aplica |
 
 Uma linha em `CHANNEL_CAPABILITIES` respondendo "não se aplica" às sete colunas afirmaria
 que isto é canal quando não é, e transformaria o invariante 2 em formulário preenchido com

@@ -35,6 +35,7 @@ interface Rascunho {
   custo: string;
   quantidade: string;
   controla_estoque: boolean;
+  sale_unit: string;
 }
 
 const VAZIO: Rascunho = {
@@ -46,6 +47,7 @@ const VAZIO: Rascunho = {
   custo: "",
   quantidade: "0",
   controla_estoque: true,
+  sale_unit: "",
 };
 
 function doRascunho(
@@ -53,9 +55,11 @@ function doRascunho(
   t: (s: string) => string,
 ): Record<string, unknown> | { erro: string } {
   const preco_cents = precoParaCentavos(r.preco);
-  if (preco_cents === null) return { erro: t("Preço inválido. Escreva assim: 5.499,00") };
+  if (preco_cents === null)
+    return { erro: t("Preço inválido. Escreva assim: 5.499,00") };
   const custo_cents = r.custo.trim() === "" ? null : precoParaCentavos(r.custo);
-  if (r.custo.trim() !== "" && custo_cents === null) return { erro: t("Custo inválido.") };
+  if (r.custo.trim() !== "" && custo_cents === null)
+    return { erro: t("Custo inválido.") };
 
   return {
     codigo: r.codigo.trim(),
@@ -66,21 +70,69 @@ function doRascunho(
     custo_cents,
     controla_estoque: r.controla_estoque,
     quantidade: Number(r.quantidade) || 0,
+    // Vazio não inventa uma unidade para o legado; a API recebe null só quando
+    // o operador escolhe limpar num PATCH, não neste formulário de criação.
+    ...(r.sale_unit.trim() ? { sale_unit: r.sale_unit.trim() } : {}),
   };
+}
+
+function BuscaDoCatalogo({
+  inicial,
+  pendente,
+  aoBuscar,
+}: {
+  inicial: string;
+  pendente: boolean;
+  aoBuscar: (termo: string) => void;
+}) {
+  const t = useT();
+  const [busca, setBusca] = React.useState(inicial);
+  return (
+    <form
+      className="flex flex-1 flex-wrap items-center gap-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!pendente) aoBuscar(busca);
+      }}
+    >
+      <input
+        value={busca}
+        onChange={(event) => setBusca(event.target.value)}
+        placeholder={t("Buscar por nome, código, marca ou categoria")}
+        className="h-9 w-full max-w-sm rounded-md border px-3 text-sm"
+        aria-label={t("Buscar por nome, código, marca ou categoria")}
+        maxLength={200}
+        data-testid="busca-produto"
+      />
+      <Button type="submit" variant="outline" disabled={pendente}>
+        {t("Buscar")}
+      </Button>
+    </form>
+  );
 }
 
 export function ProdutosClient({
   inicial,
   podeEditar,
   textos,
+  erro = null,
+  buscaInicial = "",
+  pagina = 1,
+  total = inicial.length,
+  limite = 50,
 }: {
   inicial: Produto[];
   podeEditar: boolean;
   textos: Textos;
+  erro?: string | null;
+  buscaInicial?: string;
+  pagina?: number;
+  total?: number;
+  limite?: number;
 }) {
   const t = useT();
   const router = useRouter();
-  const [busca, setBusca] = React.useState("");
+  const [navegando, startTransition] = React.useTransition();
   const [criando, setCriando] = React.useState(false);
   const [rascunho, setRascunho] = React.useState<Rascunho>(VAZIO);
   const [salvando, setSalvando] = React.useState(false);
@@ -88,15 +140,14 @@ export function ProdutosClient({
   const [resumo, setResumo] = React.useState<ResumoDaImportacao | null>(null);
   const arquivoRef = React.useRef<HTMLInputElement>(null);
 
-  const filtrados = React.useMemo(() => {
-    const q = busca.trim().toLowerCase();
-    if (q === "") return inicial;
-    return inicial.filter((p) =>
-      [p.nome, p.codigo, p.marca ?? "", p.categoria ?? ""].join(" ").toLowerCase().includes(q),
-    );
-  }, [inicial, busca]);
+  function navegar(page: number, term = buscaInicial) {
+    const params = new URLSearchParams({ page: String(page) });
+    if (term.trim()) params.set("busca", term.trim());
+    startTransition(() => router.push(`/app/products?${params.toString()}`));
+  }
 
   async function salvar() {
+    if (!podeEditar || salvando) return;
     const corpo = doRascunho(rascunho, t);
     if ("erro" in corpo) {
       toast.error(corpo.erro as string);
@@ -117,15 +168,18 @@ export function ProdutosClient({
   }
 
   async function importar(arquivo: File) {
+    if (!podeEditar || importando) return;
     setImportando(true);
     setResumo(null);
     try {
       const form = new FormData();
       form.append("file", arquivo);
-      const res = await fetch("/api/v1/products/import", { method: "POST", body: form });
+      const res = await fetch("/api/v1/products/import", {
+        method: "POST",
+        body: form,
+      });
       const json = (await res.json()) as
-        | { data: ResumoDaImportacao }
-        | { error?: { message?: string } };
+        { data: ResumoDaImportacao } | { error?: { message?: string } };
       if (!res.ok || !("data" in json)) {
         const msg = "error" in json ? json.error?.message : undefined;
         toast.error(msg ?? t("Não consegui ler essa planilha."));
@@ -144,6 +198,7 @@ export function ProdutosClient({
   }
 
   async function alternarAtivo(p: Produto) {
+    if (!podeEditar) return;
     try {
       await apiClient.patch(`/api/v1/products/${p.id}`, { ativo: !p.ativo });
       toast.success(t(p.ativo ? "Produto desativado" : "Produto reativado"));
@@ -160,17 +215,30 @@ export function ProdutosClient({
         <p className="mt-1 text-sm text-muted-foreground">{textos.subtitulo}</p>
       </header>
 
-      <div className="mb-4 flex items-center gap-3">
-        <input
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          placeholder={t("Buscar por nome, código ou marca")}
-          className="h-9 w-full max-w-sm rounded-md border px-3 text-sm"
-          data-testid="busca-produto"
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <BuscaDoCatalogo
+          key={`${pagina}:${buscaInicial}`}
+          inicial={buscaInicial}
+          pendente={navegando}
+          aoBuscar={(term) => navegar(1, term)}
         />
+        {buscaInicial && (
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={navegando}
+            onClick={() => navegar(1, "")}
+          >
+            {t("Limpar busca")}
+          </Button>
+        )}
         {podeEditar ? (
           <>
-            <Button onClick={() => setCriando((v) => !v)} data-testid="novo-produto">
+            <Button
+              type="button"
+              onClick={() => setCriando((v) => !v)}
+              data-testid="novo-produto"
+            >
               {t(criando ? "Cancelar" : "Novo produto")}
             </Button>
             <input
@@ -186,6 +254,7 @@ export function ProdutosClient({
             />
             <Button
               variant="outline"
+              type="button"
               disabled={importando}
               onClick={() => arquivoRef.current?.click()}
               data-testid="importar-planilha"
@@ -195,6 +264,11 @@ export function ProdutosClient({
           </>
         ) : null}
       </div>
+      {navegando && (
+        <p role="status" className="mb-3 text-sm">
+          {t("Carregando produtos…")}
+        </p>
+      )}
 
       {podeEditar ? (
         // Rota de API que devolve o arquivo com `content-disposition:
@@ -211,14 +285,18 @@ export function ProdutosClient({
       ) : null}
 
       {resumo ? (
-        <div className="mb-6 rounded-lg border p-4 text-sm" data-testid="resumo-importacao">
+        <div
+          className="mb-6 rounded-lg border p-4 text-sm"
+          data-testid="resumo-importacao"
+        >
           <p className="font-medium">
-            {resumo.criados} {t("novos")} · {resumo.atualizados} {t("atualizados")} ·{" "}
-            {resumo.total_linhas} {t("linhas na planilha")}
+            {resumo.criados} {t("novos")} · {resumo.atualizados}{" "}
+            {t("atualizados")} · {resumo.total_linhas} {t("linhas na planilha")}
           </p>
           {resumo.colunas_ignoradas.length > 0 ? (
             <p className="mt-2 text-muted-foreground">
-              {t("Não usei estas colunas:")} {resumo.colunas_ignoradas.join(", ")}.
+              {t("Não usei estas colunas:")}{" "}
+              {resumo.colunas_ignoradas.join(", ")}.
             </p>
           ) : null}
           {resumo.erros.length > 0 ? (
@@ -238,7 +316,10 @@ export function ProdutosClient({
               ) : null}
             </div>
           ) : null}
-          <button className="mt-3 text-xs underline" onClick={() => setResumo(null)}>
+          <button
+            className="mt-3 text-xs underline"
+            onClick={() => setResumo(null)}
+          >
             {t("Fechar")}
           </button>
         </div>
@@ -251,7 +332,9 @@ export function ProdutosClient({
               {t("Código")}
               <input
                 value={rascunho.codigo}
-                onChange={(e) => setRascunho({ ...rascunho, codigo: e.target.value })}
+                onChange={(e) =>
+                  setRascunho({ ...rascunho, codigo: e.target.value })
+                }
                 className="mt-1 h-9 w-full rounded-md border px-3"
                 data-testid="produto-codigo"
               />
@@ -260,7 +343,9 @@ export function ProdutosClient({
               {t("Nome")}
               <input
                 value={rascunho.nome}
-                onChange={(e) => setRascunho({ ...rascunho, nome: e.target.value })}
+                onChange={(e) =>
+                  setRascunho({ ...rascunho, nome: e.target.value })
+                }
                 className="mt-1 h-9 w-full rounded-md border px-3"
                 data-testid="produto-nome"
               />
@@ -269,7 +354,9 @@ export function ProdutosClient({
               {t("Marca")}
               <input
                 value={rascunho.marca}
-                onChange={(e) => setRascunho({ ...rascunho, marca: e.target.value })}
+                onChange={(e) =>
+                  setRascunho({ ...rascunho, marca: e.target.value })
+                }
                 className="mt-1 h-9 w-full rounded-md border px-3"
               />
             </label>
@@ -277,7 +364,9 @@ export function ProdutosClient({
               {t("Categoria")}
               <input
                 value={rascunho.categoria}
-                onChange={(e) => setRascunho({ ...rascunho, categoria: e.target.value })}
+                onChange={(e) =>
+                  setRascunho({ ...rascunho, categoria: e.target.value })
+                }
                 className="mt-1 h-9 w-full rounded-md border px-3"
               />
             </label>
@@ -285,22 +374,48 @@ export function ProdutosClient({
               {t("Preço de venda")}
               <input
                 value={rascunho.preco}
-                onChange={(e) => setRascunho({ ...rascunho, preco: e.target.value })}
+                onChange={(e) =>
+                  setRascunho({ ...rascunho, preco: e.target.value })
+                }
                 placeholder="5.499,00"
                 className="mt-1 h-9 w-full rounded-md border px-3"
                 data-testid="produto-preco"
               />
             </label>
             <label className="text-sm">
-              {t("Custo")} <span className="text-muted-foreground">{t("(opcional)")}</span>
+              {t("Custo")}{" "}
+              <span className="text-muted-foreground">{t("(opcional)")}</span>
               <input
                 value={rascunho.custo}
-                onChange={(e) => setRascunho({ ...rascunho, custo: e.target.value })}
+                onChange={(e) =>
+                  setRascunho({ ...rascunho, custo: e.target.value })
+                }
                 placeholder="4.100,00"
                 className="mt-1 h-9 w-full rounded-md border px-3"
               />
               <span className="mt-1 block text-xs text-muted-foreground">
-                {t("Serve para o atendente saber até onde pode negociar. Não aparece para o cliente.")}
+                {t(
+                  "Serve para o atendente saber até onde pode negociar. Não aparece para o cliente.",
+                )}
+              </span>
+            </label>
+            <label className="text-sm">
+              {t("Unidade de venda")}{" "}
+              <span className="text-muted-foreground">{t("(opcional)")}</span>
+              <input
+                value={rascunho.sale_unit}
+                onChange={(e) =>
+                  setRascunho({ ...rascunho, sale_unit: e.target.value })
+                }
+                placeholder={t("Ex.: caixa, kg")}
+                maxLength={32}
+                className="mt-1 h-9 w-full rounded-md border px-3"
+                data-testid="produto-unidade-venda"
+              />
+              <span className="mt-1 block text-xs text-muted-foreground">
+                {t(
+                  "Informe como este produto é vendido. Não convertemos unidades automaticamente.",
+                )}
               </span>
             </label>
           </div>
@@ -309,7 +424,9 @@ export function ProdutosClient({
             <input
               type="checkbox"
               checked={rascunho.controla_estoque}
-              onChange={(e) => setRascunho({ ...rascunho, controla_estoque: e.target.checked })}
+              onChange={(e) =>
+                setRascunho({ ...rascunho, controla_estoque: e.target.checked })
+              }
               data-testid="produto-controla-estoque"
             />
             {t("Controlar estoque deste produto")}
@@ -319,7 +436,9 @@ export function ProdutosClient({
               {t("Quantidade")}
               <input
                 value={rascunho.quantidade}
-                onChange={(e) => setRascunho({ ...rascunho, quantidade: e.target.value })}
+                onChange={(e) =>
+                  setRascunho({ ...rascunho, quantidade: e.target.value })
+                }
                 className="mt-1 h-9 w-32 rounded-md border px-3"
               />
             </label>
@@ -332,29 +451,68 @@ export function ProdutosClient({
           )}
 
           <div className="mt-4">
-            <Button onClick={salvar} disabled={salvando} data-testid="salvar-produto">
+            <Button
+              onClick={salvar}
+              disabled={salvando}
+              data-testid="salvar-produto"
+            >
               {t(salvando ? "Salvando…" : "Salvar produto")}
             </Button>
           </div>
         </div>
       ) : null}
 
-      {filtrados.length === 0 ? (
-        <div className="rounded-lg border border-dashed p-8 text-center" data-testid="produtos-vazio">
-          <p className="font-medium">{textos.vazio}</p>
-          <p className="mt-1 text-sm text-muted-foreground">{textos.vazioDica}</p>
+      {erro ? (
+        <div
+          role="alert"
+          className="rounded-md border p-6"
+          data-testid="produtos-erro"
+        >
+          <p>{erro}</p>
+          <Button
+            variant="outline"
+            disabled={navegando}
+            onClick={() => startTransition(() => router.refresh())}
+          >
+            {t("Tentar novamente")}
+          </Button>
+        </div>
+      ) : inicial.length === 0 ? (
+        <div
+          className="rounded-lg border border-dashed p-8 text-center"
+          data-testid="produtos-vazio"
+        >
+          <p className="font-medium">
+            {pagina > 1
+              ? t("Nenhum produto nesta página")
+              : buscaInicial
+                ? t("Nenhum produto encontrado")
+                : textos.vazio}
+          </p>
+          {!buscaInicial && pagina === 1 && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {textos.vazioDica}
+            </p>
+          )}
         </div>
       ) : (
         <ul className="divide-y rounded-lg border" data-testid="lista-produtos">
-          {filtrados.map((p) => (
-            <li key={p.id} className="flex items-center gap-4 p-3" data-testid={`produto-${p.codigo}`}>
+          {inicial.map((p) => (
+            <li
+              key={p.id}
+              className="flex items-center gap-4 p-3"
+              data-testid={`produto-${p.codigo}`}
+            >
               <div className="min-w-0 flex-1">
-                <p className={`truncate font-medium ${p.ativo ? "" : "text-muted-foreground line-through"}`}>
+                <p
+                  className={`truncate font-medium ${p.ativo ? "" : "text-muted-foreground line-through"}`}
+                >
                   {p.nome}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {p.codigo}
                   {p.marca ? ` · ${p.marca}` : ""}
+                  {` · ${p.sale_unit ?? t("Unidade não definida")}`}
                   {p.controla_estoque
                     ? ` · ${p.quantidade} ${t("em estoque")}`
                     : ` · ${t("sem controle de estoque")}`}
@@ -376,6 +534,30 @@ export function ProdutosClient({
             </li>
           ))}
         </ul>
+      )}
+      {!erro && (total > limite || pagina > 1) && (
+        <nav
+          aria-label={t("Paginação do catálogo")}
+          className="mt-4 flex items-center justify-between gap-3"
+        >
+          <Button
+            variant="outline"
+            disabled={navegando || pagina <= 1}
+            onClick={() => navegar(pagina - 1)}
+          >
+            {t("Anterior")}
+          </Button>
+          <span className="text-sm">
+            {t("Página")} {pagina} · {total} {t("produtos")}
+          </span>
+          <Button
+            variant="outline"
+            disabled={navegando || pagina * limite >= total}
+            onClick={() => navegar(pagina + 1)}
+          >
+            {t("Próxima")}
+          </Button>
+        </nav>
       )}
     </div>
   );

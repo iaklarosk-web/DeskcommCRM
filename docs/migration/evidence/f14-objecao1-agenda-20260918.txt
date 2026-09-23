@@ -1,0 +1,87 @@
+== 2026-09-18T06:03:24Z sandbox up
+==> workdir preparado em .verify-logs/sandbox-workdir (project_id=f02-crm-cadastros)
+WARN: config section [inbucket] is deprecated. Please use [local_smtp] instead.
+Starting database...
+Initialising schema...
+Seeding globals from roles.sql...
+WARN: no files matched pattern: supabase/seed.sql
+A new version of Supabase CLI is available: v2.117.0 (currently installed v2.116.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+==> criando as extensões que o baseline referencia e não cria
+NOTICE:  schema "extensions" already exists, skipping
+NOTICE:  extension "uuid-ossp" already exists, skipping
+NOTICE:  extension "pgcrypto" already exists, skipping
+==> aplicando supabase/baseline.sql no banco do sandbox
+==> baseline aplicado; 3252 linhas de saída em .verify-logs/sandbox-workdir/baseline.log
+==> portas de pé: 55424 
+==> antes de rodar o navegador, exporte E2E_PORT=3102: o
+    playwright.config.ts lê process.env.E2E_PORT ANTES de publicar o
+    .env.e2e, então sem isso ele tenta a porta 3001 e o build sobe no
+    lugar errado. Medido na F03-T09.
+==> [realtime] fica DESLIGADO neste sandbox, como na F02: nenhuma spec
+    do inventário obrigatório usa realtime, e o container custa RAM que
+    esta VPS de dois núcleos não tem. A spec inbox-tempo-real NÃO roda
+    aqui — ela já está declarada fora do CI.
+==> .env.e2e NÃO é regravado por este script: as chaves locais do
+    Supabase são determinísticas por projeto, então o arquivo privado
+    preservado continua valendo. Para regerar: pnpm e2e:env com o
+    workdir apontado, e nunca imprima o conteúdo.
+== env
+==> .env.e2e gerado, apontando para http://127.0.0.1:55421
+==> Próximo: pnpm e2e:build && pnpm test:e2e
+== build
+build: reaproveitado
+== seed credenciais
+org: 447579c3-fa01-429d-b3db-8312016d9ae8
+agent default: d9fa68df-2042-4a63-a0e7-a0a82b63ad3b
+users: admin(admin)=e2e-admin@deskcomm.test, manager(manager)=e2e-manager@deskcomm.test, agent(agent)=e2e-agent@deskcomm.test, viewer(viewer)=e2e-viewer@deskcomm.test, dono(admin)=e2e-dono@deskcomm.test
+== specs
+[WebServer] {"level":"warn","msg":"[ai-dispatcher.rate-limit] redis incr failed; falling back to in-memory","ts":"2026-09-18T06:04:54.808Z","error":"fetch failed","bucket":"auth:login:ip:eff8e7ca506627fe15dda5e0e512fcaa"}
+[WebServer] ⨯ Error: The destination stream closed early.
+[WebServer]     at ignore-listed frames {
+[WebServer]   digest: '2275248422'
+[WebServer] }
+  ✓   3 [chromium] › tests/e2e/agenda-remarcar-e-cancelar.spec.ts:121:5 › cancelar pela tela: o motivo é exigido, e o compromisso sai dos próximos (15.5s)
+[WebServer] {"level":"warn","msg":"[ai-dispatcher.rate-limit] redis incr failed; falling back to in-memory","ts":"2026-09-18T06:05:10.279Z","error":"fetch failed","bucket":"auth:login:ip:eff8e7ca506627fe15dda5e0e512fcaa"}
+  ✓   4 [chromium] › tests/e2e/agenda-remarcar-e-cancelar.spec.ts:171:5 › remarcar pela tela: o painel abre em modo remarcar e o horário muda (12.5s)
+[WebServer] {"level":"warn","msg":"[ai-dispatcher.rate-limit] redis incr failed; falling back to in-memory","ts":"2026-09-18T06:05:23.158Z","error":"fetch failed","bucket":"auth:login:ip:eff8e7ca506627fe15dda5e0e512fcaa"}
+[WebServer] Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+[WebServer] Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+[WebServer] Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+[WebServer] Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+[WebServer] Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+[WebServer] Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+[WebServer] Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+[WebServer] Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+[WebServer] Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+  ✓   5 [chromium] › tests/e2e/agenda-tela-do-produto.spec.ts:38:7 › a Agenda como o dono do produto a usa › chego na Agenda CLICANDO no menu, não digitando a URL (7.1s)
+[WebServer] Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+[WebServer] Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+[WebServer] Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+[WebServer] Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+[WebServer] Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+[WebServer] Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+[WebServer] Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+  ✓   6 [chromium] › tests/e2e/agenda-tela-do-produto.spec.ts:57:7 › a Agenda como o dono do produto a usa › as pessoas da equipe são REAIS — o filtro deixou de ser invisível (4.4s)
+  ✓   7 [chromium] › tests/e2e/agenda-tela-do-produto.spec.ts:120:7 › a Agenda como o dono do produto a usa › o histórico está NA TELA DO PRODUTO, com as quatro abas (160ms)
+  ✓   8 [chromium] › tests/e2e/agenda-tela-do-produto.spec.ts:130:7 › a Agenda como o dono do produto a usa › a tela declara de onde veio o que ela mostra — e nunca de mentira (125ms)
+  ✓   9 [chromium] › tests/e2e/agenda-tela-do-produto.spec.ts:157:7 › a Agenda como o dono do produto a usa › as três visões desenham, e a régua do agora existe — NO PRODUTO (803ms)
+[WebServer] Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+[WebServer] Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+[WebServer] Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+[WebServer] Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+  ✓  10 [chromium] › tests/e2e/agenda-tela-do-produto.spec.ts:189:7 › a Agenda como o dono do produto a usa › o filtro por pessoa ISOLA de verdade — clicando, no produto (601ms)
+[WebServer] Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+  ✓  11 [chromium] › tests/e2e/agenda-tela-do-produto.spec.ts:216:7 › a Agenda como o dono do produto a usa › evidência visual da tela do produto (2.3s)
+[WebServer] Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+
+  11 passed (1.4m)
+specs exit=0
+== sandbox down
+{"project_id_filter":"f02-crm-cadastros","backup":false,"message":"Stopped supabase local development setup."}
+A new version of Supabase CLI is available: v2.117.0 (currently installed v2.116.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+==> containers restantes deste sandbox: 0
+==> portas ainda ocupadas:  
+== fim 2026-09-18T06:05:45Z
+exit=0

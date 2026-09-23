@@ -1,0 +1,38 @@
+{
+  "id": "evt_1F19Fixture000000000001",
+  "object": "event",
+  "api_version": "2025-08-27.basil",
+  "created": 1758290400,
+  "data": {
+    "object": {
+      "id": "cs_test_a1F19Fixture000000000000000000000000000000000001",
+      "object": "checkout.session",
+      "amount_subtotal": 1000,
+      "amount_total": 0,
+      "client_reference_id": "f1900002-0000-4000-8000-000000000001",
+      "currency": "brl",
+      "customer": "cus_F19Fixture000001",
+      "customer_details": {
+        "email": "dono@f19.invalid",
+        "name": "F19 Fixture"
+      },
+      "livemode": false,
+      "metadata": {},
+      "mode": "subscription",
+      "payment_method_collection": "always",
+      "payment_status": "no_payment_required",
+      "status": "complete",
+      "subscription": "sub_1F19Fixture00000001",
+      "success_url": "http://localhost:3000/app/billing?checkout=ok",
+      "cancel_url": "http://localhost:3000/app/billing?checkout=cancelado",
+      "url": null
+    }
+  },
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": {
+    "id": "req_F19Fixture0001",
+    "idempotency_key": null
+  },
+  "type": "checkout.session.completed"
+}

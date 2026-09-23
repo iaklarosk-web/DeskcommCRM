@@ -13,11 +13,12 @@ import { PACING_DEFAULTS } from '@/lib/agent-engine/pacing/defaults';
 const MADRUGADA = new Date('2026-07-28T06:00:00Z'); // 03h BRT — fora da janela 7h-22h
 const COMERCIAL = new Date('2026-07-28T13:00:00Z'); // 10h BRT — terça, dentro da janela
 
-function input(over: { now: Date; banRisk?: boolean; sentToday?: number }) {
+function input(over: { now: Date; banRisk?: boolean; liveVisitor?: boolean; sentToday?: number }) {
   return {
     now: over.now,
     knobs: PACING_DEFAULTS,
     banRisk: over.banRisk,
+    liveVisitor: over.liveVisitor,
     state: {
       lastSentAt: null,
       sentToday: over.sentToday ?? 0,
@@ -51,5 +52,23 @@ describe('cortesia não é anti-ban', () => {
   it('omitir banRisk preserva o comportamento atual (default = true)', () => {
     const d = decidePacing(input({ now: COMERCIAL, sentToday: 999 }));
     expect(d.allow).toBe(false); // nenhum chamador existente muda de resultado
+  });
+
+  // F14 (ADR-038; doutrina inv. 3, exceção declarada): o visitante do chat do
+  // site está NA PÁGINA — a janela não tem a quem proteger. Desarma SÓ a
+  // janela; o anti-ban continua decidido por `banRisk`.
+  it('com o visitante na página, a janela DESARMA às 3h (webchat, IA 24 h)', () => {
+    const d = decidePacing(input({ now: MADRUGADA, banRisk: false, liveVisitor: true }));
+    expect(d.allow).toBe(true);
+  });
+  it('com o visitante na página MAS com risco de ban, o cap de warm-up continua vetando', () => {
+    const d = decidePacing(input({ now: MADRUGADA, banRisk: true, liveVisitor: true, sentToday: 999 }));
+    expect(d.allow).toBe(false);
+    if (d.allow) throw new Error('inalcançável');
+    expect(d.code).not.toBe('outside_window');
+  });
+  it('omitir liveVisitor preserva o comportamento atual (default = false)', () => {
+    const d = decidePacing(input({ now: MADRUGADA, banRisk: false }));
+    expect(d.allow).toBe(false);
   });
 });

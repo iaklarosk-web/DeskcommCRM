@@ -1,0 +1,48 @@
+{
+  "id": "sub_1F19Fixture00000001",
+  "object": "subscription",
+  "cancel_at_period_end": false,
+  "canceled_at": null,
+  "collection_method": "charge_automatically",
+  "created": 1758290300,
+  "currency": "brl",
+  "current_period_end": 1760882300,
+  "current_period_start": 1758290300,
+  "customer": "cus_F19Fixture000001",
+  "default_payment_method": "pm_1F19Fixture0001",
+  "items": {
+    "object": "list",
+    "data": [
+      {
+        "id": "si_F19Fixture0001",
+        "object": "subscription_item",
+        "price": {
+          "id": "price_1F19FixturePlanA",
+          "object": "price",
+          "active": true,
+          "currency": "brl",
+          "product": "prod_F19FixturePlanA",
+          "recurring": {
+            "interval": "month",
+            "interval_count": 1
+          },
+          "type": "recurring",
+          "unit_amount": 1000
+        },
+        "quantity": 1
+      }
+    ],
+    "has_more": false,
+    "total_count": 1,
+    "url": "/v1/subscription_items?subscription=sub_1F19Fixture00000001"
+  },
+  "latest_invoice": "in_1F19Fixture00000001",
+  "livemode": false,
+  "metadata": {
+    "organization_id": "f1900002-0000-4000-8000-000000000001"
+  },
+  "pause_collection": null,
+  "status": "trialing",
+  "trial_end": 1758895100,
+  "trial_start": 1758290300
+}

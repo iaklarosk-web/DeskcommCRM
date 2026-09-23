@@ -1,0 +1,76 @@
+F08 — Serviços reais e produção inicial nesta VPS (crm.kntecnologia.app). Evidência de construção.
+Fechamento: 2026-09-14 (manhã, Brasília). Branch feat/F08-producao-inicial (a partir de dc45a638, fim da F11+F12).
+Código validado pelo gate: dc39424a46667c284856083e7662b375ee5aad29 (ADR-032 tasks T01–T10, verify v1.7 ADR-033, migration 9025, dois consertos: comentário do compose e prova de auditoria).
+Autorização: D52 (13–14/09/2026 — F08 autorizada; Stripe depois; planos placeholder; carência 7 dias sem pró-rata). BLOCKER-PROD segue aberto (D13).
+
+== GATE INTEGRAL — DENTRO DO STAGING (ADR-028 §2), current_phase=F08 (ADR-033 §1: inventário de F12; a produção fica FORA do bloco) ==
+./scripts/verify.sh, WHATSAPP_MODE=mock AI_PROVIDER=mock CI=1, um worker, zero retries,
+VERIFY_ENVIRONMENT=staging F02_E2E_SANDBOX_ID=crm-staging E2E_PORT=3202: navegador DUAS vezes contra o Supabase
+do STAGING desta VPS (loopback 56421/56422, app do gate em 3202) — E2E_TENANT=deka e depois demo2, mesma árvore,
+sem commit entre elas; unit/db/integration no Postgres efêmero de scripts/test-db.sh (baseline com o apêndice 9025).
+Execução f08-gate-03, 6007 s (100,1 min; 02:49:50 → 04:29:57 de Brasília, 14/09 = 05:49Z → 07:29Z), exit 0,
+STATUS: READY (staging), violations=0, TERCEIRA tentativa. Etapas: typecheck 13 s, lint 83 s, build 143 s,
+shell 54 s, unit 1468 s, integration 78 s, db 855 s, e2e-deka 1190 s, e2e-demo2 1190 s, mutantes 62/62.
+inputs: files=3592 sha256 db9c0c3f… antes = depois. Load de outros projetos durante o navegador: 10–13.
+
+Tentativas: 01 interrompida em unit (8507/8508) por UMA régua real — namespace-das-imagens pegou o literal do
+namespace do upstream num COMENTÁRIO do compose.prod.yml (ADR-032 §3 cita a imagem herdada) — consertada em
+5c202263 (comentário reescrito; a ADR mantém a referência); 02 interrompida em e2e-deka (50/51; unit 8508/8508,
+integration 175/175, db 1661/1661 verdes): f02-support-readonly-api viu api_audit_log +3 em vez de +2 — o audit
+fire-and-forget do início do acompanhamento chegou DEPOIS da contagem "antes" sob load ≈ 10; nenhuma recusa a
+mais (a asserção por request_id continuou verde) — conserto de prova em dc39424a (linha de base só vale quando
+parou de crescer: duas leituras iguais com 1,5 s); 03 READY.
+
+VERIFY SUMMARY
+scope=phase phase=F08 current_phase=F08 environment=staging
+build=ok lint=ok typecheck=ok shell=ok
+unit=8508/8508 integration=175/175 db=1661/1661 e2e=51/51 baseline_n0=8997
+baseline_comparable: scope=unit+db passed=10169 required=8738 full_n0=pending
+e2e_scope: F08-required passed=51/51 specs=12/12
+isolation: tables=138 ops=4 dirs=2 leaks=0 (material_cross_org=97/138)
+rls-coverage: tables_with_org_id=138 policies_found=116 missing=0 service_only_with_grant=0
+rbac: roles=3 denied_expected=19 denied_actual=19
+entitlement: usage_events_written=23
+ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0
+handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3 notify=3 notify_rows=6 msgs_after=3 provider_calls_after=0
+reminder: runs=2 sent=1 duplicates=0 tables_summed=3
+webhook: replay=2 stored=1 tables_checked=7
+logs: routes=278 routes_logged=278 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
+rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=278 routes_with_schema=278 routes_reading_input=148 validated=148
+lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2
+admin: tenants_listed=3/3 support_sessions=2 support_reason=2/2 support_scope_denied=25/32 support_writes_denied=5/5 full_mode_rejected=1/1 signup_awaiting_payment=1/1 orgs_without_subscription=0/3
+billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1/1 blocked_writes_denied=5/5 grace_days=7 reconciliation_mismatch=0/3 cancellations=1/1 data_preserved=7/7
+replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=51/51 demo2=51/51 specs=12/12 org_a=seed-replica)
+secrets: files_scanned=520 findings=0
+tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=62/62
+debt_known=0 skip_only_occurrences=15 violations=0
+STATUS: READY (staging)
+
+== Provas de operação — STAGING (container crm-staging, imagem da F12 + migration 9025 aplicada; a F08 não muda código do app) ==
+restore: tables=183 tables_restored=183 rows=9570 rows_diff=0 dump=staging-20260914T073055Z.dump target=restore_20260914_073056 seconds=12 at=20260914T073056Z
+smoke: steps=7 pass=7/7 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 owner_login=1/1 subscriptions[deka]=active/full subscriptions[demo2]=active/full orgs_without_subscription=0/2 tenants=deka,demo2
+p95_ms: endpoints=3/3 health=38 contacts=469 conversations=468 samples=20 url=http://127.0.0.1:3200
+staging: compose=crm-staging services_running=15/15 memory_mib=1449 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F12(1e13071d)+9025
+
+== PRODUÇÃO INICIAL — stack crm-prod de pé (scripts/prod/up.sh 14/14 em 463 s, 2026-09-14T02:18Z→02:26Z), domínio no Caddy do host ==
+prod: compose=crm-prod services_running=14/14 config_vars=27/27 placeholders=0/27 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=1 orgs_without_subscription=0/1 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only backup=1/1 restore_rows_diff=0 sha=dc39424a
+prod_stack: compose=crm-prod services_running=14/14 memory_mib=1962 ports=127.0.0.1+tailscale(3300,56431,56432) public_ports=0
+Domínio: https://crm.kntecnologia.app/api/v1/health = HTTP/2 200 com strict-transport-security (certificado emitido no reload do Caddy,
+02:28Z); /auth/v1/health e /rest/v1/ pelo domínio = 200; robots.txt privado; os 7 outros vhosts da VPS responderam 200/307 antes e depois.
+Dono: criado pelo proprietário (scripts/prod/bootstrap-owner.sh — o classificador bloqueou o agente): users=1 orgs=1 platform_admins=1
+subscriptions_active=1 (PLAN_C active/operator) orgs_without_subscription=0/1.
+Jornadas reais (docs/ops/prod-jornadas.log; proprietário como único destinatário; id do provedor, nunca corpo):
+  sentry: ok id=a4514e84e77a4005b082a8cc9be0e4e0 community=false kept=4/8 pii_fields=0/4 flushed=1/1 (scripts/prod/jornada-sentry.ts no worker)
+  email: ok id=400d30d4-4953-4aca-8065-ecffefe7d343 from=crm@mail.kntecnologia.app recovery_audit=1/1 (GoTrue /recover por SMTP + lib/email/resend.ts pela API)
+  embedding: ok source=f6ea0a02 status=success chunks=3 model=openai/text-embedding-3-small (ai_chunks.embedding vector(1536))
+  whatsapp_session: row status=FAILED (sessão criada no WAHA real pelo POST do onboarding; sem QR lido cai em FAILED em ~2 min — D12-4)
+  ai_turn: ai_turn: ok status=ok provider=anthropic model=claude-haiku-4-5 chars=231 agent=feafebc3 version=36ad5f85 version_status=draft dry_run=1 (07:01 BRT, dentro da janela; às 01:05/04:14 BRT: ai_turn: window — 10 chamadas registradas, resposta agendada por outside_window)
+Backup diário: ~/bin/backup-crm-os (= scripts/prod/backup-diario.sh), cron 20 3 * * *; primeira execução à mão 2026-09-14T02:33Z:
+  1.518.613 B confirmados em gdrive-crypt:crm-os/db/crm-db-2026-09-13.dump (tamanho local = remoto), marcador /var/tmp/crm-os-backup-success.marker.
+Restore de produção (banco VAZIO novo, D36): restore: tables=183 tables_restored=183 rows=207 rows_diff=0 dump=prod-20260914T023429Z.dump seconds=11.
+Migration 9025 aplicada em produção e staging (fn_reserve_channel_connection: sessão renomeada 69→53 chars); test-db parcial 20/20.
+
+== O que NÃO foi verificado (fica em FINAL-VALIDATION §3) ==
+WhatsApp real (número + pareamento — do proprietário, D12-4); produção LIBERADA (BLOCKER-PROD, D13: cadastro público desligado);
+Stripe (D52, fase própria); a caixa de entrada do proprietário; o cron do backup (primeira execução agendada); demo3 e from-scratch
+nesta fase; run do verify.yml no GitHub (PR do proprietário); teste visual pelo domínio.

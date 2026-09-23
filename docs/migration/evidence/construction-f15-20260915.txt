@@ -1,0 +1,146 @@
+F15 — automação e autonomia de IA por empresa/ação (política por ação, limite diário, handoff por rodízio, regras sobre o catálogo, conhecimento com proveniência). Evidência de construção.
+Fechamento: 2026-09-15 (madrugada, Brasília). Branch feat/F15-automacao-e-autonomia (a partir de 426d011c, fim da F13/D53).
+Código validado pelo gate: 4c7bfcdf (ADR-036 tasks T00–T06, verify v1.9 ADR-037, migrations 9027/9028/9029, §B16 reescrito, §B5/§C6 fechado).
+Autorização: D54 (14/09/2026 — F15 como próxima fase, escolhida em entrevista em cards + contraponto; engenharia em staging; ≤ 20 turnos reais
+de IA na prova; sem número de WhatsApp, sem liberação geral, sem Stripe). BLOCKER-PROD segue aberto (D13; liberado só para o tenant Deka, D53).
+
+== GATE INTEGRAL — DENTRO DO STAGING (ADR-028 §2), current_phase=F15 (ADR-037 §1: inventário de F13 + f15-automacao-e-autonomia = 14 specs, 65 testes) ==
+./scripts/verify.sh, WHATSAPP_MODE=mock AI_PROVIDER=mock CI=1, um worker, zero retries,
+VERIFY_ENVIRONMENT=staging F02_E2E_SANDBOX_ID=crm-staging E2E_PORT=3202: navegador DUAS vezes contra o Supabase
+do STAGING desta VPS (loopback 56421/56422, app do gate em 3202) — E2E_TENANT=deka e depois demo2, mesma árvore,
+sem commit entre elas; unit/db/integration no Postgres efêmero de scripts/test-db.sh (baseline com os apêndices 9027–9029).
+Execução f15-gate-03, ≈ 7420 s (123,7 min; 01:41Z → 03:44Z de 15/09 = 22:41 → 00:44 de Brasília), exit 0,
+STATUS: READY (staging), violations=0, TERCEIRA tentativa. Etapas: typecheck 13 s, lint 113 s, build 354 s, shell 63 s,
+unit 1743 s, integration 115 s, db 956 s, e2e-deka 1414 s, e2e-demo2 1451 s, mutantes 69/69.
+inputs: files=3657 sha256 cedf1f03… antes = depois. Load durante o navegador: 10–13 (o próprio gate; entre 00:30Z e 01:10Z também
+um build/tsc de /srv/prod/oferta-os — de outro agente — a 89 % de CPU, sem timeouts).
+
+Tentativas (nenhuma de carga; as três causas foram defeitos de PROVA/estrutura, consertados e relançados sobre commit novo):
+01 (sobre 0c86bb2d) — unit 8533/8535 e integração 205/208. (a) `create-tenant-f02-seed`: o CLI `scripts/create-tenant.ts`
+   (ADR-029 §3, só SUPABASE_DB_URL) morria em `lib/env` — a chave `actions.policy` fez `tenant-config/validators` importar
+   `actions/politica` → `catalog` → `conversation` → `settings` → `lib/env`. (b) `baseline-constraint-reconstruida`:
+   `notifications_event_check`/`email_outbox_event_check` reconstruídas duas vezes no baseline (9023 + 9028). (c)
+   `spec-de-envio-declara-a-janela`: a spec nova sem dispensa. Morto por cwd em db; container de teste apagado; 0 fixtures órfãs.
+   Conserto 5c02855d: `src/actions/nomes.ts` (nomes do catálogo sem o catálogo; unit afirma igualdade com ACTION_CATALOG),
+   bloco único da 9023 com o vocabulário final (apêndice 9028 não byte-fiel, dito no arquivo e no MANIFEST), dispensa com motivo.
+02 (sobre 5c02855d) — tudo verde (unit 8536/8536, integração 208/208, db 1670/1670, e2e 65/65 × 2, replicability ok,
+   `autonomy:` medida) e mutants_killed=68/69: o 40 (`f04-confirmacao-por-risco`) tinha alvo desatualizado — a T01 substituiu
+   `if (await exigeConfirmacao(…))` por `if (modo === "approve")`. Conserto 4c7bfcdf: mutante reapontado (mata 1/1) +
+   `scripts/prod/jornada-limite-ia.ts` (a linha `ai_real:`, abaixo). Lição já escrita: alvo desatualizado = mutante vivo.
+03 (sobre 4c7bfcdf) — READY (staging).
+
+VERIFY SUMMARY
+scope=phase phase=F15 current_phase=F15 environment=staging
+build=ok lint=ok typecheck=ok shell=ok
+unit=8536/8536 integration=208/208 db=1670/1670 e2e=65/65 baseline_n0=8997
+baseline_comparable: scope=unit+db passed=10206 required=8738 full_n0=pending
+e2e_scope: F15-required passed=65/65 specs=14/14
+isolation: tables=138 ops=4 dirs=2 leaks=0 (material_cross_org=97/138)
+rls-coverage: tables_with_org_id=138 policies_found=116 missing=0 service_only_with_grant=0
+rbac: roles=4 denied_expected=32 denied_actual=32
+entitlement: usage_events_written=23
+ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0
+handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3 notify=3 notify_rows=6 msgs_after=3 provider_calls_after=0
+reminder: runs=2 sent=1 duplicates=0 tables_summed=3
+webhook: replay=2 stored=1 tables_checked=7
+logs: routes=286 routes_logged=286 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
+rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=286 routes_with_schema=286 routes_reading_input=155 validated=155
+lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2
+admin: tenants_listed=3/3 support_sessions=2 support_reason=2/2 support_scope_denied=25/32 support_writes_denied=5/5 full_mode_rejected=1/1 signup_awaiting_payment=1/1 orgs_without_subscription=0/3
+billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1/1 blocked_writes_denied=5/5 grace_days=7 reconciliation_mismatch=0/3 cancellations=1/1 data_preserved=7/7
+crm: fields_defined=6 values_rejected=3/3 values_preserved=4/4 queue_size=5 distributed=5/5 balanced=1 second_claim_rejected=1/1 history_types=3 orders_linked=1/1 cross_org_link_denied=1/1 report_indicators=14/14 roles_denied=3/3
+autonomy: policy_modes=4/4 ai_task_created=1/1 limit_hits=1/1 calls_after_limit=0/3 paused=1/1 resumed=1/1 handoffs=4 balanced=1 assignees_distinct=3 rules=4 runs=4/4 replays=4 duplicate_runs=0 outside_catalog_denied=1/1 reindexed=2/2 unchanged_skipped=4/4 sources_cited=1/1 roles_denied=3/3
+replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=65/65 demo2=65/65 specs=14/14 org_a=seed-replica)
+secrets: files_scanned=542 findings=0
+tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=69/69
+debt_known=0 skip_only_occurrences=15 violations=0
+STATUS: READY (staging)
+
+== O que cada campo da linha `autonomy:` mede (tests/integration/f15-automacao-e-autonomia.test.ts, ADR-037 §2) ==
+policy_modes=4/4: por executor `ai`, em ações de ESCRITA, com o efeito no banco — allow: create_task executa (+ replay idempotente por
+  tipo de executor), recibo/evento com actor_type=ai e o id do turno, created_by nulo; approve: create_order fica pendente
+  (pending_actions), 0 pedidos gravados, conversa em waiting_confirmation; block: create_task negada policy_blocked, 0 tarefas,
+  1 linha de auditoria; transfer: send_message negada policy_transferred, 0 mensagens, conversa em waiting_human, handoff tenant_rule;
+  a organização B sem entrada continua no D33. ai_task_created=1/1 fecha VARREDURA §B5/§C6.
+limit_hits=1/1 calls_after_limit=0/3 paused=1/1 resumed=1/1: daily_turns=2 → dois turnos respondem (2 linhas chat em ai_usage_events),
+  o terceiro vira handoff tenant_rule sem chamar o provedor; três turnos depois em conversas distintas: 0 chamadas ao registry falso,
+  saldo de ai_usage_events inalterado (G-20), UM aviso ai.limit_reached ao tenant_admin (4 tentativas); limite 10 → o turno volta a
+  responder (1 chamada); limite 0 = sem teto.
+handoffs=4 balanced=1 assignees_distinct=3: round_robin — 4 transferências pela IA sobre 3 attendants → cargas 2/1/1, aviso só ao
+  atribuído (4/4, payload.assigned_to); o atribuído vê o seu na fila e o outro não (1/1 e 1/1); claim do outro = assigned_to_other,
+  claim do atribuído assume (human_handling); queue (default) nasce sem atribuição e avisa a fila inteira (3/3).
+rules=4 runs=4/4 replays=4 duplicate_runs=0 outside_catalog_denied=1/1: uma regra por gatilho (lead.stage_changed→assign_owner,
+  order.confirmed→create_task, task.overdue→send_message, conversation.resolved→create_task), cada evento pelo emissor real (T00) ou
+  pela forma que a rota herdada emite; motor pg (src/automation/motor.ts): 4 runs success com efeito medido (dono na oportunidade,
+  tarefa no pedido confirmado, mensagem na conversa ativa do contato, tarefa pós-atendimento), 4 auditorias actor_type=automation
+  com request_id rule:…; redespacho dos 4 eventos = 4 `duplicate` pelo índice da 9027, 0 linhas/tarefas/mensagens novas; regra
+  legada com call_webhook: recusada na escrita (validador) e `failed: outside_catalog` na execução.
+reindexed=2/2 unchanged_skipped=4/4 sources_cited=1/1: três reindexações do material do seed (1+1, 0+2, 1+1) com o embutidor
+  determinístico contado — chamadas = reindexados; uma versão ativa, 2 trechos ativos, 2 no total; o turno que usou o acervo devolve
+  fontes_citadas=["Entregas e prazos"] e a mensagem enviada leva metadata.ai_sources.
+roles_denied=3/3: settings.manage negada ao attendant e ao platform_admin (matriz D15) e rank manager exigido pelas rotas novas.
+
+== Spec de navegador f15-automacao-e-autonomia (7 testes × 2 execuções no gate; antes do gate: 7/7 fictícia e 7/7 E2E_TENANT=deka) ==
+Autonomia (A e B): /app/settings/tenant/ia/autonomia com 13 ações; create_task → "Bloquear" muda data-mode/data-source e a rota
+  devolve policy={create_task:block}; limite 7 gravado e mostrado (usado 0, não pausada); "Voltar ao padrão" limpa; o outro tenant
+  não tem tenant_settings; attendant lê (200) e não configura (403).
+Regras (A e B): /app/settings/tenant/automation-rules — criar pela tela nasce ligada (POST 201 + PATCH is_active); call_webhook e
+  message.received → 422 outside_catalog pela rota; desligar e apagar; 0 regras no banco ao fim.
+Regra dispara (A e B): regra lead.stage_changed→assign_owner pela tela; oportunidade criada e movida por /leads/[id]/move (emite
+  lead.stage_changed); GET /api/v1/cron/event-log-drain com o segredo roda o motor; automation_rule_runs=[success]; a oportunidade
+  ganhou um dos dois attendants; a tela mostra a execução success.
+Dono: /api/v1/admin/tenants lista A e B; /api/v1/admin/usage?range=7d&tenant_id=A → 200 só com A.
+§B16 (fora do inventário): suporte-temporario.spec.ts reescrita para só-leitura passa o bloco de leitura de B e para na asserção
+  herdada de REALTIME (linha 212) — o mesmo limite de inbox-tempo-real (fora do CI).
+
+== Provas de operação — STAGING (scripts/staging/up.sh --no-seed com a imagem da F15: 15/15 em 259 s, 03:45Z→03:49Z; baseline reaplicado com 9027–9029) ==
+restore: tables=183 tables_restored=183 rows=14873 rows_diff=0 dump=staging-20260915T034953Z.dump target=restore_20260915_034954 seconds=15 at=20260915T034954Z
+smoke: steps=7 pass=7/7 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 owner_login=1/1 subscriptions[deka]=active/full subscriptions[demo2]=active/full orgs_without_subscription=0/2 tenants=deka,demo2
+p95_ms: endpoints=3/3 health=25 contacts=375 conversations=392 samples=20 url=http://127.0.0.1:3200
+staging: compose=crm-staging services_running=15/15 memory_mib=2064 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F15(4c7bfcdf)
+Fixtures do gate apagadas: organizations com slug '%-e2e-%'/'f11-%'/'f13-%'/'f02-%' = 0 após os três gates.
+
+== PRODUÇÃO — stack crm-prod (scripts/prod/up.sh + prova.sh DEPOIS do READY, ADR-036 §2 T06) ==
+scripts/prod/up.sh: 14/14 em 255 s (03:50Z→03:54Z; next build no host + baseline idempotente com 9027–9029): no banco de produção
+uniq_automation_rule_runs_rule_event=1/1, notifications_event_check com ai.limit_reached=1/1, handoffs.assigned_to=1/1.
+prod: compose=crm-prod services_running=14/14 config_vars=27/27 placeholders=0/27 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=2 orgs_without_subscription=0/2 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only backup=1/1 restore_rows_diff=0 sha=4c7bfcdf
+prod_stack: compose=crm-prod services_running=14/14 memory_mib=1885 ports=127.0.0.1+tailscale(3300,56431,56432) public_ports=0
+restore_prod (banco VAZIO novo, D36): tables=183 tables_restored=183 rows=461 rows_diff=0 dump=prod-20260915T035537Z.dump target=restore_20260915_035538 seconds=7 at=20260915T035538Z
+
+== ai_real (ADR-036 §3; D54 g: ≤ 20 turnos; FORA do bloco, o verify força mock) — scripts/prod/jornada-limite-ia.ts no crm-prod-worker ==
+ai_real: turns=3/3 usage_delta=3/3 provider=anthropic model=claude-haiku-4-5 cost_cents=0.0162 limit_hit=1/1 denied=3/3 calls_after_limit=0/3 paused=1/1 notified=1 limit_restored=1/1 day=2026-09-15 at=2026-09-15T03:56:08Z
+Organização do proprietário ("KN Tecnologia"): limite posto em usados+3; 3 chamadas ai.reply pelo caminho do turno (chamarModelo →
+withEntitlement → resolver com limite → Anthropic) = 3 linhas chat em ai_usage_events (US$ 0,00016); 3 tentativas seguintes negadas
+daily_limit_reached ANTES do provedor (saldo inalterado); 1 aviso ai.limit_reached in-app ao dono (e-mail desligado: 0 em email_outbox);
+limite restaurado a 0. Nenhuma conversa, contato ou mensagem criados. Gasto novo da fase: estas 3 chamadas.
+
+== demo3 e from-scratch (primeira execução desde a F07 — as migrations 9025–9029 entraram pelo baseline) ==
+demo3: created=1 smoke=pass=7/7 e2e[demo3]=41/41 specs=10/10 removed=1 tenants=2
+  scripts/verify/tenant-efemero.sh demo3 no staging da F15, 15/09 03:56Z→04:11Z (log .verify-logs/f07-t03-demo3-20260915T035628Z/):
+  tenant demo3 pelo loader (rows_created=25), smoke 7/7, navegador com E2E_TENANT=demo3 no inventário fixo da F07 (10 specs, 41 testes),
+  remoção (usuarios_removidos=2, replicas_restantes=0), staging de volta a 2 tenants. Rodou com load 8–12 (build de outro projeto).
+from-scratch (tentativa 01): steps=7 pass=6/7 verify_exit=1 status="NOT READY" clone=.from-scratch-EURQ commit=4c7bfcdf
+  15/09 04:12Z→05:48Z (5767 s no verify): clone, install, sandbox 5542x com o baseline, seeds dos dois tenants (idempotentes),
+  verify inteiro no clone — unit/integration/db/e2e 2× (999 s + 1003 s)/mutants 69/69 todos verdes; UMA violação: "RBAC fora do
+  contrato", porque o from-scratch.sh (escrito na F07) gravava `current_phase: F07` no clone e o verify mede a matriz D15 pela
+  fase ativa (4 papéis desde a F13). Conserto: commit d2a66fb8 (a fase vem do BUILD-STATE da origem ou de FROM_SCRATCH_PHASE);
+  nenhum código de produto mudou — o READY (staging) continua sobre 4c7bfcdf.
+from-scratch (tentativa 02): steps=7 pass=6/7 verify_exit=1 status="NOT READY" clone=.from-scratch-mzbK commit=d2a66fb8
+  15/09 15:06Z→17:17Z (7767 s no verify, load5 9–12 por um processo Codex de outro projeto): fase=F15 lida da origem; bloco
+  scope=phase phase=F15 current_phase=F15 environment=sandbox; unit 8536/8536, integração 208/208, e2e 65/65 em 14 specs 2×
+  (1501 s + 1706 s), rbac roles=4 32/32, autonomy: idêntica à do gate 03, mutants 69/69; db 1669/1670 — UMA suíte herdada
+  (tests/invariants/agenda-google-reconciliacao.test.ts, caso "suporte full conserva dono efetivo…", comparação de estado
+  protegido) reprovou sob carga. Isolada, no mesmo HEAD, 3/3 execuções verdes (17/17 cada, load 4–5). Mesma classe do que a
+  F13 registrou (prova herdada sob carga) — relançar.
+from-scratch: steps=7 pass=7/7 verify_exit=0 status="READY (F15)" clone=.from-scratch-phto commit=d2a66fb8
+  15/09 17:21Z→19:24Z (verify 7360 s, load5 5–11): clone de d2a66fb8, install, sandbox 5542x com o baseline (as migrations
+  9025–9029 pelo apêndice), seeds dos dois tenants (segunda passada rows_created=0), verify inteiro com fase=F15: unit 8536/8536,
+  integração 208/208, db 1670/1670, e2e 65/65 em 14 specs 2× (deka 1370 s, demo2), rbac roles=4 32/32, autonomy: idêntica ao
+  gate 03, mutants 69/69, violations=0, STATUS: READY (F15) no sandbox. Log .verify-logs/f07-t04-from-scratch-20260915T172102Z/.
+
+== O que NÃO foi verificado (fica em FINAL-VALIDATION §3) ==
+Telas novas no navegador HUMANO (/app/settings/tenant/ia/autonomia, /app/settings/tenant/automation-rules) — teste visual é do
+proprietário; condições (SE) na tela de regras do SaaS (a tela grava conditions=[]; o motor avalia condições gravadas pela rota);
+o limite diário virando de dia de verdade (a retomada é medida subindo o limite); e-mail real do aviso ai.limit_reached (mock e
+desligado); ingestão por URL/upload (fora, D54 f); realtime do inbox na spec herdada do suporte; o handler do event_log no drain
+REAL do staging fora da spec (a spec chama o cron); WhatsApp real, liberação geral, Stripe (D12-4, D13, D52).

@@ -40,6 +40,14 @@ vi.mock("@/hooks/inbox/useConversationTags", () => ({
 vi.mock("@/hooks/inbox/useConversationCounts", () => ({
   useConversationCounts: () => ({ data: { unassigned: 3, mine: 2, all: 5 } }),
 }));
+// O filtro por RESPONSÁVEL (F03-T09) lê os mesmos destinos que a transferência
+// usa, por um `useQuery` de verdade — sem dublê ele explode por falta de
+// QueryClientProvider e derruba casos que nada têm a ver com ele. Lista VAZIA de
+// propósito: nenhum caso deste arquivo afirma coisa alguma sobre responsável, e
+// um dublê com nomes daria a esses casos conteúdo que eles não pediram.
+vi.mock("@/hooks/inbox/useAssignableMembers", () => ({
+  useAssignableMembers: () => ({ data: [], isLoading: false }),
+}));
 
 const VALUE: InboxFiltersValue = { tab: "unassigned", search: "", onlyUnread: false };
 

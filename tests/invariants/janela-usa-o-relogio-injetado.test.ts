@@ -229,6 +229,16 @@ beforeAll(async () => {
      values ($1,'janela-relogio','Janela Relogio','Janela Relogio') on conflict (id) do nothing`,
     [ORG],
   );
+  // F18 (ADR-040 §1): esta suíte mede o MOTOR HERDADO (`runAgentTurn`). Desde a
+  // F18 o padrão de `ai.engine` é o motor novo, e o despacho entregaria o turno
+  // a ele — o que aqui apareceria como "nenhuma mensagem saiu". A organização
+  // declara qual motor está sendo medido, em vez de a suíte depender do padrão.
+  await pool.query(
+    `insert into tenant_settings (organization_id, key, value, schema_version, source)
+     values ($1,'ai.engine','"legacy"'::jsonb,1,'tenant_admin')
+     on conflict (organization_id, key) do update set value = excluded.value`,
+    [ORG],
+  );
   await pool.query(
     `insert into contacts (id, organization_id, name, phone_number)
      values ($1,$2,'Lead da Janela','+5511900000777') on conflict (id) do nothing`,

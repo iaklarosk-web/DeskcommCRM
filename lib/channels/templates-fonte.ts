@@ -42,6 +42,8 @@ const FONTE: Record<ChannelProvider, FonteDeTemplates | null> = {
   waha: null,
   meta_cloud: "oficial",
   zernio: "parceiro",
+  // Chat do site: texto livre sempre; não há definição a listar (F14).
+  webchat: null,
 };
 
 /** `null` quando este canal não trabalha com definições aprovadas. */

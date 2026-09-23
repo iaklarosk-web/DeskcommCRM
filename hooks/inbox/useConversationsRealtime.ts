@@ -7,12 +7,15 @@ import { apiClient } from "@/lib/api/client";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import type { Conversation } from "@/lib/types/messaging";
 import type { ComandoDoBanco } from "@/lib/inbox/comando-da-conversa";
+import type { ConversationState } from "@/lib/inbox/estado-d16";
 
 export interface ContactSummary {
   id: string;
   display_name: string | null;
   name: string | null;
   phone_number: string | null;
+  /** F14: o visitante do chat do site pode ter só e-mail — é o que a lista mostra sem telefone. Opcional: cache de antes do campo. */
+  email?: string | null;
   tags: string[];
   is_blocked: boolean;
   is_anonymized: boolean;
@@ -85,6 +88,12 @@ export interface ConversationsFilters {
    * vida, este é quem responde a próxima mensagem do cliente.
    */
   comando?: readonly ComandoDoBanco[];
+  /**
+   * O ESTADO D16 (§5.6) — o filtro de F03-T09. Terceira pergunta: `status` é o
+   * ciclo herdado, `comando` é quem responde a próxima mensagem, este é o
+   * vocabulário de oito estados que `transition()` escreve.
+   */
+  saas_state?: readonly ConversationState[];
   search?: string;
   channel_session_id?: string;
   tag?: string;
@@ -118,6 +127,12 @@ export function useConversationsRealtime(
       // mostraria a lista inteira — parecendo funcionar.
       if (filters.comando && filters.comando.length > 0) {
         qs.set("comando", filters.comando.join(","));
+      }
+      // O ESTADO D16 (F03-T09). Vale aqui a mesma advertência do `comando` acima:
+      // o campo no tipo sem esta linha faria a tela mostrar a lista inteira com
+      // o filtro aceso — parecendo funcionar.
+      if (filters.saas_state && filters.saas_state.length > 0) {
+        qs.set("saas_state", filters.saas_state.join(","));
       }
       if (filters.exclude_finished) qs.set("exclude_finished", "true");
       if (filters.assigned_to) qs.set("assigned_to", filters.assigned_to);

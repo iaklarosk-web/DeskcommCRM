@@ -1,0 +1,1487 @@
+import assert from "node:assert/strict";
+import { execFileSync, spawnSync } from "node:child_process";
+import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { test } from "node:test";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const modulePath = process.env.VERIFY_GATE_MODULE ?? path.join(ROOT, "scripts/verify/report.mjs");
+const { evaluate, parseSuite, phaseContext, KNOWN_DEBT, render, collect } = await import(pathToFileURL(modulePath).href);
+const helperPath = path.join(path.dirname(modulePath), "f02-e2e.mjs");
+const {
+  EXPECTED_F02_E2E_TESTS,
+  EXPECTED_F03_E2E_TESTS,
+  EXPECTED_F04_E2E_TESTS,
+  EXPECTED_F05_E2E_TESTS,
+  EXPECTED_F08_E2E_TESTS,
+  EXPECTED_F11_E2E_TESTS,
+  EXPECTED_F12_E2E_TESTS,
+  EXPECTED_F13_E2E_TESTS,
+  EXPECTED_F15_E2E_TESTS,
+  EXPECTED_F14_E2E_TESTS,
+  EXPECTED_F18_E2E_TESTS,
+  EXPECTED_F19_E2E_TESTS,
+  REQUIRED_F02_E2E_SPECS,
+  REQUIRED_F03_E2E_SPECS,
+  REQUIRED_F04_E2E_SPECS,
+  REQUIRED_F05_E2E_SPECS,
+  REQUIRED_F08_E2E_SPECS,
+  REQUIRED_F11_E2E_SPECS,
+  REQUIRED_F12_E2E_SPECS,
+  REQUIRED_F13_E2E_SPECS,
+  REQUIRED_F15_E2E_SPECS,
+  REQUIRED_F14_E2E_SPECS,
+  REQUIRED_F18_E2E_SPECS,
+  REQUIRED_F19_E2E_SPECS,
+  compareF02Inputs,
+  snapshotF02Inputs,
+  verifyF02Sandbox,
+} = await import(pathToFileURL(helperPath).href);
+// Identidades históricas, somente como tentativas de regressão contra o gate atual.
+const RETIRED_DEBT = [
+  { suite: "db", file: "tests/invariants/webhooks-inbound.test.ts", title: "rate limit 429 após estourar a janela — coberto por unit test do fallback in-memory", kind: "skipped" },
+  { suite: "unit", file: "tests/unit/agenda-separar-historico.test.tsx", title: "o compromisso EM ANDAMENTO ainda é Próximos — começou, mas não terminou", kind: "expected_failure" },
+  { suite: "db", file: "tests/invariants/followup-reactivity.test.ts", title: "STOP alcança também o enrollment PAUSADO MANUALMENTE — opt-out não abre exceção de estado", kind: "expected_failure" },
+];
+const state = `current_phase: F02
+baseline_n0: 7
+f00_commit: c85f7d72
+baseline_detail: "unit=2/2 db=2/2 e2e=3/3"
+| F01 | Fundação | done(verify=2026-09-07 6f7c56fc) |
+| F02 | CRM | pending |
+`;
+
+function report(rows = []) {
+  const all = rows.length ? rows : [{ status: "passed" }, { status: "passed" }];
+  const assertionResults = all.map((row, index) => ({ title: `case ${index}`, meta: { verifyExpectedFailure: false }, ...row }));
+  return {
+    success: !all.some((row) => row.status === "failed"),
+    numTotalTests: all.length,
+    numPassedTests: all.filter((row) => row.status === "passed").length,
+    numFailedTests: all.filter((row) => row.status === "failed").length,
+    numPendingTests: all.filter((row) => ["skipped", "pending", "disabled"].includes(row.status)).length,
+    numTodoTests: all.filter((row) => row.status === "todo").length,
+    numFailedTestSuites: 0,
+    testResults: [{ name: path.join(ROOT, "tests/example.test.ts"), status: "passed", assertionResults }],
+  };
+}
+function input() {
+  return {
+    root: ROOT,
+    context: phaseContext(state, "F01"),
+    exits: Object.fromEntries(["typecheck", "lint", "build", "shell", "secrets", "unit", "db", "integration"].map((name) => [name, 0])),
+    reports: { unit: report(), db: report(), integration: report() },
+    testsDeleted: 0, tenantReferences: 0, skipOnlyOccurrences: 15,
+    mutants: { killed: 2, total: 2 },
+    metrics: {
+      isolation: "isolation: tables=110 ops=4 dirs=2 leaks=0 (material_cross_org=86/110)",
+      "rls-coverage": "rls-coverage: tables_with_org_id=110 policies_found=106 missing=0 service_only_with_grant=0",
+      rbac: "rbac: roles=3 denied_expected=17 denied_actual=17",
+      entitlement: "entitlement: usage_events_written=2",
+      secrets: "secrets: files_scanned=337 findings=0",
+    },
+  };
+}
+const F02_SPEC_COUNTS = [1, 2, 2, 2, 3, 1, 2];
+// ADR-018: F03 acrescenta a spec de inbox com 14 testes (7 ações x 2 tenants).
+const F03_SPEC_COUNTS = [...F02_SPEC_COUNTS, 14];
+function playwrightReport({ actual = false, specs = REQUIRED_F02_E2E_SPECS, counts = F02_SPEC_COUNTS, total = EXPECTED_F02_E2E_TESTS } = {}) {
+  const suites = specs.map((requiredFile, fileIndex) => {
+    const file = path.basename(requiredFile);
+    return {
+      title: file,
+      file,
+      line: 0,
+      column: 0,
+      specs: Array.from({ length: counts[fileIndex] }, (_, testIndex) => ({
+        title: `jornada ${fileIndex + 1}.${testIndex + 1}`,
+        ok: true,
+        id: `f02-${fileIndex + 1}-${testIndex + 1}`,
+        file,
+        line: 10 + testIndex,
+        column: 1,
+        tags: [],
+        tests: [{
+          timeout: 30_000,
+          annotations: [],
+          expectedStatus: "passed",
+          projectName: "chromium",
+          projectId: "chromium",
+          status: "expected",
+          results: actual ? [{ status: "passed", retry: 0, error: undefined, errors: [], annotations: [] }] : [],
+        }],
+      })),
+    };
+  });
+  return {
+    config: {
+      workers: 1,
+      fullyParallel: false,
+      forbidOnly: true,
+      rootDir: path.join(ROOT, "tests/e2e"),
+      projects: [{ name: "chromium", id: "chromium", retries: 0, repeatEach: 1, testDir: path.join(ROOT, "tests/e2e") }],
+    },
+    suites,
+    errors: [],
+    stats: actual
+      ? { expected: total, unexpected: 0, flaky: 0, skipped: 0 }
+      : { expected: 0, unexpected: 0, flaky: 0, skipped: 0 },
+  };
+}
+function f02Input() {
+  const data = input();
+  data.context = phaseContext(state);
+  Object.assign(data.exits, { "inputs-before": 0, sandbox: 0, "e2e-plan": 0, e2e: 0, inputs: 0 });
+  data.reports["e2e-plan"] = playwrightReport();
+  data.reports.e2e = playwrightReport({ actual: true });
+  data.sandbox = {
+    ok: true,
+    sandbox: "f02-crm-cadastros-disposable",
+    api: "loopback:55421",
+    database: "loopback:55422/postgres",
+    app: "loopback:3102",
+    providers: { whatsapp: "mock", ai: "mock" },
+    credentials: { anon: "present", service_role: "present" },
+  };
+  data.inputs = {
+    ok: true,
+    algorithm: "sha256",
+    files_before: 321,
+    files_after: 321,
+    hash_before: "a".repeat(64),
+    hash_after: "a".repeat(64),
+  };
+  return data;
+}
+function addDebt(data, entry) {
+  const existing = data.reports[entry.suite];
+  const extra = report([{ title: entry.title, status: entry.kind === "expected_failure" ? "passed" : entry.kind,
+    meta: { verifyExpectedFailure: entry.kind === "expected_failure" } }]);
+  extra.testResults[0].name = path.join(ROOT, entry.file);
+  for (const key of ["numTotalTests", "numPassedTests", "numPendingTests", "numTodoTests"]) existing[key] += extra[key];
+  existing.testResults.push(...extra.testResults);
+}
+
+test("revalidates F01 without declaring F02 ready or changing current phase", () => {
+  const data = input();
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.status, "REVALIDATED (F01)");
+  assert.match(render(data, result), /current_phase=F02/);
+  assert.match(render(data, result), /e2e=pending/);
+  assert.match(render(data, result), /full_n0=pending/);
+});
+test("refuses revalidation of a phase without a recorded completion", () => {
+  assert.throws(() => phaseContext(state, "F02"), /fase concluída/);
+});
+test("normal F02 does not become ready with F01 evidence", () => {
+  const data = input(); data.context = phaseContext(state);
+  assert.equal(evaluate(data).exitCode, 1);
+});
+test("F02 becomes ready only with 13 clean tests from all seven explicit specs", () => {
+  const data = f02Input();
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.status, "READY (F02)");
+  assert.deepEqual([result.suites.e2e.passed, result.suites.e2e.total], [13, 13]);
+  assert.match(render(data, result), /e2e=13\/13/);
+  assert.match(render(data, result), /specs=7\/7/);
+  assert.match(render(data, result), /full_n0=pending/);
+  assert.match(render(data, result), /e2e_scope: F02-required passed=13\/13 specs=7\/7/);
+});
+for (const missing of REQUIRED_F02_E2E_SPECS) test(`F02 rejects missing required spec ${missing}`, () => {
+  const data = f02Input();
+  data.reports.e2e.suites = data.reports.e2e.suites.filter((suite) => suite.file !== path.basename(missing));
+  assert.equal(evaluate(data).exitCode, 1);
+});
+test("F02 rejects a filtered run even when every executed test passed", () => {
+  const data = f02Input();
+  data.reports.e2e.suites[1].specs.pop();
+  data.reports.e2e.stats.expected--;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.some((error) => /execução parcial/.test(error)));
+});
+test("F02 compares complete test titles and identities with the unfiltered inventory", () => {
+  const data = f02Input();
+  data.reports.e2e.suites[0].specs[0].title = "mesmo teste selecionado por outro título";
+  assert.equal(evaluate(data).exitCode, 1);
+});
+test("F02 rejects skip, failure, retry and flaky Playwright evidence", () => {
+  const mutations = [
+    (report) => {
+      const test = report.suites[0].specs[0].tests[0];
+      test.expectedStatus = "skipped"; test.status = "skipped"; test.results = [];
+      report.stats.expected--; report.stats.skipped++;
+    },
+    (report) => {
+      const test = report.suites[0].specs[0].tests[0];
+      test.status = "unexpected"; test.results[0].status = "failed"; test.results[0].errors = [{ message: "failure" }];
+      report.stats.expected--; report.stats.unexpected++;
+    },
+    (report) => {
+      const test = report.suites[0].specs[0].tests[0];
+      test.status = "flaky"; test.results.push({ status: "passed", retry: 1, error: undefined, errors: [], annotations: [] });
+      report.stats.expected--; report.stats.flaky++;
+    },
+  ];
+  for (const mutate of mutations) {
+    const data = f02Input(); mutate(data.reports.e2e);
+    assert.equal(evaluate(data).exitCode, 1);
+  }
+});
+test("F02 rejects non-serial, repeated, non-chromium or incomplete runner metadata", () => {
+  const mutations = [
+    (report) => { report.config.workers = 2; },
+    (report) => { report.config.projects[0].retries = 1; },
+    (report) => { report.config.projects[0].name = "webkit"; },
+    (report) => { report.errors.push({ message: "configuration failed" }); },
+    (report) => { report.stats.expected = 12; },
+  ];
+  for (const mutate of mutations) {
+    const data = f02Input(); mutate(data.reports.e2e);
+    assert.equal(evaluate(data).exitCode, 1);
+  }
+});
+test("F02 rejects missing process evidence or an untrusted sandbox", () => {
+  for (const mutate of [
+    (data) => { data.exits.e2e = null; },
+    (data) => { data.reports["e2e-plan"] = null; },
+    (data) => { data.sandbox.database = "loopback:54322/postgres"; },
+    (data) => { data.sandbox.providers.ai = "real"; },
+    (data) => { data.inputs.hash_after = "b".repeat(64); },
+  ]) {
+    const data = f02Input(); mutate(data);
+    assert.equal(evaluate(data).exitCode, 1);
+  }
+});
+test("F02 input snapshot stays equal when only excluded artifacts change", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "verify-f02-inputs-"));
+  try {
+    mkdirSync(path.join(dir, "src"));
+    mkdirSync(path.join(dir, ".verify-logs"));
+    writeFileSync(path.join(dir, "src/value.ts"), "export const value = 1;\n");
+    writeFileSync(path.join(dir, ".env.e2e"), "SECRET=never-hashed\n");
+    writeFileSync(path.join(dir, ".verify-logs/run.log"), "artifact\n");
+    const before = snapshotF02Inputs(dir);
+    assert.equal(compareF02Inputs(dir, before).ok, true);
+    writeFileSync(path.join(dir, ".verify-logs/run.log"), "changed artifact\n");
+    assert.equal(compareF02Inputs(dir, before).ok, true);
+    // ADR-029 §5: o `next build` do gate gera `next-env.d.ts` num clone limpo;
+    // um arquivo gerado pelo próprio gate não pode ser input do gate.
+    writeFileSync(path.join(dir, "next-env.d.ts"), "/// <reference types=\"next\" />\n");
+    assert.equal(compareF02Inputs(dir, before).ok, true);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+test("F02 input snapshot detects a source change", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "verify-f02-inputs-change-"));
+  try {
+    mkdirSync(path.join(dir, "src"));
+    writeFileSync(path.join(dir, "src/value.ts"), "export const value = 1;\n");
+    const before = snapshotF02Inputs(dir);
+    writeFileSync(path.join(dir, "src/value.ts"), "export const value = 2;\n");
+    assert.equal(compareF02Inputs(dir, before).ok, false);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+test("F02 sandbox evidence accepts only the dedicated local ports and never contains credentials", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "verify-f02-sandbox-"));
+  const filename = path.join(dir, ".env.e2e");
+  const contents = [
+    "NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:55421",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY=anon-private-fixture",
+    "SUPABASE_SERVICE_ROLE_KEY=service-private-fixture",
+    "SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:55422/postgres",
+    "NEXT_PUBLIC_APP_URL=http://localhost:3102",
+  ].join("\n");
+  const environment = {
+    F02_E2E_SANDBOX_ID: "f02-crm-cadastros-disposable",
+    E2E_PORT: "3102",
+    WHATSAPP_MODE: "mock",
+    AI_PROVIDER: "mock",
+    CI: "1",
+  };
+  try {
+    writeFileSync(filename, contents);
+    const evidence = verifyF02Sandbox(dir, environment);
+    assert.equal(evidence.ok, true);
+    assert.doesNotMatch(JSON.stringify(evidence), /private-fixture/);
+    writeFileSync(filename, contents.replace(":55421", ":54321"));
+    assert.throws(() => verifyF02Sandbox(dir, environment), /porta 55421/);
+    writeFileSync(filename, `${contents}\nUNSAFE=$(touch should-not-run)`);
+    assert.throws(() => verifyF02Sandbox(dir, environment), /sintaxe recusada/);
+    writeFileSync(filename, `${contents}\nUNSAFE=fixture&/bin/true`);
+    assert.throws(() => verifyF02Sandbox(dir, environment), /sintaxe recusada/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+test("does not invent a phase or comparable baseline", () => {
+  assert.throws(() => phaseContext("", "F01"), /current_phase/);
+  assert.throws(() => phaseContext(state.replace("unit=2/2", "unit=pending"), "F01"), /Baseline/);
+});
+test("missing mandatory metric makes otherwise green F01 fail", () => {
+  const data = input(); delete data.metrics.rbac;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.includes("Métrica obrigatória ausente: rbac"));
+});
+for (const [name, replacement] of [
+  ["isolation", "isolation: tables=110 ops=4 dirs=2 leaks=1"],
+  ["isolation", "isolation: tables=0 ops=4 dirs=2 leaks=0"],
+  ["rls-coverage", "rls-coverage: tables_with_org_id=109 policies_found=106 missing=0 service_only_with_grant=0"],
+  ["rls-coverage", "rls-coverage: tables_with_org_id=110 policies_found=106 missing=1 service_only_with_grant=0"],
+  ["rbac", "rbac: roles=3 denied_expected=17 denied_actual=16"],
+  ["entitlement", "entitlement: usage_events_written=1"],
+  ["secrets", "secrets: files_scanned=337 findings=1"],
+  ["secrets", "secrets: files_scanned=0 findings=0"],
+  ["rbac", "rbac: roles=3 denied_expected=17 denied_actual=pending"],
+]) test(`rejects invalid measurement ${replacement}`, () => {
+  const data = input(); data.metrics[name] = replacement;
+  assert.equal(evaluate(data).exitCode, 1);
+});
+test("test deletion, tenant references and a live mutant each fail the gate", () => {
+  for (const patch of [{ testsDeleted: 1 }, { tenantReferences: 1 }, { mutants: { killed: 1, total: 2 } }, { mutants: { killed: 0, total: 0 } }]) {
+    assert.equal(evaluate({ ...input(), ...patch }).exitCode, 1);
+  }
+});
+test("missing report and contradictory denominators are failures", () => {
+  const data = input(); delete data.reports.db;
+  assert.equal(evaluate(data).exitCode, 1);
+  const inconsistent = report(); inconsistent.numTotalTests = 100;
+  assert.throws(() => parseSuite(inconsistent, "unit", ROOT), /inconsistentes/);
+});
+test("standard JSON without explicit reporter metadata cannot claim functional passes", () => {
+  for (const value of [undefined, null, "false", 0]) {
+    const ordinaryJson = report();
+    ordinaryJson.testResults[0].assertionResults[0].meta = { verifyExpectedFailure: value };
+    const data = input(); data.reports.unit = ordinaryJson;
+    const result = evaluate(data);
+    assert.equal(result.exitCode, 1);
+    assert.ok(result.errors.some((error) => error.includes("sem metadata do reporter")));
+    assert.match(render(data, result), /unit=pending/);
+  }
+});
+test("process or module failure wins over passed assertions", () => {
+  const data = input(); data.exits.db = 1;
+  assert.equal(evaluate(data).exitCode, 1);
+  data.exits.db = 0; data.reports.db.testResults[0].status = "failed";
+  assert.equal(evaluate(data).exitCode, 1);
+});
+test("real failures and unfinished tests are never inherited debt", () => {
+  for (const status of ["failed", "pending", "todo"]) {
+    const data = input(); data.reports.db = report([{ status }, { status: "passed" }]);
+    assert.equal(evaluate(data).exitCode, 1);
+  }
+});
+test("retired debt cannot return in revalidation or normal readiness", () => {
+  assert.deepEqual(KNOWN_DEBT, []);
+  for (const entry of RETIRED_DEBT) {
+    for (const revalidation of [true, false]) {
+      const data = input(); data.context.revalidation = revalidation;
+      addDebt(data, entry);
+      const result = evaluate(data);
+      assert.equal(result.exitCode, 1);
+      assert.equal(result.status, "NOT READY");
+      assert.equal(result.debt.length, 1);
+      assert.ok(result.errors.includes("Dívida nova ou não reconhecida: 1"));
+    }
+  }
+});
+test("new skip cannot spend an inherited skip allowance", () => {
+  const data = input(); addDebt(data, { ...RETIRED_DEBT[0], title: "a different skipped behavior" });
+  assert.equal(evaluate(data).exitCode, 1);
+});
+test("duplicate inherited debt identity cannot increase the allowance", () => {
+  const data = input(); addDebt(data, RETIRED_DEBT[0]); addDebt(data, RETIRED_DEBT[0]);
+  assert.equal(evaluate(data).exitCode, 1);
+});
+test("reduced unit baseline cannot be compensated by new DB tests", () => {
+  const data = input(); data.reports.unit = report([{ status: "passed" }]);
+  data.reports.db = report([{ status: "passed" }, { status: "passed" }, { status: "passed" }]);
+  assert.equal(evaluate(data).exitCode, 1);
+});
+test("text occurrences are diagnostics, not skipped executed tests", () => {
+  const data = input(); data.skipOnlyOccurrences = 42;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 0);
+  assert.match(render(data, result), /tests_skipped=0/);
+  assert.match(render(data, result), /skip_only_occurrences=42/);
+});
+test("native Vitest reporter distinguishes a passed expected failure and runtime skip", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "verify-reporter-"));
+  try {
+    const fixture = path.join(dir, "outcomes.test.mjs");
+    const config = path.join(dir, "vitest.config.mjs");
+    writeFileSync(fixture, `import { it, expect } from ${JSON.stringify(path.join(ROOT, "node_modules/vitest/dist/index.js"))};
+it('works', () => expect(1).toBe(1));
+it.fails('known defect', () => expect(1).toBe(2));
+it.skip('unavailable capability', () => {});
+`);
+    writeFileSync(config, `export default {test:{environment:'node',include:['**/*.test.mjs']}};`);
+    const output = path.join(dir, "outcomes.json");
+    const run = spawnSync(process.execPath, [path.join(ROOT, "node_modules/vitest/vitest.mjs"), "run", "--config", config, "--root", dir,
+      "--maxWorkers=1", "--allowOnly=false", "--reporter", path.join(ROOT, "scripts/verify/reporter.mjs"), "--outputFile", output],
+    { cwd: ROOT, encoding: "utf8", timeout: 20000 });
+    assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+    const parsed = parseSuite(JSON.parse(readFileSync(output, "utf8")), "unit", ROOT);
+    assert.deepEqual([parsed.passed, parsed.expectedFailures, parsed.skipped, parsed.total], [1, 1, 1, 3]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+test("inventory failure is pending, never a partial zero", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "verify-inventory-"));
+  try {
+    execFileSync("git", ["init", "-q"], { cwd: dir });
+    const gathered = collect(dir, dir, phaseContext(state, "F01"));
+    assert.equal(gathered.testsDeleted, null);
+    assert.equal(evaluate(gathered).exitCode, 1);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+test("shell orchestration isolates mutant evidence and honors custom log directory", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "verify-shell-"));
+  try {
+    for (const sub of ["scripts/verify", "tests/mutants", "src", "bin"]) mkdirSync(path.join(dir, sub), { recursive: true });
+    copyFileSync(path.join(ROOT, "scripts/verify.sh"), path.join(dir, "scripts/verify.sh"));
+    copyFileSync(modulePath, path.join(dir, "scripts/verify/report.mjs"));
+    copyFileSync(helperPath, path.join(dir, "scripts/verify/f02-e2e.mjs"));
+    writeFileSync(path.join(dir, "src/fixture.ts"), "export const fixture = true;\n");
+    execFileSync("git", ["init", "-q"], { cwd: dir });
+    execFileSync("git", ["add", "src/fixture.ts"], { cwd: dir });
+    execFileSync("git", ["-c", "user.name=Gate fixture", "-c", "user.email=gate@example.test", "commit", "-qm", "fixture"], { cwd: dir });
+    const base = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
+    writeFileSync(path.join(dir, "BUILD-STATE.md"), state.replace("c85f7d72", base));
+    writeFileSync(path.join(dir, "scripts/scan-secrets.sh"), "echo 'secrets: files_scanned=1 findings=0'\n");
+    writeFileSync(path.join(dir, "tests/mutants/fixture.sh"), 'mkdir -p "$VERIFY_LOG_DIR/metrics"\necho "isolation: tables=110 ops=4 dirs=2 leaks=99" > "$VERIFY_LOG_DIR/metrics/isolation.line"\n');
+    const healthy = input().metrics;
+    const pnpm = path.join(dir, "bin/pnpm");
+    writeFileSync(pnpm, `#!${process.execPath}
+const fs = require('node:fs'), path = require('node:path'), child = require('node:child_process');
+const args = process.argv.slice(2);
+if (args[0] === 'exec' && args[1] === 'bash') {
+  const run = child.spawnSync('bash', args.slice(2), { stdio: 'inherit', env: process.env });
+  process.exit(run.status ?? 1);
+}
+if (args[0].startsWith('test:') && args[0] !== 'test:shell') {
+  if (!args.includes('--maxWorkers=1') || !args.includes('--allowOnly=false')) process.exit(2);
+  const output = args.find(a => a.startsWith('--outputFile='))?.slice('--outputFile='.length);
+  if (!output) process.exit(3);
+  fs.writeFileSync(output, ${JSON.stringify(JSON.stringify(report()))});
+  const metrics = ${JSON.stringify(healthy)};
+  for (const [name, line] of Object.entries(metrics)) if (name !== 'secrets') fs.writeFileSync(path.join(process.env.VERIFY_LOG_DIR, 'metrics', name + '.line'), line);
+}
+`);
+    chmodSync(pnpm, 0o755);
+    const logs = path.join(dir, "custom evidence");
+    const run = spawnSync("bash", ["scripts/verify.sh", "--revalidate", "F01"], {
+      cwd: dir, encoding: "utf8", timeout: 15000, env: { ...process.env, PATH: `${path.join(dir, "bin")}:${process.env.PATH}`, VERIFY_LOG_DIR: logs },
+    });
+    assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+    assert.match(run.stdout, /STATUS: REVALIDATED \(F01\)/);
+    assert.doesNotMatch(run.stdout, /leaks=99/);
+    const runs = readdirSync(logs);
+    assert.equal(runs.length, 1);
+    const evidence = path.join(logs, runs[0]);
+    assert.match(readFileSync(path.join(evidence, "metrics/isolation.line"), "utf8"), /leaks=0/);
+    assert.match(readFileSync(path.join(evidence, "mutants/fixture/metrics/isolation.line"), "utf8"), /leaks=99/);
+    assert.equal(JSON.parse(readFileSync(path.join(evidence, "summary.json"), "utf8")).context.active, "F02");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// ─── ADR-018 — verify.sh v1.1: F03 herda os controles de F02 e mede `webhook` ──
+
+const stateF03 = `current_phase: F03
+baseline_n0: 7
+f00_commit: c85f7d72
+baseline_detail: "unit=2/2 db=2/2 e2e=3/3"
+| F01 | Fundação | done(verify=2026-09-07 6f7c56fc) |
+| F02 | CRM | done(verify=2026-09-10 03ec6a3b) |
+| F03 | Conversa | pending |
+`;
+const WEBHOOK_OK = "webhook: replay=2 stored=1 tables_checked=5";
+
+function f03Input() {
+  const data = f02Input();
+  data.context = phaseContext(stateF03);
+  const parametros = { specs: REQUIRED_F03_E2E_SPECS, counts: F03_SPEC_COUNTS, total: EXPECTED_F03_E2E_TESTS };
+  data.reports["e2e-plan"] = playwrightReport(parametros);
+  data.reports.e2e = playwrightReport({ ...parametros, actual: true });
+  data.metrics.webhook = WEBHOOK_OK;
+  return data;
+}
+
+test("F03 is a gated phase and reaches READY with the webhook line measured", () => {
+  const result = evaluate(f03Input());
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F03)");
+  const bloco = render(f03Input(), result);
+  assert.match(bloco, new RegExp(WEBHOOK_OK.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(bloco, /e2e_scope: F03-required passed=27\/27 specs=8\/8/);
+  assert.match(bloco, /replicability: e2e\[fictitious_A_B\]=27\/27 specs=8\/8/);
+});
+
+test("F03 keeps every F02 spec: dropping one is rejected, so the denominator never shrinks", () => {
+  for (const herdada of REQUIRED_F02_E2E_SPECS) {
+    assert.ok(REQUIRED_F03_E2E_SPECS.includes(herdada), `F03 perdeu a spec ${herdada}`);
+  }
+  assert.equal(REQUIRED_F03_E2E_SPECS.length, REQUIRED_F02_E2E_SPECS.length + 1);
+  assert.ok(EXPECTED_F03_E2E_TESTS > EXPECTED_F02_E2E_TESTS);
+  const data = f03Input();
+  const restantes = REQUIRED_F03_E2E_SPECS.filter((file) => file !== REQUIRED_F02_E2E_SPECS[0]);
+  const parametros = { specs: restantes, counts: F03_SPEC_COUNTS.slice(1), total: EXPECTED_F03_E2E_TESTS };
+  data.reports["e2e-plan"] = playwrightReport(parametros);
+  data.reports.e2e = playwrightReport({ ...parametros, actual: true });
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.some((erro) => /specs obrigatórias de F03/.test(erro)), result.errors.join("\n"));
+});
+
+test("missing webhook line makes otherwise green F03 fail", () => {
+  const data = f03Input();
+  delete data.metrics.webhook;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.includes("Métrica obrigatória ausente: webhook"), result.errors.join("\n"));
+  assert.match(render(data, result), /webhook: replay=pending stored=pending tables_checked=pending/);
+});
+
+for (const [rotulo, linha] of [
+  ["duplicata gravada", "webhook: replay=2 stored=2 tables_checked=5"],
+  ["sem reentrega", "webhook: replay=1 stored=1 tables_checked=5"],
+  ["pipeline raso", "webhook: replay=2 stored=1 tables_checked=3"],
+  ["campo pendente", "webhook: replay=2 stored=pending tables_checked=5"],
+]) test(`F03 rejects a webhook line out of contract: ${rotulo}`, () => {
+  const data = f03Input();
+  data.metrics.webhook = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, `linha aceita indevidamente: ${linha}`);
+  assert.ok(
+    result.errors.some((erro) => /webhook/i.test(erro)),
+    result.errors.join("\n"),
+  );
+});
+
+test("F02 keeps webhook pending without failing: the field is required only from F03", () => {
+  const data = f02Input();
+  delete data.metrics.webhook;
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F02)");
+  assert.match(render(data, result), /webhook: replay=pending stored=pending tables_checked=pending/);
+  assert.match(render(data, result), /e2e_scope: F02-required passed=13\/13 specs=7\/7/);
+});
+
+test("F03 still requires the disposable sandbox and the untouched input snapshot", () => {
+  for (const quebra of [
+    (data) => { data.sandbox = null; },
+    (data) => { data.inputs = { ...data.inputs, hash_after: "b".repeat(64), ok: false }; },
+    (data) => { data.exits.sandbox = 1; },
+  ]) {
+    const data = f03Input();
+    quebra(data);
+    const result = evaluate(data);
+    assert.equal(result.exitCode, 1);
+  }
+});
+
+// ─── ADR-022 — verify.sh v1.2: F04 mede `ai_eval` ─────────────────────────
+
+const stateF04 = `current_phase: F04
+baseline_n0: 7
+f00_commit: c85f7d72
+baseline_detail: "unit=2/2 db=2/2 e2e=3/3"
+| F01 | Fundação | done(verify=2026-09-07 6f7c56fc) |
+| F02 | CRM | done(verify=2026-09-10 03ec6a3b) |
+| F03 | Conversa | done(verify=2026-09-11 6d742a6b) |
+| F04 | IA | pending |
+`;
+const F04_SPEC_COUNTS = [...F03_SPEC_COUNTS, 10];
+const AI_EVAL_OK =
+  "ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0";
+
+function f04Input() {
+  const data = f03Input();
+  data.context = phaseContext(stateF04);
+  const parametros = { specs: REQUIRED_F04_E2E_SPECS, counts: F04_SPEC_COUNTS, total: EXPECTED_F04_E2E_TESTS };
+  data.reports["e2e-plan"] = playwrightReport(parametros);
+  data.reports.e2e = playwrightReport({ ...parametros, actual: true });
+  data.metrics.ai_eval = AI_EVAL_OK;
+  data.metrics.entitlement = "entitlement: usage_events_written=6";
+  return data;
+}
+
+test("F04 is gated and reaches READY with ai_eval measured", () => {
+  const result = evaluate(f04Input());
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F04)");
+  const bloco = render(f04Input(), result);
+  assert.match(bloco, /ai_eval: cases=30 pass=30\/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0/);
+  assert.match(bloco, /e2e_scope: F04-required passed=37\/37 specs=9\/9/);
+});
+
+test("F04 keeps every F03 spec: the denominator never shrinks", () => {
+  for (const herdada of REQUIRED_F03_E2E_SPECS) {
+    assert.ok(REQUIRED_F04_E2E_SPECS.includes(herdada), `F04 perdeu a spec ${herdada}`);
+  }
+  assert.equal(REQUIRED_F04_E2E_SPECS.length, REQUIRED_F03_E2E_SPECS.length + 1);
+  assert.ok(EXPECTED_F04_E2E_TESTS > EXPECTED_F03_E2E_TESTS);
+});
+
+test("missing ai_eval line makes otherwise green F04 fail", () => {
+  const data = f04Input();
+  delete data.metrics.ai_eval;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.includes("Métrica obrigatória ausente: ai_eval"), result.errors.join("\n"));
+  assert.match(render(data, result), /ai_eval: cases=pending/);
+});
+
+for (const [rotulo, linha] of [
+  ["dataset curto", "ai_eval: cases=29 pass=29/29 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0"],
+  ["caso reprovado", "ai_eval: cases=30 pass=29/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0"],
+  ["injeção a menos", "ai_eval: cases=30 pass=30/30 unknown=6 injection=9 cross_tenant=5 provider_calls_at_zero_balance=0"],
+  ["cross-tenant a menos", "ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=4 provider_calls_at_zero_balance=0"],
+  ["chamou o provedor sem saldo", "ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=1"],
+]) test(`F04 rejects an ai_eval line out of contract: ${rotulo}`, () => {
+  const data = f04Input();
+  data.metrics.ai_eval = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, `linha aceita indevidamente: ${linha}`);
+  assert.ok(result.errors.some((erro) => /ai_eval/i.test(erro)), result.errors.join("\n"));
+});
+
+test("F04 requires entitlement at least the dataset's normal cases", () => {
+  const data = f04Input();
+  data.metrics.entitlement = "entitlement: usage_events_written=5";
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(
+    result.errors.some((erro) => /Entitlement abaixo dos casos normais/.test(erro)),
+    result.errors.join("\n"),
+  );
+});
+
+test("F03 keeps ai_eval pending without failing: required only from F04", () => {
+  const data = f03Input();
+  delete data.metrics.ai_eval;
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F03)");
+  assert.match(render(data, result), /ai_eval: cases=pending/);
+});
+
+// ─── ADR-024 — verify.sh v1.3: F05 mede `handoff` e `reminder` ────────────
+
+const stateF05 = `current_phase: F05
+baseline_n0: 7
+f00_commit: c85f7d72
+baseline_detail: "unit=2/2 db=2/2 e2e=3/3"
+| F03 | Conversa | done(verify=2026-09-11 6d742a6b) |
+| F04 | IA | done(verify=2026-09-11 aaaaaaaa) |
+| F05 | Handoff | pending |
+`;
+const F05_SPEC_COUNTS = [...F04_SPEC_COUNTS, 4];
+const HANDOFF_OK = "handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3/3 notify=3/3";
+const REMINDER_OK = "reminder: runs=2 sent=1 duplicates=0";
+
+function f05Input() {
+  const data = f04Input();
+  data.context = phaseContext(stateF05);
+  const parametros = { specs: REQUIRED_F05_E2E_SPECS, counts: F05_SPEC_COUNTS, total: EXPECTED_F05_E2E_TESTS };
+  data.reports["e2e-plan"] = playwrightReport(parametros);
+  data.reports.e2e = playwrightReport({ ...parametros, actual: true });
+  data.metrics.handoff = HANDOFF_OK;
+  data.metrics.reminder = REMINDER_OK;
+  return data;
+}
+
+test("F05 is gated and reaches READY with handoff and reminder measured", () => {
+  const result = evaluate(f05Input());
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F05)");
+  const bloco = render(f05Input(), result);
+  assert.match(bloco, /handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7\/7 assignee=3\/3 notify=3\/3/);
+  assert.match(bloco, /reminder: runs=2 sent=1 duplicates=0/);
+  assert.match(bloco, /e2e_scope: F05-required passed=41\/41 specs=10\/10/);
+});
+
+for (const [rotulo, linha] of [
+  ["sem handoff nenhum", "handoff: handoffs=0 ai_msgs_after_handoff=0 summary=7/7 assignee=0/0 notify=0/0"],
+  ["poucos handoffs", "handoff: handoffs=2 ai_msgs_after_handoff=0 summary=7/7 assignee=2/2 notify=2/2"],
+  ["IA falou depois", "handoff: handoffs=3 ai_msgs_after_handoff=1 summary=7/7 assignee=3/3 notify=3/3"],
+  ["resumo incompleto", "handoff: handoffs=3 ai_msgs_after_handoff=0 summary=6/7 assignee=3/3 notify=3/3"],
+  ["responsável faltando", "handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=2/3 notify=3/3"],
+  ["notificação faltando", "handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3/3 notify=2/3"],
+]) test(`F05 rejects a handoff line out of contract: ${rotulo}`, () => {
+  const data = f05Input();
+  data.metrics.handoff = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, `linha aceita indevidamente: ${linha}`);
+  assert.ok(result.errors.some((e) => /handoff/i.test(e)), result.errors.join("\n"));
+});
+
+for (const [rotulo, linha] of [
+  ["rodou uma vez só", "reminder: runs=1 sent=1 duplicates=0"],
+  ["mandou duas vezes", "reminder: runs=2 sent=2 duplicates=0"],
+  ["duplicou", "reminder: runs=2 sent=1 duplicates=1"],
+]) test(`F05 rejects a reminder line out of contract: ${rotulo}`, () => {
+  const data = f05Input();
+  data.metrics.reminder = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, `linha aceita indevidamente: ${linha}`);
+  assert.ok(result.errors.some((e) => /reminder/i.test(e)), result.errors.join("\n"));
+});
+
+test("missing handoff or reminder line makes otherwise green F05 fail", () => {
+  for (const campo of ["handoff", "reminder"]) {
+    const data = f05Input();
+    delete data.metrics[campo];
+    const result = evaluate(data);
+    assert.equal(result.exitCode, 1);
+    assert.ok(result.errors.includes(`Métrica obrigatória ausente: ${campo}`), result.errors.join("\n"));
+  }
+});
+
+test("F04 keeps handoff and reminder pending without failing", () => {
+  const data = f04Input();
+  delete data.metrics.handoff;
+  delete data.metrics.reminder;
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F04)");
+  assert.match(render(data, result), /handoff: ai_msgs_after_handoff=pending/);
+  assert.match(render(data, result), /reminder: runs=pending/);
+});
+
+// ─── ADR-028 — verify.sh v1.4: F06 mede `logs`, `rate-limit`, `lgpd`; ambiente `staging` ──
+
+const stateF06 = `current_phase: F06
+baseline_n0: 7
+f00_commit: c85f7d72
+baseline_detail: "unit=2/2 db=2/2 e2e=3/3"
+| F04 | IA | done(verify=2026-09-11 aaaaaaaa) |
+| F05 | Handoff | done(verify=2026-09-12 5aa5de54) |
+| F06 | Hardening | pending |
+`;
+const LOGS_OK = "logs: routes=269 routes_logged=269 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7";
+const RATE_LIMIT_OK = "rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=269 routes_with_schema=269 routes_reading_input=142 validated=142";
+const LGPD_OK = "lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2";
+
+function f06Input() {
+  const data = f05Input();
+  data.context = phaseContext(stateF06);
+  data.metrics.logs = LOGS_OK;
+  data.metrics["rate-limit"] = RATE_LIMIT_OK;
+  data.metrics.lgpd = LGPD_OK;
+  return data;
+}
+
+function stagingEvidence() {
+  return {
+    ok: true,
+    environment: "staging",
+    sandbox: "crm-staging",
+    api: "loopback:56421",
+    database: "loopback:56422/postgres",
+    app: "loopback:3202",
+    providers: { whatsapp: "mock", ai: "mock" },
+    credentials: { anon: "present", service_role: "present" },
+  };
+}
+
+test("F06 is gated: in the sandbox it reaches READY (F06) with the three hardening lines measured", () => {
+  const data = f06Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F06)");
+  const bloco = render(data, result);
+  assert.match(bloco, /environment=sandbox/);
+  assert.match(bloco, /logs: routes=269 routes_logged=269/);
+  assert.match(bloco, /rate-limit: requests=101 status_429=1/);
+  assert.match(bloco, /lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2/);
+  assert.match(bloco, /e2e_scope: F06-required passed=41\/41 specs=10\/10/);
+});
+
+test("F06 inside the staging environment prints READY (staging) and environment=staging", () => {
+  const data = f06Input();
+  data.sandbox = stagingEvidence();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (staging)");
+  assert.match(render(data, result), /environment=staging/);
+});
+
+test("staging evidence with the wrong ports or marker is rejected, and F05 never earns READY (staging)", () => {
+  for (const patch of [{ api: "loopback:55421" }, { sandbox: "f02-crm-cadastros-disposable" }, { app: "loopback:3102" }, { database: "loopback:56422/outro" }]) {
+    const data = f06Input();
+    data.sandbox = { ...stagingEvidence(), ...patch };
+    const result = evaluate(data);
+    assert.equal(result.exitCode, 1, JSON.stringify(patch));
+    assert.ok(result.errors.some((e) => /sandbox: evidência/.test(e)), result.errors.join("\n"));
+  }
+  const f05 = f05Input();
+  f05.sandbox = stagingEvidence();
+  const result = evaluate(f05);
+  assert.equal(result.status, "READY (F05)");
+});
+
+for (const [rotulo, campo, linha] of [
+  ["rota sem log", "logs", "logs: routes=269 routes_logged=268 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7"],
+  ["worker sem log", "logs", "logs: routes=269 routes_logged=269 workers=4 workers_logged=3 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7"],
+  ["request sem organization_id", "logs", "logs: routes=269 routes_logged=269 workers=4 workers_logged=4 request_log_org_id=0/1 sentry_mock_captured=1 pii_fields=4/7"],
+  ["sentry mudo", "logs", "logs: routes=269 routes_logged=269 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=0 pii_fields=4/7"],
+  ["allowlist vazou", "logs", "logs: routes=269 routes_logged=269 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=7/7"],
+  ["sem 429", "rate-limit", "rate-limit: requests=101 status_429=0 auth_requests=101 auth_blocked=1 routes=269 routes_with_schema=269 routes_reading_input=142 validated=142"],
+  ["login sem teto", "rate-limit", "rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=0 routes=269 routes_with_schema=269 routes_reading_input=142 validated=142"],
+  ["rota sem schema", "rate-limit", "rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=269 routes_with_schema=268 routes_reading_input=142 validated=141"],
+  ["poucas requisições", "rate-limit", "rate-limit: requests=50 status_429=1 auth_requests=101 auth_blocked=1 routes=269 routes_with_schema=269 routes_reading_input=142 validated=142"],
+  ["sobrou linha", "lgpd", "lgpd: tables=9 rows=11 rows_remaining=1 audit_rows=2"],
+  ["sem auditoria", "lgpd", "lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=1"],
+  ["cliente vazio", "lgpd", "lgpd: tables=1 rows=1 rows_remaining=0 audit_rows=2"],
+]) test(`F06 rejects a hardening line out of contract: ${rotulo}`, () => {
+  const data = f06Input();
+  data.metrics[campo] = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, `linha aceita indevidamente: ${linha}`);
+  assert.ok(result.errors.some((e) => e.includes(campo)), result.errors.join("\n"));
+});
+
+test("missing logs, rate-limit or lgpd line makes otherwise green F06 fail", () => {
+  for (const campo of ["logs", "rate-limit", "lgpd"]) {
+    const data = f06Input();
+    delete data.metrics[campo];
+    const result = evaluate(data);
+    assert.equal(result.exitCode, 1);
+    assert.ok(result.errors.includes(`Métrica obrigatória ausente: ${campo}`), result.errors.join("\n"));
+  }
+});
+
+test("F05 keeps logs, rate-limit and lgpd pending without failing", () => {
+  const data = f05Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F05)");
+  assert.match(render(data, result), /logs: routes=pending/);
+  assert.match(render(data, result), /rate-limit: requests=pending/);
+  assert.match(render(data, result), /lgpd: tables=pending/);
+});
+
+// ─── ADR-029 — verify.sh v1.5: F07 mede `replicability` por tenant do seed ──
+
+const stateF07 = `current_phase: F07
+baseline_n0: 7
+f00_commit: c85f7d72
+baseline_detail: "unit=2/2 db=2/2 e2e=3/3"
+| F05 | Handoff | done(verify=2026-09-12 5aa5de54) |
+| F06 | Hardening | done(verify=2026-09-12 270852a6) |
+| F07 | Validação | pending |
+`;
+const TREE_A = "b".repeat(40);
+
+function replicabilityEvidence() {
+  return {
+    ok: true,
+    tenants: [{ slug: "deka", run: "e2e-deka" }, { slug: "demo2", run: "e2e-demo2" }],
+    src_tree_before: TREE_A,
+    src_tree_after: TREE_A,
+    src_diff_lines: 0,
+    org_a: "seed-replica",
+  };
+}
+
+function f07Input() {
+  const data = f06Input();
+  data.context = phaseContext(stateF07);
+  const parametros = { specs: REQUIRED_F05_E2E_SPECS, counts: F05_SPEC_COUNTS, total: EXPECTED_F05_E2E_TESTS };
+  data.reports["e2e-deka"] = playwrightReport({ ...parametros, actual: true });
+  data.reports["e2e-demo2"] = playwrightReport({ ...parametros, actual: true });
+  data.reports.e2e = data.reports["e2e-deka"];
+  Object.assign(data.exits, { "e2e-deka": 0, "e2e-demo2": 0, replicability: 0 });
+  data.replicability = replicabilityEvidence();
+  return data;
+}
+
+test("F07 is gated: two tenant runs of the whole inventory with src_diff_lines=0 reach READY, and the block prints the measured replicability line", () => {
+  const data = f07Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F07)");
+  const bloco = render(data, result);
+  assert.match(bloco, /replicability: e2e\[deka\]=ok e2e\[demo2\]=ok src_diff_lines=0 grep_deka_in_src=0 \(deka=41\/41 demo2=41\/41 specs=10\/10 org_a=seed-replica\)/);
+  assert.match(bloco, /e2e=41\/41/);
+  assert.doesNotMatch(bloco, /fictitious_A_B/);
+
+  const staging = f07Input();
+  staging.sandbox = stagingEvidence();
+  const emStaging = evaluate(staging);
+  assert.deepEqual(emStaging.errors, []);
+  assert.equal(emStaging.status, "READY (staging)");
+});
+
+test("missing replicability evidence makes otherwise green F07 fail", () => {
+  const data = f07Input();
+  delete data.replicability;
+  data.exits.replicability = null;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.some((e) => /^replicability: /.test(e)), result.errors.join("\n"));
+  assert.match(render(data, result), /replicability: e2e\[deka\]=ok e2e\[demo2\]=ok src_diff_lines=pending/);
+});
+
+for (const [rotulo, sabotar] of [
+  ["src/ mudou entre as execuções", (d) => { d.replicability.src_diff_lines = 3; d.replicability.src_tree_after = "c".repeat(40); d.replicability.ok = false; }],
+  ["árvore de src diferente com diff zero declarado", (d) => { d.replicability.src_tree_after = "c".repeat(40); }],
+  ["um tenant só", (d) => { d.replicability.tenants = [{ slug: "deka", run: "e2e-deka" }]; }],
+  ["tenant trocado", (d) => { d.replicability.tenants = [{ slug: "deka", run: "e2e-deka" }, { slug: "demo3", run: "e2e-demo3" }]; }],
+  ["execução do demo2 ausente", (d) => { d.reports["e2e-demo2"] = null; d.exits["e2e-demo2"] = null; }],
+  ["execução do demo2 parcial", (d) => { d.reports["e2e-demo2"] = playwrightReport({ specs: REQUIRED_F04_E2E_SPECS, counts: F04_SPEC_COUNTS, total: EXPECTED_F04_E2E_TESTS, actual: true }); }],
+  ["comando de replicabilidade falhou", (d) => { d.exits.replicability = 1; }],
+]) test(`F07 rejects replicability out of contract: ${rotulo}`, () => {
+  const data = f07Input();
+  sabotar(data);
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, rotulo);
+  assert.ok(result.errors.some((e) => /replicability|e2e-demo2|e2e\[demo2\]/.test(e)), result.errors.join("\n"));
+});
+
+test("F06 keeps the fictitious replicability line and never requires the tenant runs", () => {
+  const data = f06Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.match(render(data, result), /replicability: e2e\[fictitious_A_B\]=41\/41 specs=10\/10 grep_deka_in_src=0/);
+});
+
+test("collect derives the block's e2e from the first tenant run and reads every tenant listed in replicability.json", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "verify-collect-"));
+  try {
+    mkdirSync(path.join(dir, "metrics"), { recursive: true });
+    const parametros = { specs: REQUIRED_F05_E2E_SPECS, counts: F05_SPEC_COUNTS, total: EXPECTED_F05_E2E_TESTS };
+    writeFileSync(path.join(dir, "e2e-plan.json"), JSON.stringify(playwrightReport(parametros)));
+    writeFileSync(path.join(dir, "e2e-plan.exit"), "0\n");
+    for (const slug of ["deka", "demo2"]) {
+      writeFileSync(path.join(dir, `e2e-${slug}.json`), JSON.stringify(playwrightReport({ ...parametros, actual: true })));
+      writeFileSync(path.join(dir, `e2e-${slug}.exit`), "0\n");
+    }
+    writeFileSync(path.join(dir, "replicability.json"), JSON.stringify(replicabilityEvidence()));
+    writeFileSync(path.join(dir, "replicability.exit"), "0\n");
+    writeFileSync(path.join(dir, "mutants.count"), "1/1\n");
+    const collected = collect(ROOT, dir, phaseContext(stateF07));
+    assert.equal(collected.exits.e2e, 0);
+    assert.equal(collected.exits["e2e-demo2"], 0);
+    assert.ok(collected.reports.e2e && collected.reports["e2e-demo2"]);
+    assert.equal(collected.replicability.src_diff_lines, 0);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// ─── ADR-031 — verify.sh v1.6: F11 mede `admin`, F12 mede `billing`; as duas fecham juntas ──
+
+const stateF12 = `current_phase: F12
+baseline_n0: 7
+f00_commit: c85f7d72
+baseline_detail: "unit=2/2 db=2/2 e2e=3/3"
+| F06 | Hardening | done(verify=2026-09-12 270852a6) |
+| F07 | Validação | done(verify=2026-09-13 d7543c14) |
+| F11 | Administração | in_progress |
+| F12 | Assinatura | in_progress |
+`;
+const stateF11 = stateF12.replace("current_phase: F12", "current_phase: F11");
+const F11_SPEC_COUNTS = [...F05_SPEC_COUNTS, 6];
+const F12_SPEC_COUNTS = [...F11_SPEC_COUNTS, 4];
+const ADMIN_OK = "admin: tenants_listed=3/3 support_sessions=2 support_reason=2/2 support_scope_denied=25/32 support_writes_denied=5/5 full_mode_rejected=1/1 signup_awaiting_payment=1/1 orgs_without_subscription=0/3";
+const BILLING_OK = "billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1/1 blocked_writes_denied=5/5 grace_days=7 reconciliation_mismatch=0/3 cancellations=1/1 data_preserved=7/7";
+
+function fasePorTenant(base, state, specs, counts, total) {
+  const data = f06Input();
+  data.context = phaseContext(state);
+  const parametros = { specs, counts, total };
+  data.reports["e2e-plan"] = playwrightReport(parametros);
+  data.reports["e2e-deka"] = playwrightReport({ ...parametros, actual: true });
+  data.reports["e2e-demo2"] = playwrightReport({ ...parametros, actual: true });
+  data.reports.e2e = data.reports["e2e-deka"];
+  Object.assign(data.exits, { "e2e-deka": 0, "e2e-demo2": 0, replicability: 0 });
+  data.replicability = replicabilityEvidence();
+  data.metrics.admin = ADMIN_OK;
+  if (base === "F12") data.metrics.billing = BILLING_OK;
+  return data;
+}
+const f11Input = () => fasePorTenant("F11", stateF11, REQUIRED_F11_E2E_SPECS, F11_SPEC_COUNTS, EXPECTED_F11_E2E_TESTS);
+const f12Input = () => fasePorTenant("F12", stateF12, REQUIRED_F12_E2E_SPECS, F12_SPEC_COUNTS, EXPECTED_F12_E2E_TESTS);
+
+test("F11 is gated: inventory of 11 specs (47 tests) per tenant, admin line measured; billing stays pending and is not required", () => {
+  const data = f11Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F11)");
+  const bloco = render(data, result);
+  assert.match(bloco, /e2e_scope: F11-required passed=47\/47 specs=11\/11/);
+  assert.match(bloco, /admin: tenants_listed=3\/3 support_sessions=2 support_reason=2\/2/);
+  assert.match(bloco, /billing: plans=pending/);
+});
+
+test("F12 is gated: inventory of 12 specs (51 tests) per tenant, admin and billing measured; in staging it prints READY (staging)", () => {
+  const data = f12Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F12)");
+  const bloco = render(data, result);
+  assert.match(bloco, /e2e_scope: F12-required passed=51\/51 specs=12\/12/);
+  assert.match(bloco, /billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1\/1/);
+  assert.match(bloco, /replicability: e2e\[deka\]=ok e2e\[demo2\]=ok src_diff_lines=0 grep_deka_in_src=0 \(deka=51\/51 demo2=51\/51 specs=12\/12 org_a=seed-replica\)/);
+  const staging = f12Input();
+  staging.sandbox = stagingEvidence();
+  const emStaging = evaluate(staging);
+  assert.deepEqual(emStaging.errors, []);
+  assert.equal(emStaging.status, "READY (staging)");
+});
+
+// ─── ADR-033 — verify.sh v1.7: F08 fecha com o inventário de F12; a produção fica fora do bloco ──
+
+const stateF08 = stateF12.replace("current_phase: F12", "current_phase: F08")
+  .replace("| F11 | Administração | in_progress |", "| F11 | Administração | done(verify=2026-09-13 1e13071d) |")
+  .replace("| F12 | Assinatura | in_progress |", "| F12 | Assinatura | done(verify=2026-09-13 1e13071d) |\n| F08 | Produção inicial | in_progress |");
+const f08Input = () => fasePorTenant("F12", stateF08, REQUIRED_F08_E2E_SPECS, F12_SPEC_COUNTS, EXPECTED_F08_E2E_TESTS);
+
+test("F08 is gated with the F12 inventory (12 specs, 51 tests) per tenant, admin and billing still required; in staging it prints READY (staging)", () => {
+  const data = f08Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F08)");
+  assert.match(render(data, result), /e2e_scope: F08-required passed=51\/51 specs=12\/12/);
+  const staging = f08Input();
+  staging.sandbox = stagingEvidence();
+  assert.equal(evaluate(staging).status, "READY (staging)");
+  const semBilling = f08Input();
+  delete semBilling.metrics.billing;
+  assert.ok(evaluate(semBilling).errors.some((e) => /Métrica obrigatória ausente: billing/.test(e)));
+});
+
+test("missing admin line makes otherwise green F11 fail", () => {
+  const data = f11Input();
+  delete data.metrics.admin;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.some((e) => /Métrica obrigatória ausente: admin/.test(e)), result.errors.join("\n"));
+});
+
+test("missing billing line makes otherwise green F12 fail", () => {
+  const data = f12Input();
+  delete data.metrics.billing;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.some((e) => /Métrica obrigatória ausente: billing/.test(e)), result.errors.join("\n"));
+});
+
+for (const [rotulo, linha] of [
+  ["motivo faltando numa sessão", ADMIN_OK.replace("support_reason=2/2", "support_reason=1/2")],
+  ["modo full aceito", ADMIN_OK.replace("full_mode_rejected=1/1", "full_mode_rejected=0/1")],
+  ["organização sem assinatura", ADMIN_OK.replace("orgs_without_subscription=0/3", "orgs_without_subscription=1/3")],
+  ["escrita permitida no suporte", ADMIN_OK.replace("support_writes_denied=5/5", "support_writes_denied=3/5")],
+]) test(`F11 rejects an admin line out of contract: ${rotulo}`, () => {
+  const data = f11Input();
+  data.metrics.admin = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, rotulo);
+  assert.ok(result.errors.some((e) => /^admin fora do contrato/.test(e)), result.errors.join("\n"));
+});
+
+for (const [rotulo, linha] of [
+  ["duplicata ativou de novo", BILLING_OK.replace("activations=1/1", "activations=2/1")],
+  ["sem evento duplicado medido", BILLING_OK.replace("duplicates=1", "duplicates=0")],
+  ["sem evento fora de ordem medido", BILLING_OK.replace("out_of_order=1", "out_of_order=0")],
+  ["conciliação divergente", BILLING_OK.replace("reconciliation_mismatch=0/3", "reconciliation_mismatch=1/3")],
+  ["bloqueada escreveu", BILLING_OK.replace("blocked_writes_denied=5/5", "blocked_writes_denied=2/5")],
+  ["cancelamento apagou dados", BILLING_OK.replace("data_preserved=7/7", "data_preserved=0/7")],
+]) test(`F12 rejects a billing line out of contract: ${rotulo}`, () => {
+  const data = f12Input();
+  data.metrics.billing = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, rotulo);
+  assert.ok(result.errors.some((e) => /^billing fora do contrato/.test(e)), result.errors.join("\n"));
+});
+
+test("F07 keeps its own inventory (10 specs, 41 tests) and never requires admin or billing", () => {
+  const data = f07Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  const bloco = render(data, result);
+  assert.match(bloco, /admin: tenants_listed=pending/);
+  assert.match(bloco, /billing: plans=pending/);
+});
+
+// ─── ADR-035 — verify.sh v1.8: F13 (CRM comercial) mede `crm:`; a matriz D15 passa a 4 papéis ──
+
+const stateF13 = stateF08.replace("current_phase: F08", "current_phase: F13")
+  .replace("| F08 | Produção inicial | in_progress |", "| F08 | Produção inicial | done(verify=2026-09-14 dc39424a) |\n| F13 | CRM comercial | in_progress |");
+const F13_SPEC_COUNTS = [...F12_SPEC_COUNTS, 7];
+const CRM_OK = "crm: fields_defined=6 values_rejected=3/3 values_preserved=4/4 queue_size=5 distributed=5/5 balanced=1 second_claim_rejected=1/1 history_types=3 orders_linked=1/1 cross_org_link_denied=1/1 report_indicators=9/9 roles_denied=3/3";
+const RBAC_4 = "rbac: roles=4 denied_expected=27 denied_actual=27";
+function f13Input() {
+  const data = fasePorTenant("F12", stateF13, REQUIRED_F13_E2E_SPECS, F13_SPEC_COUNTS, EXPECTED_F13_E2E_TESTS);
+  data.metrics.crm = CRM_OK;
+  data.metrics.rbac = RBAC_4;
+  return data;
+}
+
+test("F13 is gated: inventory of 13 specs (58 tests) per tenant, admin, billing and crm measured, rbac with 4 roles; in staging it prints READY (staging)", () => {
+  const data = f13Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F13)");
+  const bloco = render(data, result);
+  assert.match(bloco, /e2e_scope: F13-required passed=58\/58 specs=13\/13/);
+  assert.match(bloco, /crm: fields_defined=6 values_rejected=3\/3 values_preserved=4\/4 queue_size=5 distributed=5\/5 balanced=1/);
+  assert.match(bloco, /replicability: e2e\[deka\]=ok e2e\[demo2\]=ok src_diff_lines=0 grep_deka_in_src=0 \(deka=58\/58 demo2=58\/58 specs=13\/13 org_a=seed-replica\)/);
+  const staging = f13Input();
+  staging.sandbox = stagingEvidence();
+  assert.equal(evaluate(staging).status, "READY (staging)");
+});
+
+test("missing crm line makes otherwise green F13 fail", () => {
+  const data = f13Input();
+  delete data.metrics.crm;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.some((e) => /Métrica obrigatória ausente: crm/.test(e)), result.errors.join("\n"));
+});
+
+test("F13 requires rbac roles=4 (the tree has four D15 roles) and F08 still requires roles=3", () => {
+  const tres = f13Input();
+  tres.metrics.rbac = "rbac: roles=3 denied_expected=19 denied_actual=19";
+  assert.ok(evaluate(tres).errors.includes("RBAC fora do contrato"));
+  const f08ComQuatro = f08Input();
+  f08ComQuatro.metrics.rbac = RBAC_4;
+  assert.ok(evaluate(f08ComQuatro).errors.includes("RBAC fora do contrato"));
+});
+
+test("crm line stays pending before F13 and is not required there", () => {
+  const data = f08Input();
+  assert.deepEqual(evaluate(data).errors, []);
+  assert.match(render(data, evaluate(data)), /crm: fields_defined=pending/);
+});
+
+for (const [rotulo, linha] of [
+  ["fila distribuída pela metade", CRM_OK.replace("distributed=5/5", "distributed=3/5")],
+  ["rodízio desequilibrado", CRM_OK.replace("balanced=1", "balanced=0")],
+  ["valor preservado a menos", CRM_OK.replace("values_preserved=4/4", "values_preserved=3/4")],
+  ["indicador divergente da origem", CRM_OK.replace("report_indicators=9/9", "report_indicators=8/9")],
+  ["segundo claim aceito", CRM_OK.replace("second_claim_rejected=1/1", "second_claim_rejected=0/1")],
+  ["vínculo entre organizações aceito", CRM_OK.replace("cross_org_link_denied=1/1", "cross_org_link_denied=0/1")],
+  ["papel permitido onde nega", CRM_OK.replace("roles_denied=3/3", "roles_denied=2/3")],
+  ["poucos tipos no histórico", CRM_OK.replace("history_types=3", "history_types=2")],
+]) test(`F13 rejects a crm line out of contract: ${rotulo}`, () => {
+  const data = f13Input();
+  data.metrics.crm = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, rotulo);
+  assert.ok(result.errors.some((e) => /^crm fora do contrato/.test(e)), result.errors.join("\n"));
+});
+
+// ─── ADR-037 — verify.sh v1.9: F15 (automação e autonomia) mede `autonomy:` ──
+
+const stateF15 = stateF13.replace("current_phase: F13", "current_phase: F15")
+  .replace("| F13 | CRM comercial | in_progress |", "| F13 | CRM comercial | done(verify=2026-09-14 767d22a6) |\n| F15 | Automação e autonomia | in_progress |");
+const F15_SPEC_COUNTS = [...F13_SPEC_COUNTS, 7];
+const AUTONOMY_OK = "autonomy: policy_modes=4/4 ai_task_created=1/1 limit_hits=1/1 calls_after_limit=0/3 paused=1/1 resumed=1/1 handoffs=4 balanced=1 assignees_distinct=2 rules=4 runs=4/4 replays=4 duplicate_runs=0 outside_catalog_denied=1/1 reindexed=2/2 unchanged_skipped=3/3 sources_cited=2/2 roles_denied=3/3";
+function f15Input() {
+  const data = fasePorTenant("F12", stateF15, REQUIRED_F15_E2E_SPECS, F15_SPEC_COUNTS, EXPECTED_F15_E2E_TESTS);
+  data.metrics.crm = CRM_OK;
+  data.metrics.rbac = RBAC_4;
+  data.metrics.autonomy = AUTONOMY_OK;
+  return data;
+}
+
+test("F15 is gated: inventory of 14 specs (65 tests) per tenant, admin, billing, crm and autonomy measured; in staging it prints READY (staging)", () => {
+  const data = f15Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F15)");
+  const bloco = render(data, result);
+  assert.match(bloco, /e2e_scope: F15-required passed=65\/65 specs=14\/14/);
+  assert.match(bloco, /autonomy: policy_modes=4\/4 ai_task_created=1\/1 limit_hits=1\/1 calls_after_limit=0\/3/);
+  assert.match(bloco, /replicability: e2e\[deka\]=ok e2e\[demo2\]=ok src_diff_lines=0 grep_deka_in_src=0 \(deka=65\/65 demo2=65\/65 specs=14\/14 org_a=seed-replica\)/);
+  const staging = f15Input();
+  staging.sandbox = stagingEvidence();
+  assert.equal(evaluate(staging).status, "READY (staging)");
+});
+
+test("missing autonomy line makes otherwise green F15 fail", () => {
+  const data = f15Input();
+  delete data.metrics.autonomy;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.some((e) => /Métrica obrigatória ausente: autonomy/.test(e)), result.errors.join("\n"));
+});
+
+test("F15 still requires crm (closes after F13) and rbac roles=4", () => {
+  const semCrm = f15Input();
+  delete semCrm.metrics.crm;
+  assert.ok(evaluate(semCrm).errors.some((e) => /Métrica obrigatória ausente: crm/.test(e)));
+  const tres = f15Input();
+  tres.metrics.rbac = "rbac: roles=3 denied_expected=19 denied_actual=19";
+  assert.ok(evaluate(tres).errors.includes("RBAC fora do contrato"));
+});
+
+test("autonomy line stays pending before F15 (F13) and is not required there", () => {
+  const data = f13Input();
+  assert.deepEqual(evaluate(data).errors, []);
+  assert.match(render(data, evaluate(data)), /autonomy: policy_modes=pending/);
+});
+
+for (const [rotulo, linha] of [
+  ["modo de política faltando", AUTONOMY_OK.replace("policy_modes=4/4", "policy_modes=3/4")],
+  ["tarefa da IA não criada", AUTONOMY_OK.replace("ai_task_created=1/1", "ai_task_created=0/1")],
+  ["provedor chamado depois do limite", AUTONOMY_OK.replace("calls_after_limit=0/3", "calls_after_limit=1/3")],
+  ["limite sem tentativas suficientes", AUTONOMY_OK.replace("calls_after_limit=0/3", "calls_after_limit=0/2")],
+  ["pausa não retomada", AUTONOMY_OK.replace("resumed=1/1", "resumed=0/1")],
+  ["rodízio de handoff desequilibrado", AUTONOMY_OK.replace("balanced=1", "balanced=0")],
+  ["um único atribuído", AUTONOMY_OK.replace("assignees_distinct=2", "assignees_distinct=1")],
+  ["regra que não rodou", AUTONOMY_OK.replace("runs=4/4", "runs=3/4")],
+  ["replay duplicou run", AUTONOMY_OK.replace("duplicate_runs=0", "duplicate_runs=1")],
+  ["replay não exercitado", AUTONOMY_OK.replace("replays=4", "replays=3")],
+  ["ação fora do catálogo aceita", AUTONOMY_OK.replace("outside_catalog_denied=1/1", "outside_catalog_denied=0/1")],
+  ["trecho inalterado reembedado", AUTONOMY_OK.replace("unchanged_skipped=3/3", "unchanged_skipped=2/3")],
+  ["resposta sem fonte", AUTONOMY_OK.replace("sources_cited=2/2", "sources_cited=1/2")],
+  ["papel permitido onde nega", AUTONOMY_OK.replace("roles_denied=3/3", "roles_denied=2/3")],
+]) test(`F15 rejects an autonomy line out of contract: ${rotulo}`, () => {
+  const data = f15Input();
+  data.metrics.autonomy = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, rotulo);
+  assert.ok(result.errors.some((e) => /^autonomy fora do contrato/.test(e)), result.errors.join("\n"));
+});
+
+// ─── ADR-039 — verify.sh v1.10: F14 (chat do site, agenda) mede `channels:` ──
+
+const stateF14 = stateF15.replace("current_phase: F15", "current_phase: F14")
+  .replace("| F15 | Automação e autonomia | in_progress |", "| F15 | Automação e autonomia | done(verify=2026-09-15 4c7bfcdf) |\n| F14 | Chat do site e agenda | in_progress |");
+const F14_SPEC_COUNTS = [...F15_SPEC_COUNTS, 7];
+const CHANNELS_OK = "channels: webchat_sessions=3 identified=3/3 contacts_created=3/3 messages_in=6 ai_replies=3/3 ai_outside_window=1/1 handoff_queued=1/1 ip_limited=1/1 org_limited=1/1 flood_calls_capped=1/1 cross_org_denied=1/1 appointments=3 conflicts_blocked=1/1 revoked_blocked=1/1 tz_ok=1/1 proposed=2/2 approved=1/1 denied_by_policy=1/1 roles_denied=2/2";
+function f14Input() {
+  const data = fasePorTenant("F12", stateF14, REQUIRED_F14_E2E_SPECS, F14_SPEC_COUNTS, EXPECTED_F14_E2E_TESTS);
+  data.metrics.crm = CRM_OK;
+  data.metrics.rbac = RBAC_4;
+  data.metrics.autonomy = AUTONOMY_OK;
+  data.metrics.channels = CHANNELS_OK;
+  return data;
+}
+
+test("F14 is gated: inventory of 15 specs (72 tests) per tenant, admin, billing, crm, autonomy and channels measured; in staging it prints READY (staging)", () => {
+  const data = f14Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F14)");
+  const bloco = render(data, result);
+  assert.match(bloco, /e2e_scope: F14-required passed=72\/72 specs=15\/15/);
+  assert.match(bloco, /channels: webchat_sessions=3 identified=3\/3 contacts_created=3\/3 messages_in=6/);
+  assert.match(bloco, /replicability: e2e\[deka\]=ok e2e\[demo2\]=ok src_diff_lines=0 grep_deka_in_src=0 \(deka=72\/72 demo2=72\/72 specs=15\/15 org_a=seed-replica\)/);
+  const staging = f14Input();
+  staging.sandbox = stagingEvidence();
+  assert.equal(evaluate(staging).status, "READY (staging)");
+});
+
+test("missing channels line makes otherwise green F14 fail", () => {
+  const data = f14Input();
+  delete data.metrics.channels;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.some((e) => /Métrica obrigatória ausente: channels/.test(e)), result.errors.join("\n"));
+});
+
+test("F14 still requires autonomy and crm (closes after F15) and rbac roles=4", () => {
+  const semAutonomy = f14Input();
+  delete semAutonomy.metrics.autonomy;
+  assert.ok(evaluate(semAutonomy).errors.some((e) => /Métrica obrigatória ausente: autonomy/.test(e)));
+  const semCrm = f14Input();
+  delete semCrm.metrics.crm;
+  assert.ok(evaluate(semCrm).errors.some((e) => /Métrica obrigatória ausente: crm/.test(e)));
+  const tres = f14Input();
+  tres.metrics.rbac = "rbac: roles=3 denied_expected=19 denied_actual=19";
+  assert.ok(evaluate(tres).errors.includes("RBAC fora do contrato"));
+});
+
+test("channels line stays pending before F14 (F15) and is not required there", () => {
+  const data = f15Input();
+  assert.deepEqual(evaluate(data).errors, []);
+  assert.match(render(data, evaluate(data)), /channels: webchat_sessions=pending/);
+});
+
+for (const [rotulo, linha] of [
+  ["poucas sessões", CHANNELS_OK.replace("webchat_sessions=3", "webchat_sessions=2")],
+  ["sessão sem identificação", CHANNELS_OK.replace("identified=3/3", "identified=2/3")],
+  ["contato não criado", CHANNELS_OK.replace("contacts_created=3/3", "contacts_created=0/0")],
+  ["IA muda fora da janela", CHANNELS_OK.replace("ai_outside_window=1/1", "ai_outside_window=0/1")],
+  ["handoff não enfileirado", CHANNELS_OK.replace("handoff_queued=1/1", "handoff_queued=0/1")],
+  ["freio por ip não bateu", CHANNELS_OK.replace("ip_limited=1/1", "ip_limited=0/1")],
+  ["freio por organização não bateu", CHANNELS_OK.replace("org_limited=1/1", "org_limited=0/1")],
+  ["enxurrada passou do teto", CHANNELS_OK.replace("flood_calls_capped=1/1", "flood_calls_capped=0/1")],
+  ["token cruzou organização", CHANNELS_OK.replace("cross_org_denied=1/1", "cross_org_denied=0/1")],
+  ["poucos compromissos", CHANNELS_OK.replace("appointments=3", "appointments=1")],
+  ["conflito aceito", CHANNELS_OK.replace("conflicts_blocked=1/1", "conflicts_blocked=0/1")],
+  ["conexão revogada publicou", CHANNELS_OK.replace("revoked_blocked=1/1", "revoked_blocked=0/1")],
+  ["fuso errado", CHANNELS_OK.replace("tz_ok=1/1", "tz_ok=0/1")],
+  ["IA não propôs", CHANNELS_OK.replace("proposed=2/2", "proposed=0/0")],
+  ["política ignorada", CHANNELS_OK.replace("denied_by_policy=1/1", "denied_by_policy=0/1")],
+  ["papel permitido onde nega", CHANNELS_OK.replace("roles_denied=2/2", "roles_denied=1/2")],
+]) test(`F14 rejects a channels line out of contract: ${rotulo}`, () => {
+  const data = f14Input();
+  data.metrics.channels = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, rotulo);
+  assert.ok(result.errors.some((e) => /^channels fora do contrato/.test(e)), result.errors.join("\n"));
+});
+
+// ─── ADR-041 — verify.sh v1.11: F18 (um motor de IA só) mede `engine:` ───────
+
+const stateF18 = stateF14.replace("current_phase: F14", "current_phase: F18")
+  .replace("| F14 | Chat do site e agenda | in_progress |", "| F14 | Chat do site e agenda | done(verify=2026-09-18 6b493892) |\n| F18 | Um motor de IA só | in_progress |");
+const F18_SPEC_COUNTS = [...F14_SPEC_COUNTS, 7];
+const ENGINE_OK = "engine: saas_turns=4 legacy_turns=1 volta_atras=1/1 tools_migradas=13/13 fora_do_catalogo_negado=1/1 heranca_prompt=1/1 heranca_acervo=1/1 policy_approve_pendura=1/1 limite_diario_nega=1/1 cancel_allow=1/1 cancel_passado_negado=1/1 cancel_auditado=1/1 auditoria=6/6 roles_denied=2/2";
+function f18Input() {
+  const data = fasePorTenant("F12", stateF18, REQUIRED_F18_E2E_SPECS, F18_SPEC_COUNTS, EXPECTED_F18_E2E_TESTS);
+  data.metrics.crm = CRM_OK;
+  data.metrics.rbac = RBAC_4;
+  data.metrics.autonomy = AUTONOMY_OK;
+  data.metrics.channels = CHANNELS_OK;
+  data.metrics.engine = ENGINE_OK;
+  return data;
+}
+
+test("F18 is gated: inventory of 16 specs (79 tests) per tenant, with crm, autonomy, channels and engine measured; in staging it prints READY (staging)", () => {
+  const data = f18Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F18)");
+  const bloco = render(data, result);
+  assert.match(bloco, /e2e_scope: F18-required passed=79\/79 specs=16\/16/);
+  assert.match(bloco, /engine: saas_turns=4 legacy_turns=1 volta_atras=1\/1 tools_migradas=13\/13/);
+  const staging = f18Input();
+  staging.sandbox = stagingEvidence();
+  assert.equal(evaluate(staging).status, "READY (staging)");
+});
+
+test("missing engine line makes otherwise green F18 fail", () => {
+  const data = f18Input();
+  delete data.metrics.engine;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.some((e) => /Métrica obrigatória ausente: engine/.test(e)), result.errors.join("\n"));
+});
+
+test("F18 still requires channels, autonomy and crm (it closes after all three)", () => {
+  for (const campo of ["channels", "autonomy", "crm"]) {
+    const data = f18Input();
+    delete data.metrics[campo];
+    assert.ok(
+      evaluate(data).errors.some((e) => new RegExp(`Métrica obrigatória ausente: ${campo}`).test(e)),
+      campo,
+    );
+  }
+});
+
+test("engine line stays pending before F18 (F14) and is not required there", () => {
+  const data = f14Input();
+  assert.deepEqual(evaluate(data).errors, []);
+  assert.match(render(data, evaluate(data)), /engine: saas_turns=pending/);
+});
+
+for (const [rotulo, linha] of [
+  ["nenhum turno pelo motor novo", ENGINE_OK.replace("saas_turns=4", "saas_turns=0")],
+  ["volta atrás não medida", ENGINE_OK.replace("legacy_turns=1", "legacy_turns=0")],
+  ["volta atrás declarada e não provada", ENGINE_OK.replace("volta_atras=1/1", "volta_atras=0/1")],
+  ["ferramenta migrada a menos", ENGINE_OK.replace("tools_migradas=13/13", "tools_migradas=12/13")],
+  ["denominador das ferramentas encolhido", ENGINE_OK.replace("tools_migradas=13/13", "tools_migradas=12/12")],
+  ["ferramenta fora do catálogo passou em silêncio", ENGINE_OK.replace("fora_do_catalogo_negado=1/1", "fora_do_catalogo_negado=0/1")],
+  ["prompt da versão não herdado", ENGINE_OK.replace("heranca_prompt=1/1", "heranca_prompt=0/1")],
+  ["acervo da versão não respeitado", ENGINE_OK.replace("heranca_acervo=1/1", "heranca_acervo=0/1")],
+  ["approve não pendurou", ENGINE_OK.replace("policy_approve_pendura=1/1", "policy_approve_pendura=0/1")],
+  ["teto diário não negou", ENGINE_OK.replace("limite_diario_nega=1/1", "limite_diario_nega=0/1")],
+  ["cancelamento não executou sozinho", ENGINE_OK.replace("cancel_allow=1/1", "cancel_allow=0/1")],
+  ["cancelou compromisso passado", ENGINE_OK.replace("cancel_passado_negado=1/1", "cancel_passado_negado=0/1")],
+  ["cancelamento sem auditoria", ENGINE_OK.replace("cancel_auditado=1/1", "cancel_auditado=0/1")],
+  ["execução sem auditoria", ENGINE_OK.replace("auditoria=6/6", "auditoria=5/6")],
+  ["papel permitido onde nega", ENGINE_OK.replace("roles_denied=2/2", "roles_denied=1/2")],
+]) test(`F18 rejects an engine line out of contract: ${rotulo}`, () => {
+  const data = f18Input();
+  data.metrics.engine = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, rotulo);
+  assert.ok(result.errors.some((e) => /^engine fora do contrato/.test(e)), result.errors.join("\n"));
+});
+
+// ─── ADR-043 — verify.sh v1.12: F19 (cobrança real por Stripe) mede `stripe:` ─
+
+const stateF19 = stateF18.replace("current_phase: F18", "current_phase: F19")
+  .replace("| F18 | Um motor de IA só | in_progress |", "| F18 | Um motor de IA só | done(verify=2026-09-19 e5c26c4e) |\n| F19 | Cobrança real por Stripe | in_progress |");
+const F19_SPEC_COUNTS = [...F18_SPEC_COUNTS, 7];
+const STRIPE_OK = "stripe: signature_rejected=1/1 livemode_mismatch=1/1 price_outside_list=1/1 checkout_created=1/1 activated=1/1 trialing_mapped=1/1 duplicates=1 out_of_order=1 state_from_provider=1/1 past_due=1/1 blocked_after_grace=1/1 cancelled_preserved=7/7 portal_link=1/1 admin_actions=5/5 summary_ok=1/1";
+function f19Input() {
+  const data = fasePorTenant("F12", stateF19, REQUIRED_F19_E2E_SPECS, F19_SPEC_COUNTS, EXPECTED_F19_E2E_TESTS);
+  data.metrics.crm = CRM_OK;
+  data.metrics.rbac = RBAC_4;
+  data.metrics.autonomy = AUTONOMY_OK;
+  data.metrics.channels = CHANNELS_OK;
+  data.metrics.engine = ENGINE_OK;
+  data.metrics.stripe = STRIPE_OK;
+  return data;
+}
+
+test("F19 is gated: inventory of 17 specs (86 tests) per tenant, with engine and stripe measured; in staging it prints READY (staging)", () => {
+  const data = f19Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F19)");
+  const bloco = render(data, result);
+  assert.match(bloco, /e2e_scope: F19-required passed=86\/86 specs=17\/17/);
+  assert.match(bloco, /stripe: signature_rejected=1\/1 livemode_mismatch=1\/1 price_outside_list=1\/1 checkout_created=1\/1/);
+  const staging = f19Input();
+  staging.sandbox = stagingEvidence();
+  assert.equal(evaluate(staging).status, "READY (staging)");
+});
+
+test("missing stripe line makes otherwise green F19 fail", () => {
+  const data = f19Input();
+  delete data.metrics.stripe;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.some((e) => /Métrica obrigatória ausente: stripe/.test(e)), result.errors.join("\n"));
+});
+
+test("F19 still requires engine, channels, autonomy, crm and billing (it closes after all of them)", () => {
+  for (const campo of ["engine", "channels", "autonomy", "crm", "billing"]) {
+    const data = f19Input();
+    delete data.metrics[campo];
+    assert.ok(
+      evaluate(data).errors.some((e) => new RegExp(`Métrica obrigatória ausente: ${campo}`).test(e)),
+      campo,
+    );
+  }
+});
+
+test("stripe line stays pending before F19 (F18) and is not required there", () => {
+  const data = f18Input();
+  assert.deepEqual(evaluate(data).errors, []);
+  assert.match(render(data, evaluate(data)), /stripe: signature_rejected=pending/);
+});
+
+for (const [rotulo, linha] of [
+  ["webhook sem assinatura aceito", STRIPE_OK.replace("signature_rejected=1/1", "signature_rejected=0/1")],
+  ["evento live aceito em modo test", STRIPE_OK.replace("livemode_mismatch=1/1", "livemode_mismatch=0/1")],
+  ["preço fora da lista gravado", STRIPE_OK.replace("price_outside_list=1/1", "price_outside_list=0/1")],
+  ["checkout não criado", STRIPE_OK.replace("checkout_created=1/1", "checkout_created=0/1")],
+  ["webhook não ativou", STRIPE_OK.replace("activated=1/1", "activated=0/1")],
+  ["trial não mapeado", STRIPE_OK.replace("trialing_mapped=1/1", "trialing_mapped=0/1")],
+  ["duplicata não medida", STRIPE_OK.replace("duplicates=1", "duplicates=0")],
+  ["fora de ordem não medido", STRIPE_OK.replace("out_of_order=1", "out_of_order=0")],
+  ["estado lido do payload", STRIPE_OK.replace("state_from_provider=1/1", "state_from_provider=0/1")],
+  ["falha de pagamento não avisou", STRIPE_OK.replace("past_due=1/1", "past_due=0/1")],
+  ["carência não bloqueou", STRIPE_OK.replace("blocked_after_grace=1/1", "blocked_after_grace=0/1")],
+  ["cancelamento perdeu dado", STRIPE_OK.replace("cancelled_preserved=7/7", "cancelled_preserved=6/7")],
+  ["portal sem link", STRIPE_OK.replace("portal_link=1/1", "portal_link=0/1")],
+  ["ação do painel a menos", STRIPE_OK.replace("admin_actions=5/5", "admin_actions=4/5")],
+  ["denominador das ações encolhido", STRIPE_OK.replace("admin_actions=5/5", "admin_actions=4/4")],
+  ["cockpit sem resposta", STRIPE_OK.replace("summary_ok=1/1", "summary_ok=0/1")],
+]) test(`F19 rejects a stripe line out of contract: ${rotulo}`, () => {
+  const data = f19Input();
+  data.metrics.stripe = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, rotulo);
+  assert.ok(result.errors.some((e) => /^stripe fora do contrato/.test(e)), result.errors.join("\n"));
+});

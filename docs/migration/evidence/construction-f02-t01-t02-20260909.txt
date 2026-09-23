@@ -1,0 +1,50 @@
+CONSTRUÇÃO F02 — checkpoint de cadastros e pedidos operacionais
+Registro: 2026-09-09T19:06:26.082909+00:00
+Código: c81a59b8c45e60c5584f61532cd2ef83c3efedaf
+Base: c2fba8d260432af43ca2f6b9a22295b39c1c9477; v1.17.0 db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d.
+
+Escopo: backend/API/UI T01/T02 e partes T04–T06; F02 IN_PROGRESS, sem READY.
+Migrations 9005/9006/9007 instaladas/reaplicadas em banco descartável. Nenhuma aplicação em produção.
+
+RESULTADOS OBSERVADOS (execuções diferentes, sem somar como uma suíte única)
+.verify-logs/f02-cadastros-db-rerun.JCXgyZu1/result.json: passed=93/93, failed=0, pending=0; sha256=33ca7b38dad678b7fd7b7b6b3eacfdf47cb755fbcf59246c84a85215ce8977d0
+.verify-logs/f02-global-current/orders-export-integration-retry.json: passed=20/20, failed=0, pending=0; sha256=a94a575c69d96b98cbd157e04a61fdc2ab1f7c91851328e78f63b91337f32157
+.verify-logs/f02-global-current/compat-api-ci-export.json: passed=20/20, failed=0, pending=0; sha256=143584f32bce0d552e681748e1cafaf6187887e4322913f45b6d0de6707bdfeb
+.verify-logs/f02-global-current/compat-ui-i18n-final.json: passed=67/67, failed=0, pending=0; sha256=36f09af825231f270b20ca3a4ced62fa3c55b3e0cc35a0f4cd269a9539390ce2
+.verify-logs/f02-global-current/typed-fixtures-recheck.json: passed=8/8, failed=0, pending=0; sha256=eaf700080accb1808e651d8758f7b4907893958acc12a0e2934a129ce4377b2d
+Schema pedidos: 107/107 na prova focal anterior; serviço com export ampliado 20/20 acima.
+Mutantes executados: dívidas 5/5; imutabilidade de contato 1/1; suporte 1/1; confirmação com pendência 1/1. Export de recibos por contato: 1/1, esperado 3 snapshots, mutante devolveu 4; uma tentativa, Postgres descartável removido. Mutantes adicionais têm logs próprios; não se infere total global.
+Cadastros no navegador: 1/1, três passos internos, zero skips/retries; execução anterior à internacionalização. Tradução preserva português e passou na rechecagem focal.
+pnpm e2e:build: exit=0, seconds=358.5, inputs=1908, changed_inputs=0. Host local 127.0.0.1:55421 comprovado no bundle.
+pnpm typecheck: exit=0 (typecheck-compat-complete); pnpm lint: exit=0, 356 warnings, 0 errors (lint-compat-final).
+Tipos: PostgreSQL public/storage/graphql_public, 121→133 tabelas públicas nos tipos; nenhuma tabela anterior removida.
+
+Playwright pedidos: expected=2, unexpected=0, skipped=0, flaky=0, top_errors=0; sha256=f3d6351367ba2f9689a61f9b72d6879aaff50c2890287eb2a9f0b6591bddedde
+Duas jornadas independentes A/B; zero retries; cada uma removeu duas organizações e dois usuários e verificou zero linhas nas oito tabelas de domínio declaradas.
+Auditoria append-only não integra esse denominador; mantém retenção até descarte completo do sandbox. Nenhuma guarda/grant de auditoria foi enfraquecida.
+
+REGRESSÃO GLOBAL E RECHECAGENS
+Parte 1/3: arquivos=254, passed=2879/2880, failed=1, pending=0; sha256=c887efc65ae2e555e2f0c3e3bbe85b29e5bd47c0061952e7d653f526ee6a6e36
+Parte 2/3: arquivos=254, passed=2578/2579, failed=1, pending=0; sha256=ee099c691d48ca40d245f384dbc282a99cb179c1a8a3348fd0ae4650a6b6aef6
+Parte 3/3: arquivos=253, passed=2622/2630, failed=8, pending=0; sha256=49be0550f301226f45bdbee62bce9efb4de57b2da2e6e5f27d5c95e8edb00c3c
+Manifesto: 761/761 arquivos únicos executados, nenhum ausente ou inesperado. Resultado inicial composto: 8079/8089. As dez falhas foram corrigidas e possuem rechecagem aprovada por arquivo/nome:
+- tests/unit/audit-resource-id-e-uuid.test.ts :: resourceId do audit é sempre um uuid (ou null) nenhuma chave natural vai para a coluna uuid
+- lib/random-id.test.ts :: randomId — UUID v4 dentro E fora de secure context nenhum arquivo "use client" (nem lib/api/client.ts) usa crypto.randomUUID cru
+- tests/unit/e2e-cobertura-completa.test.ts :: cobertura do e2e no CI toda spec do disco está em exatamente uma lista
+- tests/unit/i18n-a-data-segue-o-idioma.test.ts :: ninguém fixa o idioma da data fora da camada nenhuma DATA é formatada com "pt-BR" fixo
+- tests/unit/i18n-espanhol-cobre-a-tela.test.ts :: toda chave usada na tela tem espanhol nenhuma chamada t() cai no português por falta de tradução
+- tests/unit/i18n-espanhol-cobre-a-tela.test.ts :: nenhuma prosa em português escapa de t() toda tela de produto passa o texto por t() antes de renderizar
+- tests/unit/inventario-de-telas.test.ts :: inventário de telas caso 5 — a lista de não-construído só encolhe
+- tests/unit/lgpd-exporta-o-que-redige.test.ts :: LGPD: o export alcança tudo que a redação alcança toda tabela que a redação apaga é visitada pelo export
+- tests/unit/suporte-cobertura-de-efeitos.test.ts :: todo handler mutante do app declara guarda de suporte ou é infraestrutura identificada
+- tests/unit/tailwind-tokens.test.ts :: Tailwind 4 — utilitários que mudaram de significado não usa `rounded` puro — no v4 ele é 0.25rem, não o `--radius-md` do produto
+
+A tentativa unitária única anterior terminou externamente com 143, sem relatório final; causa não estabelecida. O log e o código de saída foram preservados.
+As partes 1/2 precedem correções de UUID/auditoria; a parte 3 as sucede. Alterações de suporte, CI, inventário, LGPD e internacionalização foram rechecadas depois. Não apresentar isto como uma execução integral verde.
+Os testes/API de export tiveram duas correções de tipagem nas fixtures; tentativas TypeScript anteriores permanecem registradas, e typecheck-compat-complete passou.
+A primeira tentativa de integração do export ampliado parou com exit127 porque bash direto não disponibilizou vitest no PATH. pnpm exec corrigiu a invocação; a repetição passou 20/20. Não foi falha de asserção do produto.
+
+LIMITES
+Gate F02 ainda depende de T03 e das tarefas restantes. Lista do dia, impressão e conferência dependem das regras da Deka. F03 não está concluída nem liberada pelo checkpoint.
+Sem WhatsApp/IA/e-mail/cobrança reais, dados de clientes, implantação ou aceite humano. Provas de contratos/notas/tarefas em /tmp não estão promovidas neste commit.
+Logs completos e traces ficam ignorados em .verify-logs; este registro publica somente metadados, contagens e hashes.

@@ -22,6 +22,7 @@ export const CHANNEL_CAPABILITIES: Record<ChannelProvider, ChannelCapabilities> 
     voiceNote: "server-convert",
     groups: "full",
     costPerMessage: false,
+    liveVisitor: false,
   },
   // Hetero-restrição: não me banem, mas a Meta me proíbe e me cobra.
   meta_cloud: {
@@ -35,6 +36,7 @@ export const CHANNEL_CAPABILITIES: Record<ChannelProvider, ChannelCapabilities> 
     voiceNote: "opus-only",
     groups: "limited",
     costPerMessage: true,
+    liveVisitor: false,
   },
   // Mesma hetero-restrição do canal oficial, por baixo: é um BSP: a WABA é da
   // Meta, os templates são aprovados pela Meta e a janela de 24h é da Meta. O
@@ -68,6 +70,20 @@ export const CHANNEL_CAPABILITIES: Record<ChannelProvider, ChannelCapabilities> 
     voiceNote: "opus-only",
     groups: "limited",
     costPerMessage: true,
+    liveVisitor: false,
+  },
+  // Chat do site (F14): sem transporte externo, sem ban, sem template, sem
+  // custo por mensagem; o visitante está na página — a IA responde 24 h.
+  webchat: {
+    freeformOutsideWindow: true,
+    requiresTemplates: false,
+    canManageTemplates: false,
+    banRisk: false,
+    minIntervalMs: null,
+    voiceNote: "server-convert",
+    groups: "none",
+    costPerMessage: false,
+    liveVisitor: true,
   },
 };
 
