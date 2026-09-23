@@ -76,6 +76,13 @@ interface Excecao {
  */
 const PROVA_PROPRIA: readonly Excecao[] = [
   {
+    tabela: "team_invites",
+    razao:
+      "tests/invariants/f20-t01-team-invites-schema.test.ts prova RLS ligada, zero " +
+      "policies, nenhum privilégio anon/authenticated e permission denied real nas " +
+      "quatro operações para os dois papéis, com service_role como guarda de vacuidade.",
+  },
+  {
     tabela: "crm_order_check_command_receipts",
     razao:
       "tests/invariants/f02-t12-order-checks-schema.test.ts prova zero policies, " +

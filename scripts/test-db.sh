@@ -11,7 +11,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-BASELINE="$ROOT/supabase/baseline.sql"
+# F20-T01: o baseline é parametrizável pela mesma razão que a suíte e a config já
+# são (TEST_DB_SUITE_DIR/TEST_DB_VITEST_CONFIG) — o mutante 89 aplica uma CÓPIA
+# mutada para provar que o índice parcial é o que segura o invariante. Sem a
+# variável, o comportamento é o de sempre.
+BASELINE="${TEST_DB_BASELINE:-$ROOT/supabase/baseline.sql}"
 # A PORTA: quem PEDE escolhe; quem não pede deixa o Docker escolher.
 #
 # Antes era 54329 fixo, e duas sessões rodando `test:db` ao mesmo tempo colidiam:
