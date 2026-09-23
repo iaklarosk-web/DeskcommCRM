@@ -42,7 +42,7 @@ const test = base.extend<{ fixture: F13Fixture }>({
       }
       const limpeza = await cleanupF13(fixture);
       await info.attach("sandbox-cleanup", { body: JSON.stringify(limpeza), contentType: "application/json" });
-      expect(limpeza).toEqual({ deleted_organizations: 3, deleted_users: 4, domain_tables_checked: 6, domain_rows_remaining: 0, f13_tables_checked: 6, f13_rows_remaining: 0 });
+      expect(limpeza).toEqual({ deleted_organizations: 3, deleted_users: 4, domain_tables_checked: 7, domain_rows_remaining: 0, f13_tables_checked: 6, f13_rows_remaining: 0 });
     }
   },
 });

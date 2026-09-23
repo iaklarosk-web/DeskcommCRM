@@ -49,7 +49,7 @@ async function convidar(page: Page, email: string, role = "agent"): Promise<{ id
     data: { invitations: [{ email, role }] },
     timeout: HTTP_TIMEOUT,
   });
-  expect(r.status(), await r.text()).toBe(200);
+  expect(r.status(), await r.text()).toBe(201);
   const corpo = (await r.json()) as { data: { sent: Array<{ invite_id: string; accept_url: string }> } };
   const enviado = corpo.data.sent[0]!;
   return { id: enviado.invite_id, link: enviado.accept_url };
