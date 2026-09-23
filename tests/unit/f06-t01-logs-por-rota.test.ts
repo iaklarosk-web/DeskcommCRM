@@ -45,7 +45,7 @@ const USUARIO = "22222222-2222-4222-8222-222222222222";
 const REQUEST_ID = "33333333-3333-4333-8333-333333333333";
 
 /** Marcadores que provam que a rota produz a linha `api.request`/`job.run`. */
-const EMISSORES = [/\brequireRole\(/, /\brequirePlatformAdmin\(/, /\bresolveActiveOrg\(/, /\bregistrarRequisicao(De)?\(/, /\blogger\.(info|warn|error)\(/];
+const EMISSORES = [/\brequireRole\(/, /\brequirePlatformAdmin(Api)?\(/, /\bresolveActiveOrg\(/, /\bregistrarRequisicao(De)?\(/, /\blogger\.(info|warn|error)\(/];
 
 function arquivos(dir: string, filtro: (nome: string) => boolean, achados: string[] = []): string[] {
   for (const nome of readdirSync(dir)) {

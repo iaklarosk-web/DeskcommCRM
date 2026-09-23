@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { copyToClipboard } from "@/lib/clipboard";
 import { useIdioma, useT } from "@/lib/i18n/IdiomaProvider";
 
 interface Convite {
@@ -61,11 +62,13 @@ export function ConvitesPendentes({ podeGerir }: { podeGerir: boolean }) {
   }
 
   async function copiar(convite: Convite) {
-    try {
-      await navigator.clipboard.writeText(convite.link);
+    // `copyToClipboard` é o helper da casa: a API crua do navegador não existe
+    // fora de secure context, e o link do convite é justamente o que se copia
+    // de um staging acessado por IP.
+    if (await copyToClipboard(convite.link)) {
       setCopiado(convite.id);
       setTimeout(() => setCopiado(null), 2000);
-    } catch {
+    } else {
       setErro(t("Não foi possível copiar. Selecione o link e copie à mão."));
     }
   }

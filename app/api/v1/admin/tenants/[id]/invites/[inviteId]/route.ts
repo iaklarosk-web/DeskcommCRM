@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requirePlatformAdminApi } from "@/lib/auth/requirePlatformAdminApi";
+import { requireSupportWrite } from "@/lib/impersonate/support";
 import { revogarConviteDaOrganizacao } from "@/src/convites/politica";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,10 @@ export async function DELETE(
   _req: Request,
   ctx: { params: Promise<{ id: string; inviteId: string }> },
 ): Promise<Response> {
+  // D51: acompanhamento é só leitura; revogar convite é ato de gestão.
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
+
   const requestId = randomUUID();
   const guarda = await requirePlatformAdminApi(requestId);
   if (!guarda.ok) return guarda.response;

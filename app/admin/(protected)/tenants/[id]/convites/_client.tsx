@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { copyToClipboard } from "@/lib/clipboard";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useT } from "@/hooks/i18n/useT";
@@ -150,13 +151,13 @@ export function ConvitesDoTenantClient({ organizationId }: { organizationId: str
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      void navigator.clipboard.writeText(c.link).then(
-                        () => {
-                          setCopiado(c.id);
-                          setTimeout(() => setCopiado(null), 2000);
-                        },
-                        () => setErro(t("Não foi possível copiar. Selecione o link e copie à mão.")),
-                      );
+                      // Helper da casa: fora de secure context (staging por IP)
+                      // a API crua do navegador não existe.
+                      void copyToClipboard(c.link).then((ok) => {
+                        if (!ok) return setErro(t("Não foi possível copiar. Selecione o link e copie à mão."));
+                        setCopiado(c.id);
+                        setTimeout(() => setCopiado(null), 2000);
+                      });
                     }}
                   >
                     {copiado === c.id ? t("Copiado") : t("Copiar link")}

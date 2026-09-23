@@ -69,7 +69,11 @@ function contemNo(no: ts.Node, confere: (filho: ts.Node) => boolean): boolean {
 
 function temChamadaDeGate(no: ts.Node): boolean {
   if (ts.isCallExpression(no) && ts.isIdentifier(no.expression)
-    && ["requireRole", "requirePlatformAdmin"].includes(no.expression.text)) return true;
+    // `requirePlatformAdminApi` (F20-T03) é a MESMA guarda para rota de API: ela
+    // envolve `requirePlatformAdmin` e só acrescenta a distinção entre negação
+    // (403) e indisponibilidade (503). Sem este nome aqui, 20 rotas do /admin
+    // apareceriam como "sem gate" no dia em que passaram a tratar o erro certo.
+    && ["requireRole", "requirePlatformAdmin", "requirePlatformAdminApi"].includes(no.expression.text)) return true;
   // /marca/logo aplica o mesmo predicado de papel com resposta JSON própria.
   // A comparação solta não basta: ela precisa NEGAR papel no if e retornar 403.
   if (ts.isIfStatement(no)

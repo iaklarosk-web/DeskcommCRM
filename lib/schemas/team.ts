@@ -30,6 +30,16 @@ export const inviteMemberSchema = z.object({
 });
 export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;
 
+/**
+ * F20-T03: o convite emitido pelo painel do dono (`/admin/tenants/<id>/invites`)
+ * — um e-mail e um papel. A organização vem da ROTA, nunca do corpo.
+ */
+export const adminInviteSchema = z.object({
+  email: z.string().trim().toLowerCase().email(),
+  role: z.enum(["viewer", "agent", "manager", "admin"]),
+});
+export type AdminInviteInput = z.infer<typeof adminInviteSchema>;
+
 export const acceptInviteSchema = z.object({
   token: z.string().min(20),
 });

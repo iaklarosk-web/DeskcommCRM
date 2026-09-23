@@ -18,6 +18,8 @@ import type { NextRequest } from "next/server";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requirePlatformAdminApi } from "@/lib/auth/requirePlatformAdminApi";
+import { requireSupportWrite } from "@/lib/impersonate/support";
+import { adminInviteSchema } from "@/lib/schemas/team";
 import { env } from "@/lib/env";
 import { emitirConvite, listarPendentes, type PapelDoConvite } from "@/src/convites/repositorio";
 import { linkDoConvite } from "@/src/convites/token";
@@ -60,25 +62,23 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
+  // D51: durante acompanhamento a sessão é só leitura — emitir convite é ato de
+  // gestão, feito com a própria autoridade, fora do acompanhamento.
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
+
   const requestId = randomUUID();
   const guarda = await requirePlatformAdminApi(requestId);
   if (!guarda.ok) return guarda.response;
   const { id } = await ctx.params;
 
-  let corpo: { email?: unknown; role?: unknown };
+  let entrada;
   try {
-    corpo = (await req.json()) as { email?: unknown; role?: unknown };
+    entrada = adminInviteSchema.parse(await req.json());
   } catch {
-    return fail("validation_error", "Corpo inválido.", 400, { requestId });
+    return fail("validation_error", `Informe e-mail válido e papel (${PAPEIS.join(", ")}).`, 400, { requestId });
   }
-  const email = typeof corpo.email === "string" ? corpo.email.trim().toLowerCase() : "";
-  const role = corpo.role as PapelDoConvite;
-  if (email.length === 0 || !email.includes("@")) {
-    return fail("validation_error", "Informe o e-mail do convite.", 400, { requestId });
-  }
-  if (!PAPEIS.includes(role)) {
-    return fail("validation_error", `Papel inválido: use ${PAPEIS.join(", ")}.`, 400, { requestId });
-  }
+  const { email, role } = entrada;
 
   const { convite, link, revogados } = await emitirConvite({
     organization_id: id,
