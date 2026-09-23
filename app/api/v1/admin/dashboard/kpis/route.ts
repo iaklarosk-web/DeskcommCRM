@@ -1,6 +1,7 @@
 import { type NextRequest } from "next/server";
 import { normalizarModoDeOrcamento } from "@/lib/agent-engine/edge/llm/orcamento";
 import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
+import { requirePlatformAdminApi } from "@/lib/auth/requirePlatformAdminApi";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ok, fail } from "@/lib/api/wrappers";
 
@@ -35,12 +36,12 @@ export interface DashboardKPIs {
 // Requires platform admin gate (MFA-enforced).
 // Uses service-role client intentionally — cross-tenant read for super-admin.
 export async function GET(_req: NextRequest) {
-  try {
-    await requirePlatformAdmin();
-  } catch {
-    // requirePlatformAdmin redirects; if it throws, it's unexpected
-    return fail("forbidden", "Platform admin required", 403);
-  }
+  // F20-T03: a guarda distingue NEGAÇÃO (403) de INDISPONIBILIDADE (503). O
+  // `catch` genérico respondia "sem permissão" com o banco fora — o defeito do
+  // incidente de 21–22/09 (VARREDURA §B25/§B29). Esta rota não usa requestId
+  // próprio; o helper aceita o vazio e a resposta continua sem correlação.
+  const guarda = await requirePlatformAdminApi("");
+  if (!guarda.ok) return guarda.response;
 
   const admin = createAdminClient();
 

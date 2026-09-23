@@ -14,6 +14,7 @@ import { getRequestId } from "@/lib/api/request-id";
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
+import { requirePlatformAdminApi } from "@/lib/auth/requirePlatformAdminApi";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { PlanoDesconhecido, TransicaoIlegal } from "@/src/billing";
 import { DiasForaDaFaixa, estenderTrial, provisionarNaMao, reativar, suspender } from "@/src/billing/admin";
@@ -35,12 +36,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
   const supportDenied = await requireSupportWrite(org);
   if (supportDenied) return supportDenied;
   const requestId = getRequestId(req);
-  let adminCtx: Awaited<ReturnType<typeof requirePlatformAdmin>>;
-  try {
-    adminCtx = await requirePlatformAdmin();
-  } catch {
-    return fail("forbidden", "Platform admin required", 403, { requestId });
-  }
+  // F20-T03: a guarda distingue NEGAÇÃO (403) de INDISPONIBILIDADE (503).
+  // O `catch` genérico que existia aqui respondia "sem permissão" quando o
+  // banco estava fora — foi o que fez o dono achar que tinha perdido o
+  // acesso no incidente de 21–22/09 (VARREDURA §B25/§B29).
+  const guarda = await requirePlatformAdminApi(requestId);
+  if (!guarda.ok) return guarda.response;
+  const adminCtx = guarda;
   if (adminCtx.platformAdmin.scope !== "full") return fail("forbidden", "Seu acesso de suporte não permite mexer na assinatura.", 403, { requestId });
   if (!UUID.test(org)) return fail("validation_failed", "Organização inválida.", 422, { requestId });
   const corpo = corpoSchema.safeParse(await req.json().catch(() => null));

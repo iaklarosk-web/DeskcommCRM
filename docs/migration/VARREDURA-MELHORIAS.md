@@ -485,6 +485,20 @@ de reenviar/ver convite no `/admin` (D59), senão um convite expirado sem aceite
 organização para gerar outro") é verdadeiro mas ilegível para quem não sabe que dá para trocar de
 organização no seletor; reescrever junto com o link curto (D59).
 
+### B29. Vinte rotas de API do `/admin` mascaravam falha de infraestrutura como falta de permissão (23/09/2026) — CONSERTADO na F20-T03
+O conserto de §B25 alcançou a PÁGINA (`requirePlatformAdmin` passou a falhar alto), mas as rotas de API
+chamavam a mesma guarda dentro de `try { … } catch { return fail("forbidden", "Platform admin required",
+403) }`. Esse `catch` engole tudo: com o pool do PostgREST travado, um `platform_admin` legítimo recebia
+403 em `/api/v1/admin/*` — a mesma mentira do incidente, um andar abaixo. Medido em 23/09: **20 arquivos**
+de rota com o padrão (18 ocorrências mecânicas + 3 variantes: mensagem com ponto final em `lgpd/requests`
+e `kpis` sem `requestId` próprio).
+**Conserto**: `lib/auth/requirePlatformAdminApi(requestId)` — negação continua **403**; erro que carrega
+`auth_permissions_unavailable` vira **503 `upstream_unavailable`** com a frase que diz para tentar de
+novo. Todas as 20 rotas convertidas; prova em `tests/unit/f20-t03-guarda-de-admin-na-api.test.ts`
+(admin passa, não-admin 403, banco fora 503) e as 5 suítes de rota do `/admin` seguem verdes (19/19).
+**O que fica**: a página e a API agora concordam. Rota nova de `/admin` deve usar o helper, nunca o
+`try/catch` em volta da guarda de página — o `catch` volta a mascarar no dia em que alguém o copiar.
+
 ## C. Portões do proprietário — o que a engenharia não pode abrir sozinha
 
 D49 suspendeu a pausa por fase de D47, mas preservou D11–D13. Estes itens não
