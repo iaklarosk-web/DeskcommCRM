@@ -2,7 +2,7 @@
 updated_at: 2026-09-22T23:34:59Z
 head_commit: e3c34195   # código VALIDADO pelo gate f19-gate-03 (READY (staging), dentro do staging, F19 — ADR-042/043) = e3c34195; o fechamento (docs) vem depois dele; from-scratch: ver a linha from-scratch:
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
-plan_version: "2.14 (2026-09-22); D38–D59; ADR-006…044"
+plan_version: "2.15 (2026-09-22); D38–D60; ADR-006…044"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
 current_phase: F19
 next_task: F19-T06             # 21/09/2026 20:12Z: gate f19-gate-04 READY (staging) sobre a3a5a01e, demo3 e from-scratch VERDES; falta a PRODUÇÃO (stripe-live.sh ligar → up.sh → prova.sh → stripe-live.sh provar → stripe_live:) — aguarda janela pesada (build) da coordenação KN; depois fechamento. stripe_live: PENDENTE

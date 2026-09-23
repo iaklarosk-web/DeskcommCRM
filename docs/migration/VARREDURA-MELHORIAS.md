@@ -465,6 +465,26 @@ pendentes, TTL para 7 dias; task própria DEPOIS da F19-T06, com ADR, migration 
 `PUBLIC_PATHS`, testes e mutante. Enquanto isso, o convite por e-mail funciona (o link longo não
 atrapalha no e-mail) — foi assim que a F08 mediu `email=1/1`.
 
+### B28. Criar um tenant dá ao `platform_admin` acesso admin PERMANENTE, contornando o suporte só-leitura (22/09/2026) — decidido em D60, construção junto da D59
+`fn_create_tenant_with_owner` (migration da F11) insere, sem condição,
+`user_organizations(org.id, p_actor, 'admin', now(), …)`. A F11/D51 desenhou o acesso do dono da
+plataforma às organizações dos clientes como **sessão de suporte só-leitura**, com motivo (10–500
+chars), escopo e vencimento (1–60 min), tudo auditado — e essa linha abre uma porta lateral: quem cria
+a organização entra por ela quando quiser, com escrita, sem motivo, sem prazo e sem aparecer como
+suporte na auditoria. Medido na produção em 22/09: o proprietário é `admin` com `accepted_at` em
+`kn-tecnologia`, `deka` e `deka-sucos`.
+**Efeito colateral bom, que a decisão preserva**: é por essa membership que o dono consegue recuperar um
+convite perdido (trocar de organização no app → Equipe → Convidar). Sem ela, o caminho não existe —
+`requireSupportWrite` nega `POST /api/v1/team/invite` durante sessão de suporte
+(`app/api/v1/team/invite/route.ts:43`).
+**Decidido (D60)**: a membership do criador só nasce quando o convite é para ele mesmo; para outra
+pessoa, a organização nasce sem ele. **A ordem importa**: essa regra só entra junto ou depois da ação
+de reenviar/ver convite no `/admin` (D59), senão um convite expirado sem aceite deixa a organização
+ÓRFÃ — ninguém entra e o suporte não pode convidar. Organizações existentes não mudam sozinhas.
+**Também da mesma conversa**: o texto da tela de criação ("Se o convite vencer, abra Equipe na
+organização para gerar outro") é verdadeiro mas ilegível para quem não sabe que dá para trocar de
+organização no seletor; reescrever junto com o link curto (D59).
+
 ## C. Portões do proprietário — o que a engenharia não pode abrir sozinha
 
 D49 suspendeu a pausa por fase de D47, mas preservou D11–D13. Estes itens não
