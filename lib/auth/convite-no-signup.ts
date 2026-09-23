@@ -25,6 +25,15 @@ import { verifyInviteToken, type InvitePayload } from "@/lib/auth/invite-token";
 export type DecisaoDeSignup =
   /** Foi convidado: NÃO provisionar organização; mandar para o aceite. */
   | { tipo: "convite"; token: string; payload: InvitePayload }
+  /**
+   * Convite CURTO (F20, D59): o token não carrega nada — quem sabe é a linha
+   * em `team_invites`. Esta função continua pura, então classifica o formato e
+   * PARA aqui; a autoridade (e-mail do convite = e-mail que o provedor acabou
+   * de confirmar) é aplicada pelo `auth/confirm` contra a linha, antes de
+   * mandar para o aceite. O que não pode acontecer, e não acontece, é cair no
+   * provisionamento comum e ganhar uma organização fantasma.
+   */
+  | { tipo: "convite_curto"; token: string }
   /** Ninguém o convidou: caminho normal, ganha a própria organização. */
   | { tipo: "provisionar" }
   /** Havia convite e ele não vale. Não provisiona — ver abaixo. */
@@ -43,6 +52,14 @@ export function decidirConviteDoSignup(user: UsuarioConfirmado): DecisaoDeSignup
   const bruto = user.user_metadata?.["invite_token"];
   // Sem convite em jogo: o caminho de sempre, intocado.
   if (typeof bruto !== "string" || bruto.trim() === "") return { tipo: "provisionar" };
+
+  const token = bruto.trim();
+  // O token HMAC tem corpo e assinatura separados por ponto; o curto é só
+  // base64url. A distinção é de FORMATO, e é o que permite tratar os dois
+  // caminhos sem banco aqui dentro.
+  if (!token.includes(".") && /^[A-Za-z0-9_-]{16,64}$/.test(token)) {
+    return { tipo: "convite_curto", token };
+  }
 
   const payload = verifyInviteToken(bruto);
   // FALHA FECHADA. Token expirado ou adulterado NÃO pode cair no provisionamento:

@@ -271,8 +271,10 @@ export async function POST(req: NextRequest) {
           inviterName:
             adminCtx.user.user_metadata?.full_name ?? adminCtx.user.email ?? "Administrador",
           requestId,
-          inviteId: org.invite_id,
-          issuedAt: org.issued_at,
+          // F20: a identidade do convite passou a ser a LINHA (team_invites);
+          // `invite_id`/`issued_at` do RPC continuam existindo para a
+          // idempotência da criação, e o convite vivo é reaproveitado quando a
+          // chamada se repete (`dispatch: false`).
           dispatch: org.created,
         });
   return ok(

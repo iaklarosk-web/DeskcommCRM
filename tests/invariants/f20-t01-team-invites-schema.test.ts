@@ -99,9 +99,14 @@ describe("F20-T01 — team_invites: ciclo de vida e isolamento", () => {
 
     expect(erroDe(convite("cccccccccccccccc", "dup@x.test")), "o primeiro convite foi recusado").toBeNull();
     const segundo = erroDe(convite("dddddddddddddddd", "dup@x.test"));
+    // Caixa alta é recusada pelo CHECK `email = lower(email)` — o `lower()` do
+    // índice é defesa em profundidade para quem escrever direto no banco.
     const caixaAlta = erroDe(convite("eeeeeeeeeeeeeeee", "DUP@X.TEST"));
     expect(segundo, "o segundo convite VIVO para a mesma pessoa passou").not.toBeNull();
     expect(caixaAlta, "caixa alta abriu um segundo convite vivo").not.toBeNull();
+    const porIndice = erroDe(`insert into public.team_invites (organization_id, token, email, role, expires_at, accepted_at, accepted_by)
+      values ('${ORG}','iiiiiiiiiiiiiiii', null, 'agent', now() + interval '7 days', now(), '${USER}')`);
+    expect(porIndice, "convite ACEITO sem e-mail deveria ser aceito pelo banco (o aceite apaga o e-mail)").toBeNull();
     expect(vivos("dup@x.test"), "sobrou mais de um convite vivo").toBe("1");
 
     // Outra organização convida a mesma pessoa sem esbarrar no índice.

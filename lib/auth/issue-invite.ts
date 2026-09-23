@@ -4,15 +4,23 @@ import {
   interfaceTemDestino,
   type InterfaceSettings,
 } from "@/lib/navigation/interface";
-import { randomUUID } from "node:crypto";
 import { env } from "@/lib/env";
 import { audit } from "@/lib/audit";
-import { signInviteToken, INVITE_TTL_SECONDS } from "@/lib/auth/invite-token";
+import { emitirConvite, type PapelDoConvite } from "@/src/convites/repositorio";
 import { buildInviteEmail } from "@/lib/email/templates/invite";
 import { sendEmail } from "@/lib/email/resend";
 import { marcaDaSaida } from "@/lib/branding/saida";
 
-/** Link sempre existe, inclusive quando a instalação não configurou e-mail. */
+/**
+ * Link sempre existe, inclusive quando a instalação não configurou e-mail.
+ *
+ * F20 (D59/D61): o convite virou LINHA (`team_invites`) e o link virou
+ * `/i/<token>` — ~47 chars em vez dos 559 que o WhatsApp não linkificava
+ * (§B27). A emissão revoga o convite vivo anterior da mesma pessoa, então
+ * "reenviar" tem um só link válido por vez (D61 b). O token HMAC continua
+ * sendo ACEITO enquanto os convites já enviados não expiram (D61 a), mas não é
+ * mais EMITIDO.
+ */
 export async function issueInvite(input: {
   interfaceSettings?: InterfaceSettings;
   email: string;
@@ -22,8 +30,6 @@ export async function issueInvite(input: {
   inviterId: string;
   inviterName: string;
   requestId: string;
-  inviteId?: string;
-  issuedAt?: number;
   dispatch?: boolean;
 }) {
   const interfaceSettings = interfaceSettingsSchema.parse(
@@ -32,20 +38,19 @@ export async function issueInvite(input: {
   if (!interfaceTemDestino(interfaceSettings, input.role))
     throw new Error("Selecione ao menos uma área permitida ao papel.");
   const email = input.email.trim().toLowerCase();
-  const inviteId = input.inviteId ?? randomUUID();
-  const iat = input.issuedAt ?? Math.floor(Date.now() / 1000);
-  const exp = iat + INVITE_TTL_SECONDS;
-  const token = signInviteToken({
-    invite_id: inviteId,
-    email,
+  const { convite, link: acceptUrl, revogados } = await emitirConvite({
     organization_id: input.organizationId,
-    role: input.role,
-    exp,
-    iat,
+    email,
+    role: input.role as PapelDoConvite,
     invited_by: input.inviterId,
     interface_settings: interfaceSettings,
+    app_url: env.NEXT_PUBLIC_APP_URL,
+    // `dispatch: false` é a repetição idempotente da criação de tenant: ela
+    // devolve o MESMO link, em vez de revogar o que já foi enviado.
+    reaproveitar_vivo: input.dispatch === false,
   });
-  const acceptUrl = `${env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/team/accept-invite/${token}`;
+  const inviteId = convite.id;
+  const exp = Math.floor(new Date(convite.expires_at).getTime() / 1000);
   let dispatched = false;
   // Falhas de infraestrutura não desfazem a organização já criada nem o link.
   if (input.dispatch !== false) {
@@ -79,7 +84,7 @@ export async function issueInvite(input: {
       resourceType: "membership",
       resourceId: inviteId,
       requestId: input.requestId,
-      metadata: { email, role: input.role, email_dispatched: dispatched },
+      metadata: { email, role: input.role, email_dispatched: dispatched, revogados_no_reenvio: revogados },
     });
   }
   return {

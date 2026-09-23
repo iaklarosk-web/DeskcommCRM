@@ -71,7 +71,12 @@ export async function recoverOrganization(name: string): Promise<RecoverOrganiza
     void audit({
       action: "auth.signup_provision_recusado",
       actorUserId: authUser.id,
-      metadata: { motivo: decisao.tipo === "convite" ? "convite_pendente" : decisao.motivo },
+      metadata: {
+        motivo:
+          decisao.tipo === "convite" || decisao.tipo === "convite_curto"
+            ? "convite_pendente"
+            : decisao.motivo,
+      },
     });
     return { ok: false, error: "invite_pending" };
   }

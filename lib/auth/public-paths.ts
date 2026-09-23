@@ -68,6 +68,9 @@ export const PUBLIC_PATHS: RegExp[] = [
   /^\/icon$/,
   /^\/manifest\.webmanifest$/,
   /^\/team\/accept-invite\/.+$/,
+  // F20 (D59): o link curto do convite. Rota pública pelo mesmo motivo da irmã
+  // acima — quem é convidado pode ainda não ter conta —, com o mesmo teto por IP.
+  /^\/i\/[A-Za-z0-9_-]{16,64}$/,
   /^\/account-suspended$/,
   // Documentos legais. O checkbox obrigatório de `/onboarding/welcome` linka os
   // dois, e o aceite acontece antes de a pessoa ter qualquer coisa no sistema —
