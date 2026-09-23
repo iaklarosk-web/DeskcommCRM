@@ -288,6 +288,15 @@ describe("catraca: ninguém mais repete o namespace", () => {
       // árvores do repo, com o gate delas próprio.
       "evidence",
       ".claude",
+      // `.verify-logs/` é a evidência dos gates — 613 MB medidos em 23/09
+      // (unit.json de 3 MB por tentativa, logs de navegador) — e `.prod/` é o
+      // contexto de build da produção. Nenhum dos dois monta referência de
+      // imagem. Varrê-los não é errado, é caro: com a máquina livre o grep leva
+      // 0,39 s, mas DENTRO do gate, disputando I/O com o próprio gate, passou de
+      // 15 s e derrubou esta régua por timeout (f20-gate-02) — vermelha por
+      // tempo parece defeito e não é.
+      ".verify-logs",
+      ".prod",
     ].map((d) => `--exclude-dir=${d}`);
     // `.bak`/`.orig`/`.rej`/`~` são sobra de editor e de `sed -i.bak`. Sem isto,
     // uma sabotagem local deixa o gate vermelho pelo motivo errado.
