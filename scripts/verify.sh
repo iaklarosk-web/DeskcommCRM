@@ -50,6 +50,7 @@ case "$PHASE" in
   # F18 e acrescenta a spec f19-cobranca-stripe (+7 testes) ao inventário de F18;
   # mede a linha `stripe:`.
   F19) CLOSED_E2E=1; EXPECTED_SPECS=17; REPLICABILITY_TENANTS="deka,demo2" ;;
+  F20) CLOSED_E2E=1; EXPECTED_SPECS=18; REPLICABILITY_TENANTS="deka,demo2" ;;
   *)   CLOSED_E2E=0; EXPECTED_SPECS=0 ;;
 esac
 REPLICABILITY_TENANTS="${REPLICABILITY_TENANTS:-}"

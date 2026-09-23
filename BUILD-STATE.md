@@ -4,7 +4,7 @@ head_commit: e3c34195   # código VALIDADO pelo gate f19-gate-03 (READY (staging
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
 plan_version: "2.16 (2026-09-23); D38–D61; ADR-006…045"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
-current_phase: F19
+current_phase: F20
 next_task: F19-T06             # 21/09/2026 20:12Z: gate f19-gate-04 READY (staging) sobre a3a5a01e, demo3 e from-scratch VERDES; falta a PRODUÇÃO (stripe-live.sh ligar → up.sh → prova.sh → stripe-live.sh provar → stripe_live:) — aguarda janela pesada (build) da coordenação KN; depois fechamento. stripe_live: PENDENTE
 status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING — F19-T06 PAUSADA (D58; ADR-044): código validado pelo f19-gate-04 (READY (staging), a3a5a01e), faltam demo3 + from-scratch + produção live + stripe_live:; a F19 fechou READY (staging) em e3c34195 (bloco abaixo); BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26)
 baseline_n0: 8997

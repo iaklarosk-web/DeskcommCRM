@@ -47,6 +47,9 @@ const TABELAS_DO_DOMINIO = [
   "platform_support_sessions",
   "user_organizations",
   "notifications",
+  // F20: o convite virou linha; a limpeza da fixture tem de alcançá-la, senão
+  // `domain_rows_remaining` denuncia o resto no fim de cada spec.
+  "team_invites",
 ] as const;
 
 async function criarUsuario(db: SupabaseClient, email: string, password: string, nome: string): Promise<string> {

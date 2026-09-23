@@ -23,6 +23,7 @@ const {
   EXPECTED_F14_E2E_TESTS,
   EXPECTED_F18_E2E_TESTS,
   EXPECTED_F19_E2E_TESTS,
+  EXPECTED_F20_E2E_TESTS,
   REQUIRED_F02_E2E_SPECS,
   REQUIRED_F03_E2E_SPECS,
   REQUIRED_F04_E2E_SPECS,
@@ -35,6 +36,7 @@ const {
   REQUIRED_F14_E2E_SPECS,
   REQUIRED_F18_E2E_SPECS,
   REQUIRED_F19_E2E_SPECS,
+  REQUIRED_F20_E2E_SPECS,
   compareF02Inputs,
   snapshotF02Inputs,
   verifyF02Sandbox,
@@ -1484,4 +1486,71 @@ for (const [rotulo, linha] of [
   const result = evaluate(data);
   assert.equal(result.exitCode, 1, rotulo);
   assert.ok(result.errors.some((e) => /^stripe fora do contrato/.test(e)), result.errors.join("\n"));
+});
+
+// ─── ADR-046 — verify.sh v1.13: F20 (convite com ciclo de vida) mede `invites:` ─
+
+const stateF20 = stateF19.replace("current_phase: F19", "current_phase: F20")
+  .replace("| F19 | Cobrança real por Stripe | in_progress |", "| F19 | Cobrança real por Stripe | done(verify=2026-09-23 b1f69e3e) |\n| F20 | Convite curto e membership do criador | in_progress |");
+const F20_SPEC_COUNTS = [...F19_SPEC_COUNTS, 5];
+const INVITES_OK = "invites: link_len=47/64 reenvio_revoga=1/1 aceite=1/1 email_apagado_no_aceite=1/1 duas_aceitacoes=1/1 revogado_recusado=1/1 pendentes_listados=3";
+function f20Input() {
+  const data = fasePorTenant("F12", stateF20, REQUIRED_F20_E2E_SPECS, F20_SPEC_COUNTS, EXPECTED_F20_E2E_TESTS);
+  data.metrics.crm = CRM_OK;
+  data.metrics.rbac = RBAC_4;
+  data.metrics.autonomy = AUTONOMY_OK;
+  data.metrics.channels = CHANNELS_OK;
+  data.metrics.engine = ENGINE_OK;
+  data.metrics.stripe = STRIPE_OK;
+  data.metrics.invites = INVITES_OK;
+  return data;
+}
+
+test("F20 is gated: inventory of 18 specs (91 tests) per tenant, with invites measured; in staging it prints READY (staging)", () => {
+  const data = f20Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.status, "READY (F20)");
+  const bloco = render(data, result);
+  assert.match(bloco, /e2e_scope: F20-required passed=91\/91 specs=18\/18/);
+  assert.match(bloco, /invites: link_len=47\/64 reenvio_revoga=1\/1/);
+  const staging = f20Input();
+  staging.sandbox = stagingEvidence();
+  assert.equal(evaluate(staging).status, "READY (staging)");
+});
+
+test("missing invites line makes otherwise green F20 fail", () => {
+  const data = f20Input();
+  delete data.metrics.invites;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.some((e) => /Métrica obrigatória ausente: invites/.test(e)), result.errors.join("\n"));
+});
+
+test("F20 still requires stripe, engine and the rest (it closes after all of them)", () => {
+  const data = f20Input();
+  delete data.metrics.stripe;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1);
+  assert.ok(result.errors.some((e) => /Métrica obrigatória ausente: stripe/.test(e)), result.errors.join("\n"));
+});
+
+test("invites line stays pending before F20 (F19) and is not required there", () => {
+  const data = f19Input();
+  const result = evaluate(data);
+  assert.deepEqual(result.errors, []);
+  assert.match(render(data, result), /invites: link_len=pending/);
+});
+
+for (const [rotulo, linha] of [
+  ["link maior que 64", "invites: link_len=559/64 reenvio_revoga=1/1 aceite=1/1 email_apagado_no_aceite=1/1 duas_aceitacoes=1/1 revogado_recusado=1/1 pendentes_listados=3"],
+  ["reenvio não revoga", "invites: link_len=47/64 reenvio_revoga=0/1 aceite=1/1 email_apagado_no_aceite=1/1 duas_aceitacoes=1/1 revogado_recusado=1/1 pendentes_listados=3"],
+  ["e-mail sobrevive ao aceite", "invites: link_len=47/64 reenvio_revoga=1/1 aceite=1/1 email_apagado_no_aceite=0/1 duas_aceitacoes=1/1 revogado_recusado=1/1 pendentes_listados=3"],
+  ["aceite duplo passou", "invites: link_len=47/64 reenvio_revoga=1/1 aceite=1/1 email_apagado_no_aceite=1/1 duas_aceitacoes=0/1 revogado_recusado=1/1 pendentes_listados=3"],
+]) test(`F20 rejects an invites line out of contract: ${rotulo}`, () => {
+  const data = f20Input();
+  data.metrics.invites = linha;
+  const result = evaluate(data);
+  assert.equal(result.exitCode, 1, rotulo);
+  assert.ok(result.errors.some((e) => /^invites fora do contrato/.test(e)), result.errors.join("\n"));
 });

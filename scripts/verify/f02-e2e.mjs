@@ -159,6 +159,19 @@ export const REQUIRED_F19_E2E_SPECS = Object.freeze([
 ]);
 export const EXPECTED_F19_E2E_TESTS = EXPECTED_F18_E2E_TESTS + 7;
 
+/**
+ * F20 (ADR-046): o convite com ciclo de vida acrescenta UMA spec (gerente vê e
+ * copia; atendente não vê; cancelar tira da lista e o link passa a dizer
+ * "cancelado"; o painel do dono lista e emite; empresa sem membro aparece como
+ * "Aguardando aceite") ao inventário da F19 — 5 testes, por tenant do seed. A
+ * linha `invites:` vem da suíte de integração.
+ */
+export const REQUIRED_F20_E2E_SPECS = Object.freeze([
+  ...REQUIRED_F19_E2E_SPECS,
+  "tests/e2e/f20-convites.spec.ts",
+]);
+export const EXPECTED_F20_E2E_TESTS = EXPECTED_F19_E2E_TESTS + 5;
+
 /** Tenants do seed que a F07 percorre, na ordem (§7.8 T02: deka, depois demo2). */
 export const REPLICABILITY_TENANTS = Object.freeze(["deka", "demo2"]);
 
@@ -178,6 +191,7 @@ const CLOSED_E2E_PHASES = Object.freeze({
   F14: { specs: REQUIRED_F14_E2E_SPECS, tests: EXPECTED_F14_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
   F18: { specs: REQUIRED_F18_E2E_SPECS, tests: EXPECTED_F18_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
   F19: { specs: REQUIRED_F19_E2E_SPECS, tests: EXPECTED_F19_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
+  F20: { specs: REQUIRED_F20_E2E_SPECS, tests: EXPECTED_F20_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
 });
 
 /**
