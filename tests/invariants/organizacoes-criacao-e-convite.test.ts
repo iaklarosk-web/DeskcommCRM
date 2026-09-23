@@ -4,7 +4,15 @@ import { sql } from "./gov-helpers";
 const actor = "f2180000-0000-4000-8000-000000000001";
 const guest = "f2180000-0000-4000-8000-000000000002";
 const key = "f2180000-0000-4000-8000-000000000003";
-const body = `' {"display_name":"Nova organização", "slug":"invariante-0218", "plan":"standard"}'::jsonb`;
+/**
+ * F20-T04 (D60): a membership do criador passou a depender de `owner_email` —
+ * ela nasce só quando o convite é para ele mesmo. Este payload declara o
+ * e-mail do ator justamente porque o que estes casos medem é o caminho "criei
+ * a MINHA empresa": idempotência da chave, membership de admin e rollback. O
+ * caminho novo (convite para outra pessoa, empresa sem membros) é medido em
+ * `f20-t04-membership-do-criador.test.ts`.
+ */
+const body = `' {"display_name":"Nova organização", "slug":"invariante-0218", "plan":"standard", "owner_email":"owner-0218@invariant.test"}'::jsonb`;
 const call = `public.fn_create_tenant_with_owner('${actor}', '${key}', ${body}, 'abcd')`;
 const seed = `begin;
 insert into auth.users(id,email) values ('${actor}','owner-0218@invariant.test'), ('${guest}','guest-0218@invariant.test');

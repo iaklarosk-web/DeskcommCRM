@@ -339,6 +339,7 @@ O mapa resolve referências históricas e comentários SQL que ainda usam os ró
 
 | Tabela | Desde | Motivo |
 |---|---|---|
+| `team_invites` | `20260923010000_9035` | convite de equipe com ciclo de vida (F20, D59/D61): o `token` É a credencial do link `/i/<token>` e não pode ser legível pelo PostgREST com a anon key; RLS ligada, zero policies, `revoke all` de public/anon/authenticated e `grant all` só a `service_role`. Quem lê pela tela é a rota, com papel provado (`tenant_admin`/`manager`) ou `platform_admin` |
 | `webhook_quarantine` | `20260907150000_9001` | evento sem tenant resolvido; investigação é operacional, não de usuário |
 | `ad_conversion_dispatches` | herdada (marcada na 9002/F01-T03) | fila server-side de conversões de ads; RLS ligada sem policies, sem grant a authenticated (medido 2026-09-07) |
 | `ad_insights_connections` | herdada (marcada na 9002/F01-T03) | credencial de leitura de ads; o próprio comment da tabela declara server-side only |
