@@ -165,6 +165,16 @@ o staging derrubado, como o risco 16 prevê)..
 
 Cada item com a marcação e o dono humano (§8.6, D11, D12, D26).
 
+> **24/09/2026 — esta lista foi apurada item a item.** Cinco dos 39 já estavam
+> feitos e ninguém tinha tirado: backup diário do banco (8 execuções confirmadas
+> desde 17/09), nome e preço reais dos planos (D14, 3 planos `source=owner` na
+> produção), Stripe LIVE na produção, run do `verify.yml` no GitHub (2 sucessos
+> em 23/09) e persistência do swap. O inventário completo, com a coluna que
+> importa — **impede o uso real?** —, está em [BACKLOG.md](BACKLOG.md).
+> Lista de pendência que ninguém apura mente nos dois sentidos: esconde o que
+> falta e cobra o que já foi feito.
+
+
 | Item | Marcação | Dono humano |
 |---|---|---|
 | Telas que prometem o que o produto não entrega (varredura de 24/09) | CONHECIDO — inventário em [docs/ops/promessas-vazias-20260924.md](docs/ops/promessas-vazias-20260924.md): abas **Equipe** e **Uso** do `/admin` desligadas e sem rota; rótulos `PLAN_A/B/C (placeholder)` no formulário de criar tenant e aviso de planos não-decididos no `/admin/billing`, ambos desatualizados desde D58; link morto para um runbook inexistente; 7 funções declaradas "em breve". Nenhum teste falha por isto — teste nenhum pergunta se a tela diz a verdade | Proprietário |
