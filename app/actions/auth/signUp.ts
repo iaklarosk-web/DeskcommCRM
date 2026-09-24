@@ -9,7 +9,9 @@ import {
   type SignupInput,
   type SignupComConviteInput,
 } from "@/lib/auth/schemas";
-import { verifyInviteToken } from "@/lib/auth/invite-token";
+import { resolverConvite } from "@/lib/auth/resolver-de-convite";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { aceitarConvitePorToken } from "@/src/convites/repositorio";
 import { audit, hashEmail } from "@/lib/audit";
 import { authRateLimited, AUTH_LIMITS } from "@/lib/auth/rate-limit";
 import { env } from "@/lib/env";
@@ -88,15 +90,76 @@ export async function signUp(
   // aqui não é erro do usuário — é tentativa de entrar em organização alheia
   // colando um token que chegou para outra pessoa.
   let convite: string | null = null;
+  let origemDoConvite: "team_invites" | "legado" | null = null;
   if (temConvite && inviteToken) {
-    const payload = verifyInviteToken(inviteToken);
-    if (!payload) {
+    // Resolve token NOVO (linha em `team_invites`) e legado (JWT HMAC) no mesmo
+    // lugar: antes da T07 só o legado era entendido aqui, e `app/i/[token]`
+    // mandava o curto — todo convidado lia "convite expirado" (ADR-047 §4).
+    const resolvido = await resolverConvite(inviteToken);
+    if (!resolvido) {
       return { ok: false, error: "validation_error", details: { invite: ["convite_invalido"] } };
     }
-    if (payload.email.trim().toLowerCase() !== parsed.data.email.trim().toLowerCase()) {
+    if (resolvido.email.trim().toLowerCase() !== parsed.data.email.trim().toLowerCase()) {
       return { ok: false, error: "validation_error", details: { invite: ["email_divergente"] } };
     }
     convite = inviteToken;
+    origemDoConvite = resolvido.origem;
+  }
+
+  // ─── A porta do convidado ────────────────────────────────────────────────
+  // Com convite VIVO e e-mail conferido, a conta nasce pelo service role, que
+  // não passa pelo `GOTRUE_DISABLE_SIGNUP`. Sem convite nada muda: a porta
+  // pública segue sendo a pública, e na produção ela recusa (D13).
+  //
+  // `email_confirm: true` não concede nada novo — o token do convite JÁ é o
+  // segredo portador da organização. O que evita é a tela impossível de pedir
+  // confirmação onde não há remetente configurado (§B29).
+  if (convite && origemDoConvite === "team_invites") {
+    const admin = createAdminClient();
+    const { data: criado, error: erroDoServico } = await admin.auth.admin.createUser({
+      email: parsed.data.email,
+      password: parsed.data.password,
+      email_confirm: true,
+      user_metadata: { invite_token: convite },
+    });
+    if (erroDoServico) {
+      await audit({
+        action: "auth.signup_failed",
+        metadata: { email_hash: hashEmail(parsed.data.email), reason: erroDoServico.message, via: "convite" },
+        requestId,
+        ip,
+        userAgent,
+      });
+      return { ok: false, error: "signup_failed" };
+    }
+    await audit({
+      action: "auth.signup_requested",
+      actorUserId: criado?.user?.id ?? null,
+      metadata: { email_hash: hashEmail(parsed.data.email), via: "convite" },
+      requestId,
+      ip,
+      userAgent,
+    });
+    // O VÍNCULO ACONTECE AQUI, não no `/auth/confirm`: com o e-mail já
+    // confirmado, aquela rota nunca é visitada, e sem isto a pessoa teria conta
+    // e nenhuma organização — a tela impossível de novo, por outro caminho.
+    const vinculo = await aceitarConvitePorToken({ token: convite, user_id: criado!.user!.id });
+    if (!vinculo.ok) {
+      await audit({
+        action: "auth.signup_failed",
+        actorUserId: criado?.user?.id ?? null,
+        metadata: { email_hash: hashEmail(parsed.data.email), reason: vinculo.recusa, via: "convite" },
+        requestId,
+        ip,
+        userAgent,
+      });
+      return { ok: false, error: "signup_failed", details: { invite: [vinculo.recusa] } };
+    }
+
+    // Sem sessão: o service role cria a conta, não autentica o browser. A tela
+    // manda para o login, que agora funciona porque a conta existe, o e-mail já
+    // está confirmado e a organização já é dela.
+    return { ok: true, sessao_ativa: false };
   }
 
   const supabase = await createClient();

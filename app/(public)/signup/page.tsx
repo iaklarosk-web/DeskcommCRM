@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { SignupForm } from "@/components/auth/SignupForm";
 import { branding } from "@/lib/branding";
-import { verifyInviteToken } from "@/lib/auth/invite-token";
+import { resolverConvite } from "@/lib/auth/resolver-de-convite";
 import { createClient } from "@/lib/supabase/server";
 import { normalizarIdioma } from "@/lib/i18n/idiomas";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -24,9 +24,12 @@ export default async function SignupPage({
   searchParams: Promise<{ invite?: string }>;
 }) {
   const { invite } = await searchParams;
-  const payload = invite ? verifyInviteToken(invite) : null;
-  const convite = invite && payload ? { token: invite, email: payload.email } : undefined;
-  const conviteExpirado = Boolean(invite) && !payload;
+  // Resolve os DOIS formatos (ADR-047 §1). Antes da T07 só o JWT legado era
+  // entendido, e `app/i/[token]` manda o token curto: quem foi convidado lia
+  // "convite expirado" e não tinha como entrar.
+  const resolvido = invite ? await resolverConvite(invite) : null;
+  const convite = resolvido ? { token: resolvido.token, email: resolvido.email } : undefined;
+  const conviteExpirado = Boolean(invite) && !resolvido;
 
   const supabase = await createClient();
   const {

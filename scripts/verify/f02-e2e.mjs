@@ -170,7 +170,7 @@ export const REQUIRED_F20_E2E_SPECS = Object.freeze([
   ...REQUIRED_F19_E2E_SPECS,
   "tests/e2e/f20-convites.spec.ts",
 ]);
-export const EXPECTED_F20_E2E_TESTS = EXPECTED_F19_E2E_TESTS + 5;
+export const EXPECTED_F20_E2E_TESTS = EXPECTED_F19_E2E_TESTS + 7;
 
 /** Tenants do seed que a F07 percorre, na ordem (§7.8 T02: deka, depois demo2). */
 export const REPLICABILITY_TENANTS = Object.freeze(["deka", "demo2"]);

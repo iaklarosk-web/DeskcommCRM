@@ -87,6 +87,50 @@ for (const lado of ["A", "B"] as LadoDoTeste[]) {
     await page.goto(caminho);
     await expect(page.getByRole("heading", { name: /cancelad/i })).toBeVisible({ timeout: HTTP_TIMEOUT });
   });
+
+  /**
+   * A JORNADA QUE FALTAVA — e por faltar deixou a F20 passar quebrada.
+   *
+   * Em 23/09 um convidado real não entrou: o link curto levava a
+   * `/signup?invite=`, que só entendia o token HMAC legado, e o cadastro da
+   * produção estava fechado (`GOTRUE_DISABLE_SIGNUP=true`). As três jornadas
+   * acima cobrem quem CONVIDA; nenhuma cobria quem é CONVIDADO (ADR-047).
+   */
+  test(`o convidado SEM conta abre o link, cria a conta e cai na empresa certa em ${lado}`, async ({ page, fixture }) => {
+    await login(page, fixture.admin.email, fixture.password);
+    await page.request.post("/api/v1/auth/active-org", { data: { organization_id: fixture.orgs[lado] }, timeout: HTTP_TIMEOUT });
+    const email = `novato.${lado.toLowerCase()}.${fixture.suffix}@exemplo.test`;
+    const { link } = await convidar(page, email);
+
+    // A partir daqui é a pessoa convidada, que nunca entrou no produto.
+    const convidado = await page.context().browser()!.newContext();
+    const dele = await convidado.newPage();
+    await dele.goto(new URL(link).pathname);
+
+    // Sem conta, a tela precisa oferecer um caminho que FUNCIONE.
+    await dele.getByRole("link", { name: /ainda não tenho conta|criar conta|cadastr/i }).click();
+    await dele.waitForURL("**/signup**", { timeout: HTTP_TIMEOUT });
+
+    // O convite tem de ter sido reconhecido: o e-mail vem travado e a tela não
+    // pergunta nome de empresa — perguntar significa criar organização separada.
+    await expect(dele.locator("#email")).toHaveValue(email, { timeout: HTTP_TIMEOUT });
+    await expect(dele.locator("#org_name")).toHaveCount(0);
+
+    await dele.locator("#password").fill("SenhaForte!2026");
+    await dele.locator("#password_confirm").fill("SenhaForte!2026");
+    await dele.getByRole("button", { name: /criar conta/i }).click();
+
+    // Não pode sobrar na tela de erro genérica do §B29.
+    await expect(dele.getByText(/não foi possível criar a conta/i)).toHaveCount(0, { timeout: HTTP_TIMEOUT });
+
+    await login(dele, email, "SenhaForte!2026");
+    const orgs = await dele.request.get("/api/v1/auth/active-org", { timeout: HTTP_TIMEOUT });
+    expect(orgs.status(), await orgs.text()).toBe(200);
+    const corpo = (await orgs.json()) as { data: { organization_id: string } };
+    expect(corpo.data.organization_id, "o convidado tem de cair na empresa que o convidou").toBe(fixture.orgs[lado]);
+
+    await convidado.close();
+  });
 }
 
 test("o painel do dono lista os convites da empresa, emite um novo e o link anterior morre", async ({ page, fixture }) => {

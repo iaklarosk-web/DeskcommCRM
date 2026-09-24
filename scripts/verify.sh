@@ -148,6 +148,7 @@ suite unit test:unit
 suite integration test:integration
 suite db test:db
 step secrets bash scripts/scan-secrets.sh
+step divergencia-ambiente node scripts/verify/divergencia-de-ambiente.mjs
 
 if [ "$CLOSED_E2E" = 1 ]; then
   mapfile -t F02_SPECS < <(node scripts/verify/f02-e2e.mjs specs "$PHASE")
