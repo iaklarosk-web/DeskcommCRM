@@ -1492,7 +1492,7 @@ for (const [rotulo, linha] of [
 
 const stateF20 = stateF19.replace("current_phase: F19", "current_phase: F20")
   .replace("| F19 | Cobrança real por Stripe | in_progress |", "| F19 | Cobrança real por Stripe | done(verify=2026-09-23 b1f69e3e) |\n| F20 | Convite curto e membership do criador | in_progress |");
-const F20_SPEC_COUNTS = [...F19_SPEC_COUNTS, 5];
+const F20_SPEC_COUNTS = [...F19_SPEC_COUNTS, 7];
 const INVITES_OK = "invites: link_len=47/64 reenvio_revoga=1/1 aceite=1/1 email_apagado_no_aceite=1/1 duas_aceitacoes=1/1 revogado_recusado=1/1 pendentes_listados=3";
 function f20Input() {
   const data = fasePorTenant("F12", stateF20, REQUIRED_F20_E2E_SPECS, F20_SPEC_COUNTS, EXPECTED_F20_E2E_TESTS);
@@ -1506,13 +1506,13 @@ function f20Input() {
   return data;
 }
 
-test("F20 is gated: inventory of 18 specs (91 tests) per tenant, with invites measured; in staging it prints READY (staging)", () => {
+test("F20 is gated: inventory of 18 specs (93 tests) per tenant, with invites measured; in staging it prints READY (staging)", () => {
   const data = f20Input();
   const result = evaluate(data);
   assert.deepEqual(result.errors, []);
   assert.equal(result.status, "READY (F20)");
   const bloco = render(data, result);
-  assert.match(bloco, /e2e_scope: F20-required passed=91\/91 specs=18\/18/);
+  assert.match(bloco, /e2e_scope: F20-required passed=93\/93 specs=18\/18/);
   assert.match(bloco, /invites: link_len=47\/64 reenvio_revoga=1\/1/);
   const staging = f20Input();
   staging.sandbox = stagingEvidence();
