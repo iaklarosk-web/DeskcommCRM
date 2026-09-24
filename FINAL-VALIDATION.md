@@ -72,31 +72,33 @@ Fase 1.
 ## 2. VERIFY SUMMARY final
 
 Bloco colado na íntegra, rodado DENTRO do staging (ADR-028 §2), sobre
-`e3c34195`, em `2026-09-19 20:20Z → 22:20Z` (6011 s de passos), exit `0`, com
-`current_phase: F19` (inventário de F18 + `f19-cobranca-stripe` = 17 specs, 86
-testes; linha `stripe:`; `rbac: roles=4` — ADR-043). O app do gate rodou com
-`BILLING_GATEWAY=stripe` contra o Stripe FALSO da bancada (ADR-043 §4). Log em
-`.verify-logs/f19-gate-03/` (não versionado); evidência versionada em
-[docs/migration/evidence/construction-f19-20260919.txt](docs/migration/evidence/construction-f19-20260919.txt).
-Os blocos anteriores ficam nas evidências das fases (F07, F11+F12, F08, F13, F15, F14, F18).
+`2085c4d1a`, em `2026-09-24`, exit `0`, com `current_phase: F20` (inventário de
+F19 + `f20-convites` = 18 specs, 93 testes; linha `invites:` — ADR-046). O app do
+gate rodou com o Stripe FALSO da bancada em 4202. Log em `.verify-logs/f20-gate-09/`
+(não versionado); evidência versionada em
+[docs/migration/evidence/construction-f20-20260924.txt](docs/migration/evidence/construction-f20-20260924.txt).
+Os blocos anteriores ficam nas evidências das fases (F07, F11+F12, F08, F13, F15, F14, F18, F19).
+
+Este é o MESMO commit que está na produção: `scripts/prod/prova.sh` leu
+`sha=2085c4d1a` de dentro do contêiner, não da árvore de trabalho.
 
 ```text
 VERIFY SUMMARY
-scope=phase phase=F19 current_phase=F19 environment=staging
+scope=phase phase=F20 current_phase=F20 environment=staging
 build=ok lint=ok typecheck=ok shell=ok
-unit=8578/8578 integration=260/260 db=1683/1683 e2e=86/86 baseline_n0=8997
-baseline_comparable: scope=unit+db passed=10261 required=8738 full_n0=pending
-e2e_scope: F19-required passed=86/86 specs=17/17
-isolation: tables=139 ops=4 dirs=2 leaks=0 (material_cross_org=98/139)
-rls-coverage: tables_with_org_id=139 policies_found=116 missing=0 service_only_with_grant=0
+unit=8603/8603 integration=270/270 db=1695/1695 e2e=93/93 baseline_n0=8997
+baseline_comparable: scope=unit+db passed=10298 required=8738 full_n0=pending
+e2e_scope: F20-required passed=93/93 specs=18/18
+isolation: tables=140 ops=4 dirs=2 leaks=0 (material_cross_org=98/140)
+rls-coverage: tables_with_org_id=140 policies_found=116 missing=0 service_only_with_grant=0
 rbac: roles=4 denied_expected=32 denied_actual=32
 entitlement: usage_events_written=23
 ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0
 handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3 notify=3 notify_rows=6 msgs_after=3 provider_calls_after=0
 reminder: runs=2 sent=1 duplicates=0 tables_summed=3
 webhook: replay=2 stored=1 tables_checked=7
-logs: routes=295 routes_logged=295 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
-rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=295 routes_with_schema=295 routes_reading_input=162 validated=162
+logs: routes=299 routes_logged=299 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
+rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=299 routes_with_schema=299 routes_reading_input=163 validated=163
 lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2
 admin: tenants_listed=3/3 support_sessions=2 support_reason=2/2 support_scope_denied=25/32 support_writes_denied=5/5 full_mode_rejected=1/1 signup_awaiting_payment=1/1 orgs_without_subscription=0/3
 billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1/1 blocked_writes_denied=5/5 grace_days=7 reconciliation_mismatch=0/3 cancellations=1/1 data_preserved=7/7
@@ -104,13 +106,13 @@ crm: fields_defined=6 values_rejected=3/3 values_preserved=4/4 queue_size=5 dist
 autonomy: policy_modes=4/4 ai_task_created=1/1 limit_hits=1/1 calls_after_limit=0/3 paused=1/1 resumed=1/1 handoffs=4 balanced=1 assignees_distinct=3 rules=4 runs=4/4 replays=4 duplicate_runs=0 outside_catalog_denied=1/1 reindexed=2/2 unchanged_skipped=4/4 sources_cited=1/1 roles_denied=3/3
 channels: webchat_sessions=96 identified=12/12 contacts_created=11/11 messages_in=56 ai_replies=1/1 ai_outside_window=1/1 handoff_queued=1/1 ip_limited=1/1 org_limited=1/1 flood_calls_capped=1/1 cross_org_denied=1/1 appointments=7 conflicts_blocked=1/1 revoked_blocked=1/1 tz_ok=1/1 proposed=2/2 approved=1/1 denied_by_policy=1/1 roles_denied=2/2
 engine: saas_turns=1 legacy_turns=1 volta_atras=1/1 heranca_prompt=1/1 heranca_acervo=1/1 limite_diario_nega=1/1 cancel_allow=1/1 cancel_passado_negado=1/1 cancel_auditado=1/1 policy_approve_pendura=1/1 tools_migradas=13/13 auditoria=5/5 roles_denied=2/2 fora_do_catalogo_negado=1/1 inventadas_descartadas=1/1
+invites: link_len=47/64 reenvio_revoga=1/1 aceite=1/1 email_apagado_no_aceite=1/1 duas_aceitacoes=1/1 revogado_recusado=1/1 pendentes_listados=2
 stripe: signature_rejected=1/1 livemode_mismatch=1/1 price_outside_list=1/1 checkout_created=1/1 activated=1/1 trialing_mapped=1/1 duplicates=1 out_of_order=1 state_from_provider=1/1 past_due=1/1 blocked_after_grace=1/1 cancelled_preserved=7/7 portal_link=1/1 admin_actions=5/5 summary_ok=1/1
-replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=86/86 demo2=86/86 specs=17/17 org_a=seed-replica)
-secrets: files_scanned=580 findings=0
-tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=82/82
+replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=93/93 demo2=93/93 specs=18/18 org_a=seed-replica)
+secrets: files_scanned=590 findings=0
+tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=89/89
 debt_known=0 skip_only_occurrences=15 violations=0
 STATUS: READY (staging)
-exit=0
 ```
 
 Fora do bloco, contra o staging de pé, DEPOIS do READY e com a mesma imagem
@@ -165,6 +167,8 @@ Cada item com a marcação e o dono humano (§8.6, D11, D12, D26).
 
 | Item | Marcação | Dono humano |
 |---|---|---|
+| Convite aceito por PESSOA REAL na produção (o que falhou em 23/09) | NOT VALIDATED (real) — a correção da T07 (ADR-047) foi provada em staging NA CONDIÇÃO DA PRODUÇÃO (`GOTRUE_DISABLE_SIGNUP=true`, 7/7 em 24/09, ver `t07_prova_producao` no BUILD-STATE). Falta a pessoa: o convite do Kayro é o primeiro aceite real | Proprietário |
+| Pagamento real pelo Stripe LIVE | NOT VALIDATED (real) — `checkout_paid=0/0`. O gateway está `live` na produção desde 20/09, mas nenhuma cobrança real jamais passou; o primeiro cliente que pagar é o primeiro teste | Proprietário |
 | Provedor real de IA com CLIENTES: casos do ai-eval contra o provedor, custo real em volume, limites | PARCIAL — F08-T05 mediu 1 turno real (Anthropic, `claude-haiku-4-5`, 5 chamadas por turno em `ai_usage_events`) e 1 FAQ indexado (OpenAI, `ai_chunks` 3/3) na organização do dono; os 30 casos do ai-eval continuam medidos com `AI_PROVIDER=mock` no gate (D12) | proprietário + Deka (piloto D27) |
 | WAHA real: parear número, receber/enviar, reconectar, ausência de duplicação | NOT VALIDATED (real) — container real de pé (`health_only`), sessão criada pelo produto e aguardando QR (cai em FAILED sem leitura); número é do proprietário (D12-4); achado: nome de sessão > 54 chars consertado (9025) | proprietário + Deka (número, aceite D04) |
 | E-mail transacional real para TERCEIROS (convites, avisos) | PARCIAL — F08-T06: 1 e-mail pela API do produto (`lib/email/resend.ts`, id da Resend) e 1 recuperação de senha pelo GoTrue via SMTP, ambos ao proprietário; nenhum terceiro recebeu nada (regra da casa) | proprietário |

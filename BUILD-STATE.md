@@ -1,34 +1,34 @@
 ---
-updated_at: 2026-09-22T23:34:59Z
-head_commit: e3c34195   # código VALIDADO pelo gate f19-gate-03 (READY (staging), dentro do staging, F19 — ADR-042/043) = e3c34195; o fechamento (docs) vem depois dele; from-scratch: ver a linha from-scratch:
+updated_at: 2026-09-24T15:30:00Z
+head_commit: 2085c4d1a   # código VALIDADO pelo gate f20-gate-09 (READY (staging), F20 — ADR-045/046/047) = 2085c4d1a; o fechamento (docs) vem depois dele. Este MESMO commit está na produção (prova.sh sha=2085c4d1a)
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
 plan_version: "2.16 (2026-09-23); D38–D61; ADR-006…045"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
 current_phase: F20
-next_task: F19-T06             # 21/09/2026 20:12Z: gate f19-gate-04 READY (staging) sobre a3a5a01e, demo3 e from-scratch VERDES; falta a PRODUÇÃO (stripe-live.sh ligar → up.sh → prova.sh → stripe-live.sh provar → stripe_live:) — aguarda janela pesada (build) da coordenação KN; depois fechamento. stripe_live: PENDENTE
-status: IN_PROGRESS            # IN_PROGRESS | BLOCKED | READY_STAGING — F19-T06 PAUSADA (D58; ADR-044): código validado pelo f19-gate-04 (READY (staging), a3a5a01e), faltam demo3 + from-scratch + produção live + stripe_live:; a F19 fechou READY (staging) em e3c34195 (bloco abaixo); BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26)
+next_task: F17                 # 24/09/2026: F20 FECHADA (READY (staging) no f20-gate-09) e NA PRODUÇÃO. Pendências do proprietário: emitir o convite do Kayro em /admin/tenants/7923b561-8f48-4dad-b7dc-6b906f839a90/convites (papel admin) e, DEPOIS do aceite dele, pedir a remoção da membership dele próprio no deka-sucos (D60 c: organizações existentes não mudaram sozinhas)
+status: READY_STAGING          # IN_PROGRESS | BLOCKED | READY_STAGING — F20 READY (staging) em 2085c4d1a e implantada na produção em 24/09. BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26)
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
 hosting_confirmed: yes         # D50 (11/09/2026): staging nesta VPS, Docker Compose com Supabase local, acesso só por Tailscale — ADR-027
 build_env: "Claude Code na VPS (4 núcleos/16 GB), worktree DeskcommCRM-v1.17.0; validação em serviços/bancos descartáveis e no staging; WHATSAPP_MODE=mock AI_PROVIDER=mock; F15: 3 chamadas reais à Anthropic (ai_real:); F14: 12 turnos Haiku reais no chat do site da organização do dono (webchat_real:, teto 20)"
-verify_summary_last_context: "f19-gate-03 aprovado em 19/09/2026 sobre e3c34195, 6011 s de passos (20:20Z→22:20Z), exit 0, DENTRO do staging (VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202 + Stripe FALSO em 4202), current_phase=F19 com a spec f19-cobranca-stripe (17 specs, 86 testes, ADR-043 §1) e a linha stripe: (ADR-043 §2). Três tentativas: 01 interrompida em db — unit 8576/8578 por duas réguas (spec fora da lista do CI; `rounded` puro); 02 NOT READY por tenantReferences=1 (a palavra do tenant num comentário) e mutante 63 vivo por FORMATAÇÃO (o vitest abrevia o objeto esperado com os campos novos da assinatura) — tudo o mais verde; 03 READY. mutants_killed=82/82. Produção recebeu o código DEPOIS do READY (prod:), com BILLING_GATEWAY=mock (D57 f). Stripe REAL: NOT VALIDATED (real) — a chave não foi gravada. READY (staging) = verificado em staging; owner_validated em branco; BLOCKER-PROD aberto (liberado só para o tenant Deka, D53)."
+verify_summary_last_context: "f20-gate-09 aprovado em 24/09/2026 sobre 2085c4d1a, DENTRO do staging (VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202 + Stripe FALSO em 4202), current_phase=F20 com a spec f20-convites (18 specs, 93 testes) e a linha invites:. Quatro tentativas: 06 NOT READY — 35 testes de navegador por AFIRMAÇÃO DE TESTE desatualizada, não por defeito (31 por domain_tables_checked 6→7, que subiu porque a fixture passou a limpar team_invites; 4 por toBe(200) num POST que devolve 201 desde a F11); 07 abortado por receita de ambiente errada (faltavam VERIFY_ENVIRONMENT/F02_E2E_SANDBOX_ID/E2E_PORT — receita em docs/ops/staging.md:148), sem custo de máquina; 08 NOT READY — unit 8602/8603 pela fixture do meta-gate (91→93 testes) e e2e com ERRO GLOBAL (porta 4202 presa por um Stripe falso órfão de gate anterior), zero testes executados; 09 READY. mutants_killed=89/89. A F20 ganhou a T07 (ADR-047) DEPOIS da construção original, porque um convidado REAL não conseguiu entrar em 23/09: a F20 encurtava o link e parava um passo antes — /i/[token] mandava o token curto para /signup?invite=, que só entendia o HMAC legado, e a produção recusa cadastro (GOTRUE_DISABLE_SIGNUP=true, false no staging, 422 signup_disabled medido em docker logs crm-prod-auth 21:09:07Z-21:10:10Z). O gate não pegava nem um nem outro: a spec cobria só quem CONVIDA, e o caminho da produção não existe no staging. Entram a jornada do convidado (+2 testes) e a régua divergencia-de-ambiente. demo3 e from-scratch NÃO foram executados nesta fase — o proprietário autorizou o deploy direto (24/09). READY (staging) = verificado em staging; owner_validated em branco."
 verify_summary_last: |
   VERIFY SUMMARY
-  scope=phase phase=F19 current_phase=F19 environment=staging
+  scope=phase phase=F20 current_phase=F20 environment=staging
   build=ok lint=ok typecheck=ok shell=ok
-  unit=8578/8578 integration=260/260 db=1683/1683 e2e=86/86 baseline_n0=8997
-  baseline_comparable: scope=unit+db passed=10261 required=8738 full_n0=pending
-  e2e_scope: F19-required passed=86/86 specs=17/17
-  isolation: tables=139 ops=4 dirs=2 leaks=0 (material_cross_org=98/139)
-  rls-coverage: tables_with_org_id=139 policies_found=116 missing=0 service_only_with_grant=0
+  unit=8603/8603 integration=270/270 db=1695/1695 e2e=93/93 baseline_n0=8997
+  baseline_comparable: scope=unit+db passed=10298 required=8738 full_n0=pending
+  e2e_scope: F20-required passed=93/93 specs=18/18
+  isolation: tables=140 ops=4 dirs=2 leaks=0 (material_cross_org=98/140)
+  rls-coverage: tables_with_org_id=140 policies_found=116 missing=0 service_only_with_grant=0
   rbac: roles=4 denied_expected=32 denied_actual=32
   entitlement: usage_events_written=23
   ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0
   handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3 notify=3 notify_rows=6 msgs_after=3 provider_calls_after=0
   reminder: runs=2 sent=1 duplicates=0 tables_summed=3
   webhook: replay=2 stored=1 tables_checked=7
-  logs: routes=295 routes_logged=295 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
-  rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=295 routes_with_schema=295 routes_reading_input=162 validated=162
+  logs: routes=299 routes_logged=299 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
+  rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=299 routes_with_schema=299 routes_reading_input=163 validated=163
   lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2
   admin: tenants_listed=3/3 support_sessions=2 support_reason=2/2 support_scope_denied=25/32 support_writes_denied=5/5 full_mode_rejected=1/1 signup_awaiting_payment=1/1 orgs_without_subscription=0/3
   billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1/1 blocked_writes_denied=5/5 grace_days=7 reconciliation_mismatch=0/3 cancellations=1/1 data_preserved=7/7
@@ -36,10 +36,11 @@ verify_summary_last: |
   autonomy: policy_modes=4/4 ai_task_created=1/1 limit_hits=1/1 calls_after_limit=0/3 paused=1/1 resumed=1/1 handoffs=4 balanced=1 assignees_distinct=3 rules=4 runs=4/4 replays=4 duplicate_runs=0 outside_catalog_denied=1/1 reindexed=2/2 unchanged_skipped=4/4 sources_cited=1/1 roles_denied=3/3
   channels: webchat_sessions=96 identified=12/12 contacts_created=11/11 messages_in=56 ai_replies=1/1 ai_outside_window=1/1 handoff_queued=1/1 ip_limited=1/1 org_limited=1/1 flood_calls_capped=1/1 cross_org_denied=1/1 appointments=7 conflicts_blocked=1/1 revoked_blocked=1/1 tz_ok=1/1 proposed=2/2 approved=1/1 denied_by_policy=1/1 roles_denied=2/2
   engine: saas_turns=1 legacy_turns=1 volta_atras=1/1 heranca_prompt=1/1 heranca_acervo=1/1 limite_diario_nega=1/1 cancel_allow=1/1 cancel_passado_negado=1/1 cancel_auditado=1/1 policy_approve_pendura=1/1 tools_migradas=13/13 auditoria=5/5 roles_denied=2/2 fora_do_catalogo_negado=1/1 inventadas_descartadas=1/1
+  invites: link_len=47/64 reenvio_revoga=1/1 aceite=1/1 email_apagado_no_aceite=1/1 duas_aceitacoes=1/1 revogado_recusado=1/1 pendentes_listados=2
   stripe: signature_rejected=1/1 livemode_mismatch=1/1 price_outside_list=1/1 checkout_created=1/1 activated=1/1 trialing_mapped=1/1 duplicates=1 out_of_order=1 state_from_provider=1/1 past_due=1/1 blocked_after_grace=1/1 cancelled_preserved=7/7 portal_link=1/1 admin_actions=5/5 summary_ok=1/1
-  replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=86/86 demo2=86/86 specs=17/17 org_a=seed-replica)
-  secrets: files_scanned=580 findings=0
-  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=82/82
+  replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=93/93 demo2=93/93 specs=18/18 org_a=seed-replica)
+  secrets: files_scanned=590 findings=0
+  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=89/89
   debt_known=0 skip_only_occurrences=15 violations=0
   STATUS: READY (staging)
   exit=0
@@ -47,7 +48,8 @@ restore: tables=184 tables_restored=184 rows=33004 rows_diff=0 dump=staging-2026
 smoke: steps=10 pass=10/10 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 owner_login=1/1 subscriptions[deka]=active/full subscriptions[demo2]=active/full orgs_without_subscription=0/3 webchat_disabled_denied=2/2 engine_saas=2/2 webhook_stripe_unsigned_rejected=1/1 tenants=deka,demo2
 p95_ms: endpoints=3/3 health=21 contacts=394 conversations=510 samples=20 url=http://127.0.0.1:3200
 staging: compose=crm-staging services_running=15/15 memory_mib=1414 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F19(e3c34195)
-prod: compose=crm-prod services_running=14/14 config_vars=29/29 placeholders=0/29 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=2 orgs_without_subscription=0/2 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only billing_gateway=mock backup=1/1 restore_rows_diff=0 sha=e3c341958
+t07_prova_producao: journey=7/7 flag=GOTRUE_DISABLE_SIGNUP=true env=crm-staging duracao_s=132 data=2026-09-24T20:52Z   # ADR-047: a T07 foi exercitada na CONDIÇÃO DA PRODUÇÃO (cadastro público fechado), recriando só o contêiner de auth do staging com o flag da produção e devolvendo-o em seguida. Sem isso a correção ficaria provada apenas por teste unitário com mock, e o primeiro convidado real seria o primeiro teste. Staging devolvido: flag=false, healthy, git limpo.
+prod: compose=crm-prod services_running=14/14 config_vars=29/29 placeholders=0/29 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=3 orgs_without_subscription=0/3 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only billing_gateway=stripe/live backup=1/1 restore_rows_diff=0 sha=2085c4d1a   # 24/09/2026: F20 na produção (migrations 9035/9036/9037 conferidas NO BANCO: team_invites=1, fn_aceitar_convite_de_equipe=1, owner_email na fn_create_tenant_with_owner=true). Backup antes: prod-20260924T145546Z.dump (1629341 bytes, 182 tabelas)
 incidente_prod: fora=36h inicio=2026-09-21T11:08:11Z fim=2026-09-22T23:23:46Z causa=pool_do_postgrest_travado(PGRST003) erros=9628 health_antes=503 health_depois=200 conserto=docker_restart_crm-prod-rest rest_200=20/20 prod_apos=14/14 owner_login=1/1   # VARREDURA §B25: o Postgres estava são (21 conexões/100, nada preso); a tela do /admin culpou permissão/MFA porque requirePlatformAdmin descartava o erro da consulta — consertado na F19-T06 (falha alto, mutante 87). Pendência: crm-prod-rest sem healthcheck (F17)
 tenant_deka: created=1 plan=PLAN_C subscription=active origin=operator admin=platform_admin invites_sent=0/0 orgs=2 orgs_without_subscription=0/2 (D53, 14/09/2026 10:40Z)
 prod_stack: compose=crm-prod services_running=14/14 memory_mib=1574 ports=127.0.0.1+tailscale(3300,56431,56432) public_ports=0   # F19: scripts/prod/up.sh DEPOIS do READY; o apêndice 9033 aplicou-se no banco que ATUALIZA (3/3 CHECKs com stripe/cancelled, 3/3 colunas); BILLING_GATEWAY=mock gravado por secrets.sh (D57 f); webhook do Stripe responde 503 (fechado) no domínio
@@ -839,6 +841,7 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 | F17 | Operação, capacidade/recuperação, suporte, atualização, regressão e aceite comercial pelo proprietário | pending |
 | F18 | Um motor de IA só: o turno SaaS assume o despacho (unificação do §B8) | done(verify=2026-09-19 e5c26c4e) — READY (staging) no f18-gate-04 (16 specs, linha `engine:`; ADR-040/041); T00–T05 concluídas; produção com o código da F18 (`prod:`/`engine_real:`) |
 | F19 | Cobrança real por Stripe + padrão KN do `/admin` (D57; ADR-042/043) | done(verify=2026-09-19 e3c34195) — READY (staging) no f19-gate-03 (17 specs, linha `stripe:`; mutantes 82/82); T00–T05 concluídas; produção com o código da F19 e `billing_gateway=mock` (D57 f); **T06 (ADR-044, D58: planos reais + Stripe LIVE) EM ANDAMENTO/PAUSADA** — gate f19-gate-04 READY (staging) sobre a3a5a01e; demo3 e from-scratch verdes em 21/09; faltam produção live e `stripe_live:` |
+| F20 | Convite curto com ciclo de vida, ação no `/admin` e membership do criador (D59/D60; ADR-045/046/047) | done(verify=2026-09-24 2085c4d1a) — READY (staging) no f20-gate-09 (18 specs, 93 testes, linha `invites:`; mutantes 89/89); NA PRODUÇÃO em 24/09 (migrations 9035/9036/9037 conferidas no banco; `prova.sh sha=2085c4d1a`). T07 (ADR-047) entrou DEPOIS, por defeito medido com convidado real: o link curto ia para `/signup?invite=`, que só entendia o token HMAC legado, e a produção recusa cadastro (`GOTRUE_DISABLE_SIGNUP=true`; staging `false`). Entram o resolvedor dos dois formatos, a criação por service role SÓ com convite vivo, a jornada do convidado sem conta (+2 testes) e a régua `divergencia-de-ambiente`. **demo3 e from-scratch NÃO executados** (deploy direto autorizado pelo proprietário). Pendente do proprietário: emitir o convite do Kayro e, após o aceite, remover a própria membership no `deka-sucos` (D60 c) |
 
 Dependência técnica: F00/F01 → F02 → F03 → F04 → F05 → F06 → F07 → (D51) F11+F12. F11/F12 fecharam juntas o onboarding pago em staging (13/09/2026); F13 fechou em 14/09/2026; F15 fechou em 15/09/2026 (D54); F14 fechou em 18/09/2026 (D55); F16 avança com contratos definidos. F08 depende das entradas/autorização para serviços reais. D48 permite concluir a construção F11–F17 antes das evidências reais F09/F10; piloto e validação de mercado permanecem marcos separados, sem bloquear o software. F17 reúne a jornada comercial e os critérios de operação. Nenhuma fase futura recebe `done` por existir código equivalente no upstream.
 

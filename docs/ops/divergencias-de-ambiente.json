@@ -7,7 +7,8 @@
       "producao": "true",
       "porque": "D13: cadastro público fechado na produção. O staging precisa dele aberto para as jornadas de cadastro de F11/F12 rodarem.",
       "fluxo_afetado": "criar conta — pública e por convite",
-      "teste_do_valor_de_producao": "app/actions/auth/signUp.convite.test.ts"
+      "teste_do_valor_de_producao": "app/actions/auth/signUp.convite.test.ts",
+      "prova_do_valor_de_producao_em_e2e": "tests/e2e/f20-convites.spec.ts 7/7 com o flag em true no staging, 2026-09-24 (ver t07_prova_producao no BUILD-STATE)"
     }
   ]
 }
