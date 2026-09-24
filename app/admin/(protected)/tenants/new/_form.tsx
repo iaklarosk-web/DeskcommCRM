@@ -69,7 +69,24 @@ function maskCnpj(value: string): string {
 // Form component
 // ---------------------------------------------------------------------------
 
-export function NewTenantForm() {
+export interface PlanoDaLista {
+  code: string;
+  name: string;
+  price_cents: number;
+  currency: string;
+  source: "placeholder" | "owner";
+}
+
+/** Formata como a pessoa lê: "Essencial — R$ 197,00/mês". */
+export function rotuloDoPlano(p: PlanoDaLista): string {
+  const preco = (p.price_cents / 100).toLocaleString("pt-BR", { style: "currency", currency: p.currency || "BRL" });
+  const base = `${p.name} — ${preco}/mês`;
+  // O aviso só aparece enquanto o plano REALMENTE for placeholder; some sozinho
+  // quando o proprietário decide (D58), sem ninguém precisar editar esta tela.
+  return p.source === "placeholder" ? `${base} (placeholder)` : base;
+}
+
+export function NewTenantForm({ planos }: { planos: readonly PlanoDaLista[] }) {
   const t = useT();
   const idioma = useIdioma();
   const router = useRouter();
@@ -317,9 +334,11 @@ export function NewTenantForm() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="PLAN_A">PLAN_A (placeholder)</SelectItem>
-                  <SelectItem value="PLAN_B">PLAN_B (placeholder)</SelectItem>
-                  <SelectItem value="PLAN_C">PLAN_C (placeholder)</SelectItem>
+                  {planos.map((p) => (
+                    <SelectItem key={p.code} value={p.code}>
+                      {rotuloDoPlano(p)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">{t("A empresa nasce com assinatura ativa neste plano (origem: operador).")}</p>

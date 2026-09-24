@@ -18,6 +18,7 @@ import { linkNoStripe } from "@/src/billing/admin";
 import { getServicePool } from "@/src/tenant-context/db";
 
 import { AcoesDaAssinatura } from "./_acoes";
+import { rotuloDoGateway } from "@/src/billing/rotulo-do-gateway";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Cobrança — Admin Plataforma" };
@@ -53,6 +54,10 @@ export default async function AdminBillingPage() {
   const t = (texto: string) => traduzir(texto, idioma);
   const pool = await getServicePool();
 
+  // A tela repete a configuração do gateway; ela não afirma "não cobra" por
+  // conta própria (ver src/billing/rotulo-do-gateway.ts).
+  const gateway = rotuloDoGateway({ gateway: env.BILLING_GATEWAY, modo: env.STRIPE_MODE });
+
   const [planos, conciliacao, assinaturas, semAssinatura, eventos] = await Promise.all([
     listarPlanos({ pool }),
     conciliar(null, { pool }),
@@ -78,7 +83,10 @@ export default async function AdminBillingPage() {
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">{t("Cobrança da plataforma")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {t("Assinaturas por empresa, planos, eventos do gateway e conciliação. Gateway em modo de teste: nenhuma cobrança real acontece.")}
+          {t("Assinaturas por empresa, planos, eventos do gateway e conciliação.")}{" "}
+          <span data-testid="admin-billing-modo-do-gateway" className={gateway.cobra_de_verdade ? "font-medium text-warning" : undefined}>
+            {t(gateway.texto)}
+          </span>
         </p>
       </header>
 
@@ -107,7 +115,11 @@ export default async function AdminBillingPage() {
 
       <section className="rounded-lg border p-4" aria-labelledby="admin-billing-planos">
         <h2 id="admin-billing-planos" className="text-sm font-medium">{t("Planos")}</h2>
-        <p className="mt-1 text-xs text-muted-foreground">{t("Nome, preço e limites marcados como placeholder ainda não foram decididos pelo proprietário da plataforma.")}</p>
+        {planos.some((p) => p.source === "placeholder") ? (
+          <p className="mt-1 text-xs text-muted-foreground" data-testid="admin-billing-aviso-placeholder">
+            {t("Nome, preço e limites marcados como placeholder ainda não foram decididos pelo proprietário da plataforma.")}
+          </p>
+        ) : null}
         <table className="mt-2 w-full text-sm">
           <thead>
             <tr className="text-left text-muted-foreground">

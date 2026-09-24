@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { Info } from "@/lib/ui/icons";
 import { useT } from "@/hooks/i18n/useT";
 
@@ -27,14 +26,6 @@ export function DBAOnlyNotice() {
           {t(
             ". Esta página é informativa e read-only — nenhum botão de modificação está disponível por design.",
           )}
-        </p>
-        <p className="pt-1">
-          <Link
-            href="/runbook/platform-admin-management.md"
-            className="text-xs font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900"
-          >
-            {t("Ver runbook →")}
-          </Link>
         </p>
       </div>
     </div>
