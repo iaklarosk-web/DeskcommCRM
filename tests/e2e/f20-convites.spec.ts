@@ -123,13 +123,18 @@ for (const lado of ["A", "B"] as LadoDoTeste[]) {
     // Não pode sobrar na tela de erro genérica do §B29.
     await expect(dele.getByText(/não foi possível criar a conta/i)).toHaveCount(0, { timeout: HTTP_TIMEOUT });
 
+    // Ele entra e cai DENTRO do produto — não no onboarding de empresa nova,
+    // que é exatamente o desvio que o link truncado produzia na produção.
     await login(dele, email, "SenhaForte!2026");
-    const orgs = await dele.request.get("/api/v1/auth/active-org", { timeout: HTTP_TIMEOUT });
-    expect(orgs.status(), await orgs.text()).toBe(200);
-    const corpo = (await orgs.json()) as { data: { organization_id: string } };
-    expect(corpo.data.organization_id, "o convidado tem de cair na empresa que o convidou").toBe(fixture.orgs[lado]);
-
+    await expect(dele).toHaveURL(/\/app(\/|$)/, { timeout: HTTP_TIMEOUT });
+    await expect(dele.getByRole("link", { name: /inbox/i }).first()).toBeVisible({ timeout: HTTP_TIMEOUT });
     await convidado.close();
+
+    // A prova de QUAL empresa: na equipe de quem convidou, o convite saiu dos
+    // pendentes por ACEITE (não por cancelamento) e a pessoa agora é membro.
+    await page.goto("/app/team");
+    await expect(page.getByTestId(`convite-${email}`)).toHaveCount(0, { timeout: HTTP_TIMEOUT });
+    await expect(page.getByText(email, { exact: false }).first()).toBeVisible({ timeout: HTTP_TIMEOUT });
   });
 }
 
