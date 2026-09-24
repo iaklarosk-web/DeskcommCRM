@@ -31,6 +31,8 @@ import {
 import { withTenant, type TenantCtx } from "@/src/tenant-context";
 
 import { BotaoDeCheckout, BotaoDeTrocaDePlano, BotaoDoPortal, FormularioDeCancelamento } from "./_acoes";
+import { rotuloDoGateway } from "@/src/billing/rotulo-do-gateway";
+import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +58,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
   const t = (texto: string) => traduzir(texto, idioma);
 
   const planos = await listarPlanos();
+  const gateway = rotuloDoGateway({ gateway: env.BILLING_GATEWAY, modo: env.STRIPE_MODE });
   const dados = await withTenant(ctx, async (db) => {
     const assinatura = await lerAssinaturaEm(db, ctx);
     const faturas = await listarFaturasEm(db, ctx);
@@ -84,7 +87,10 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">{t("Assinatura e cobrança")}</h1>
         <p className="text-sm text-muted-foreground">
-          {t("Plano, estado da assinatura, uso do período e faturas desta empresa. Gateway em modo de teste: nenhuma cobrança real acontece.")}
+          {t("Plano, estado da assinatura, uso do período e faturas desta empresa.")}{" "}
+          <span data-testid="billing-modo-do-gateway" className={gateway.cobra_de_verdade ? "font-medium text-warning" : undefined}>
+            {t(gateway.texto)}
+          </span>
         </p>
       </header>
 

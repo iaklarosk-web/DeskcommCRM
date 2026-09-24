@@ -8587,6 +8587,11 @@ export const DICIONARIO: Traducoes = {
   // F12-T07 (ADR-030): cobrança do dono (/admin/billing) e coluna de assinatura na lista de empresas.
   "sem assinatura (herdada)": {"es":"sin suscripción (heredada)"},
   "Cobrança da plataforma": {"es":"Facturación de la plataforma"},
+  "Assinaturas por empresa, planos, eventos do gateway e conciliação.": {"es":"Suscripciones por empresa, planes, eventos de la pasarela y conciliación."},
+  "Plano, estado da assinatura, uso do período e faturas desta empresa.": {"es":"Plan, estado de la suscripción, uso del período y facturas de esta empresa."},
+  "Gateway simulado: nenhuma cobrança real acontece.": {"es":"Pasarela simulada: no ocurre ningún cobro real."},
+  "Stripe em modo de teste: nenhuma cobrança real acontece.": {"es":"Stripe en modo de prueba: no ocurre ningún cobro real."},
+  "Stripe em modo REAL: toda cobrança aqui é dinheiro de verdade.": {"es":"Stripe en modo REAL: todo cobro aquí es dinero de verdad."},
   "Assinaturas por empresa, planos, eventos do gateway e conciliação. Gateway em modo de teste: nenhuma cobrança real acontece.": {"es":"Suscripciones por empresa, planes, eventos de la pasarela y conciliación. Pasarela en modo de prueba: no ocurre ningún cobro real."},
   "Conciliação": {"es":"Conciliación"},
   "Faturas pagas": {"es":"Facturas pagadas"},
