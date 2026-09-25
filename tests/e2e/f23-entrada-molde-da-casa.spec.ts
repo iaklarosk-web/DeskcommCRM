@@ -62,7 +62,10 @@ test.describe("F23 · tela de entrar no molde da casa", () => {
       "href",
       "/login/forgot",
     );
-    await expect(page.getByRole("link", { name: "Termos" })).toHaveAttribute("href", "/legal/terms");
+    await expect(page.getByRole("link", { name: "Termos" })).toHaveAttribute(
+      "href",
+      "/legal/terms",
+    );
     await expect(page.getByRole("link", { name: "Privacidade" })).toHaveAttribute(
       "href",
       "/legal/privacy",
@@ -72,5 +75,34 @@ test.describe("F23 · tela de entrar no molde da casa", () => {
     await expect(page).toHaveURL(/\/signup/);
     // A casca é a mesma: a marca continua no alto da tela de cadastro.
     await expect(page.getByTestId("marca-da-fachada")).toContainText(marca);
+  });
+  test("'Lembrar meu e-mail' guarda SÓ o e-mail neste aparelho, e some ao desmarcar", async ({
+    page,
+  }) => {
+    await page.goto("/login");
+    await page.locator("#email").fill("lembrado@exemplo.test");
+    await page.locator("#password").fill("senha-errada-de-proposito");
+    await page.getByLabel(/lembrar meu e-mail/i).check();
+    await page.getByRole("button", { name: /entrar/i }).click();
+    // A senha está errada de propósito: o que se mede é o que sobrevive à recarga.
+    await expect(page.getByRole("alert")).toBeVisible();
+
+    await page.reload();
+    await expect(page.locator("#email")).toHaveValue("lembrado@exemplo.test");
+    await expect(page.getByLabel(/lembrar meu e-mail/i)).toBeChecked();
+    await expect(page.locator("#password")).toHaveValue("");
+    // Uma chave só, e ela é o e-mail: senha nunca vai para o storage.
+    const guardado = await page.evaluate(() =>
+      Object.entries(localStorage).filter(([k]) => k.includes("lembrar")),
+    );
+    expect(guardado).toEqual([["deskcomm-lembrar-email", "lembrado@exemplo.test"]]);
+
+    await page.getByLabel(/lembrar meu e-mail/i).uncheck();
+    await page.locator("#password").fill("senha-errada-de-proposito");
+    await page.getByRole("button", { name: /entrar/i }).click();
+    await expect(page.getByRole("alert")).toBeVisible();
+    await page.reload();
+    await expect(page.locator("#email")).toHaveValue("");
+    await expect(page.getByLabel(/lembrar meu e-mail/i)).not.toBeChecked();
   });
 });

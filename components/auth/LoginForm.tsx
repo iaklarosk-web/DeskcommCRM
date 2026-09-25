@@ -2,10 +2,11 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useTransition, useState } from "react";
+import { useEffect, useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useT } from "@/hooks/i18n/useT";
+import { esquecerEmail, lembrarEmail, lerEmailLembrado } from "@/lib/auth/lembrar-email";
 import { loginSchema, type LoginInput } from "@/lib/auth/schemas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,18 +18,37 @@ export function LoginForm({ next }: { next?: string }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
+  // "Lembrar meu e-mail neste aparelho" (F23): só o e-mail, nunca a senha — ver
+  // lib/auth/lembrar-email.ts. Nasce desmarcado no servidor e no primeiro paint;
+  // o efeito abaixo lê o storage DEPOIS da hidratação, senão o servidor renderiza
+  // vazio e o cliente hidrata preenchido (React #418).
+  const [lembrar, setLembrar] = useState(false);
 
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
 
+  useEffect(() => {
+    const salvo = lerEmailLembrado();
+    if (salvo) {
+      setValue("email", salvo);
+      setLembrar(true);
+    }
+  }, [setValue]);
+
   const onSubmit = (values: LoginInput) => {
     setServerError(null);
+    // Antes de enviar, e não só no sucesso: o sucesso redireciona pelo Server
+    // Action e este componente nunca volta a rodar. Lembrar um e-mail cuja senha
+    // errou é inofensivo; desmarcar apaga na hora.
+    if (lembrar) lembrarEmail(values.email);
+    else esquecerEmail();
     startTransition(async () => {
       // Server Action redirects on success — no return value reaches here.
       // On failure, an error discriminator is returned and rendered inline.
@@ -86,6 +106,16 @@ export function LoginForm({ next }: { next?: string }) {
           <p className="text-xs text-destructive">{t(errors.password.message ?? "")}</p>
         )}
       </div>
+      <label className="flex items-center gap-2 text-sm text-text-muted">
+        <input
+          type="checkbox"
+          name="lembrar"
+          checked={lembrar}
+          onChange={(e) => setLembrar(e.target.checked)}
+          className="size-4 rounded-sm border-border accent-accent"
+        />
+        {t("Lembrar meu e-mail neste aparelho")}
+      </label>
       {serverError && (
         <div
           className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"

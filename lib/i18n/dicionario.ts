@@ -8787,6 +8787,7 @@ export const DICIONARIO: Traducoes = {
   "por mês": { es: "al mes" },
   "dias grátis": { es: "días gratis" },
   "Conhecer os planos": { es: "Conocer los planes" },
+  "Lembrar meu e-mail neste aparelho": { es: "Recordar mi correo en este dispositivo" },
 };
 
 /**
