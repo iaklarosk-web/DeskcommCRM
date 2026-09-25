@@ -287,6 +287,14 @@ const schema = z.object({
   STRIPE_API_BASE: z.string().url().optional().default("https://api.stripe.com"),
   BILLING_TRIAL_DAYS: z.coerce.number().int().min(0).max(90).optional().default(7),
   ADMIN_SUMMARY_TOKEN: z.string().optional().default(""),
+  /**
+   * F24 (Suporte KN): o slug da organização de SUPORTE deste produto. Definida,
+   * a área logada (`/app`) embute o chat do site dela — `/embed/<slug>.js`,
+   * com nome e e-mail de quem está logado pré-preenchidos (identidade
+   * declarada, não autenticada). Vazia = nada muda. Quem a lê é
+   * `slugDoSuporte()` em `app/app/_components/SuporteEmbutido.tsx`.
+   */
+  SUPPORT_WEBCHAT_SLUG: z.string().optional().default(""),
 
   /**
    * Resend — o transporte de TODO e-mail transacional (convite, LGPD, alarme).
