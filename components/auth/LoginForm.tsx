@@ -94,7 +94,7 @@ export function LoginForm({ next }: { next?: string }) {
           {serverError}
         </div>
       )}
-      <Button type="submit" className="w-full" disabled={isPending}>
+      <Button type="submit" size="lg" className="w-full font-bold" disabled={isPending}>
         {isPending ? t("Entrando...") : t("Entrar")}
       </Button>
     </form>

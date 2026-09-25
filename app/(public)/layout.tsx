@@ -1,80 +1,85 @@
+import Link from "next/link";
+
+import { MarcaDaFachada } from "@/components/auth/MarcaDaFachada";
+import { PainelDeApresentacao } from "@/components/auth/PainelDeApresentacao";
+import { branding } from "@/lib/branding";
 import { marcaDaSaida } from "@/lib/branding/saida";
-import { createClient } from "@/lib/supabase/server";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
+import { traduzir } from "@/lib/i18n/dicionario";
+import { normalizarIdioma } from "@/lib/i18n/idiomas";
+import { createClient } from "@/lib/supabase/server";
 
 /**
- * A casca das telas de acesso — login, cadastro, recuperação, MFA.
+ * A casca das telas de acesso — login, cadastro, recuperação, MFA — no molde
+ * dos OS da KN (F23): formulário à esquerda, apresentação do produto à direita
+ * em telas largas, rodapé com os textos legais.
  *
- * ── Por que o LOGO mora aqui, e não em `login/page.tsx` ───────────────────────
+ * ── Por que a MARCA mora aqui, e não em `login/page.tsx` ─────────────────────
  *
- * São seis telas no grupo `(public)`, e todas são "antes de entrar": quem instala
- * o produto para clientes mostra a marca dele exatamente aí. Um `<img>` por
- * página seriam seis cópias que divergem na primeira vez que alguém mexer numa
- * só — e a que ficaria para trás é sempre a que ninguém abre (recuperação de
- * senha, cadastro de MFA), que é justamente onde o cliente do revendedor
- * aparece sozinho e sem contexto.
+ * São seis telas no grupo `(public)`, todas "antes de entrar": quem instala o
+ * produto para clientes mostra a marca dele exatamente aí. Uma cópia por página
+ * seriam seis cópias que divergem na primeira vez que alguém mexer numa só — e a
+ * que ficaria para trás é sempre a que ninguém abre (recuperação de senha,
+ * cadastro de MFA), onde o cliente do revendedor aparece sozinho e sem contexto.
  *
- * ── Por que `marcaDaSaida(null)` ──────────────────────────────────────────────
+ * ── As duas resoluções da marca, de propósito ────────────────────────────────
  *
- * Aqui não existe organização resolvida: `null` é a declaração disso, e a pilha
- * resultante é a mesma do layout raiz (banco acima, `.env` embaixo). Montar a
- * pilha à mão nesta tela faria a fachada anunciar uma precedência que o resto do
- * produto não usa. E `marcaDaSaida` NUNCA lança (ver o cabeçalho dela): uma cor
- * ou um logo mal gravados não podem derrubar a única tela por onde se entra para
- * corrigi-los.
+ * O LOGO vem de `marcaDaSaida(null)`: não há organização resolvida aqui, `null`
+ * é a declaração disso, e a pilha é a mesma do layout raiz (banco acima, `.env`
+ * embaixo). `marcaDaSaida` NUNCA lança: um logo mal gravado não pode derrubar a
+ * única tela por onde se entra para corrigi-lo.
  *
- * O NOME continua saindo de `branding()` dentro de cada página — não é descuido,
- * está medido em `tests/e2e/icone-da-marca.spec.ts:64-77`: aquela spec cruza duas
- * resoluções independentes (o título da aba, que lê o banco, contra o texto sob
- * o "Entrar", que lê o `.env`). Trocar o texto para este mesmo resolvedor
- * deixaria a spec verde medindo nada.
+ * O NOME sai de `branding()` (o `.env`) — não é descuido, está medido em
+ * `tests/e2e/icone-da-marca.spec.ts`: aquela spec cruza o título da aba (que lê
+ * o banco) com o nome na tela (que lê o `.env`). Trocar o texto para o mesmo
+ * resolvedor deixaria a spec verde medindo nada.
+ *
+ * O rodapé diz só "© ano · nome": o produto é instalável por terceiros e não
+ * existe configuração para a razão social de quem opera a instalação.
  */
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
   const marca = await marcaDaSaida(null);
-  // A maioria destas telas roda ANTES do login (não há usuário nenhum), mas
-  // duas — `/login/mfa` e, em parte, `/login/recovery` — rodam com uma sessão
-  // parcial já criada (primeiro fator verificado, segundo pendente). Onde há
-  // sessão, o idioma salvo no perfil vale; sem ela, `IdiomaProvider` já cai no
-  // padrão pt-BR sozinho (ver o cabeçalho do provider) — nunca lança.
+  // A maioria destas telas roda ANTES do login, mas `/login/mfa` e, em parte,
+  // `/login/recovery` rodam com sessão parcial (primeiro fator verificado).
+  // Onde há sessão, o idioma salvo no perfil vale; sem ela, `IdiomaProvider`
+  // cai no padrão pt-BR sozinho — nunca lança.
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   const locale = (user?.user_metadata?.locale as string | undefined) ?? null;
+  const idioma = normalizarIdioma(locale);
+  const t = (texto: string) => traduzir(texto, idioma);
+  const nome = branding().name;
+  const ano = new Date().getFullYear();
 
   return (
     <IdiomaProvider locale={locale}>
-      <div className="flex min-h-screen items-center justify-center bg-background p-6">
-        <div className="w-full max-w-sm space-y-6">
-          {marca.logoUrl && (
-            <div className="flex justify-center">
-              {/*
-                <img> em vez de next/image pelo mesmo motivo da barra lateral: a URL
-                é de quem hospeda e o `next/image` exige allowlist de domínios
-                fechada em BUILD — a imagem pré-buildada do self-host recusaria o
-                domínio do operador. Altura fixa e largura livre para não distorcer
-                arte de proporção desconhecida.
+      <div className="grid min-h-screen bg-background text-foreground lg:grid-cols-[minmax(24rem,0.9fr)_minmax(30rem,1.1fr)]">
+        <section
+          aria-label={t("Acesso à conta")}
+          className="flex min-h-screen flex-col px-6 py-7 sm:px-10 lg:px-14 xl:px-20"
+        >
+          <MarcaDaFachada nome={nome} logoUrl={marca.logoUrl} logoAlt={marca.nome} />
 
-                O `alt` é o nome DESTA resolução (`marca.nome`), e não o de
-                `branding()`: é a legenda da imagem que está ali, e nomeá-la com a
-                marca de outra fonte descreveria uma marca que não é a do logo.
+          <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center py-10">
+            {children}
+          </div>
 
-                O `data-testid` é lido por `tests/e2e/marca-logo.spec.ts`, que prova
-                que o logo da EMPRESA não vaza para cá. Sem ele a spec caía na
-                "primeira <img> da página", e uma asserção de negação com seletor
-                largo passa sozinha assim que outra imagem entra na tela.
-              */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                data-testid="logo-da-fachada"
-                src={marca.logoUrl}
-                alt={marca.nome}
-                className="h-10 w-auto max-w-[12rem] object-contain"
-              />
-            </div>
-          )}
-          {children}
-        </div>
+          <footer className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-text-muted">
+            <span>
+              © {ano} {nome}
+            </span>
+            <Link href="/legal/terms" className="underline underline-offset-4 hover:text-text">
+              {t("Termos")}
+            </Link>
+            <Link href="/legal/privacy" className="underline underline-offset-4 hover:text-text">
+              {t("Privacidade")}
+            </Link>
+          </footer>
+        </section>
+
+        <PainelDeApresentacao idioma={idioma} />
       </div>
     </IdiomaProvider>
   );

@@ -17,8 +17,8 @@ export default async function ResetPasswordPage() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1.5 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">{t("Definir nova senha")}</h1>
+      <div className="space-y-2">
+        <h1 className="text-3xl leading-tight font-bold tracking-tight text-balance sm:text-4xl">{t("Definir nova senha")}</h1>
         <p className="text-sm text-muted-foreground">
           {t("Escolha uma nova senha para sua conta")}
         </p>
