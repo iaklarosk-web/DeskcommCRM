@@ -3,6 +3,10 @@
   Ver o cabeçalho de confirmation.html para o par de cores, para o caminho do
   GoTrue self-hosted (`--render-em`) e para quem faz a substituição.
 
+  Desenho (ADR-049, 25/09/2026): a mesma identidade das telas — faixa marinho com o
+  nome da plataforma, cartão branco sobre areia, botão no accent. Tabelas e estilo
+  em linha porque é e-mail: Gmail descarta <style>, fontes externas e SVG.
+
   `&`, nunca `?`: `.RedirectTo` já chega com `?type=recovery` embutido
   (app/actions/auth/requestPasswordReset.ts) — é o que sobrevive ao hop pelo
   GoTrue quando o link chega via PKCE (`code`) em vez de token_hash.
@@ -11,18 +15,46 @@
   parâmetro (vira parte do valor de `type`), e /auth/confirm redireciona
   pra `/login?error=link_invalido` mesmo com o link correto — medido nas
   specs password-recovery.spec.ts e signup-journey.spec.ts.
+  O botão é o ÚNICO <a> com `.RedirectTo`: tests/unit/link-de-email-tem-uma-query-so
+  lê o primeiro href que o contém. O endereço repetido em texto, mais abaixo, é
+  para quem não consegue clicar (e ajuda o filtro de spam a ver um e-mail inteiro).
 -->
-<html>
-  <body style="font-family: sans-serif; color: #1c1a16; background: #faf9f6; max-width: 480px; margin: 0 auto; padding: 24px;">
-    <h2 style="font-size: 18px;">Redefinir senha</h2>
-    <p>Recebemos um pedido para redefinir a senha da sua conta no __APP_NAME__. Clique no botão abaixo para escolher uma nova senha:</p>
-    <p style="margin: 24px 0;">
-      <a
-        href="{{ .RedirectTo }}&token_hash={{ .TokenHash }}"
-        style="background: #506d48; background: __ACCENT__; color: #ffffff; color: __ACCENT_FG__; padding: 10px 20px; border-radius: 6px; text-decoration: none; display: inline-block;"
-        >Redefinir senha</a
-      >
-    </p>
-    <p style="font-size: 12px; color: #7d786c;">Se você não pediu a redefinição, ignore este e-mail — sua senha atual continua valendo.</p>
+<html lang="pt-BR">
+  <body style="margin: 0; padding: 0; background: #f5f4ef; font-family: -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; color: #15202b;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background: #f5f4ef;">
+      <tr>
+        <td align="center" style="padding: 32px 16px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 520px; background: #ffffff; border: 1px solid #d9d6cc; border-radius: 14px; overflow: hidden;">
+            <tr>
+              <td style="background: #0f1b2d; padding: 18px 28px; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; color: #eef2f6;">__APP_NAME__</td>
+            </tr>
+            <tr>
+              <td style="padding: 28px 28px 8px 28px;">
+                <p style="margin: 0 0 6px 0; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #56606a;">Acesso à sua conta</p>
+                <h1 style="margin: 0; font-size: 22px; line-height: 1.25; font-weight: 700; color: #15202b;">Redefinir senha</h1>
+                <p style="margin: 14px 0 0 0; font-size: 15px; line-height: 1.6; color: #56606a;">Recebemos um pedido para redefinir a senha da sua conta no __APP_NAME__. O botão abaixo abre a tela de nova senha e vale por um tempo limitado.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 20px 28px 8px 28px;">
+                <a href="{{ .RedirectTo }}&token_hash={{ .TokenHash }}" style="background: #0b7374; background: __ACCENT__; color: #ffffff; color: __ACCENT_FG__; display: inline-block; padding: 13px 24px; border-radius: 8px; font-size: 15px; font-weight: 700; text-decoration: none;">Escolher uma nova senha</a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 12px 28px 24px 28px;">
+                <p style="margin: 0; font-size: 12px; line-height: 1.6; color: #7a838c;">Se o botão não abrir, copie e cole este endereço no navegador:</p>
+                <p style="margin: 6px 0 0 0; font-size: 12px; line-height: 1.6; color: #56606a; word-break: break-all;">{{ .RedirectTo }}&amp;token_hash={{ .TokenHash }}</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 16px 28px 24px 28px; border-top: 1px solid #d9d6cc;">
+                <p style="margin: 0; font-size: 12px; line-height: 1.6; color: #7a838c;">Se você não pediu a redefinição, ignore este e-mail: sua senha atual continua valendo e ninguém consegue trocá-la sem este link.</p>
+              </td>
+            </tr>
+          </table>
+          <p style="margin: 16px 0 0 0; font-size: 12px; line-height: 1.6; color: #7a838c;">Você recebeu esta mensagem porque este e-mail está cadastrado no __APP_NAME__ &middot; {{ .SiteURL }}</p>
+        </td>
+      </tr>
+    </table>
   </body>
 </html>
