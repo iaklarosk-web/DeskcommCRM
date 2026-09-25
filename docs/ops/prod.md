@@ -17,7 +17,7 @@ proprietário; o cadastro público está DESLIGADO no GoTrue até lá.
 | Supabase API (kong) | `127.0.0.1:56431` (e o IP do Tailscale) |
 | Postgres | `127.0.0.1:56432` (e o IP do Tailscale), usuário `postgres` |
 | WhatsApp | container `crm-prod-waha` (WAHA real, sem número pareado — D12-4) |
-| E-mail | Resend: GoTrue por SMTP (`smtp.resend.com:587`), app pela API |
+| E-mail | Resend: GoTrue por SMTP (`smtp.resend.com:587`), app pela API. Modelos com `token_hash` em `/srv/prod/crm/email/` (renderizados por `hostgator-setup-kit/marca-emails.sh --render-em`, servidos pelo Caddy em `/email/`); allow list do GoTrue com `**` — ver "Links dos e-mails de acesso" abaixo |
 | Sentry | DSN próprio (`SENTRY_DSN` no env); sem DSN = desligado (§B11) |
 | Volumes | `crm-prod_prod-db`, `crm-prod_prod-storage`, `crm-prod_waha-data`, `crm-prod_waha-media` |
 | Arquivos gerados | `.prod/` (não versionado): `kong.yml` com chaves, árvore do build do app |
@@ -187,3 +187,39 @@ eventos param de chegar e as assinaturas ficam sem sincronizar).
 Texto no BUILD-STATE: `BLOCKER-PROD: liberado por <nome> em <data>, sha <hash>`.
 Só então: `GOTRUE_DISABLE_SIGNUP: "false"` no compose (por ADR), `up.sh`, e o
 tenant Deka real pelo painel do dono (D04: aceite escrito do risco de ban).
+
+## Links dos e-mails de acesso (recuperar senha, confirmar cadastro) — 25/09/2026
+
+**O defeito.** O app pede `redirectTo` com query (`/auth/confirm?type=recovery`,
+`?type=signup`) e o GoTrue compara com `GOTRUE_URI_ALLOW_LIST` por glob: a entrada
+exata `…/auth/confirm` não casa, o redirect é descartado e o link do e-mail volta
+para a raiz do site — onde `/` manda para `/app` e o código se perde. O e-mail
+chegava (`jornada-email.sh` verde) e a pessoa caía em `/login` sem sessão.
+
+**O conserto, em três partes:**
+
+1. `compose.prod.yml`: `GOTRUE_URI_ALLOW_LIST` com `**` e
+   `GOTRUE_MAILER_TEMPLATES_{RECOVERY,CONFIRMATION}` apontando para
+   `${NEXT_PUBLIC_APP_URL}/email/*.html`. O GoTrue relê o env ao recriar o serviço:
+   `docker compose -f compose.prod.yml --env-file /srv/secrets/crm-prod.env -p crm-prod up -d --no-deps auth`.
+2. Modelos renderizados, com o nome e a cor do produto:
+   `APP_NAME="CRM OS" APP_ACCENT_HEX="#0b7374" bash hostgator-setup-kit/marca-emails.sh --render-em /tmp/crm-email`
+   e depois `sudo install -d /srv/prod/crm/email && sudo install -m 644 /tmp/crm-email/*.html /srv/prod/crm/email/`.
+3. Caddy: dentro do bloco `crm.kntecnologia.app`, antes do `handle { reverse_proxy 127.0.0.1:3300 }`:
+   ```
+   handle_path /email/* {
+       root * /srv/prod/crm/email
+       file_server
+   }
+   ```
+   e `sudo caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy`.
+
+**Prova:** `curl -sI ${NEXT_PUBLIC_APP_URL}/email/recovery.html` → 200;
+`bash scripts/prod/jornada-email.sh` → e-mail ao proprietário cujo link tem
+`token_hash=` e leva a `/login/reset`.
+
+**Senha do proprietário.** `OWNER_PASSWORD` em `/srv/secrets/crm-prod.env` é a senha
+real (o `prova.sh` entra com ela). Trocar: `segredo crm-prod.env OWNER_PASSWORD` e
+`bash scripts/prod/bootstrap-owner.sh` — o script passa o valor por `-e` ao container
+porque `compose exec` herda o ambiente de quando o container foi CRIADO (o defeito de
+25/09: regravou a senha antiga).

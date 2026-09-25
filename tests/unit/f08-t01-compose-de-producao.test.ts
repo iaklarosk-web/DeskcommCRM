@@ -114,13 +114,24 @@ describe("F08-T01 — compose.prod.yml: sem dublê, sem porta pública, com teto
     expect(achados, achados.join("\n")).toEqual([]);
   });
 
-  it("GoTrue manda e-mail pela Resend por SMTP e, com o BLOCKER-PROD aberto, mantém o cadastro público desligado (D13)", () => {
+  it("GoTrue manda e-mail pela Resend por SMTP, com cadastro público ABERTO (D13 revogado em d53a0273c) e links que fecham", () => {
     const e = env("auth");
     expect(e.GOTRUE_SMTP_HOST).toBe("smtp.resend.com");
     expect(e.GOTRUE_SMTP_USER).toBe("resend");
     expect(e.GOTRUE_SMTP_PASS).toBe("${RESEND_API_KEY}");
     expect(e.GOTRUE_SMTP_ADMIN_EMAIL).toBe("${RESEND_FROM_EMAIL}");
-    expect(e.GOTRUE_DISABLE_SIGNUP).toBe("true");
+    // D13 foi revogado pelo proprietário em 25/09/2026 (d53a0273c): cadastro aberto.
+    expect(e.GOTRUE_DISABLE_SIGNUP).toBe("false");
+    // Os links dos e-mails só fecham se (1) o redirect com query for aceito — o app
+    // pede `/auth/confirm?type=…` e o GoTrue compara por glob — e (2) o modelo levar
+    // `token_hash` direto para /auth/confirm, sem depender do navegador que pediu.
+    expect(e.GOTRUE_URI_ALLOW_LIST).toBe(
+      "${NEXT_PUBLIC_APP_URL}/auth/confirm**,${NEXT_PUBLIC_APP_URL}/auth/callback**",
+    );
+    expect(e.GOTRUE_MAILER_TEMPLATES_RECOVERY).toBe("${NEXT_PUBLIC_APP_URL}/email/recovery.html");
+    expect(e.GOTRUE_MAILER_TEMPLATES_CONFIRMATION).toBe(
+      "${NEXT_PUBLIC_APP_URL}/email/confirmation.html",
+    );
     expect(e.API_EXTERNAL_URL).toBe("${NEXT_PUBLIC_APP_URL}/auth/v1");
     expect(e.GOTRUE_SITE_URL).toBe("${NEXT_PUBLIC_APP_URL}");
   });

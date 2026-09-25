@@ -117,7 +117,13 @@ services:
       GOTRUE_DB_DRIVER: postgres
       GOTRUE_DB_DATABASE_URL: postgresql://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres
       GOTRUE_SITE_URL: ${NEXT_PUBLIC_APP_URL}
-      GOTRUE_URI_ALLOW_LIST: ${NEXT_PUBLIC_APP_URL}/auth/confirm,${NEXT_PUBLIC_APP_URL}/auth/callback
+      # `**` e não a URL exata: o app pede `redirectTo` COM query
+      # (`/auth/confirm?type=recovery`, requestPasswordReset.ts; `?type=signup`,
+      # signUp.ts) e o GoTrue compara por glob — a entrada exata não casa, ele
+      # descarta o redirect e manda o link para a raiz do site, onde `/`
+      # redireciona para `/app` e o código se perde. Medido em 25/09/2026: o
+      # e-mail de recuperação chegava e o link caía em /login sem sessão.
+      GOTRUE_URI_ALLOW_LIST: ${NEXT_PUBLIC_APP_URL}/auth/confirm**,${NEXT_PUBLIC_APP_URL}/auth/callback**
       # D13: enquanto o BLOCKER-PROD estiver aberto, o cadastro público
       # (`/signup`, F11) fica DESLIGADO no GoTrue — ninguém de fora cria conta
       # nem recebe e-mail desta instalação. Convites do dono passam pela API
@@ -138,6 +144,16 @@ services:
       GOTRUE_MAILER_URLPATHS_RECOVERY: ${NEXT_PUBLIC_APP_URL}/auth/v1/verify
       GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: ${NEXT_PUBLIC_APP_URL}/auth/v1/verify
       GOTRUE_MAILER_SUBJECTS_RECOVERY: "Redefinir senha"
+      # Modelos com `token_hash` (supabase/templates/*.html, renderizados por
+      # `hostgator-setup-kit/marca-emails.sh --render-em` e servidos pelo Caddy em
+      # /email/ a partir de /srv/prod/crm/email — ver docs/ops/prod.md). Sem eles
+      # o GoTrue usa o modelo padrão, cujo link passa por /auth/v1/verify e volta
+      # com `code` (PKCE): só fecha no MESMO navegador que pediu. Com token_hash,
+      # `app/auth/confirm/route.ts` verifica direto e o link vale em qualquer
+      # aparelho — é o fluxo que password-recovery.spec.ts e signup-journey.spec.ts
+      # medem e o que o kit de hospedagem (hostgator-setup-kit/marca-emails.sh) usa.
+      GOTRUE_MAILER_TEMPLATES_RECOVERY: ${NEXT_PUBLIC_APP_URL}/email/recovery.html
+      GOTRUE_MAILER_TEMPLATES_CONFIRMATION: ${NEXT_PUBLIC_APP_URL}/email/confirmation.html
       # E-mail de autenticação (confirmação, convite, recuperação) pela Resend,
       # por SMTP: usuário fixo `resend`, senha = a chave da API (D12-5).
       GOTRUE_SMTP_HOST: smtp.resend.com

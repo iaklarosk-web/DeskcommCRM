@@ -23,7 +23,17 @@ ORG_NAME=$(prod_env OWNER_ORG_NAME)
   || { echo "==> OWNER_EMAIL/OWNER_PASSWORD/OWNER_ORG_NAME vazios em $PROD_ENV_FILE" >&2; exit 1; }
 
 echo "==> bootstrap do dono dentro do container do worker (env resolvido pelo compose)"
-"${PROD_COMPOSE[@]}" exec -T -w /app worker sh -c \
+# `-e` com os valores LIDOS AGORA do arquivo de segredos: `compose exec` entra num
+# container que já existe, e o ambiente dele é o de quando foi CRIADO. Medido em
+# 25/09/2026: o proprietário trocou OWNER_PASSWORD no arquivo, rodou este script
+# e o GoTrue regravou a senha ANTIGA (24 chars, a do container) — a nova (8 chars)
+# ficou só no arquivo, e a tela dizia "incorreta". Sem o `-e`, este script só
+# funciona enquanto ninguém mudou nada desde o último `up.sh`.
+"${PROD_COMPOSE[@]}" exec -T -w /app \
+  -e OWNER_EMAIL="$(prod_env OWNER_EMAIL)" \
+  -e OWNER_PASSWORD="$(prod_env OWNER_PASSWORD)" \
+  -e OWNER_ORG_NAME="$ORG_NAME" \
+  worker sh -c \
   'TSX_TSCONFIG_PATH=/app/tsconfig.json node --import /app/node_modules/tsx/dist/loader.mjs /app/scripts/bootstrap-owner.ts' \
   | sed -E 's/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/<uuid>/g'
 
