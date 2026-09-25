@@ -1,0 +1,42 @@
+# Evidência de construção — F23 (identidade visual própria, ADR-049)
+# 2026-09-25, branch feat/F23-identidade-visual (base d53a0273c), worktree crm-identidade-visual
+# SEM gate verify.sh: a produção subiu por ordem do proprietário no mesmo dia (up.sh 13:10–13:26,
+# backup prod-20260925T161014Z.dump antes, 14/14 serviços, sha f53aa244e). READY (staging) pendente.
+
+## O que este PR faz
+Tela de entrar no molde dos OS da KN (formulário + painel de apresentação), paleta
+"Marinho & Turquesa" em todo o sistema pelos tokens, trilho lateral escuro nos dois
+temas, marca no padrão dos OS (símbolo + nome, "OS" em acento), e-mails de acesso com
+a identidade nova. De carona: links dos e-mails de recuperação/confirmação passam a
+fechar (allow list do GoTrue com `**` + modelos `token_hash`), e o bootstrap do dono
+lê a senha do arquivo em vez do ambiente congelado do container.
+
+## Commits
+269bd60f9 feat(F23): tela de entrar no molde dos OS da KN
+4f1e3c9aa feat(F23): paleta Marinho & Turquesa e trilho escuro em todo o sistema (ADR-049)
+c83dabdbd fix(F23): painel da fachada síncrono; réguas da casca pública remedidas
+32cfc353d fix(auth): links de e-mail que fecham e bootstrap do dono com env fresco
+f53aa244e feat(email): modelos de recuperar senha e confirmar cadastro com a identidade nova
+
+## Medido
+typecheck: ok (com o dev server parado)
+eslint: 0 erros nos arquivos tocados (2 avisos pré-existentes em TOTPInput/Sidebar)
+unit (suíte completa, 1108 s): 6326/6331 → as 4 reprovas da casca pública consertadas em c83dabdbd;
+  a 5ª (f08-t01: GOTRUE_DISABLE_SIGNUP) era o D13 revogado em d53a0273c, remedida em 32cfc353d
+unit (branding, tokens, régua, tema-claro-escopável, i18n, e2e-cobertura, wordmark, preço): 193/193
+régua de contraste (extrairRegua sobre o globals.css novo): 6 papéis/tema, 18 pares claro + 26 escuro, 0 reprovas
+  accent×bg 5,13 · foco×bg 3,53 · foco×elevada 3,20 (eram 5,51 · 3,79 · 3,60 na Sage)
+mutante 93 (sufixo OS sem exigir espaço): morto 1/1
+e2e contra next dev + Supabase do staging: f23-entrada-molde-da-casa 2/2, icone-da-marca 3/3, auth 4/4,
+  navegacao 11/13 (as 2 estouraram tempo no dev server; remedidas direto: menu 1280×900 rola=false,
+  títulos fora=0 nos dois temas; /app/settings/tenant/pipelines responde 200 com h1 "Etapas do funil")
+capturas: login/signup/forgot 1440/1024/390 × claro/escuro sem rolagem horizontal; /app, /app/inbox,
+  gaveta do celular nos dois temas
+recuperação de senha: provada pelo proprietário na produção (e-mail chegou — no spam — e o link abriu /login/reset)
+produção após o deploy: health 200, título "Entrar · CRM OS", casca nova servida; acento vermelho porque
+  platform_branding.accent_hex=#fa0000 (marca da instalação, 15/09) vence a paleta por desenho
+
+## Não verificado
+verify.sh completo (gate READY (staging)); next build só pelo up.sh; password-recovery.spec contra esta
+casca (a spec espera o Mailpit da CLI local); BUILD-STATE e inventário de telas não atualizados (sessão
+paralela da F22 no repo principal); capturas de referência de f22-visual-telas vão mudar de propósito.
