@@ -1,0 +1,14 @@
+app
+lib
+src
+workers
+scripts
+supabase
+hooks
+components
+proxy.ts
+instrumentation.ts
+instrumentation-client.ts
+next.config.ts
+sentry.server.config.ts
+sentry.edge.config.ts

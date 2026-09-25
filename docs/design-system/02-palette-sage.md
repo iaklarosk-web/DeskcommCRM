@@ -1,6 +1,23 @@
-# 02 — Paleta Sage
+# 02 — Paleta
 
-> **Source of truth:** `app/design/lib/tokens.ts` → `PALETTES.sage`
+> **Source of truth:** `app/design/lib/tokens.ts` → `PALETTES.marinho` (a do produto desde 25/09/2026, ADR-049) e `PALETTES.sage` (a herança do Deskcomm, descrita abaixo).
+
+## Marinho & Turquesa — a paleta do CRM OS (ADR-049)
+
+Tinta azul-marinho, neutros areia no claro e marinho no escuro, turquesa como cor de ação. A estrutura é a mesma da Sage (11 paradas de accent por `rampaDeSemente`, dois temas desenhados separadamente, mesmos estados), então tudo o que este documento diz sobre USO de cada parada continua valendo — só os hex mudaram. Os valores vigentes estão em `app/globals.css` (blocos `:root` e `[data-theme="dark"]`) e em `PALETTES.marinho`; a régua de contraste (`lib/branding/regua-do-produto.ts`) é regenerada a partir do CSS.
+
+| Papel | Claro | Escuro |
+|---|---|---|
+| Fundo · superfície · elevada | `#f5f4ef` · `#ffffff` · `#ebe9e1` | `#0b141f` · `#121e2c` · `#1a2838` |
+| Texto · apoio · sutil | `#15202b` · `#56606a` · `#7a838c` | `#eef2f6` · `#a7b3c2` · `#6f7f91` |
+| Accent (parada) | `#0b7374` (600) | `#4da7a7` (400) |
+| Trilho lateral | `#0f1b2d`, nos dois temas (`[data-trilho="escuro"]`) | idem |
+
+Medido pela régua do produto: accent sobre fundo 5,13:1 no claro; anel de foco 3,53:1; zero reprovas nos 44 pares dos dois temas.
+
+---
+
+## Paleta Sage — a herança do Deskcomm (histórico)
 
 ## Filosofia da paleta
 

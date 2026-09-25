@@ -1,10 +1,11 @@
+import { requireSupportWrite } from "@/lib/impersonate/support";
+import { getRequestId } from "@/lib/api/request-id";
 /**
  * GET  /api/v1/contacts — list (handler em ./_handler.ts)
  * POST /api/v1/contacts — create (handler em ./_handler.ts)
  *
  * Thin wrapper: auth + Zod + ok/fail. Lógica em listContactsHandler/createContactHandler.
  */
-import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 
 import { ApiError } from "@/lib/api/types";
@@ -19,13 +20,15 @@ import {
   type ContactCreate,
 } from "@/lib/schemas";
 import { createClient } from "@/lib/supabase/server";
+import { validarCamposDa } from "@/src/crm/campos";
+import { ctxDaRota } from "@/src/crm/permissao-da-rota";
 
 import { listContactsHandler, createContactHandler } from "./_handler";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest): Promise<Response> {
-  const requestId = randomUUID();
+  const requestId = getRequestId(req);
   const supabase = await createClient();
   const {
     data: { user },
@@ -77,7 +80,10 @@ export async function GET(req: NextRequest): Promise<Response> {
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
-  const requestId = randomUUID();
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
+
+  const requestId = getRequestId(req);
   const supabase = await createClient();
   // spec 13 §4: escrita é agent+ (viewer é read-only).
   const authz = await requireRole("agent", { requestId, resource: "contacts" });
@@ -96,6 +102,16 @@ export async function POST(req: NextRequest): Promise<Response> {
       });
     }
     throw err;
+  }
+  // F13-T01 (ADR-034): o valor dos campos configuráveis do contato passa pelo
+  // validador único (definições de `crm.fields.contacts`); chave sem definição
+  // é preservada — apagar uma definição não apaga o valor gravado.
+  if (input.custom_fields !== undefined) {
+    const campos = await validarCamposDa(ctxDaRota(authz), "contacts", input.custom_fields);
+    if (!campos.ok) {
+      return fail("custom_field_invalid", "Campos personalizados inválidos.", 422, { requestId, details: { erros: campos.erros } });
+    }
+    input = { ...input, custom_fields: campos.valores };
   }
 
   try {

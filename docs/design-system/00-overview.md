@@ -39,6 +39,7 @@ Leia 00 → 09 sequencial uma vez. Depois consulte por demanda via tabela do `RE
 ## Versionamento
 
 - **v1.0 — locked em 2026-04-28.** As 5 escolhas (Sage, Atkinson, Aerada, Phosphor, IBM Plex Mono) estão fechadas até v2.0. PRs que tentem trocar uma delas precisam de RFC.
+- **v1.1 — 2026-09-25.** A paleta trocou por decisão do proprietário, registrada em `docs/decisions/ADR-049-F23-identidade-visual-propria.md` (o RFC que esta linha pedia): Sage → Marinho & Turquesa. As outras quatro escolhas seguem fechadas.
 - Patches são aceitos para: novos ícones, novos exemplos de microcopy, ajustes de hex em ±2 pontos de luminosidade quando WCAG falhar, novos componentes derivados.
 - Histórico de mudanças vai em `CHANGELOG.md` quando houver primeira mudança.
 

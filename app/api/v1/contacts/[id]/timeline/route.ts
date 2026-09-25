@@ -17,11 +17,12 @@
  * as duas dividem as peças de `lib/leads/timeline-query.ts` e divergem só na
  * cláusula, que é justamente onde a diferença mora.
  */
-import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
+import { getRequestId } from "@/lib/api/request-id";
+import { z } from "zod";
 
 import { ok, fail } from "@/lib/api/wrappers";
-import { loadAuthUser } from "@/lib/auth/server";
+import { requireRole } from "@/lib/auth/require-role";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
 import type { TimelineItem } from "@/lib/types/contacts";
@@ -39,19 +40,21 @@ export async function GET(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const requestId = randomUUID();
-  const { id: contactId } = await ctx.params;
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: authErr,
-  } = await supabase.auth.getUser();
-  if (authErr || !user) {
-    return fail("unauthenticated", "Auth required.", 401, { requestId });
+  const requestId = getRequestId(req);
+  const authz = await requireRole("viewer", {
+    requestId,
+    resource: "crm_lead_activities",
+  });
+  if (!authz.ok) return authz.response;
+  const t = (texto: string) => traduzir(texto, authz.user.idioma);
+  const contactId = z.uuid().safeParse((await ctx.params).id);
+  if (!contactId.success) {
+    return fail("validation_failed", t("Parâmetros inválidos."), 422, {
+      requestId,
+    });
   }
-  const authUser = await loadAuthUser();
-  const t = (texto: string) => traduzir(texto, authUser?.idioma ?? "pt-BR");
+  const organizationId = authz.org.orgId;
+  const supabase = await createClient();
 
   const url = new URL(req.url);
   const types = url.searchParams.getAll("type").filter(Boolean);
@@ -67,11 +70,12 @@ export async function GET(
     }
   }
 
-  // Verify contact accessible (RLS will filter); 404 if not.
+  // A associação a outra organização não muda a organização ativa da rota.
   const { data: contactRow, error: cErr } = await supabase
     .from("contacts")
     .select("id")
-    .eq("id", contactId)
+    .eq("organization_id", organizationId)
+    .eq("id", contactId.data)
     .maybeSingle();
   if (cErr) return fail("internal_error", cErr.message, 500, { requestId });
   if (!contactRow) return fail("not_found", t("Contato não encontrado."), 404, { requestId });
@@ -80,7 +84,8 @@ export async function GET(
   const { data: leadRows, error: lErr } = await supabase
     .from("crm_leads")
     .select("id")
-    .eq("contact_id", contactId);
+    .eq("organization_id", organizationId)
+    .eq("contact_id", contactId.data);
   if (lErr) return fail("internal_error", lErr.message, 500, { requestId });
 
   const leadIds = (leadRows ?? []).map((r) => (r as { id: string }).id);
@@ -93,6 +98,7 @@ export async function GET(
     let q = supabase
       .from("crm_lead_activities")
       .select(TIMELINE_COLS)
+      .eq("organization_id", organizationId)
       .order("performed_at", { ascending: false })
       .order("id", { ascending: false })
       .limit(FETCH);
@@ -107,9 +113,11 @@ export async function GET(
     return q;
   };
 
-  const directQ = buildQuery("contact_id", contactId);
+  const directQ = buildQuery("contact_id", contactId.data);
   const leadQ =
-    leadIds.length > 0 ? buildQuery("lead_id", leadIds) : Promise.resolve({ data: [], error: null });
+    leadIds.length > 0
+      ? buildQuery("lead_id", leadIds)
+      : Promise.resolve({ data: [], error: null });
 
   const [directRes, leadRes] = await Promise.all([directQ, leadQ]);
 
@@ -148,9 +156,7 @@ export async function GET(
   const page = await comNomeDoAtor(supabase, pageRows);
   const last = page[page.length - 1];
   const nextCursor =
-    hasMore && last
-      ? encodeCursor({ performed_at: last.performed_at, id: last.id })
-      : null;
+    hasMore && last ? encodeCursor({ performed_at: last.performed_at, id: last.id }) : null;
 
   return ok(page, {
     requestId,

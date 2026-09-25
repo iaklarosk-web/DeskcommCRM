@@ -66,7 +66,10 @@ function payload(patch: Partial<ExportPayload> = {}): ExportPayload {
     appointments: [],
     tasks: [],
     webhook_captures: [],
+    webchat_sessions: [],
     audit_log_extract: [],
+    meeting_deliveries: [],
+    appointment_notices: [],
     ...patch,
   };
 }

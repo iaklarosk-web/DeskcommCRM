@@ -14,7 +14,13 @@ export const PUBLIC_PATHS: RegExp[] = [
   /^\/503$/,
   /^\/api\/v1\/health$/,
   /^\/api\/v1\/webhooks\//,
+  // (O webhook do gateway de cobrança, F12-T03, mora em /api/v1/webhooks/billing-mock
+  // e entra pela linha acima: a autoridade é a assinatura HMAC conferida
+  // DENTRO da rota, `src/billing/webhook-mock.ts`.)
   /^\/api\/v1\/cron\//,
+  // F19 (ADR-042 §5): o cockpit da KN, `Authorization: Bearer ADMIN_SUMMARY_TOKEN`
+  // conferido DENTRO da rota, em tempo constante — sem cookie, como /cron/.
+  /^\/api\/admin\/summary$/,
   // Heartbeat do agente do host (bearer INTERNAL_SECRET/INTERNAL_CRON_SECRET,
   // checado dentro da própria rota) — sem cookie de sessão, igual /cron/.
   /^\/api\/v1\/system\/agent$/,
@@ -37,6 +43,18 @@ export const PUBLIC_PATHS: RegExp[] = [
   // qualquer sub-path futuro nascer público de carona.
   /^\/api\/v1\/agenda\/google\/callback$/,
   /^\/api\/v1\/integrations\/nuvemshop\/callback$/,
+  // A VOLTA DO CHECKOUT DO STRIPE (F19): mesma natureza — navegação cross-site
+  // sem o cookie Strict; a ponte responde 200 e navega do nosso origin. Não
+  // lê sessão nem escreve nada (quem ativa é o webhook, D38). Ancorada.
+  /^\/api\/v1\/billing\/retorno$/,
+  // CHAT DO SITE (F14, ADR-038): o visitante não tem cookie de sessão. A
+  // autoridade é o token da sessão do visitante, conferido DENTRO das rotas
+  // (`app/api/public/webchat/[slug]/_comum.ts`); a página e o script de embed
+  // são públicos por natureza — vivem no site do cliente. Ancorados: um
+  // sub-path novo de /chat ou /embed não nasce público de carona.
+  /^\/api\/public\/webchat\/[a-z0-9-]+\/(session|identify|messages)$/,
+  /^\/chat\/[a-z0-9-]+$/,
+  /^\/embed\/[a-z0-9-]+\.js$/,
   /^\/api\/internal\//,
   /^\/api\/mcp(\/.*)?$/,
   /^\/_next\//,
@@ -50,6 +68,9 @@ export const PUBLIC_PATHS: RegExp[] = [
   /^\/icon$/,
   /^\/manifest\.webmanifest$/,
   /^\/team\/accept-invite\/.+$/,
+  // F20 (D59): o link curto do convite. Rota pública pelo mesmo motivo da irmã
+  // acima — quem é convidado pode ainda não ter conta —, com o mesmo teto por IP.
+  /^\/i\/[A-Za-z0-9_-]{16,64}$/,
   /^\/account-suspended$/,
   // Documentos legais. O checkbox obrigatório de `/onboarding/welcome` linka os
   // dois, e o aceite acontece antes de a pessoa ter qualquer coisa no sistema —

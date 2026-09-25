@@ -28,7 +28,8 @@ function loadEnv(): Record<string, string> {
     if (!fs.existsSync(p)) continue;
     for (const line of fs.readFileSync(p, "utf8").split("\n")) {
       const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-      if (m && !out[m[1]!]) out[m[1]!] = m[2]!.replace(/^"(.*)"$/, "$1");
+      // Aspas duplas E simples (ADR-032 §3): o `segredo` da casa grava NOME='valor'.
+      if (m && !out[m[1]!]) out[m[1]!] = m[2]!.replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1");
     }
   }
   return out;

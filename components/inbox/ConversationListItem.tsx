@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { OwnerBadge } from "@/components/kanban/OwnerBadge";
 import { comandoDaConversa } from "@/lib/inbox/comando-da-conversa";
+import { rotuloDoEstadoD16 } from "@/lib/inbox/estado-d16";
 import { cn } from "@/lib/utils";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
@@ -124,7 +125,9 @@ export function ConversationListItem({
   const t = useT();
   const c = conversation.contacts ?? null;
   const displayName = rotuloDoContato(c, t);
-  const phoneFallback = c?.phone_number ? phoneForDisplay(c.phone_number) : "??";
+  // Sem telefone (visitante do chat do site identificado por e-mail, F14), o
+  // e-mail é o que identifica a pessoa — "??" só quando não há nada.
+  const phoneFallback = c?.phone_number ? phoneForDisplay(c.phone_number) : (c?.email ?? "??");
   const tags = c?.tags ?? [];
   const visibleTags = tags.slice(0, 2);
   const overflow = tags.length - visibleTags.length;
@@ -161,7 +164,18 @@ export function ConversationListItem({
   const canal = conversation.channel_sessions ?? null;
   const rotuloCanal = canal?.phone_number ?? canal?.display_name ?? null;
 
+  /**
+   * O ESTADO D16 NA LINHA (F03-T09, §7.4: "estado exibido na lista").
+   *
+   * Diferente dos outros selos desta linha, ele NÃO tem a regra do "só quando
+   * discrimina": o estado é o que muda a cada ação do atendente, e é justamente
+   * a coluna que a prova desta task acompanha. Ausente (resposta em cache antiga)
+   * some, em vez de imprimir um token cru.
+   */
+  const rotuloDoEstado = rotuloDoEstadoD16(conversation.saas_state);
+
   const temSelos =
+    rotuloDoEstado !== null ||
     visibleTags.length > 0 ||
     (mostrarAtendente && comando.quem === "humano") ||
     (mostrarCanal && rotuloCanal != null) ||
@@ -176,7 +190,7 @@ export function ConversationListItem({
       className={cn(
         "group relative flex w-full items-start gap-3 border-b border-border/70 px-3 py-2.5 text-left transition-colors hover:bg-surface-elevated",
         "focus-visible:outline-hidden focus-visible:bg-surface-elevated",
-        isSelected && "bg-accent-50 hover:bg-accent-50",
+        isSelected && "bg-accent-soft hover:bg-accent-soft",
       )}
       aria-current={isSelected ? "true" : undefined}
     >
@@ -257,6 +271,15 @@ export function ConversationListItem({
 
         {temSelos && (
           <div className="mt-1.5 flex flex-wrap items-center gap-1">
+            {rotuloDoEstado && (
+              <Badge
+                variant="outline"
+                data-testid="estado-d16"
+                className="h-4 px-1.5 text-[10px] font-normal"
+              >
+                {t(rotuloDoEstado)}
+              </Badge>
+            )}
             {visibleTags.map((t) => (
               <Badge key={t} variant="secondary" className="h-4 px-1.5 text-[10px]">
                 {t}

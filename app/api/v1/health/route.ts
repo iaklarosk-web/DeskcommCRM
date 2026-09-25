@@ -27,6 +27,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
 import { alvoDe, classificarFalhaDeAlcance, type FalhaDeAlcance } from "@/lib/net/alcance";
 import { validarConfigRedisRest } from "@/lib/redis-config";
+import { registrarRequisicaoDe } from "@/src/obs/log";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -262,6 +263,8 @@ function semAlvo(check: Check): Check {
 }
 
 export async function GET(req: NextRequest) {
+  // F06-T01: a rota global de saúde também loga, sem organização por desenho.
+  registrarRequisicaoDe(req, { scope: "health", outcome: "allowed" });
   const [supabase, redis, waha] = await Promise.all([
     checkSupabase(),
     checkRedis(),

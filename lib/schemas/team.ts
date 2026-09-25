@@ -6,6 +6,7 @@
  * with the DB constraint when adding/removing roles.
  */
 import { z } from "zod";
+import { interfaceSettingsSchema, interfaceTemDestino } from "@/lib/navigation/interface";
 
 export const ROLES = ["viewer", "agent", "manager", "admin"] as const;
 export type Role = (typeof ROLES)[number];
@@ -13,15 +14,37 @@ export type Role = (typeof ROLES)[number];
 export const inviteMemberSchema = z.object({
   invitations: z
     .array(
-      z.object({
-        email: z.string().email(),
-        role: z.enum(ROLES),
-      }),
+      z
+        .object({
+          email: z.string().email(),
+          role: z.enum(ROLES),
+          interface_settings: interfaceSettingsSchema.optional(),
+        })
+        .refine((v) => !v.interface_settings || interfaceTemDestino(v.interface_settings, v.role), {
+          message: "Selecione ao menos uma área permitida ao papel.",
+          path: ["interface_settings"],
+        }),
     )
     .min(1)
     .max(20),
 });
 export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;
+
+/**
+ * F20-T03: o convite emitido pelo painel do dono (`/admin/tenants/<id>/invites`)
+ * — um e-mail e um papel. A organização vem da ROTA, nunca do corpo.
+ */
+export const adminInviteSchema = z.object({
+  email: z.string().trim().toLowerCase().email(),
+  role: z.enum(["viewer", "agent", "manager", "admin"]),
+});
+export type AdminInviteInput = z.infer<typeof adminInviteSchema>;
+
+/** F21 (ADR-048): mudar o papel de um membro pelo painel do dono. */
+export const adminMudarPapelSchema = z.object({
+  role: z.enum(["viewer", "agent", "manager", "admin"]),
+});
+export type AdminMudarPapelInput = z.infer<typeof adminMudarPapelSchema>;
 
 export const acceptInviteSchema = z.object({
   token: z.string().min(20),

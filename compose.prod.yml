@@ -1,0 +1,550 @@
+# compose.prod.yml — a PRODUÇÃO INICIAL do CRM OS nesta VPS (F08-T02, D52, ADR-032).
+#
+# ═══ O QUE É ═══
+#
+# O segundo stack do produto nesta máquina, ao lado do staging
+# (`compose.staging.yml`, ADR-028): projeto `crm-prod`, portas 3300/56431/56432,
+# volumes, rede e segredos PRÓPRIOS (`/srv/secrets/crm-prod.env`). A receita do
+# Supabase local é a MESMA do staging (imagens, inicialização do banco, kong na
+# frente) — o que muda é o que a produção precisa e o staging não:
+#
+#   - provedores REAIS: IA (`AI_PROVIDER=anthropic`, chat pela Anthropic e
+#     embedding pela OpenAI), e-mail (Resend — o GoTrue manda por SMTP e o
+#     app pela API), Sentry com DSN próprio, WhatsApp pelo container `waha`
+#     de verdade (sem número pareado até o proprietário decidir — D12-4);
+#   - SEM mailpit e SEM `waha-mock`: um dublê que responde 200 num ambiente
+#     chamado produção é dado de mentira;
+#   - domínio: `https://crm.kntecnologia.app` pelo Caddy do HOST (F08-T03),
+#     que serve o app em 3300 e os caminhos do Supabase (`/auth/v1`, `/rest/v1`,
+#     `/storage/v1`, `/realtime/v1`) no kong em 56431 — um domínio, um
+#     certificado, nada do stack escuta na interface pública.
+#
+# ═══ O QUE NÃO É ═══
+#
+# Não é produção LIBERADA (D13): o BLOCKER-PROD continua aberto até o
+# proprietário escrever a liberação; nenhum tenant real nasce aqui antes disso.
+# Cobrança continua com o gateway MOCK (D52: Stripe em fase posterior) — as
+# assinaturas nascem `active/operator` pelo painel do dono.
+#
+# ═══ COMO SOBE ═══
+#
+#   scripts/prod/secrets.sh      # completa o env de segredos (idempotente por chave)
+#   scripts/prod/up.sh           # build do app no host, sobe tudo, aplica o baseline
+#   scripts/prod/bootstrap-owner.sh   # o platform_admin real (F08-T04), dentro do container
+#   scripts/prod/status.sh / down.sh / backup.sh / restore.sh / prova.sh
+#
+# Segredos: `/srv/secrets/crm-prod.env` (root:klarosk 640), lido por
+# `--env-file` e `env_file`. Nunca em chat, commit ou log. `docs/ops/prod.md`
+# é o runbook. `mem_limit` em todo serviço: a VPS (4c/16 GB, swap off) é
+# dividida com o staging e com outros projetos.
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-supabase-db-url: &supabase-db-url postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
+
+services:
+  # ─── Supabase local ────────────────────────────────────────────────────────
+  db:
+    image: public.ecr.aws/supabase/postgres:15.8.1.085
+    container_name: crm-prod-db
+    restart: unless-stopped
+    mem_limit: 768m
+    ports:
+      - "127.0.0.1:56432:5432"
+      - "${PROD_BIND_IP}:56432:5432"
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      POSTGRES_USER: supabase_admin
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXP: "3600"
+    # A mesma inicialização que o Supabase CLI escreve para a imagem (senhas
+    # dos papéis, jwt_secret no banco, schema `_realtime`), sem a parte de
+    # edge functions/analytics que este produto não usa. Roda só no PRIMEIRO
+    # boot do volume (docker-entrypoint-initdb.d).
+    entrypoint: ["sh"]
+    command:
+      - "-c"
+      - |
+        cat <<'EOF' > /etc/postgresql.schema.sql && \
+        exec docker-entrypoint.sh postgres -D /etc/postgresql
+        \set pgpass `echo "$$PGPASSWORD"`
+        \set jwt_secret `echo "$$JWT_SECRET"`
+        \set jwt_exp `echo "$$JWT_EXP"`
+
+        ALTER DATABASE postgres SET "app.settings.jwt_secret" TO :'jwt_secret';
+        ALTER DATABASE postgres SET "app.settings.jwt_exp" TO :'jwt_exp';
+
+        ALTER USER postgres WITH PASSWORD :'pgpass';
+        ALTER USER authenticator WITH PASSWORD :'pgpass';
+        ALTER USER pgbouncer WITH PASSWORD :'pgpass';
+        ALTER USER supabase_auth_admin WITH PASSWORD :'pgpass';
+        ALTER USER supabase_storage_admin WITH PASSWORD :'pgpass';
+        ALTER USER supabase_replication_admin WITH PASSWORD :'pgpass';
+        ALTER USER supabase_read_only_user WITH PASSWORD :'pgpass';
+
+        create schema if not exists _realtime;
+        alter schema _realtime owner to postgres;
+        EOF
+    volumes:
+      - prod-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -h 127.0.0.1 -p 5432"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging: *default-logging
+    networks: [prod]
+
+  auth:
+    image: public.ecr.aws/supabase/gotrue:v2.196.0
+    container_name: crm-prod-auth
+    restart: unless-stopped
+    mem_limit: 128m
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: "9999"
+      API_EXTERNAL_URL: ${NEXT_PUBLIC_APP_URL}/auth/v1
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgresql://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      GOTRUE_SITE_URL: ${NEXT_PUBLIC_APP_URL}
+      # `**` e não a URL exata: o app pede `redirectTo` COM query
+      # (`/auth/confirm?type=recovery`, requestPasswordReset.ts; `?type=signup`,
+      # signUp.ts) e o GoTrue compara por glob — a entrada exata não casa, ele
+      # descarta o redirect e manda o link para a raiz do site, onde `/`
+      # redireciona para `/app` e o código se perde. Medido em 25/09/2026: o
+      # e-mail de recuperação chegava e o link caía em /login sem sessão.
+      GOTRUE_URI_ALLOW_LIST: ${NEXT_PUBLIC_APP_URL}/auth/confirm**,${NEXT_PUBLIC_APP_URL}/auth/callback**
+      # D13: enquanto o BLOCKER-PROD estiver aberto, o cadastro público
+      # (`/signup`, F11) fica DESLIGADO no GoTrue — ninguém de fora cria conta
+      # nem recebe e-mail desta instalação. Convites do dono passam pela API
+      # admin (service_role) e continuam funcionando. Liberar = "false" + up.
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_EXP: "3600"
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_ISSUER: ${NEXT_PUBLIC_APP_URL}/auth/v1
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_EXTERNAL_PHONE_ENABLED: "false"
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false"
+      GOTRUE_MAILER_AUTOCONFIRM: "false"
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: ${NEXT_PUBLIC_APP_URL}/auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_INVITE: ${NEXT_PUBLIC_APP_URL}/auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_RECOVERY: ${NEXT_PUBLIC_APP_URL}/auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: ${NEXT_PUBLIC_APP_URL}/auth/v1/verify
+      GOTRUE_MAILER_SUBJECTS_RECOVERY: "Redefinir senha"
+      # Modelos com `token_hash` (supabase/templates/*.html, renderizados por
+      # `hostgator-setup-kit/marca-emails.sh --render-em` e servidos pelo Caddy em
+      # /email/ a partir de /srv/prod/crm/email — ver docs/ops/prod.md). Sem eles
+      # o GoTrue usa o modelo padrão, cujo link passa por /auth/v1/verify e volta
+      # com `code` (PKCE): só fecha no MESMO navegador que pediu. Com token_hash,
+      # `app/auth/confirm/route.ts` verifica direto e o link vale em qualquer
+      # aparelho — é o fluxo que password-recovery.spec.ts e signup-journey.spec.ts
+      # medem e o que o kit de hospedagem (hostgator-setup-kit/marca-emails.sh) usa.
+      GOTRUE_MAILER_TEMPLATES_RECOVERY: ${NEXT_PUBLIC_APP_URL}/email/recovery.html
+      GOTRUE_MAILER_TEMPLATES_CONFIRMATION: ${NEXT_PUBLIC_APP_URL}/email/confirmation.html
+      # E-mail de autenticação (confirmação, convite, recuperação) pela Resend,
+      # por SMTP: usuário fixo `resend`, senha = a chave da API (D12-5).
+      GOTRUE_SMTP_HOST: smtp.resend.com
+      GOTRUE_SMTP_PORT: "587"
+      GOTRUE_SMTP_USER: resend
+      GOTRUE_SMTP_PASS: ${RESEND_API_KEY}
+      GOTRUE_SMTP_ADMIN_EMAIL: ${RESEND_FROM_EMAIL}
+      GOTRUE_SMTP_SENDER_NAME: ${PLATFORM_NAME}
+      GOTRUE_SMTP_MAX_FREQUENCY: 60s
+      GOTRUE_RATE_LIMIT_EMAIL_SENT: "30"
+      GOTRUE_MFA_TOTP_ENROLL_ENABLED: "true"
+      GOTRUE_MFA_TOTP_VERIFY_ENABLED: "true"
+      GOTRUE_MFA_MAX_ENROLLED_FACTORS: "10"
+      GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED: "true"
+      GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL: "10"
+      GOTRUE_PASSWORD_MIN_LENGTH: "6"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:9999/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    logging: *default-logging
+    networks: [prod]
+
+  rest:
+    image: public.ecr.aws/supabase/postgrest:v16.1
+    container_name: crm-prod-rest
+    restart: unless-stopped
+    mem_limit: 128m
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgresql://authenticator:${POSTGRES_PASSWORD}@db:5432/postgres
+      PGRST_DB_SCHEMAS: public,storage,graphql_public
+      PGRST_DB_EXTRA_SEARCH_PATH: public,extensions
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_MAX_ROWS: "1000"
+      PGRST_ADMIN_SERVER_PORT: "3001"
+    logging: *default-logging
+    networks: [prod]
+
+  storage:
+    image: public.ecr.aws/supabase/storage-api:v1.70.3
+    container_name: crm-prod-storage
+    restart: unless-stopped
+    mem_limit: 320m
+    depends_on:
+      db:
+        condition: service_healthy
+      rest:
+        condition: service_started
+    environment:
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      AUTH_JWT_SECRET: ${JWT_SECRET}
+      POSTGREST_URL: http://rest:3000
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgresql://supabase_storage_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      FILE_SIZE_LIMIT: "52428800"
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /mnt
+      TENANT_ID: stub
+      REGION: local
+      GLOBAL_S3_BUCKET: stub
+      ENABLE_IMAGE_TRANSFORMATION: "false"
+      TUS_URL_PATH: /storage/v1/upload/resumable
+    volumes:
+      - prod-storage:/mnt
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5000/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    logging: *default-logging
+    networks: [prod]
+
+  realtime:
+    image: public.ecr.aws/supabase/realtime:v2.129.3
+    container_name: crm-prod-realtime
+    restart: unless-stopped
+    mem_limit: 384m
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: "4000"
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: supabase_admin
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: postgres
+      DB_AFTER_CONNECT_QUERY: "SET search_path TO _realtime"
+      DB_ENC_KEY: ${REALTIME_DB_ENC_KEY}
+      API_JWT_SECRET: ${JWT_SECRET}
+      METRICS_JWT_SECRET: ${JWT_SECRET}
+      SECRET_KEY_BASE: ${REALTIME_SECRET_KEY_BASE}
+      APP_NAME: realtime
+      ERL_AFLAGS: -proto_dist inet_tcp
+      DNS_NODES: "''"
+      RLIMIT_NOFILE: "10000"
+      MAX_HEADER_LENGTH: "4096"
+      RUN_JANITOR: "true"
+      SEED_SELF_HOST: "true"
+      MIX_ENV: prod
+    logging: *default-logging
+    networks: [prod]
+
+  kong:
+    image: public.ecr.aws/supabase/kong:2.8.1
+    container_name: crm-prod-kong
+    restart: unless-stopped
+    mem_limit: 256m
+    depends_on:
+      auth:
+        condition: service_healthy
+      rest:
+        condition: service_started
+      storage:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:56431:8000"
+      - "${PROD_BIND_IP}:56431:8000"
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+      KONG_NGINX_WORKER_PROCESSES: "1"
+    volumes:
+      # Gerado por scripts/prod/up.sh a partir de scripts/staging/kong.template.yml
+      # (o mesmo desenho) com as chaves do env de PRODUÇÃO. Não versionado (.prod/ no .gitignore).
+      - ./.prod/kong.yml:/home/kong/kong.yml:ro
+    logging: *default-logging
+    networks: [prod]
+
+  # ─── O produto ─────────────────────────────────────────────────────────────
+  app:
+    # Imagem FINA sobre o build do host (`pnpm build` → `.next/standalone`),
+    # pelo `Dockerfile.staging` (o mesmo estágio `runner`): o mesmo `next build`
+    # que o gate valida. ADR-032 §3: a imagem pré-buildada do upstream (ver
+    # docker-compose.prod.yml) não entra em produção (código de terceiro, não auditado).
+    build:
+      # `.prod/app/` é montado por scripts/prod/up.sh com o `.next/standalone`,
+      # o `.next/static` e o `public/` do build do host.
+      context: ./.prod/app
+      dockerfile: Dockerfile.staging
+      args:
+        APP_VERSION: ${APP_VERSION:-prod}
+    image: crm-app:prod
+    pull_policy: never
+    container_name: crm-prod-app
+    restart: unless-stopped
+    mem_limit: 768m
+    depends_on:
+      kong:
+        condition: service_started
+      srh:
+        condition: service_started
+      waha:
+        condition: service_started
+    env_file: /srv/secrets/crm-prod.env
+    environment:
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      # Provedores REAIS (D52). `SENTRY_DSN`, `ANTHROPIC_API_KEY`,
+      # `OPENAI_API_KEY`, `RESEND_*` vêm do env_file; nada é sobrescrito aqui.
+      WHATSAPP_MODE: waha
+      AI_PROVIDER: anthropic
+      # D28/ADR-032 §3: o proprietário guarda o nome como PLATFORM_NAME; o
+      # código lê APP_NAME (lib/branding.ts, white-label em runtime).
+      APP_NAME: ${PLATFORM_NAME}
+      # Servidor → kong pelo nome do serviço; navegador → o MESMO domínio do
+      # app, cujos caminhos /auth/v1, /rest/v1, /storage/v1 e /realtime/v1 o
+      # Caddy do host encaminha ao kong (F08-T03).
+      NEXT_PUBLIC_SUPABASE_URL: http://kong:8000
+      NEXT_PUBLIC_SUPABASE_URL_BROWSER: ${NEXT_PUBLIC_APP_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      SUPABASE_DB_URL: *supabase-db-url
+      WAHA_API_BASE_URL: http://waha:3000
+      WAHA_WEBHOOK_BASE_URL: http://app:3000
+      UPSTASH_REDIS_REST_URL: http://srh:80
+      UPSTASH_REDIS_REST_TOKEN: ${SRH_TOKEN}
+      WEBHOOK_RATE_LIMIT_PER_MIN: "300"
+    ports:
+      - "127.0.0.1:3300:3000"
+      - "${PROD_BIND_IP}:3300:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('net').connect(3000,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    logging: *default-logging
+    networks: [prod]
+
+  # Os três workers do produto numa imagem só (Dockerfile.worker), um processo
+  # por serviço — o do agente herdado (fila, cron, drain) e os dois do SaaS
+  # (saída pelo catálogo e lembrete recorrente).
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+      args:
+        APP_VERSION: ${APP_VERSION:-prod}
+    image: crm-worker:prod
+    pull_policy: never
+    container_name: crm-prod-worker
+    restart: unless-stopped
+    mem_limit: 512m
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: /srv/secrets/crm-prod.env
+    environment:
+      NODE_ENV: production
+      WHATSAPP_MODE: waha
+      AI_PROVIDER: anthropic
+      APP_NAME: ${PLATFORM_NAME}
+      NEXT_PUBLIC_SUPABASE_URL: http://kong:8000
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      SUPABASE_DB_URL: *supabase-db-url
+      WAHA_API_BASE_URL: http://waha:3000
+      WAHA_WEBHOOK_BASE_URL: http://app:3000
+      UPSTASH_REDIS_REST_URL: http://srh:80
+      UPSTASH_REDIS_REST_TOKEN: ${SRH_TOKEN}
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8787/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+    networks: [prod]
+
+  worker-saida:
+    image: crm-worker:prod
+    pull_policy: never
+    container_name: crm-prod-worker-saida
+    restart: unless-stopped
+    mem_limit: 384m
+    depends_on:
+      worker:
+        condition: service_started
+    env_file: /srv/secrets/crm-prod.env
+    environment:
+      NODE_ENV: production
+      WHATSAPP_MODE: waha
+      AI_PROVIDER: anthropic
+      APP_NAME: ${PLATFORM_NAME}
+      SUPABASE_DB_URL: *supabase-db-url
+      NEXT_PUBLIC_SUPABASE_URL: http://kong:8000
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      WAHA_API_BASE_URL: http://waha:3000
+      WAHA_WEBHOOK_BASE_URL: http://app:3000
+      UPSTASH_REDIS_REST_URL: http://srh:80
+      UPSTASH_REDIS_REST_TOKEN: ${SRH_TOKEN}
+      OUTBOUND_WORKER_INTERVAL_MS: "5000"
+    # G-71: caminho absoluto, de fora da raiz — é a forma que o cron chama.
+    working_dir: /tmp
+    command: ["sh", "-c", "TSX_TSCONFIG_PATH=/app/tsconfig.json node --import /app/node_modules/tsx/dist/loader.mjs /app/workers/saida-worker.ts"]
+    logging: *default-logging
+    networks: [prod]
+
+  worker-lembrete:
+    image: crm-worker:prod
+    pull_policy: never
+    container_name: crm-prod-worker-lembrete
+    restart: unless-stopped
+    mem_limit: 384m
+    depends_on:
+      worker:
+        condition: service_started
+    env_file: /srv/secrets/crm-prod.env
+    environment:
+      NODE_ENV: production
+      WHATSAPP_MODE: waha
+      AI_PROVIDER: anthropic
+      APP_NAME: ${PLATFORM_NAME}
+      SUPABASE_DB_URL: *supabase-db-url
+      NEXT_PUBLIC_SUPABASE_URL: http://kong:8000
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      WAHA_API_BASE_URL: http://waha:3000
+      WAHA_WEBHOOK_BASE_URL: http://app:3000
+      UPSTASH_REDIS_REST_URL: http://srh:80
+      UPSTASH_REDIS_REST_TOKEN: ${SRH_TOKEN}
+      REMINDER_WORKER_INTERVAL_MS: "60000"
+    working_dir: /tmp
+    command: ["sh", "-c", "TSX_TSCONFIG_PATH=/app/tsconfig.json node --import /app/node_modules/tsx/dist/loader.mjs /app/workers/lembrete-worker.ts"]
+    logging: *default-logging
+    networks: [prod]
+
+  redis:
+    image: redis:7-alpine
+    container_name: crm-prod-redis
+    restart: unless-stopped
+    mem_limit: 64m
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    logging: *default-logging
+    networks: [prod]
+
+  srh:
+    image: hiett/serverless-redis-http@sha256:5b0bb9239fce53abf87b2018a7a0deb9ec7bd900c5360738fe5fbeeb426f9150
+    container_name: crm-prod-srh
+    restart: unless-stopped
+    # 64m matou o container com 137 (OOM) na primeira subida: é Elixir/BEAM.
+    mem_limit: 192m
+    environment:
+      SRH_MODE: env
+      SRH_TOKEN: ${SRH_TOKEN}
+      SRH_CONNECTION_STRING: "redis://redis:6379"
+    depends_on:
+      redis:
+        condition: service_healthy
+    logging: *default-logging
+    networks: [prod]
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.scheduler
+    image: crm-scheduler:prod
+    pull_policy: never
+    container_name: crm-prod-scheduler
+    restart: unless-stopped
+    mem_limit: 32m
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      TZ: UTC
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+    logging: *default-logging
+    networks: [prod]
+
+  # O WAHA REAL (D12-4): de pé, sem sessão pareada até o proprietário decidir
+  # o número. Bloco herdado de `docker-compose.prod.yml` (tag pinada, engine
+  # NOWEB, dashboard desligado, HMAC nos webhooks). O app fala com ele pela
+  # rede do compose; o WAHA entrega os webhooks ao app pelo nome do serviço.
+  waha:
+    image: devlikeapro/waha:latest-2026.7.2
+    container_name: crm-prod-waha
+    restart: unless-stopped
+    # 893 MiB de pico medido pelo upstream; teto para o OOM killer não
+    # escolher o CRM.
+    mem_limit: 1280m
+    environment:
+      # Prefixo sha512: o WAHA hasheia o X-Api-Key recebido e compara com este
+      # hash (o app manda o plaintext de WAHA_API_KEY).
+      WAHA_API_KEY: "sha512:${WAHA_API_KEY_SHA512}"
+      WHATSAPP_HOOK_URL: http://app:3000/api/v1/webhooks/waha
+      WHATSAPP_HOOK_EVENTS: "message.any,message.ack,message.edited,message.revoked,session.status,state.change"
+      WHATSAPP_HOOK_HMAC: ${WAHA_HMAC_SECRET}
+      WHATSAPP_DEFAULT_ENGINE: NOWEB
+      WAHA_DASHBOARD_ENABLED: "false"
+      WHATSAPP_RESTART_ALL_SESSIONS: "True"
+    volumes:
+      - waha-data:/app/.sessions
+      - waha-media:/app/.media
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/ping || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    logging: *default-logging
+    networks: [prod]
+
+volumes:
+  prod-db:
+  prod-storage:
+  waha-data:
+  waha-media:
+
+networks:
+  prod:
+    name: crm-prod
+    driver: bridge

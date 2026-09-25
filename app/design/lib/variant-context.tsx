@@ -99,7 +99,7 @@ function applyToRoot(s: State) {
 
 export function VariantProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = React.useState<State>({
-    palette: "sage",
+    palette: "marinho",
     typo: "bricolage-jakarta",
     density: "equilibrada",
     theme: "light",

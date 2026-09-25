@@ -58,9 +58,9 @@ const FIXTURE = [
 describe("extrairRegua — os pares saem do globals.css, nunca de lista à mão", () => {
   it("acha os dois temas, a rampa do produto e os neutros", () => {
     expect(REGUA.rampaDoProduto).toHaveLength(11);
-    expect(REGUA.rampaDoProduto[6]).toBe("#506d48");
+    expect(REGUA.rampaDoProduto[6]).toBe("#0b7374"); // ADR-049: turquesa no lugar da Sage
     expect(REGUA.claro.neutros).toHaveLength(11);
-    expect(REGUA.escuro.neutros[9]).toBe("#161510");
+    expect(REGUA.escuro.neutros[9]).toBe("#0b141f"); // neutral-900 do escuro = fundo
     expect(REGUA.claro.base.map((b) => b.chave)).toEqual([
       "--color-bg",
       "--color-surface",
@@ -119,12 +119,14 @@ describe("extrairRegua — os pares saem do globals.css, nunca de lista à mão"
     const razao = (papel: string, superficie: string) =>
       pares.find((p) => p.papel === papel && p.superficie === superficie)?.razao ?? 0;
 
-    expect(razao("--color-accent", "--color-bg")).toBeCloseTo(5.51, 2);
-    expect(razao(":focus-visible/outline", "--color-bg")).toBeCloseTo(3.79, 2);
-    expect(razao(":focus-visible/outline", "--color-surface-elevated")).toBeCloseTo(3.6, 2);
+    // ADR-049 (25/09/2026), paleta Marinho & Turquesa: remedido com `medirPares` sobre o
+    // globals.css novo — 5,1279 · 3,5315 · 3,1993. Os números da Sage eram 5,51 · 3,79 · 3,60.
+    expect(razao("--color-accent", "--color-bg")).toBeCloseTo(5.13, 2);
+    expect(razao(":focus-visible/outline", "--color-bg")).toBeCloseTo(3.53, 2);
+    expect(razao(":focus-visible/outline", "--color-surface-elevated")).toBeCloseTo(3.2, 2);
   });
 
-  it("a Sage inteira, como está no CSS, cabe nos pisos", () => {
+  it("a paleta inteira, como está no CSS, cabe nos pisos", () => {
     for (const tema of [REGUA.claro, REGUA.escuro]) {
       const reprovas = medirPares(tema, REGUA.rampaDoProduto, 0).filter((p) => !p.passa);
       expect(reprovas, `${tema.nome}: ${JSON.stringify(reprovas)}`).toEqual([]);
@@ -304,11 +306,16 @@ describe("derivarMarca — as 16 sementes adversariais", () => {
 
 describe("reconciliação — quem se move são as NOSSAS semânticas", () => {
   it("a Sage pura já nasce colidida e dispara a reconciliação (controle positivo)", () => {
-    // `--color-success` do bloco escuro é `#82a077`, a MESMA string de
-    // `--color-accent-400` (globals.css:167 e :193). Δ = 0,0°. Se o mecanismo não
-    // disparasse aqui, ele não dispararia em lugar nenhum.
-    expect(REGUA.escuro.semanticas.find((s) => s.nome === "success")?.hex).toBe(
-      REGUA.rampaDoProduto[4],
+    // `--color-success` do bloco escuro é `#82a077`, e o stop 400 da rampa DERIVADA
+    // de `#506d48` é `#81a078` — ΔE OKLab 0,0017, simulado 0,0013, contra um piso de
+    // 0,05. Até a ADR-049 a Sage era a paleta do produto e as duas strings eram
+    // idênticas; hoje o accent do produto é turquesa e a Sage entra aqui como uma
+    // MARCA de instalação — a colisão que dispara a reconciliação é a mesma. Se o
+    // mecanismo não disparasse aqui, ele não dispararia em lugar nenhum.
+    const successEscuro = REGUA.escuro.semanticas.find((s) => s.nome === "success")?.hex ?? "";
+    expect(successEscuro).toBe("#82a077");
+    expect(deltaESimulado(rampaDeSemente("#506d48")[4], successEscuro)).toBeLessThan(
+      PISO_DE_SEPARACAO_SIMULADA,
     );
 
     const sage = derivarMarca("#506d48", REGUA);
@@ -375,8 +382,12 @@ describe("reconciliação — quem se move são as NOSSAS semânticas", () => {
         }
       }
     }
-    // Guarda de vacuidade do run inteiro: 23 movimentos medidos nas 16 sementes.
-    expect(movimentosNoRun).toBe(23);
+    // Guarda de vacuidade do run inteiro: 11 movimentos medidos nas 16 sementes sobre
+    // a paleta Marinho & Turquesa (ADR-049). Eram 23 sobre a Sage: as BASES mudaram
+    // (areia/marinho no lugar do greige), a caminhada de contraste para em outro stop
+    // e as semânticas colidem menos com ele. Por semente: #f5c518 1, #dc2626 3,
+    // #22c55e 2, #e11d48 2, #506d48 3, todas as outras 0.
+    expect(movimentosNoRun).toBe(11);
   });
 });
 
@@ -407,12 +418,13 @@ describe("marca acromática — o accent do produto permanece", () => {
         separacaoDoNeutro(regua, tema.grauDoAccent, tema.accent),
       ).toBeGreaterThanOrEqual(PISO_DE_SEPARACAO_DO_NEUTRO);
     }
-    // Os números exatos, fixados: 0,0681 no claro (accent-600 × neutral-600) e 0,1994 no
-    // escuro (accent-400 × neutral-400). São eles que mostram por que o piso do briefing
-    // (8, na convenção ×100 — ou seja 0,08 aqui) não podia ser aceito sem medir: ele
+    // Os números exatos, fixados: 0,0758 no claro (accent-600 × neutral-600) e 0,1111 no
+    // escuro (accent-400 × neutral-400), remedidos na ADR-049 (eram 0,0681 e 0,1994 na
+    // Sage sobre greige). Continuam mostrando por que o piso do briefing (8, na
+    // convenção ×100 — ou seja 0,08 aqui) não podia ser aceito sem medir: ele
     // reprovaria o controle positivo do próprio produto no tema claro.
-    expect(separacaoDoNeutro(REGUA.claro, marca.claro.grauDoAccent, marca.claro.accent)).toBeCloseTo(0.0681, 4);
-    expect(separacaoDoNeutro(REGUA.escuro, marca.escuro.grauDoAccent, marca.escuro.accent)).toBeCloseTo(0.1994, 4);
+    expect(separacaoDoNeutro(REGUA.claro, marca.claro.grauDoAccent, marca.claro.accent)).toBeCloseTo(0.0758, 4);
+    expect(separacaoDoNeutro(REGUA.escuro, marca.escuro.grauDoAccent, marca.escuro.accent)).toBeCloseTo(0.1111, 4);
     expect(separacaoDoNeutro(REGUA.claro, marca.claro.grauDoAccent, marca.claro.accent)).toBeLessThan(0.08);
 
     // Controle negativo: um accent cinza reprovaria as duas guardas. Sem esta linha, os

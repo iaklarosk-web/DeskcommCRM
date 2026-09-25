@@ -28,12 +28,15 @@
     "test:invariants": "bash scripts/test-db.sh",
     "lint:channels": "tsx scripts/lint-channels.ts",
     "lint:role-rank": "tsx scripts/lint-role-rank.ts",
+    "stripe:provision": "tsx scripts/stripe-provision.ts",
     "release:conferir": "tsx scripts/cortar-release.ts",
     "release:cortar": "tsx scripts/cortar-release.ts --escrever",
     "gov:verify": "pnpm typecheck && pnpm lint && pnpm lint:channels && pnpm lint:role-rank && pnpm test:unit",
     "worker": "tsx --env-file=.env --env-file=.env.local workers/agent-worker/main.ts",
     "dev:crons": "tsx --env-file=.env --env-file=.env.local scripts/dev-crons.ts",
-    "flywheel:judge": "tsx --env-file=.env --env-file=.env.local scripts/flywheel-judge-live.ts"
+    "flywheel:judge": "tsx --env-file=.env --env-file=.env.local scripts/flywheel-judge-live.ts",
+    "test:integration": "bash scripts/test-integration.sh",
+    "ai:eval": "tsx scripts/ai-eval.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.16",
@@ -90,6 +93,7 @@
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.6.0",
     "web-push": "^3.6.7",
+    "yaml": "^2.9.0",
     "zod": "^4.5.4"
   },
   "devDependencies": {

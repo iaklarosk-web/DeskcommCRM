@@ -1,0 +1,15 @@
+{
+  "_leia": "Flag do GoTrue que porteia FLUXO DE USUÁRIO e vale diferente entre staging e produção. Divergência não declarada aqui FALHA o gate. Declarar exige dizer qual fluxo muda e QUAL TESTE exercita o valor de PRODUÇÃO — sem isso o staging fica verde sobre um caminho que ninguém percorre (ADR-047).",
+  "divergencias": [],
+  "_historico": [
+    {
+      "flag": "GOTRUE_DISABLE_SIGNUP",
+      "divergiu_de": "2026-09-??",
+      "ate": "2026-09-25",
+      "era": "staging=false, produção=true (D13: cadastro público fechado)",
+      "virou": "os dois false — o proprietário ABRIU o cadastro público na produção em 25/09",
+      "o_que_a_divergencia_escondeu": "o caminho do convidado sem conta nunca rodava no ambiente do gate: a produção recusava cadastro com 422 signup_disabled e o staging não. Custou um convidado REAL travado em 23/09 (ADR-047).",
+      "observacao": "com a porta aberta, o caminho do cadastro PÚBLICO passa a valer na produção — e ele nunca foi percorrido lá: havia 1 auth.signup_requested no histórico inteiro, e era da porta do convite. A confirmação de e-mail está LIGADA (GOTRUE_MAILER_AUTOCONFIRM=false, SMTP Resend); se o e-mail não chegar, a pessoa trava em 'confirme seu e-mail'."
+    }
+  ]
+}

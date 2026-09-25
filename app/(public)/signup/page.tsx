@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { SignupForm } from "@/components/auth/SignupForm";
 import { branding } from "@/lib/branding";
-import { verifyInviteToken } from "@/lib/auth/invite-token";
+import { resolverConvite } from "@/lib/auth/resolver-de-convite";
 import { createClient } from "@/lib/supabase/server";
 import { normalizarIdioma } from "@/lib/i18n/idiomas";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -24,9 +24,12 @@ export default async function SignupPage({
   searchParams: Promise<{ invite?: string }>;
 }) {
   const { invite } = await searchParams;
-  const payload = invite ? verifyInviteToken(invite) : null;
-  const convite = invite && payload ? { token: invite, email: payload.email } : undefined;
-  const conviteExpirado = Boolean(invite) && !payload;
+  // Resolve os DOIS formatos (ADR-047 §1). Antes da T07 só o JWT legado era
+  // entendido, e `app/i/[token]` manda o token curto: quem foi convidado lia
+  // "convite expirado" e não tinha como entrar.
+  const resolvido = invite ? await resolverConvite(invite) : null;
+  const convite = resolvido ? { token: resolvido.token, email: resolvido.email } : undefined;
+  const conviteExpirado = Boolean(invite) && !resolvido;
 
   const supabase = await createClient();
   const {
@@ -39,8 +42,8 @@ export default async function SignupPage({
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1.5 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">{t("Criar conta")}</h1>
+      <div className="space-y-2">
+        <h1 className="text-3xl leading-tight font-bold tracking-tight text-balance sm:text-4xl">{t("Criar conta")}</h1>
         <p className="text-sm text-muted-foreground">
           {convite
             ? t("Crie sua senha para entrar na empresa que te convidou")
@@ -61,7 +64,7 @@ export default async function SignupPage({
 
       <SignupForm convite={convite} />
 
-      <p className="text-center text-sm text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         {t("Já tem conta?")}{" "}
         <Link href="/login" className="font-medium text-foreground underline underline-offset-4">
           {t("Entrar")}

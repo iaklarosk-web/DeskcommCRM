@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TeamMembersClient } from "./_components/TeamMembersClient";
 import { AttendantsClient } from "./_components/AttendantsClient";
+import { ConvitesPendentes } from "./_components/ConvitesPendentes";
 
 export const dynamic = "force-dynamic";
 
@@ -63,8 +64,15 @@ export default async function TeamPage({
           <TabsTrigger value="members">{t("Membros")}</TabsTrigger>
           <TabsTrigger value="attendants">{t("Atendimento")}</TabsTrigger>
         </TabsList>
-        <TabsContent value="members" className="mt-4">
+        <TabsContent value="members" className="mt-4 space-y-4">
           <TeamMembersClient currentUserId={user.id} canManage={isAdmin} />
+          {/*
+            Convite pendente é estado de ACESSO, então mora junto de quem tem
+            acesso. Antes da F20 ele não morava em lugar nenhum: o link existia
+            uma vez, na resposta da emissão, e quem fechasse a tela o perdia.
+            Gerente vê e gere (D61 c); os demais papéis não veem a seção.
+          */}
+          {isManager ? <ConvitesPendentes podeGerir={isManager} /> : null}
         </TabsContent>
         <TabsContent value="attendants" className="mt-4">
           {isManager ? (

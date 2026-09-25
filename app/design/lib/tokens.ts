@@ -2,7 +2,7 @@
 // "Soft-tech / calmo" — neutros desaturados (greige/warm-gray), accent não-saturado.
 // 5-Constraint Rule applied: Shape, Color (exact hex), Typography, Motion, Layout.
 
-export type PaletteId = "sage" | "clay" | "mist" | "plum" | "olive";
+export type PaletteId = "marinho" | "sage" | "clay" | "mist" | "plum" | "olive";
 export type TypoId = "bricolage-jakarta" | "fraunces-manrope" | "atkinson" | "source-plex";
 export type DensityId = "aerada" | "equilibrada" | "compacta";
 export type ThemeId = "light" | "dark";
@@ -38,6 +38,36 @@ export type PaletteDef = {
 // ─── Palettes ──────────────────────────────────────────────────────────────
 
 export const PALETTES: Record<PaletteId, PaletteDef> = {
+  // ADR-049 (25/09/2026): a paleta do CRM OS. É a que app/globals.css usa; a
+  // Sage abaixo fica como a herança do Deskcomm e como alternativa do showcase.
+  marinho: {
+    id: "marinho",
+    name: "Marinho & Turquesa",
+    description: "Tinta marinho, neutros areia, turquesa como ação. Irmã da KN, não cópia.",
+    accent: {
+      50: "#eef7f7", 100: "#daeded", 200: "#b3dada", 300: "#81c0c0",
+      400: "#4da7a7", 500: "#228f90", 600: "#0b7374", 700: "#165c5c",
+      800: "#194b4b", 900: "#1a3f3f", 950: "#0a2021",
+    },
+    neutralLight: {
+      50: "#f5f4ef", 100: "#ebe9e1", 200: "#d9d6cc", 300: "#bfbbae",
+      400: "#9a9c98", 500: "#7a838c", 600: "#56606a", 700: "#3e4954",
+      800: "#26313d", 900: "#15202b", 950: "#0b141f",
+    },
+    neutralDark: {
+      50: "#eef2f6", 100: "#dfe5ec", 200: "#bcc6d2", 300: "#a7b3c2",
+      400: "#6f7f91", 500: "#34475e", 600: "#253549", 700: "#1a2838",
+      800: "#121e2c", 900: "#0b141f", 950: "#060c14",
+    },
+    states: {
+      light: { success: "#5a8a5f", warning: "#b07a2b", error: "#a94a3c", info: "#4a7a93" },
+      dark:  { success: "#82a077", warning: "#d09455", error: "#c87263", info: "#7da9bf" },
+    },
+    surfaces: {
+      light: { bg: "#f5f4ef", surface: "#ffffff", surfaceElevated: "#ebe9e1", text: "#15202b", textMuted: "#56606a", border: "#d9d6cc" },
+      dark:  { bg: "#0b141f", surface: "#121e2c", surfaceElevated: "#1a2838", text: "#eef2f6", textMuted: "#a7b3c2", border: "#253549" },
+    },
+  },
   sage: {
     id: "sage",
     name: "Sage",

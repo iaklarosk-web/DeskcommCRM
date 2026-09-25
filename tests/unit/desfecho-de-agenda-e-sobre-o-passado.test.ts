@@ -46,9 +46,13 @@ vi.mock("@/lib/agenda/consulta", async (original) => {
   const real = await original<typeof import("@/lib/agenda/consulta")>();
   return { ...real, horariosLivresDaOrg: vi.fn() };
 });
+// O handler dispara a auditoria sem aguardar: a prova da regra de agenda não
+// deve deixar uma escrita externa pendente quando o ambiente do teste fechar.
+vi.mock("@/lib/audit", () => ({ audit: vi.fn().mockResolvedValue(undefined) }));
 
 const { alterarAgendamentoHandler } = await import("@/app/api/v1/agenda/agendamentos/_handler");
 const { ApiError } = await import("@/lib/api/types");
+const { audit } = await import("@/lib/audit");
 
 const ORG = "aaaaaaaa-1111-4000-8000-00000000000a";
 const AGENDAMENTO = "ffffffff-1111-4000-8000-00000000000f";
@@ -66,6 +70,7 @@ let atualizado: Record<string, unknown> | null;
 function clienteCom(startsAt: string, status: string): SupabaseClient {
   const linha = {
     id: AGENDAMENTO,
+    revision: 1,
     event_type_id: "cccccccc-1111-4000-8000-00000000000c",
     owner_user_id: "dddddddd-1111-4000-8000-00000000000d",
     contact_id: "eeeeeeee-1111-4000-8000-00000000000e",
@@ -93,12 +98,18 @@ function clienteCom(startsAt: string, status: string): SupabaseClient {
       },
       insert: () => ({ select: () => ({ single: async () => ({ data: {}, error: null }) }) }),
     }),
-    rpc: async () => ({ data: null, error: null }),
+    rpc: async (name:string,args:Record<string,unknown>) => {
+      if(name!=="fn_appointment_change") return {data:null,error:null};
+      expect(args.p_org).toBe(ORG);expect(args.p_id).toBe(AGENDAMENTO);expect(args.p_revision).toBe(1);
+      atualizado=args.p_patch as Record<string,unknown>;
+      return {data:{...linha,...atualizado,revision:2},error:null};
+    },
   } as unknown as SupabaseClient;
 }
 
 beforeEach(() => {
   atualizado = null;
+  vi.mocked(audit).mockClear();
 });
 
 describe("desfecho de compromisso futuro é recusado", () => {
@@ -117,6 +128,7 @@ describe("desfecho de compromisso futuro é recusado", () => {
       // A recusa tem de ser ANTES do update: uma que só reclamasse depois de
       // gravar teria liberado o horário do mesmo jeito.
       expect(atualizado).toBeNull();
+      expect(audit).not.toHaveBeenCalled();
     });
   }
 
@@ -131,6 +143,15 @@ describe("desfecho de compromisso futuro é recusado", () => {
     });
 
     expect(atualizado).toMatchObject({ status: "no_show" });
+    expect(audit).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      action: "agenda.appointment_outcome_recorded",
+      actorUserId: ctx.actor.id,
+      organizationId: ORG,
+      resourceType: "calendar_appointment",
+      resourceId: AGENDAMENTO,
+      requestId: ctx.requestId,
+      metadata: expect.objectContaining({ status: "no_show", revision: 2 }),
+    }));
   });
 
   it("CONFIRMAR um compromisso futuro segue liberado — é o caso normal", async () => {
@@ -145,5 +166,14 @@ describe("desfecho de compromisso futuro é recusado", () => {
     });
 
     expect(atualizado).toMatchObject({ status: "confirmed" });
+    expect(audit).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      action: "agenda.appointment_updated",
+      actorUserId: ctx.actor.id,
+      organizationId: ORG,
+      resourceType: "calendar_appointment",
+      resourceId: AGENDAMENTO,
+      requestId: ctx.requestId,
+      metadata: expect.objectContaining({ revision: 2 }),
+    }));
   });
 });

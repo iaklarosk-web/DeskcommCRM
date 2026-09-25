@@ -1,3 +1,4 @@
+import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
  * POST /api/v1/admin/incidents/[id]/resolve (S-11.11)
  *
@@ -11,6 +12,7 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 
 import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
+import { requirePlatformAdminApi } from "@/lib/auth/requirePlatformAdminApi";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
@@ -26,15 +28,19 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
+
   const requestId = randomUUID();
   const { id } = await params;
 
-  let adminCtx: Awaited<ReturnType<typeof requirePlatformAdmin>>;
-  try {
-    adminCtx = await requirePlatformAdmin();
-  } catch {
-    return fail("forbidden", "Platform admin required", 403, { requestId });
-  }
+  // F20-T03: a guarda distingue NEGAÇÃO (403) de INDISPONIBILIDADE (503).
+  // O `catch` genérico que existia aqui respondia "sem permissão" quando o
+  // banco estava fora — foi o que fez o dono achar que tinha perdido o
+  // acesso no incidente de 21–22/09 (VARREDURA §B25/§B29).
+  const guarda = await requirePlatformAdminApi(requestId);
+  if (!guarda.ok) return guarda.response;
+  const adminCtx = guarda;
 
   let body: z.infer<typeof bodySchema>;
   try {

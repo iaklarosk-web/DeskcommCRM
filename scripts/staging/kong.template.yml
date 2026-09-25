@@ -1,0 +1,118 @@
+# kong.template.yml — a porta de entrada do Supabase local do staging (F06-T06).
+#
+# Vira `.staging/kong.yml` pelo up.sh, com __ANON_KEY__ e __SERVICE_KEY__
+# trocados pelas chaves do env de segredos. Mesmo desenho do self-host
+# oficial do Supabase: `key-auth` + `acl` por consumidor; o cliente manda a
+# chave em `apikey` e o JWT do usuário em `Authorization`.
+_format_version: "2.1"
+_transform: true
+
+consumers:
+  - username: anon
+    keyauth_credentials:
+      - key: __ANON_KEY__
+  - username: service_role
+    keyauth_credentials:
+      - key: __SERVICE_KEY__
+
+acls:
+  - consumer: anon
+    group: anon
+  - consumer: service_role
+    group: admin
+
+services:
+  - name: auth-v1-open
+    url: http://auth:9999/verify
+    routes:
+      - name: auth-v1-open
+        strip_path: true
+        paths: [/auth/v1/verify]
+    plugins:
+      - name: cors
+  - name: auth-v1-open-callback
+    url: http://auth:9999/callback
+    routes:
+      - name: auth-v1-open-callback
+        strip_path: true
+        paths: [/auth/v1/callback]
+    plugins:
+      - name: cors
+  - name: auth-v1-open-authorize
+    url: http://auth:9999/authorize
+    routes:
+      - name: auth-v1-open-authorize
+        strip_path: true
+        paths: [/auth/v1/authorize]
+    plugins:
+      - name: cors
+  - name: auth-v1
+    url: http://auth:9999/
+    routes:
+      - name: auth-v1-all
+        strip_path: true
+        paths: [/auth/v1/]
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow: [admin, anon]
+  - name: rest-v1
+    url: http://rest:3000/
+    routes:
+      - name: rest-v1-all
+        strip_path: true
+        paths: [/rest/v1/]
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: true
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow: [admin, anon]
+  - name: realtime-v1-ws
+    url: http://realtime:4000/socket
+    protocol: ws
+    routes:
+      - name: realtime-v1-ws
+        strip_path: true
+        paths: [/realtime/v1/]
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow: [admin, anon]
+  - name: realtime-v1-rest
+    url: http://realtime:4000/api
+    protocol: http
+    routes:
+      - name: realtime-v1-rest
+        strip_path: true
+        paths: [/realtime/v1/api]
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow: [admin, anon]
+  - name: storage-v1
+    url: http://storage:5000/
+    routes:
+      - name: storage-v1-all
+        strip_path: true
+        paths: [/storage/v1/]
+    plugins:
+      - name: cors

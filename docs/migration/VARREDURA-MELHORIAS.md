@@ -1,0 +1,558 @@
+# Varredura de melhorias e correções — achados desta construção
+
+Lista viva, montada enquanto F03, F04, F05 e F06 eram construídas. **Nada aqui é aplicado
+sem pedido** (ADR-020, decisão 6): achado novo aplicado junto com a entrega é
+escopo crescendo depois do "pronto".
+
+Cada item diz o que foi medido, onde, e se já está consertado.
+
+---
+
+## A. Consertados durante a construção (ficam aqui como registro)
+
+### A1. Preço de modelo dependia da ordem das chaves do objeto
+`estimatedCostCents` casava o id do modelo por prefixo iterando o objeto, então
+`gpt-4o-mini` podia ser cotado pela linha de `gpt-4o` — **15 vs 250 USD por
+milhão de tokens, ~16×**. Latente desde a F01. Corrigido para casar o MAIOR
+prefixo, com teste de regressão afirmando os dois números.
+`lib/agent-engine/edge/llm/pricing.ts`, commit `69e6715b`.
+
+### A2. Duas contabilidades de consumo, uma cega
+`llm_calls` era escrita por `runModelCall` e lida pelo orçamento;
+`ai_usage_events` existia desde a F01 **sem nenhum chamador de produção**, com
+uma segunda tabela de preço. Ligar as duas por fora teria contado cada chamada
+duas vezes. Unificado num CTE só, com `llm_call_id` único parcial — dupla
+contagem virou `23505`. Commit `69e6715b`.
+
+### A3. Teste de corrida que afirmava ordem de chegada
+`crm-task-legacy-safety` usava `Promise.race` e exigia que o primeiro desfecho
+fosse a vítima do deadlock. O Postgres solta os locks da vítima ao abortá-la, o
+sobrevivente termina logo atrás, e a ordem é corrida de microtask. Passou nos
+gates anteriores por sorte; reprovou o gate 02 da F03. Agora afirma a partição
+(exatamente uma abortada com `40P01`, exatamente uma sobrevivente), que é mais
+forte. Commit `6d742a6b`.
+
+### A4. Dois mutantes dependiam de ripgrep, que não é dependência do repo
+`02-verify-metrica-ausente.sh` usava `rg`. Num shell sem ripgrep o `if ! rg …`
+inverte e o script se declara "MUTANTE VIVO" por ausência de ferramenta — um
+gate que só fecha numa máquina. Trocado por `grep -qE`. Commit `073a07d8`.
+
+### A5. Rota de webhook caía com mensagem legítima de cliente
+Mensagem anterior ao fechamento do atendimento alcançava a transição a partir
+de `archived`, cujo efeito `new_conversation` o schema herdado não comporta:
+500 com a linha já gravada. A fronteira herdada passou a preceder a máquina.
+ADR-019, commit `ec0d7c75`.
+
+### A6. Resolver pelo inbox não encerrava de verdade
+D16 `resolved` traduzia para o legado `resolved`, mas o produto só conta
+`["closed","archived"]` como encerrado: a conversa sumia da aba "Fechadas",
+seguia em `exclude_finished` e escapava do varredor de silêncio. Commit
+`b101e239`.
+
+### A7. Duas tabelas novas sem prova comportamental de RLS
+`mock_outbox` e `job_runs` tinham prova de CATÁLOGO (policies, grants), não de
+comportamento. O gate 01 da F03 as pegou. Prova real escrita em dois tenants,
+com anti-vácuo medido nas duas. Commit `3072959a`.
+
+### A9. `POST /api/v1/messages` herdado não honrava `Idempotency-Key` (era o §B10)
+Consertado na F06-T02: com a chave, a mensagem nasce com id determinístico por
+(organização, atendente, chave) e a repetição do `apiClient` devolve a linha
+existente sem chamar o canal de novo (`lib/api/idempotency.ts`,
+`idempotentReplay` no handler). Prova: posts=2 messages=1 channel_sends=1/2;
+sem a chave o comportamento herdado continua (guarda de vacuidade). Commit
+`6bc564ad`. O texto original do achado fica em §B10, marcado.
+
+### A10. A guarda G-51 do scanner de segredos estava MORTA desde a F01
+`grep -c … || echo 0` em `scripts/scan-secrets.sh` produzia "0\n0" quando a
+fixture negativa não era pega; o `[ -lt 2 ]` reclamava de inteiro e o script
+saía 0 — um scanner com padrão quebrado passava no gate e no CI. Achado pelo
+mutante 56 (F06-T04), que VIVIA antes do conserto. Commit `7d84ca81`.
+
+### A11. Busca por texto do painel do dono respondia 500 (era o §B17)
+`app/api/v1/admin/tenants/route.ts` montava `slug::text.ilike` dentro do `or`
+e o PostgREST recusava o cast. Consertado na F13-T00 (ADR-034 §4): `slug.ilike`;
+caso de spec na `f13-crm-comercial` (o dono busca por slug e por nome, 200 com A
+e sem B). Achado em produção em 14/09 (F08/D53). Commit `ee540a1f`.
+
+### A8. Sandbox do gate não era reproduzível
+A receita do ambiente de navegador só existia como cópia de `config.toml` na
+evidência da F02. Virou `scripts/verify/sandbox.sh`, que a deriva do config
+versionado por substituições conferidas e cria as extensões que o baseline
+referencia e não cria. Commits `8ebad6d3` e `b101e239`.
+
+---
+
+## B. Achados NÃO consertados — proposta para o proprietário
+
+### B1. Spec herdada que passa sem provar nada
+`tests/e2e/inbox-responder-citando.spec.ts` procura `li, [role='listitem']`,
+mas a lista renderiza `<button data-conversation-id>` desde antes da F02
+(medido em `3c1f6f6e:components/inbox/ConversationListItem.tsx:172`). A guarda
+do próprio spec então PULA os dois testes, e um teste que se pula sozinho é um
+teste que afirma verde sem medir nada.
+**Proposta:** corrigir o seletor e exigir que a jornada realmente abra a
+conversa; se ela não puder rodar, declará-la fora do CI explicitamente em vez de
+deixá-la pular em silêncio. Custo: baixo. Risco de não fazer: uma jornada de
+resposta citando mensagem sem cobertura real.
+
+### B2. 73 tabelas em `DEBITO_CONHECIDO` sem prova comportamental de RLS
+`tests/invariants/rls-completude-varredura.test.ts` fotografou a dívida herdada
+em 2026-08-27. A lista não cresceu nesta construção (tabela nova entra em
+`TABLES` ou `PROVA_PROPRIA`, nunca ali), mas também não encolheu.
+**Proposta:** uma tarefa por fase que mova N tabelas da dívida para prova real,
+com o denominador caindo de forma visível no bloco do gate. Custo: médio,
+divisível. Risco de não fazer: o isolamento dessas tabelas continua afirmado
+pelo catálogo, não pelo comportamento.
+
+### B3. `baseline.sql` mente se lido linearmente
+O corpo vem de `pg_dump` e os apêndices o corrigem mais adiante no MESMO
+arquivo: `ai_knowledge_sources.agent_id` aparece `NOT NULL` na linha 1113 e é
+tornado anulável pelo apêndice da 0181 na 16365. Um agente (e uma pessoa) que
+leia só o corpo conclui o oposto do estado real. Aconteceu nesta construção.
+**Proposta:** um teste que, para cada coluna cujo corpo e apêndice divergem,
+exija um comentário no corpo apontando o apêndice; ou gerar o baseline já
+consolidado. Custo: médio. Risco de não fazer: decisões de schema tomadas
+contra um estado que não existe.
+
+### B4. `skip_only_occurrences=15` — inventariadas e classificadas
+
+O campo é informativo por desenho (§8.3) e `tests_skipped=0` continua verdadeiro
+no gate: nenhum teste do inventário obrigatório é pulado. As 15 ocorrências
+foram lidas uma a uma. **Doze são legítimas, três não são.**
+
+Legítimas — guarda de credencial ausente (D12: sem credencial, a fase fecha com
+mock e a prova real fica marcada, não inventada):
+`acervo-de-conhecimento.spec.ts:228,260,287,315` (`OPENAI_API_KEY_E2E`),
+`followup-dossie.spec.ts:188` e `system-update.spec.ts:46` (`INTERNAL_SECRET`),
+`agenda-google-volta-do-consentimento.spec.ts:108` (sem credencial Google),
+`journeys/canal-oficial.spec.ts:93` (`META_SYSTEM_USER_TOKEN`).
+
+Legítima — estado inalcançável naquele tenant:
+`acervo-de-conhecimento.spec.ts:197` (a organização já tem chave de embedding,
+então o estado "esperando" não existe ali).
+
+Não são skip: `entrega-sem-tela-declara-quem-prova.test.ts:57,149` são o
+COMENTÁRIO e a STRING de um teste que detecta teste falso — ele afirma que
+`test.skip("depois eu faço", () => {})` NÃO conta como teste vivo. E
+`tests/verify/gate.cases.mjs:396` é conteúdo de um arquivo-fixture gerado
+dentro do próprio teste do gate.
+
+**Os três que merecem ação:**
+
+1. `agenda-conectar-google.spec.ts:126` — `test.skip("conectar a agenda do
+   Google pela tela e ver a faixa mudar", …)`: skip **incondicional**, uma
+   jornada inteira desligada. O comentário explica (falta conta Google de teste
+   com consentimento pré-aprovado), o que é honesto, mas o resultado é uma
+   jornada que nunca roda e nunca aparece como dívida em contador nenhum.
+2. e 3. `inbox-responder-citando.spec.ts:76,104` — é o B1: a guarda pula porque
+   o seletor nunca acha conversa, então dois testes afirmam verde sem medir.
+
+**Proposta:** os dois casos são a mesma doença com gravidades diferentes — teste
+que não roda e não é contado como não rodando. Ou viram dívida declarada num
+contador do bloco (como `expected_failures` já é), ou o seletor/credencial é
+consertado. Custo: baixo para o B1; o de agenda depende de conta de teste, que
+é item humano.
+
+### B5. `create_task` pela IA é negada pelo domínio — **decisão tomada em D54 (b): abrir a escrita a executor não humano com auditoria própria (F15-T01, ADR-036 §2)**
+`executeLinkedTaskCommand` exige executor humano com sessão, então a tool
+`create_task` de D18 volta `denied: non_human_executor_denied` quando a IA a
+chama. Está declarado em código e em teste, não escondido — mas D18 lista
+`create_task` como tool da IA.
+**Decisão necessária (§5.5):** abrir a escrita do CRM a executor não-humano com
+auditoria própria, ou retirar `create_task` do subset da IA e ajustar D18.
+Hoje o catálogo promete uma coisa e o domínio entrega outra.
+
+### B6. `expirarConfirmacoes()` não tem Job que a chame
+A expiração de confirmação por timeout existe e é provada, mas nenhum job em
+`job_queue` a executa de hora em hora. Enquanto não houver, o
+`confirmation.timeout` de D33/D34 só acontece se alguém chamar a função.
+**Proposta:** registrar o job na F05, junto do cron por tenant do lembrete.
+
+### B7. Turno faz ~14 idas ao banco só para ler Settings
+Cada `getSetting` é uma consulta. É a porta sancionada de §5.2, e não foi
+otimizada de propósito, mas o custo cresce por turno.
+**Proposta:** leitura em lote por prefixo (`ai.*`) numa consulta, preservando a
+fachada. Custo: baixo. Ganho: latência do turno.
+
+### B8. Dois turnos de IA convivem declaradamente
+O turno de lead herdado (`runAgentTurn`, 12 tools nativas + 57 MCP) e o turno
+SaaS (nove tools de D18) coexistem — ADR-021 o registra e
+`elegivelParaWorkerLegado` continua `false`, então ninguém recebe duas
+respostas. Unificá-los é trabalho de F13/F15 e exige inventário de leitores.
+**Risco enquanto durar:** duas superfícies de ferramenta com políticas
+diferentes. A prova de que só uma responde precisa continuar existindo a cada
+fase.
+
+### B9. `.github/workflows/e2e.yml` e o escopo do token
+O push da branch falha porque o token do `gh` não tem escopo `workflow`, e o
+commit da F03-T09 registra a spec nova no workflow para a CI acompanhar o gate
+local. `gh auth refresh -h github.com -s workflow` destrava.
+**Enquanto não destravar:** o trabalho existe só localmente, e a CI não roda as
+specs novas.
+
+### B10. `POST /api/v1/messages` (herdado) não honra `Idempotency-Key`; o cliente repete o POST — **CONSERTADO na F06-T02 (ver A9)**
+Medido no trace do Playwright do gate f05-gate-06 (12/09/2026): a jornada
+"responder" de `f03-inbox.spec.ts` fez DOIS POSTs a `/api/v1/messages` — o
+primeiro sem resposta em 10 s (`DEFAULT_TIMEOUT_MS` de `lib/api/client.ts:16`,
+que então repete com backoff), o segundo com 201. O `apiClient` manda
+`Idempotency-Key` em todo método mutante (`lib/api/client.ts:117`), mas o
+handler herdado `app/api/v1/messages/_handler.ts` não lê o cabeçalho: sob
+latência > 10 s a repetição grava uma SEGUNDA mensagem — e ela sai para o
+cliente duas vezes. Apareceu em 3 de 6 gates da F05, sempre com a VPS
+sobrecarregada (load average 12–21); nunca nos gates de F03/F04.
+**Proposta:** o handler honrar `Idempotency-Key` (recibo por
+`(organization_id, chave)` com o mesmo desenho dos recibos de comando da F02),
+ou a rota nova de envio (`execute(send_message)`, que já é idempotente por
+`idempotency_key`) substituir o caminho síncrono herdado — trabalho de
+consolidação já previsto na ADR-017. Custo: médio. Risco de não fazer: mensagem
+duplicada para cliente real em qualquer pico de latência.
+
+### B11. O Sentry herdado manda erros para um Sentry de TERCEIRO por padrão — **CONSERTADO na F11-T00 (D51 d, ADR-030 §5)**
+`resolveSentryDsn("")` passou a devolver `undefined` (desligado); a comunidade
+só entra por `SENTRY_DSN=community`. README do kit, `.env.example`, `install.sh`
+(resposta "sim" grava `community`) e as mensagens de boot dizem o novo padrão.
+Prova: `tests/unit/sentry-comunidade-so-erro.test.ts` (`desligado_sem_dsn=3/3
+comunidade_opt_in=2/2 dsn_proprio=1/1`). Texto original abaixo, como registro.
+
+`lib/sentry/dsn.ts`: sem `SENTRY_DSN`, `resolveSentryDsn()` cai em
+`DEFAULT_SENTRY_DSN` — o projeto Sentry "da comunidade" do autor do Deskcomm.
+Num SaaS com dados de tenant, erro de produção sairia da máquina para uma
+conta que não é do proprietário (o scrub de PII é denylist, `lib/sentry/scrub.ts`).
+O staging da F06 roda com `SENTRY_DSN=off` explícito; a F06-T01 acrescentou a
+allowlist de contexto (`src/obs/erros.ts`) para o que o código SaaS anexa,
+mas não mudou o padrão herdado.
+**Proposta:** inverter o padrão — sem DSN, telemetria DESLIGADA — e deixar a
+comunidade como opt-in. Custo: uma linha e o README do kit. Risco de não
+fazer: uma instalação sem `SENTRY_DSN` no `.env` exporta erros para fora.
+Decisão do proprietário: muda comportamento herdado do kit self-host.
+
+### B12. Portas publicadas pelo Docker atravessam o `ufw` nesta VPS (não é o staging)
+Medido em 12/09/2026: `DOCKER-USER` vazia; o Docker faz DNAT em PREROUTING
+antes do `ufw`. Todo container com porta publicada em `0.0.0.0` responde na
+interface pública — entre eles o Supabase de desenvolvimento do checkout
+antigo (`54321` API, `54322` Postgres com a senha padrão do CLI; parado em
+12/09 durante o gate da F06, `supabase stop` com volumes preservados) e os
+Postgres/Evolution de outros projetos. O staging da F06 publica só em
+`127.0.0.1` e no IP do Tailscale e NÃO está nessa lista. A regra que fecha a
+interface pública para containers (mantendo 80/443 do que deve ser público)
+está em `docs/ops/staging.md` §Firewall. **Porta 1-way: quem aplica é o
+proprietário.**
+
+### B13. `create-tenant.ts` pula os blocos `customers`, `products` e `faq` do seed
+"entra na fase que adapta a tabela (F02/F04)" — a fase passou e o loader não
+foi adaptado: o seed do demo2 declara 1 cliente, 1 produto e 7 FAQs que nunca
+chegam ao banco. O staging da F06 contorna com as fixtures FICTÍCIAS da F02
+(`demo2.f02-fixtures.yaml`, sob o marcador de sandbox no banco), e o smoke
+compara contra ELAS, não contra o seed — declarado no `smoke.mjs`.
+**Proposta:** o loader gravar os três blocos nas tabelas que a F02/F04
+criaram (`contacts`/`crm_companies`, `catalog_products`, acervo), com prova
+de contagem `seed=N banco=N`. Custo: baixo. Risco de não fazer: "criar um
+tenant novo" (F07-T03) entrega um tenant sem clientes nem produtos.
+
+### B13 — **CONSERTADO na F07-T03 (ADR-029 §3)**: o loader grava `products`/`customers`/`faq`
+`create-tenant.ts` passa a gravar os três blocos (`catalog_products`,
+`contacts`/`crm_companies`, acervo da organização) com id determinístico;
+itens com `TODO-` são contados e não viram linha; `products[].size` saiu do
+schema do seed em D51 (13/09/2026; F11-T00 o tirou dos seeds, do loader e do teste). O loader
+também grava `onboarded_at` no INSERT — sem isso o tenant semeado caía em
+`/onboarding` (achado da F07). Detalhe em ADR-029 §3.
+
+### B15. `up.sh` do staging não é re-executável depois do primeiro smoke — **CONSERTADO na F11-T00 (D51 d, ADR-030 §5)**
+`scripts/f02-fixture-writer.ts`: a conferência byte a byte vale só para a linha
+que a inserção acabou de criar; no rerun (insert criou 0), a conferência é
+"existe linha com este id nesta organização". Prova: caso "§B15 (F11-T00): rerun
+tolera linha já existente tocada por gatilho ou pipeline" em
+`tests/integration/create-tenant-f02-seed.test.ts` (`tocadas=N/N
+rerun_rows_created=0/0 erro=0/1`). `up.sh` volta a reaplicar seeds em staging
+tocado pelo smoke. Texto original abaixo, como registro.
+
+Achado na F07-T03. O escritor de fixtures fictícias da F02
+(`scripts/f02-fixture-writer.ts`) confere cada linha BYTE A BYTE no rerun
+(`expectOne`: `updated_at = created_at`, `source_metadata = '{}'`). O smoke da
+F06 mandava a mensagem do webhook como o contato fictício "Alfa": o pipeline
+gravou `waha_chat_id` em `source_metadata` e `trg_contacts_updated_at` moveu
+`updated_at`. Resultado: `create-tenant.sh demo2 --fictional-fixtures` reprova
+com `fixture_existing_row_mismatch` neste staging, e `up.sh` (que reaplica
+seeds) para aí. A F07 desviou: o remetente do smoke passou a ser o cliente do
+SEED (`seed-users.sh` desfaz o telefone e o metadado do Alfa, mas o gatilho
+impede repor `updated_at`), e o loader do demo2 foi rodado SEM `--fictional-fixtures`
+(rows_created=6, depois 0). Instalação nova (from-scratch) não é afetada: a
+prova de integração cobre seed + fixtures + rerun.
+**Proposta:** o escritor tolerar, no rerun, linha já existente com o MESMO id
+e `organization_id` (idempotência por id, como o loader faz), reservando a
+comparação byte a byte para a primeira gravação; ou `up.sh --no-seed` como
+padrão em staging já semeado. Custo: baixo. Decisão do proprietário: muda o
+contrato de "fixture imutável" da F02-T07.
+
+### B17. Busca por texto de `/api/v1/admin/tenants?q=` responde 500 em produção (F08, 14/09/2026) — **RESOLVIDO na F13-T00 (ver §A11)**
+Texto original preservado abaixo.
+
+`app/api/v1/admin/tenants/route.ts` monta `query.or("display_name.ilike.%q%,slug::text.ilike.%q%,cnpj.ilike.%q%")`;
+o PostgREST v16 da produção (o mesmo do staging) recusa o `::text` dentro do
+`or` — `"failed to parse logic tree (...)" (line 1, column 34)` — e a rota
+devolve `internal_error` 500. Sem `q` a lista funciona (é o que `scripts/prod/criar-tenant.mjs`
+usa). O gate não pega porque nenhuma spec exercita a busca por texto do painel
+do dono. Conserto provável: `slug.ilike.%q%` (o domínio do slug é texto) + um
+caso de spec em `f11-admin-e-entrada`. **Não consertado na F08** (código
+validado pelo gate é `dc39424a`; mudar a rota exigiria novo gate) — entra na
+próxima fase que tocar o painel do dono, por ADR.
+
+### B16. Specs herdadas do modo de EDIÇÃO do suporte ficaram sem produto (F11-T02, D51) — **RESOLVIDO na F15-T00 (D54 h, ADR-036 §5)**
+Decisão do proprietário (14/09/2026): reescrever para só-leitura. Feito em
+`tests/e2e/suporte-temporario.spec.ts`: o bloco que afirmava edição em B
+(`access_mode=full`: editar contato, criar/editar/desativar tipo de agenda,
+reconectar canal, salvar configuração) virou o seu negativo — banner "Somente
+leitura" com o nome de B, cada escrita recusada (403 / "Erro: forbidden") e o
+dado conferido intacto no banco; nenhuma asserção apagada, nenhuma `.skip`
+(D30). O trecho de acompanhamento de `agenda-presenca-recuperacao.spec.ts` já
+só lia (radar 200, `leads/at-risk` 403) e não precisou mudar. As duas
+continuam fora do inventário do gate; o `e2e.yml` as roda. **Medido contra o
+staging (14/09, app do gate em 3202)**: a spec reescrita passa por todo o bloco
+de só-leitura (banner, contato 403, tipos de agenda 403, reconexão 403, página
+de configuração → /403) e para na linha 212, "Assinatura B não confirmada" —
+a asserção herdada de REALTIME (websocket do inbox), a mesma que tira
+`inbox-tempo-real.spec.ts` do CI (`e2e.yml`, nota de 2026-08-26). Não é da
+reescrita; fica registrado, sem afrouxar. Três ajustes de bancada entraram na
+reescrita: a leitura de B pela rota (`GET /api/v1/contacts/{id}` 200) em vez
+de texto do DOM, a página de configuração é /403 em só-leitura (não "salvar
+recusado"), e a recusa de `/api/v1/team/assignable` (`agent`+) é por desenho
+para o viewer do acompanhamento. O texto abaixo é o registro do achado como
+estava.
+
+
+`tests/e2e/suporte-temporario.spec.ts` e o trecho de acompanhamento de
+`tests/e2e/agenda-presenca-recuperacao.spec.ts` (fora do inventário do gate,
+listadas em `.github/workflows/e2e.yml`) abrem o diálogo de acompanhamento e,
+em parte, afirmam EDIÇÃO dentro da organização acompanhada (`access_mode=full`).
+Desde a F11-T02 (ADR-030 §4) a rota SaaS só emite `support_readonly`, com
+motivo e escopo obrigatórios; as duas specs passaram a preencher o motivo para
+o diálogo abrir, mas as asserções de escrita descrevem um modo que não existe
+mais nesta base (o invariante de banco `tests/invariants/suporte-temporario.test.ts`
+continua verde: `fn_start_support` herdada segue no kit). **Decisão do
+proprietário:** reescrever as asserções para só leitura, ou retirar as specs
+do `e2e.yml` do fork. Nenhuma foi apagada nem pulada (D30).
+
+### B14. Reserva de swap sem persistência
+`/swapfile` (2 GB) existe, foi reativado na F02 e de novo na F06
+(`swapon /swapfile`), e não está no `/etc/fstab`: some a cada reboot. Durante
+o build do app a máquina chegou a 1,9 GB de swap usado. **Porta 1-way**
+(mexe em fstab): `echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab`.
+
+---
+
+### B18. ~~A entrada SaaS do WhatsApp não marca a prévia nem o não-lido~~ — CONSERTADO na F18-T04
+**Consertado em 18/09/2026 (F18-T04):** `concluirEntrada` chama `fn_mark_conversation_message` para
+TODO canal, e o webchat deixou de chamá-la por conta própria. Registro original abaixo.
+
+A entrada herdada do WAHA (`lib/waha/ingest.ts:377`) chama `fn_mark_conversation_message`
+(prévia, `last_inbound_at`, `unread_count_for_assignee`); a SaaS (`src/channels/inbound.ts`,
+mock e WAHA SaaS) não — o inbox lista a conversa com "Sem mensagens" e sem contador.
+Descoberto ao medir o chat do site no navegador (a lista não achava a conversa pela prévia);
+o webchat chama a RPC na própria entrada (`src/webchat/entrada.ts`). Conserto proposto: chamar
+a RPC em `concluirEntrada` para todo canal — muda o comportamento visível do inbox nas suítes
+da F03/F05 (contadores), por isso fora da F14. Custo: baixo. Ganho: inbox honesto para o WhatsApp
+SaaS. **Risco enquanto durar:** o atendente não vê a prévia da última mensagem de WhatsApp.
+
+### B19. ~~`pnpm lint:channels` reprova desde a F11~~ — CONSERTADO na F18-T04
+**Consertado em 18/09/2026 (F18-T04):** a conexão de teste virou `src/channels/conexao-de-teste.ts`
+(dentro da fronteira, onde nomear transporte é permitido) e a action ficou só com o que é do wizard.
+A régua entrou no gate (`step lint-channels`, ADR-041 §4): régua vermelha que ninguém roda é régua
+que não existe. Registro original abaixo.
+
+`scripts/lint-channels.ts` (doutrina restricao-de-canal, invariante 1) reprova o arquivo do
+wizard mock da F11; o gate não roda esse lint (`gov:verify` sim), então passou despercebido
+por quatro fases. Conserto: pedir o adapter/capability em vez de nomear `mock`/`waha` — ou
+registrar em `KNOWN_DEBT` do lint com motivo. Custo: baixo.
+
+### B20. PostgREST do staging trava depois de reaplicar o baseline por `psql` (18/09/2026)
+Depois de `psql -f supabase/baseline.sql` no banco do staging (o que a receita da RETOMADA manda
+antes de uma spec nova), o `crm-staging-rest` respondeu 504 `PGRST003 Timed out acquiring
+connection from connection pool` para toda requisição até `docker restart crm-staging-rest`.
+O `up.sh` reinicia o realtime depois do baseline, não o PostgREST. Conserto: a receita (e o
+`up.sh`) reiniciam o `rest` depois do baseline. Custo: uma linha.
+
+### B21. A guarda do baseline enumera os tipos de notificação e uma prova real derruba a subida seguinte (18/09/2026)
+O apêndice 9023 do `supabase/baseline.sql` recusa aplicar-se (`raise exception`, linha ≈ 27302) quando
+`notifications` tem um `event` fora da lista literal. A prova `ai_real:` da F15 gravou 1 `ai.limit_reached`
+(evento criado pela própria 9028) na produção; o `scripts/prod/up.sh` da F14 parou nessa guarda na primeira
+subida. Conserto aplicado: `'ai.limit_reached'` na lista. Regra: toda migration que cria evento de
+notificação atualiza a lista da guarda no mesmo commit; toda prova real que grava linha nova é candidata a
+tropeçar na subida seguinte — o `up.sh` devia listar os eventos presentes ANTES de aplicar. Custo: uma linha
+na guarda; a checagem prévia no `up.sh`, dez.
+
+### B22. Prova de shell herdada pode PENDURAR para sempre dentro do gate (18/09/2026)
+`tests/shell/owner-id-por-email.test.sh` ficou 1h25 parada num `head -1` esperando stdin, no passo
+`shell` do f18-gate-02 — a mesma prova tinha passado em 58 s no gate 01, duas horas antes. Nenhum
+passo do `verify.sh` tem `timeout`: um comando que nunca volta não reprova, ele PENDURA, e o gate
+fica vivo sem produzir nada (o sintoma é log parado, não erro). Conserto proposto: `timeout` por
+passo no `step` do `verify.sh` (o teto dá para ser generoso — 40 min cobre o mais lento com folga)
+e `</dev/null` nas provas de shell, que não leem entrada. Custo: baixo. **Risco enquanto durar:**
+um gate que pendura à noite custa a janela inteira e parece que "ainda está rodando".
+
+### B23. O turno usa o modelo PADRÃO DA ORGANIZAÇÃO, e o custo dele não é precificado (19/09/2026) — (b) CONSERTADO na F19-T00; (a) declarado
+Dois lados do mesmo achado, medidos na jornada do motor em produção:
+(a) `responderTurno` rodando no WORKER escolhe o modelo por `organizations.settings.llm.default_model`
+(`origem_da_escolha=padrao_da_organizacao`), não pelo `AI_CHAT_MODEL` que a jornada injeta no
+processo — a variável só vale quando o turno roda no MESMO processo do script (F14). Consequência
+medida: 5 chamadas `agent_turn` saíram em `claude-sonnet-5` (61.154 tokens de entrada, 3.640 de
+saída) quando o teto combinado era Haiku. Conserto para a próxima prova: gravar e devolver
+`llm.default_model` junto com as chaves de `tenant_settings`.
+(b) `llm_calls.cost_cents` fica NULO para `claude-sonnet-5` e `ai_usage_events.estimated_cost_cents`
+recebe `coalesce(...,0)` — ou seja, o consumo é registrado com custo ZERO. O teto diário da F15 conta
+TURNOS, então o freio continua valendo; o que não existe é a conta em dinheiro, e a tela de uso de IA
+mostra zero para quem usa esse modelo. **Risco enquanto durar:** o dono não vê o que gasta.
+**F19-T00 (ADR-042 §1):** (b) consertado — `claude-opus-5` (5/25), `claude-sonnet-5` (2/10) e
+`claude-haiku-4-5` (1/5) USD por milhão entraram na tabela do motor (`lib/agent-engine/edge/llm/pricing.ts`,
+tarifa do skill `claude-api`); a jornada da F18 recotada dá 15,87 cents em vez de zero
+(`tests/unit/f19-t00-preco-da-geracao-5.test.ts`, mutante 81). (a) continua como aviso no script da
+jornada: a prova que quiser fixar o modelo grava e devolve `llm.default_model` junto com as chaves.
+
+### B24. `next build` morre por OOM nesta VPS quando outra sessão roda vitest/eslint/build em paralelo (19/09/2026)
+Duas tentativas de `pnpm e2e:build` da F19 foram mortas pelo kernel (anon-rss 3,4–3,9 GB, 4,3 GB
+disponíveis; a segunda com heap limitado a 3 GB — o Turbopack usa memória fora do heap). Um deploy do
+Oferta-OS (`next build`) também rodou no meio do passo `build` do f19-gate-03 e sobreviveu por pouco.
+Conserto proposto: D51 (c) passa a valer para BUILD (avisar as sessões antes de `e2e:build`, conferir
+`free -m` ≥ 4,5 GB, `NODE_OPTIONS=--max-old-space-size=3072`); e um `.envrc`/aviso nos outros OS para
+não rodar `next build` enquanto um gate do CRM-OS estiver de pé. Custo: baixo. **Risco enquanto durar:**
+uma janela de gate (≈2 h) perdida por build alheio.
+
+### B25. O pool do PostgREST da PRODUÇÃO travou e deixou o site 36 h fora — e a tela culpou a permissão do dono (21–22/09/2026) — CONSERTADO (código) na F19-T06; infra reiniciada
+Em 21/09 11:08:11Z o `crm-prod-rest` começou a responder `PGRST003: Timed out acquiring connection from
+connection pool` **em toda requisição** e não se recuperou sozinho: 9.628 ocorrências, `/api/v1/health`
+em 503, PostgREST em 504 por 36 h. O Postgres estava SÃO (21 conexões de 100, nenhuma transação presa,
+checkpoints normais a cada 5 min) — quem travou foi o pool do PostgREST, que mantinha uma única conexão
+ociosa há 8 dias. Nada no banco explica o horário; não houve carga do CRM nesse momento. É o mesmo
+sintoma do §B20 (staging), agora em produção e sem nenhuma reaplicação de baseline por perto.
+**Conserto da infra**: `docker restart crm-prod-rest` (22/09 23:23:46Z) — rest 200 em 0,14 s, app 200 em
+0,07 s, 20/20 requisições verdes, `prod:` completa (14/14, owner_login=1/1).
+**O que agravou**: a tela. `requirePlatformAdmin` (`lib/auth/requirePlatformAdmin.ts`) lia `platform_admins`
+DESCARTANDO o `error`; `data: null` virava "não tem linha" e o proprietário — platform_admin ativo, com
+`mfa_required=false` — recebeu **"Acesso negado: esta área é restrita a administradores da plataforma com
+MFA ativo"**. A tela acusava permissão e MFA; a causa era um container. `lib/auth/server.ts` já fazia o
+certo desde o incidente de 2026-07-30 ("FALHA ALTO, não baixo"); este caminho tinha ficado de fora.
+**Conserto do código (F19-T06)**: erro na consulta agora estoura `auth_permissions_unavailable: <code>: <msg>`
+com log, em vez de redirecionar para `/admin/forbidden`; teste `tests/unit/f19-t06-admin-guard-falha-alto.test.ts`
+(4 casos: erro estoura, mensagem nomeia o código, sem linha continua forbidden, admin com aal2 passa) e
+mutante 87. **Pendência (proprietário)**: o `crm-prod-rest` não tem healthcheck no `compose.prod.yml` — um
+container "Up 8 days" servindo 504 é invisível para o Docker e para qualquer alerta. Propor healthcheck
+(`GET /` no PostgREST) + `restart: unless-stopped` reagindo a ele numa fase de operação (F17).
+
+### B26. A linha `prod:` citava o commit da ÁRVORE, não o que está rodando (22/09/2026) — CONSERTADO na F19-T06
+`scripts/prod/prova.sh` gravava `SHA=$(git rev-parse --short HEAD)`. Rodada em 22/09 com a árvore em
+`e5f11e33` e a imagem de produção construída em **19/09** (código da F19, `e3c34195`), a linha saiu
+`sha=e5f11e331` — um commit que nunca foi para a produção. Evidência que mente é pior que evidência
+ausente: o BUILD-STATE registraria um deploy que não houve (G-04). A imagem `crm-app:prod` também não
+carrega nenhum label de commit. **Conserto**: `up.sh` carimba `git rev-parse --short HEAD` em
+`.prod/app/standalone/COMMIT` (o Dockerfile copia `standalone/` para `/app`), e `prova.sh` lê
+`/app/COMMIT` DE DENTRO do container; sem carimbo, imprime `sha=desconhecido` e avisa — nunca o da
+árvore. Teste `tests/unit/f19-t06-sha-da-producao-e-o-da-imagem.test.ts` (a cadeia inteira: carimbo →
+cópia → leitura) e mutante 88 (mutação em DISCO: a suíte lê arquivo, e mutante em memória não a alcança —
+a primeira versão do 88 ficou verde e provou isso). **Enquanto a produção não rodar `up.sh`**, a linha
+dirá `sha=desconhecido`: é o valor honesto para uma imagem construída antes do carimbo.
+
+### B27. O link de convite tem 559 caracteres e o WhatsApp não o torna clicável (22/09/2026) — decidido em D59, construção depois da T06
+O convite é um token **stateless** (`lib/auth/invite-token.ts`): email, `organization_id`, papel, `interface_settings`,
+`invited_by`, `iat`/`exp` e a assinatura HMAC viajam dentro da própria URL. Medido com um payload real:
+JSON 350 chars → body 467 + assinatura 43 = token 511 → **URL de 559 caracteres**. No WhatsApp do
+proprietário (print de 22/09), só `https://crm.kntecnologia.app/team/accept-invite/` saiu como link; o
+resto virou texto em oito linhas, e a pessoa convidada não consegue clicar. Enxugar o payload
+(`interface_settings` é o maior pedaço) levaria a ~323 chars — ainda grande.
+**Segundo efeito, mais sério que o tamanho**: sem linha no banco não há **revogação**. Um link que vazou
+(grupo de WhatsApp, encaminhamento) vale até expirar, e o dono não tem como cancelar nem ver quem está
+pendente. O TTL hoje é 24 h (`INVITE_TTL_SECONDS`).
+**Decidido (D59)**: tabela de convites com id curto (`/i/<id>`, ~60 chars), revogação e lista de
+pendentes, TTL para 7 dias; task própria DEPOIS da F19-T06, com ADR, migration + prova de RLS, rota em
+`PUBLIC_PATHS`, testes e mutante. Enquanto isso, o convite por e-mail funciona (o link longo não
+atrapalha no e-mail) — foi assim que a F08 mediu `email=1/1`.
+
+### B28. Criar um tenant dá ao `platform_admin` acesso admin PERMANENTE, contornando o suporte só-leitura (22/09/2026) — decidido em D60, construção junto da D59
+`fn_create_tenant_with_owner` (migration da F11) insere, sem condição,
+`user_organizations(org.id, p_actor, 'admin', now(), …)`. A F11/D51 desenhou o acesso do dono da
+plataforma às organizações dos clientes como **sessão de suporte só-leitura**, com motivo (10–500
+chars), escopo e vencimento (1–60 min), tudo auditado — e essa linha abre uma porta lateral: quem cria
+a organização entra por ela quando quiser, com escrita, sem motivo, sem prazo e sem aparecer como
+suporte na auditoria. Medido na produção em 22/09: o proprietário é `admin` com `accepted_at` em
+`kn-tecnologia`, `deka` e `deka-sucos`.
+**Efeito colateral bom, que a decisão preserva**: é por essa membership que o dono consegue recuperar um
+convite perdido (trocar de organização no app → Equipe → Convidar). Sem ela, o caminho não existe —
+`requireSupportWrite` nega `POST /api/v1/team/invite` durante sessão de suporte
+(`app/api/v1/team/invite/route.ts:43`).
+**Decidido (D60)**: a membership do criador só nasce quando o convite é para ele mesmo; para outra
+pessoa, a organização nasce sem ele. **A ordem importa**: essa regra só entra junto ou depois da ação
+de reenviar/ver convite no `/admin` (D59), senão um convite expirado sem aceite deixa a organização
+ÓRFÃ — ninguém entra e o suporte não pode convidar. Organizações existentes não mudam sozinhas.
+**Também da mesma conversa**: o texto da tela de criação ("Se o convite vencer, abra Equipe na
+organização para gerar outro") é verdadeiro mas ilegível para quem não sabe que dá para trocar de
+organização no seletor; reescrever junto com o link curto (D59).
+
+### B29. Vinte rotas de API do `/admin` mascaravam falha de infraestrutura como falta de permissão (23/09/2026) — CONSERTADO na F20-T03
+O conserto de §B25 alcançou a PÁGINA (`requirePlatformAdmin` passou a falhar alto), mas as rotas de API
+chamavam a mesma guarda dentro de `try { … } catch { return fail("forbidden", "Platform admin required",
+403) }`. Esse `catch` engole tudo: com o pool do PostgREST travado, um `platform_admin` legítimo recebia
+403 em `/api/v1/admin/*` — a mesma mentira do incidente, um andar abaixo. Medido em 23/09: **20 arquivos**
+de rota com o padrão (18 ocorrências mecânicas + 3 variantes: mensagem com ponto final em `lgpd/requests`
+e `kpis` sem `requestId` próprio).
+**Conserto**: `lib/auth/requirePlatformAdminApi(requestId)` — negação continua **403**; erro que carrega
+`auth_permissions_unavailable` vira **503 `upstream_unavailable`** com a frase que diz para tentar de
+novo. Todas as 20 rotas convertidas; prova em `tests/unit/f20-t03-guarda-de-admin-na-api.test.ts`
+(admin passa, não-admin 403, banco fora 503) e as 5 suítes de rota do `/admin` seguem verdes (19/19).
+**O que fica**: a página e a API agora concordam. Rota nova de `/admin` deve usar o helper, nunca o
+`try/catch` em volta da guarda de página — o `catch` volta a mascarar no dia em que alguém o copiar.
+
+## C. Portões do proprietário — o que a engenharia não pode abrir sozinha
+
+D49 suspendeu a pausa por fase de D47, mas preservou D11–D13. Estes itens não
+são preferência técnica: são atos com efeito fora do repositório, ou dependem de
+credencial e dinheiro. Ficam aqui porque a entrega final tem de listá-los.
+
+### C1. `hosting_confirmed: no` bloqueia a F06 por texto explícito — **RESOLVIDO por D50 (11/09/2026)**
+Decidido: staging nesta VPS por Docker Compose com Supabase local (self-hosted),
+acesso só por Tailscale. `hosting_confirmed: yes` no BUILD-STATE; ADR-027. A
+F06 continua esperando a mensagem do proprietário para começar (D50 c). O texto
+abaixo é o registro do portão como estava.
+
+§7.7 escreve a pré-condição da F06 assim: "`F05=done`, `hosting_confirmed=yes`
+(D03). **Sem isso, BLOCKER e fim da run (D11)**". O `BUILD-STATE.md` tem
+`hosting_confirmed: no`.
+
+D03 tem um DEFAULT escrito (Docker Compose numa VPS, com Postgres apontando
+para **Supabase gerenciado**) e diz "pendência do proprietário: confirmar antes
+da Fase F06". Adotar o default resolve metade: o Compose roda nesta VPS. A outra
+metade não é técnica — um projeto Supabase **gerenciado** para staging é recurso
+externo com credencial e, dependendo do plano, custo. D11 reserva "custo novo" e
+"credencial para validação REAL" ao proprietário.
+
+Consequência honesta: a F06 pode ser **construída** (logs por tenant, rate
+limit, LGPD mínima, `backup.sh`/`restore.sh`, `compose.staging.yml`,
+`smoke.sh`, workflow de CI) e **não pode ser fechada**, porque o critério de
+saída dela é `STATUS: READY (staging)` rodado DENTRO do staging. Fechá-la contra
+o sandbox local seria chamar de staging o que é a máquina de desenvolvimento.
+
+**O que destrava:** confirmar o hosting (ou dizer que o staging é esta VPS com
+Supabase local, o que muda o critério e merece linha na DIRETRIZ) e, se for
+Supabase gerenciado, fornecer o projeto.
+
+### C2. Push bloqueado por escopo de token — **RESOLVIDO por D50 (11/09/2026)**
+A branch sobe por SSH (`origin` é `git@github.com:…`); o escopo `workflow` do
+token do `gh` não bloqueia o push. PR em rascunho aberto após o READY da F05.
+
+### C3. Itens de D12 que continuam pendentes para a produção
+Domínio, Supabase de produção, chave OpenAI com orçamento, número de WhatsApp
+com aceite de risco de ban da Deka, e-mail transacional, Sentry e usuário
+`platform_admin`. Nenhum deles bloqueia F03/F04/F05, que fecham com mock e
+`NOT VALIDATED (real)` (D12) — mas todos bloqueiam F08 em diante.
+
+### C4. Decisões comerciais que o agente não toma (D14, D28)
+Nome da plataforma, nomes e preços dos planos, gateway de pagamento. F12
+(assinatura e cobrança) não começa sem elas.
+
+### C5. A conversa nova a partir de `archived` (D34)
+Descrita em ADR-019. Exige tornar parcial o índice
+`uniq_conversations_1to1_per_contact_session`, que tem nove dependentes
+provados, entre eles a jornada de fusão de contatos duplicados. Muda o
+comportamento do caminho herdado, não só do SaaS.
+
+### C6. `create_task` pela IA (ver B5) — **RESOLVIDO por D54 (b), construído na F15-T01**
+O catálogo promete e o domínio nega. Ou a escrita do CRM se abre a executor
+não-humano com auditoria própria, ou `create_task` sai do subset da IA e D18 é
+ajustada.

@@ -16,14 +16,20 @@
  *     verdade); falha fechada se membership foi revogado.
  *  4. Rank insuficiente → audit `authz.denied` (fire-and-forget) + 403.
  */
+import { headers } from "next/headers";
 import type { NextResponse } from "next/server";
 
 import { fail, type ApiError } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
+import { acessoDaOrganizacao } from "@/lib/auth/acesso-da-assinatura";
 import { loadAuthUser, mfaEmDivida, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK, type ActiveOrg, type AuthUser, type Role } from "@/lib/auth/types";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
+import { rotaNoEscopo } from "@/lib/impersonate/escopo";
+import { escritaPermitida, type EstadoDeAcesso } from "@/src/billing/acesso";
+import { incrementCounter } from "@/src/obs/counters";
+import { registrarRequisicao, type DesfechoDaRequisicao } from "@/src/obs/log";
 
 export type RoleCheck =
   | { ok: true; user: AuthUser; org: ActiveOrg }
@@ -49,19 +55,75 @@ interface RequireRoleOpts {
  * Gate de rota: `const authz = await requireRole("manager", { requestId });`
  * `if (!authz.ok) return authz.response;`
  */
+/**
+ * F06-T01: caminho e método da requisição, como o proxy os encaminhou
+ * (`x-pathname` e `x-request-method`). Fora de um request scope (teste de
+ * unidade que chama o guarda direto) `headers()` lança — e aí a linha sai sem
+ * caminho, nunca sem `organization_id`/`request_id`.
+ */
+async function rotaDaRequisicao(): Promise<{ path: string | null; method: string | null }> {
+  try {
+    const hdrs = await headers();
+    return { path: hdrs.get("x-pathname"), method: hdrs.get("x-request-method") };
+  } catch {
+    return { path: null, method: null };
+  }
+}
+
 export async function requireRole(min: Role, opts: RequireRoleOpts = {}): Promise<RoleCheck> {
   const { requestId, resource, allowPlatformAdmin = false, organizationId } = opts;
+  const rota = await rotaDaRequisicao();
+  // Uma linha JSON por chamada ao guarda — é a linha "toda rota" de §7.7 T01.
+  // `request_id` vem da rota (ADR-015); sem ele a correlação é impossível e o
+  // log diz isso com um id próprio marcado.
+  const logar = (outcome: DesfechoDaRequisicao, org: string | null, actor: string | null, status: number) =>
+    registrarRequisicao({
+      request_id: requestId ?? `sem-request-id:${crypto.randomUUID()}`,
+      organization_id: org,
+      outcome,
+      path: rota.path,
+      method: rota.method,
+      actor_id: actor,
+      status,
+      ...(org === null ? { scope: "unresolved" as const } : {}),
+    });
 
   const user = await loadAuthUser();
   if (!user) {
+    logar("unauthenticated", null, null, 401);
     return { ok: false, response: fail("unauthenticated", "Auth required.", 401, { requestId }) };
   }
   const t = (texto: string) => traduzir(texto, user.idioma);
 
+  if (user.support && user.support.status !== "active") {
+    logar("support_ended", user.support.organization_id ?? null, user.id, 403);
+    return { ok: false, response: fail("forbidden", "O acompanhamento terminou. Saia para continuar.", 403, { requestId }) };
+  }
+  // F11-T02 (ADR-030 §4): o acompanhamento tem ESCOPO; rota fora dele é 403
+  // `support_scope`, contada. Vem antes do papel de propósito — o escopo é uma
+  // restrição da SESSÃO de suporte, não um papel na organização.
+  if (user.support && !rotaNoEscopo(user.support.scope, rota.path)) {
+    incrementCounter("support_scope_denied", { scope: user.support.scope });
+    void audit({
+      action: "authz.denied",
+      actorUserId: user.id,
+      organizationId: user.support.organization_id,
+      resourceType: resource ?? null,
+      requestId,
+      metadata: { reason: "support_scope", scope: user.support.scope, path: rota.path, support_session_id: user.support.id },
+    });
+    logar("support_scope", user.support.organization_id, user.id, 403);
+    return {
+      ok: false,
+      response: fail("support_scope", t("Este acompanhamento não alcança esta área. Escopo: ") + user.support.scope, 403, { requestId }),
+    };
+  }
   let org: ActiveOrg | null;
   if (organizationId) {
     const membership = user.organizations.find((o) => o.organization_id === organizationId);
-    org = membership
+    org = user.support?.organization_id === organizationId
+      ? { orgId: organizationId, name: user.support.name, role: user.support.access_mode === "full" ? "admin" : "viewer" }
+      : membership
       ? {
           orgId: membership.organization_id,
           name: membership.organization_name,
@@ -71,16 +133,18 @@ export async function requireRole(min: Role, opts: RequireRoleOpts = {}): Promis
         ? { orgId: organizationId, name: "—", role: "viewer" }
         : null;
   } else {
-    org = await resolveActiveOrg(user);
+    org = await resolveActiveOrg(user, { log: false });
   }
   if (!org) {
+    logar("forbidden_tenant", null, user.id, 403);
     return {
       ok: false,
       response: fail("forbidden_tenant", t("Sem organização ativa."), 403, { requestId }),
     };
   }
 
-  if (allowPlatformAdmin && user.is_platform_admin) {
+  if (allowPlatformAdmin && user.is_platform_admin && !user.support) {
+    logar("allowed", org.orgId, user.id, 200);
     return { ok: true, user, org };
   }
 
@@ -90,6 +154,7 @@ export async function requireRole(min: Role, opts: RequireRoleOpts = {}): Promis
     p_org: org.orgId,
   });
   if (error) {
+    logar("internal_error", org.orgId, user.id, 500);
     return { ok: false, response: fail("internal_error", error.message, 500, { requestId }) };
   }
 
@@ -116,6 +181,7 @@ export async function requireRole(min: Role, opts: RequireRoleOpts = {}): Promis
       requestId,
       metadata: { reason: "mfa_required", effective_role: effectiveRole ?? null },
     });
+    logar("mfa_required", org.orgId, user.id, 403);
     return {
       ok: false,
       response: fail(
@@ -139,6 +205,7 @@ export async function requireRole(min: Role, opts: RequireRoleOpts = {}): Promis
       requestId,
       metadata: { required_role: min, effective_role: effectiveRole ?? null },
     });
+    logar("forbidden_role", org.orgId, user.id, 403);
     return {
       ok: false,
       response: fail("forbidden_role", `Permissão insuficiente. Requer role >= ${min}.`, 403, {
@@ -147,5 +214,46 @@ export async function requireRole(min: Role, opts: RequireRoleOpts = {}): Promis
     };
   }
 
+  // F12-T04 (D38/D44): o que a ASSINATURA permite nesta rota. `read_only`
+  // (bloqueada por atraso) nega método que escreve; `billing_only` (pendente
+  // de pagamento, cancelada) nega tudo fora de `/api/v1/billing/*` e
+  // `/api/v1/auth/*`. Depois do papel e do MFA, de propósito: quem não tem
+  // papel continua levando 403 sem que a resposta revele o estado da conta.
+  let acesso: EstadoDeAcesso;
+  try {
+    acesso = await acessoDaOrganizacao(org.orgId);
+  } catch (erro) {
+    logar("internal_error", org.orgId, user.id, 503);
+    return {
+      ok: false,
+      response: fail("upstream_unavailable", "Não foi possível confirmar a assinatura desta organização.", 503, {
+        requestId,
+        details: { message: erro instanceof Error ? erro.message : String(erro) },
+      }),
+    };
+  }
+  if (!escritaPermitida(acesso, rota.method, rota.path)) {
+    incrementCounter("subscription_write_denied", { reason: acesso.reason });
+    void audit({
+      action: "authz.denied",
+      actorUserId: user.id,
+      organizationId: org.orgId,
+      resourceType: resource ?? null,
+      requestId,
+      metadata: { reason: acesso.reason, mode: acesso.mode, path: rota.path, method: rota.method },
+    });
+    logar("subscription_denied", org.orgId, user.id, 402);
+    return {
+      ok: false,
+      response: fail(
+        acesso.mode === "read_only" ? "subscription_blocked" : "subscription_required",
+        t("A assinatura desta organização não permite esta operação. Regularize em /app/billing."),
+        402,
+        { requestId, details: { reason: acesso.reason, mode: acesso.mode } },
+      ),
+    };
+  }
+
+  logar("allowed", org.orgId, user.id, 200);
   return { ok: true, user, org: { ...org, role: effectiveRole as Role } };
 }

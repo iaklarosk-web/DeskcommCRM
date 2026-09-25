@@ -56,6 +56,16 @@ export const AUDIT_ACTIONS = [
   "lead.imported",
   "contact.created",
   "contact.updated",
+  "crm_company.created",
+  "crm_company.updated",
+  "crm_company.deleted",
+  "crm_order.draft_created",
+  "crm_order.order_edited",
+  "crm_order.order_confirmed",
+  "crm_order.order_advanced",
+  "crm_order.order_cancelled",
+  "crm_order.redacted",
+  "crm_order.check_recorded",
   "contacts.imported",
   "contact.anonymized",
   "contact.merge_pending",
@@ -64,7 +74,11 @@ export const AUDIT_ACTIONS = [
   // A cascata retomando o que uma execução interrompida não terminou (#310).
   "lgpd.anonymize_catchup",
   "member.invited",
+  "team.interface_changed",
   "member.accepted",
+  // F20-T03 (D61 b/c): revogar é o que mata um link de convite que vazou — quem
+  // revogou e quando precisa ficar registrado como qualquer outra mudança de acesso.
+  "member.invite_revoked",
   "member.role_changed",
   "member.revoked",
   "token.created",
@@ -131,6 +145,13 @@ export const AUDIT_ACTIONS = [
   "platform_admin.conversation_viewed",
   "platform_admin.tenants_listed",
   "platform_admin.tenant_viewed",
+  // F21 (ADR-048): a aba Equipe do /admin. Nasceram porque, em 25/09/2026, a
+  // saída do proprietário de um tenant teve de sair por SQL direto — sem tela,
+  // sem regra em código e sem rastro nenhum aqui.
+  "admin.membership_role_changed",
+  "admin.membership_role_denied",
+  "admin.membership_removed",
+  "admin.membership_removal_denied",
   "tenant.created_by_platform_admin",
   "platform_admin.tenant_health_viewed",
   "platform_admin.impersonate_started",
@@ -162,6 +183,10 @@ export const AUDIT_ACTIONS = [
   "ai_agent.version_created",
   "ai_agent.version_updated",
   "ai_agent.tested",
+  "ai_agent.reconciled",
+  "ai_reply.generated",
+  "ai_reply.approved",
+  "ai_reply.rejected",
   "ai_agent.reverted",
   "ai.dispatcher_run",
   "ai.pacing_knobs_updated",
@@ -205,6 +230,7 @@ export const AUDIT_ACTIONS = [
   // uma demanda, e qual. Sem isto, a única mutação que fecha o vazamento seria
   // a única sem rastro.
   "demanda.proximo_passo_definido",
+  "demanda.encerrada",
   "routing.worker_run",
   "attendant.heartbeat_swept",
   "webhook.source_created",
@@ -410,17 +436,21 @@ export const AUDIT_ACTIONS = [
   // `nossos_ignorados` de propósito: é o número que prova o anti-eco
   // funcionando — sem ele, esses eventos teriam virado compromisso fantasma.
   "agenda.google.sync_executado",
+  "agenda.google_selection_updated",
+  "agenda.google_catalog_updated",
+  "agenda.meet_action_requested",
+  "agenda.google_resolution_requested",
 
   // ── O compromisso em si (frentes 1 e 5 do Calendário Vivo) ──────────────
   // Marcar, remarcar e cancelar são mutações de um compromisso com hora e
   // pessoa. Cancelar em especial: é a única das três que alguém pode querer
   // negar ter feito.
   //
-  // Não há `agenda.appointment_completed` nem `_no_show` aqui de propósito.
-  // Esses dois não são mutação de intenção — são o registro de um fato que já
-  // aconteceu no mundo, e vivem na timeline do lead (`ATIVIDADES_DA_AGENDA`,
-  // em `lib/agenda/tipos.ts`), não na trilha de quem-fez-o-quê.
   "agenda.appointment_created",
+  "agenda.appointment_outcome_recorded",
+  "agenda.appointment_updated",
+  "agenda.confirmation_sweep_run",
+  "agenda.settings_updated",
   "agenda.appointment_rescheduled",
   "agenda.appointment_cancelled",
   // Relógio HTTP (Hobby / sem contêiner scheduler): uma batida que alguém
@@ -445,7 +475,41 @@ export const AUDIT_ACTIONS = [
   // exatamente o que se disputa depois de um cliente ficar sem retorno.
   "crm_task.created",
   "crm_task.updated",
+  "crm_task.status_changed",
   "crm_task.deleted",
+  "crm_note.created",
+  "organization.switched",
+  // F12 (ADR-030 §3): o que o tenant_admin faz com a assinatura. O que o
+  // GATEWAY faz fica em `billing_events`, que é o livro-razão dele.
+  "billing.checkout_started",
+  "billing.plan_changed",
+  "billing.subscription_cancelled",
+  // F19 (ADR-042 §5/§6): o Portal do Stripe aberto pelo tenant_admin e as
+  // cinco ações do padrão KN do /admin sobre a assinatura de uma empresa.
+  "billing.portal_opened",
+  "billing.admin.suspended",
+  "billing.admin.resumed",
+  "billing.admin.trial_extended",
+  "billing.admin.provisioned",
+  "billing.admin.dashboard_opened",
+  // F13 (ADR-034 §2): o CRM comercial — definições de campo por organização,
+  // distribuição/claim da fila de oportunidades e o vínculo com o pedido.
+  "crm_fields.updated",
+  "crm_settings.updated",
+  "crm_opportunity.distributed",
+  "crm_opportunity.claimed",
+  "crm_opportunity.order_linked",
+  // F15 (ADR-036 §2): autonomia da IA por ação, limite diário e regras
+  // sobre o catálogo — a configuração comercial do agente.
+  "ai_autonomy.updated",
+  "ai_limits.updated",
+  // F18-T05 (ADR-040 §1): a organização trocou QUEM atende o despacho de IA.
+  "ai_engine.updated",
+  // F14-T02 (ADR-038): chat do site ligado/desligado e origens de embed.
+  "webchat_settings.updated",
+  "automation_rule.created",
+  "automation_rule.updated",
+  "automation_rule.deleted",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

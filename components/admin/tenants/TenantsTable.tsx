@@ -94,7 +94,7 @@ export function TenantsTableSkeleton() {
       <Table>
         <TableHeader>
           <TableRow>
-            {["Slug", t("Nome"), "CNPJ", t("Status"), t("Users"), t("Conversas"), t("Criado em"), ""].map(
+            {["Slug", t("Nome"), "CNPJ", t("Status"), t("Assinatura"), t("Users"), t("Conversas"), t("Criado em"), ""].map(
               (h) => (
                 <TableHead key={h}>{h}</TableHead>
               ),
@@ -104,7 +104,7 @@ export function TenantsTableSkeleton() {
         <TableBody>
           {Array.from({ length: 5 }).map((_, i) => (
             <TableRow key={i}>
-              {Array.from({ length: 8 }).map((__, j) => (
+              {Array.from({ length: 9 }).map((__, j) => (
                 <TableCell key={j}>
                   <Skeleton className="h-4 w-full max-w-[120px]" />
                 </TableCell>
@@ -158,6 +158,7 @@ export function TenantsTable({
               <TableHead>{t("Nome")}</TableHead>
               <TableHead className="w-[130px]">CNPJ</TableHead>
               <TableHead className="w-[110px]">{t("Status")}</TableHead>
+              <TableHead className="w-[150px]">{t("Assinatura")}</TableHead>
               <TableHead className="w-[70px] text-right">{t("Users")}</TableHead>
               <TableHead className="w-[90px] text-right">{t("Conversas")}</TableHead>
               <TableHead className="w-[90px]">{t("Criado em")}</TableHead>
@@ -175,8 +176,27 @@ export function TenantsTable({
                 <TableCell>
                   <StatusBadge status={row.status} onboardedAt={row.onboarded_at} />
                 </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {extractCount(row.user_count)}
+                <TableCell className="text-xs" data-testid="admin-tenant-assinatura" data-org={row.id} data-status={row.subscription?.status ?? "none"}>
+                  {row.subscription ? `${row.subscription.plan_code} · ${row.subscription.status}` : t("sem assinatura (herdada)")}
+                </TableCell>
+                <TableCell className="text-right tabular-nums" data-testid="admin-tenant-usuarios" data-org={row.id}>
+                  {/*
+                    F20-T04 (D60): com a regra nova, empresa criada para outra
+                    pessoa nasce com zero membros e um convite pendente. "0" ali
+                    sozinho parece defeito; o que aconteceu é que falta a pessoa
+                    aceitar — e o caminho para agir está na aba Convites.
+                  */}
+                  {extractCount(row.user_count) === 0 && extractCount(row.convites_pendentes) > 0 ? (
+                    <Link
+                      href={`/admin/tenants/${row.id}/convites`}
+                      className="text-xs font-medium text-accent hover:underline"
+                      data-testid="admin-tenant-aguardando-aceite"
+                    >
+                      {t("Aguardando aceite")}
+                    </Link>
+                  ) : (
+                    extractCount(row.user_count)
+                  )}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
                   {extractCount(row.conversations_count)}

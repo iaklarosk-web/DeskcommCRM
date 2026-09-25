@@ -4,6 +4,7 @@ import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { ensureTenantForUser } from "@/lib/auth/provision";
 import { decidirConviteDoSignup } from "@/lib/auth/convite-no-signup";
+import { lerConvitePorToken } from "@/src/convites/repositorio";
 import { audit } from "@/lib/audit";
 import { env } from "@/lib/env";
 
@@ -121,6 +122,30 @@ export async function GET(request: NextRequest) {
       requestId,
     });
     return redirectTo("/login?error=convite_invalido");
+  }
+
+  if (decisao.tipo === "convite_curto") {
+    // F20 (D59/D61 a): o convite curto não carrega nada — quem sabe é a linha.
+    // A autoridade que a função pura não pôde aplicar é aplicada AQUI, contra a
+    // linha: o e-mail do convite tem de ser o que o provedor acabou de
+    // confirmar. Sem isso, um token curto alheio colado no próprio signup seria
+    // porta de entrada na organização da vítima. Falha FECHADA: convite que não
+    // vale não cai no provisionamento comum.
+    const leitura = await lerConvitePorToken(decisao.token);
+    const emailConfirmado = (data.user.email ?? "").trim().toLowerCase();
+    if ("recusa" in leitura || leitura.convite.email.trim().toLowerCase() !== emailConfirmado) {
+      await audit({
+        action: "auth.signup_provision_recusado",
+        actorUserId: data.user.id,
+        metadata: {
+          motivo: "recusa" in leitura ? leitura.recusa : "email_divergente",
+          via: "link_curto",
+        },
+        requestId,
+      });
+      return redirectTo("/login?error=convite_invalido");
+    }
+    return redirectTo(`/i/${decisao.token}`);
   }
 
   if (decisao.tipo === "convite") {

@@ -1,0 +1,109 @@
+import {
+  papelD15DoHerdado,
+  requirePermission,
+  type PapelD15,
+  type Permissao,
+} from "@/src/rbac/matrix";
+import type { TenantCtx, TenantDb } from "@/src/tenant-context";
+
+export type CrmCommandPermission = Extract<
+  Permissao,
+  "orders.write" | "orders.confirm" | "tasks.create" | "notes.create"
+>;
+
+export type TrustedCrmExecutor =
+  | { type: "human"; user_id: string }
+  | { type: "ai_agent"; agent_id: string }
+  | { type: "automation"; run_id: string };
+
+export class CrmAuthorizationError extends Error {
+  public readonly status = 403;
+
+  constructor(public readonly code: string) {
+    super(code);
+    this.name = "CrmAuthorizationError";
+  }
+}
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type AuthorizationRow = {
+  role: string;
+  organization_active: boolean;
+  is_platform_admin: boolean;
+};
+
+/** Autoriza o executor confiável dentro do mesmo TenantDb que fará o efeito. */
+export async function authorizeCrmCommand(
+  db: TenantDb,
+  ctx: TenantCtx | null | undefined,
+  executor: TrustedCrmExecutor,
+  permission: CrmCommandPermission,
+  options: { forbiddenCode?: string } = {},
+): Promise<{ papel: PapelD15 }> {
+  // F15-T01 (ADR-036 §2 T01, D54 b; VARREDURA §B5/§C6): executor NÃO humano
+  // — a IA no turno (`ai_agent`) ou o motor de regras/cron (`automation`) —
+  // só para `tasks.create`, e só numa organização ativa. Não há sessão nem
+  // papel: quem autoriza é o catálogo (`executors`) e a política da
+  // organização (`actions.policy`), já conferidos em `execute()`; aqui fica a
+  // guarda de tenant e o alcance (o do `attendant`, que é quem `tasks.create`
+  // dá na matriz). Pedidos e notas continuam humanos.
+  if (executor.type !== "human") {
+    if (permission !== "tasks.create") {
+      throw new CrmAuthorizationError("non_human_executor_denied");
+    }
+    if (!ctx || !UUID.test(ctx.organization_id)) {
+      throw new CrmAuthorizationError("organization_context_required");
+    }
+    const org = await db.query<{ active: boolean }>(
+      `select (status = 'active') as active from public.organizations where id = $1 for share`,
+      [ctx.organization_id],
+    );
+    if (!org.rows[0]?.active) {
+      throw new CrmAuthorizationError(options.forbiddenCode ?? "organization_inactive");
+    }
+    return { papel: "attendant" };
+  }
+  if (
+    ctx?.source !== "session" ||
+    !ctx.user_id ||
+    !UUID.test(ctx.organization_id) ||
+    !UUID.test(ctx.user_id)
+  ) {
+    throw new CrmAuthorizationError("session_context_required");
+  }
+  if (!UUID.test(executor.user_id) || executor.user_id !== ctx.user_id) {
+    throw new CrmAuthorizationError("executor_identity_mismatch");
+  }
+
+  const result = await db.query<AuthorizationRow>(
+    `select uo.role,
+            (o.status = 'active') as organization_active,
+            exists (
+              select 1 from public.platform_admins pa
+              where pa.user_id = uo.user_id and pa.revoked_at is null
+            ) as is_platform_admin
+       from public.user_organizations uo
+       join public.organizations o on o.id = uo.organization_id
+      where uo.organization_id = $1
+        and uo.user_id = $2
+        and uo.accepted_at is not null
+        and uo.revoked_at is null
+      limit 1
+       for share of uo, o`,
+    [ctx.organization_id, ctx.user_id],
+  );
+  const row = result.rows[0];
+  const forbiddenCode = options.forbiddenCode ?? "crm_command_forbidden";
+  if (!row || !row.organization_active || row.is_platform_admin) {
+    throw new CrmAuthorizationError(forbiddenCode);
+  }
+
+  const papel = papelD15DoHerdado(row.role, false);
+  if (papel === null) throw new CrmAuthorizationError(forbiddenCode);
+  try {
+    requirePermission(papel, permission);
+  } catch {
+    throw new CrmAuthorizationError(forbiddenCode);
+  }
+  return { papel };
+}

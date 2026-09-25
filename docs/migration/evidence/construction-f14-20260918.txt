@@ -1,0 +1,98 @@
+== F14 — chat do site, agenda adotada e IA que marca horário (ADR-038/039; D55) — evidência de construção, 18/09/2026 ==
+
+Branch feat/F14-canais-e-agenda a partir de eac2db65 (HEAD da F15). Tasks T00–T05 (ADR-038 §2).
+Autorização: mensagem do proprietário de 18/09/2026 (retomada depois da F15): F14 escolhida em cards entre
+F14 / Stripe + padrão KN do /admin / F16 / F17; sete decisões de produto (D41 herdado por membro; visitante
+anônimo com identificação antes da 1ª resposta; página hospedada + embed; IA 24 h no site; schedule_appointment
+com approve; ≤ 20 turnos Haiku; sem Google OAuth real); contraponto com 3 objeções aceitas como testes.
+
+== Objeção 1 (specs herdadas de agenda sem Google, ANTES da T03) ==
+4/4 specs, 11/11 testes, 1,4 min, sandbox 5542x sobre eac2db65 + 9030 (18/09 06:04Z) — evidência
+f14-objecao1-agenda-20260918.txt. A T03 foi EXPOR (fachada SaaS sobre o herdado), não consertar.
+
+== Objeção 2 (três freios com número no endpoint público) ==
+por IP: 30 sessões/h e 60 mensagens/h; por organização: 600 mensagens/h; teto diário de turnos da F15.
+Medidos na suíte de integração: ip_limited=1/1 (31ª sessão do mesmo IP recusada), org_limited=1/1 (601ª
+mensagem da organização recusada, vinda de OUTRO IP), flood_calls_capped=1/1 (50 sessões de 50 IPs mandam
+mensagem; o provedor é chamado ≤ 5 = teto diário). Mutante 75 (freio por IP desligado) morto.
+
+== Objeção 3 (WhatsApp sai da fase) ==
+Reconexão/revogação herdadas (/api/v1/channel-sessions/[id]/reconnect, cron channel-health) só medem algo
+real com o transporte real (número, D12-4). Fora da F14 — NOT VALIDATED (real) continua.
+
+== Commits ==
+44a2f7c8 T00 ADR-038/039, verify v1.10, migration 9030, chaves webchat.*, D55
+4f717fb5 T01 chat do site — servidor
+89bf8949 T02 chat do site — telas
+68baf914 T03 agenda adotada pela fachada SaaS
+62b8b6b8 T04 schedule_appointment no catálogo (14); linha channels: gravada
+a7c3ca40 T05 parte 1: spec 7/7 nos dois modos contra o staging; smoke +1; achados B18–B20
+
+== Gate ==
+f14-gate-04 — READY (staging) sobre 6b493892, 18/09 12:03Z→14:07Z (7455 s), exit 0, DENTRO do staging
+(VERIFY_ENVIRONMENT=staging, Supabase local 56421/56422, app do gate em 3202, F02_E2E_SANDBOX_ID=crm-staging),
+current_phase=F14, inputs 3694 arquivos (sha ea77505d, inalterado entre início e fim), violations=0.
+unit=8553/8553 integration=225/225 db=1677/1677 e2e=72/72 ×2 (15 specs; deka 1675 s, demo2 1578 s)
+mutants_killed=73/73 (73–76 novos: channels-required, freio por IP, conflito de agenda, política da ação)
+Quatro tentativas:
+  01 (terminou 09:34Z) — regra da cascata LGPD pegou webchat_sessions fora do anonimizar → migration 9031 (trigger
+     trg_redigir_sessoes_do_site_ao_anonimizar); autonomia-routing-selection (pool falso lança) → visitanteNaPagina
+     fail-closed (false); channel-capability-matrix / canal-zernio-vocabulario / saude-dos-canais-oficiais →
+     liveVisitor na matriz + checkHealth do adapter; integração: fila de saída compartilhada entre suítes →
+     rodarCicloDeSaida({lote:50}) em laço até a própria mensagem sair.
+  02 (10:09Z→10:13Z, interrompida antes do fim a pedido da sessão vizinha, D51 c) — lgpd-exporta-o-que-redige → bloco
+     webchat_sessions no export; WHATSAPP_MODE=mock dublava o webchat (AggregateError do mock global) →
+     webchat excluído do dublê (src/channels/index.ts).
+  03 (terminou 12:03Z) — tudo verde menos f02-support-readonly-api.spec (timeout de navegação de 5 s) sob
+     load 9.9 (prettier em massa do Marketing-OS durante o Playwright); isolada 5/5 verde → relançado.
+  04 — READY. Nenhum teste apagado, pulado ou meia-linha (tests_deleted=0 tests_skipped=0 tests_pending=0).
+Bloco integral em BUILD-STATE.md (verify_summary_last). Logs em .verify-logs/f14-gate-01…04 (fora do git).
+
+== Linhas fora do bloco (BUILD-STATE) ==
+staging (depois do READY, mesma imagem 6b493892): up.sh 15/15 (275 s) → docker restart crm-staging-rest (§B20)
+restore: tables=184 tables_restored=184 rows=21623 rows_diff=0 dump=staging-20260918T141329Z.dump target=restore_20260918_141339 seconds=12 at=20260918T141339Z
+smoke: steps=8 pass=8/8 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 owner_login=1/1 subscriptions[deka]=active/full subscriptions[demo2]=active/full orgs_without_subscription=0/3 webchat_disabled_denied=2/2 tenants=deka,demo2
+p95_ms: endpoints=3/3 health=26 contacts=505 conversations=523 samples=20 url=http://127.0.0.1:3200
+staging: compose=crm-staging services_running=15/15 memory_mib=2254 ports=127.0.0.1+tailscale(3200,56421,56422,56424) public_ports=0 host=4c/16GB swap=off image=F14(6b493892)
+produção (DEPOIS do READY): scripts/prod/up.sh 14/14 (221 s) — a 1ª subida parou na guarda 27302 do baseline
+  (notifications tinha 1 linha ai.limit_reached da prova ai_real da F15; a lista de tipos conhecidos do apêndice
+  9023 não a incluía) → guarda estendida no baseline.sql (única diferença de código depois de 6b493892, junto
+  com scripts/prod/jornada-webchat.ts); migrations 9030/9031 no banco de produção 1/1/1.
+prod: compose=crm-prod services_running=14/14 config_vars=27/27 placeholders=0/27 public_ports=0 https=1/1 hsts=1/1 vhosts_ok=7/7 owner_login=1/1 platform_admins=1 orgs=2 orgs_without_subscription=0/2 ai_turn=1/1 embedding=1/1 email=1/1 sentry_event=1/1 whatsapp=health_only backup=1/1 restore_rows_diff=0 sha=6b493892
+prod_stack: compose=crm-prod services_running=14/14 memory_mib=1599 ports=127.0.0.1+tailscale(3300,56431,56432) public_ports=0
+restore_prod: tables=184 tables_restored=184 rows=646 rows_diff=0 dump=prod-20260918T142544Z.dump target=restore_20260918_142545 seconds=19 at=20260918T142545Z
+webchat_real (D55 f — turnos reais no chat do site da organização do dono, scripts/prod/jornada-webchat.ts no
+  crm-prod-worker, FORA do bloco; 12 turnos Haiku reais hoje, teto 20; 2,24 centavos no dia):
+  rodadas 1–2: turns=0/3 silenciado/estado_nao_e_da_ia — a organização do dono não tinha ai.enabled=true (a
+    guarda ai_available manda o visitante para a fila humana antes de chamar a IA) → o script liga ai.enabled
+    durante a prova; o freio bate na ENTRADA (ai_available → waiting_human), não no turno → script aceita as
+    duas camadas.
+  rodada 3: webchat_real: sessions=1/1 identified=1/1 turns=3/3 delivered=3/3 visible=3/3 provider=anthropic model=claude-haiku-4-5 cost_cents=0.34207 flood_capped=1/1 calls_after_limit=0/1 cleaned=1/1 at=2026-09-18T14:29:12Z
+    EFEITO COLATERAL: a devolução gravou o valor efetivo (padrão) como linha em tenant_settings — ai.enabled=true
+    e webchat.enabled=false passaram a existir como linhas na organização do dono (o dump prod-20260918T142544Z
+    prova que antes só ai.limits.daily_turns=0 existia). Comportamento idêntico ao padrão; linhas a apagar.
+  rodada 4 (script corrigido: guarda as LINHAS, presentes ou não, e apaga o que não existia):
+  webchat_real: sessions=1/1 identified=1/1 turns=3/3 delivered=3/3 visible=3/3 provider=anthropic model=claude-haiku-4-5 cost_cents=0.34357 flood_capped=1/1 calls_after_limit=0/1 cleaned=1/1 settings_rows_restored=1/1 at=2026-09-18T14:38:04Z
+    (devolveu ao estado de ANTES da rodada 4 — que já tinha as duas linhas da rodada 3; apagá-las é 1 comando
+    psql, negado ao agente pelo classificador: entregue ao proprietário no fechamento). Estado final:
+    0 webchat_sessions, 0 conversas webchat, contato do dono intacto.
+demo3: demo3: created=1 smoke=pass=8/8 e2e[demo3]=41/41 specs=10/10 removed=1 tenants=3 (18/09 14:40Z→14:59Z, staging com o código da F14; inventário fixo da F07 = 10 specs; demo3 removido, staging volta a 3 tenants)
+from-scratch: steps=7 pass=7/7 verify_exit=0 status="READY (F14)" clone=.from-scratch-g3VB commit=10fde380 (18/09 15:00Z→17:19Z; verify 8105 s no clone do commit de fechamento, fase F14 lida da origem: unit 8553, integração 225, db 1677, navegador 72/72 ×2 em 15 specs, mutantes 73/73, violations=0. Tentativa 01 morreu em 4 s — FROM_SCRATCH_LOG_DIR relativo não existe depois do cd para o clone; relançada com caminho absoluto.)
+
+== Achados registrados nesta fase (VARREDURA) ==
+- ADR-038 Consequências / §B8 reafirmado: em PRODUÇÃO quem responde o cliente é o motor herdado
+  (runAgentTurn, job inbound_turn, 57 tools MCP — entre elas crm_book_appointment), SEM a política por ação
+  da F15; o turno SaaS (responderTurno), que o gate mede, não está ligado ao despacho de produção
+  (elegivelParaWorkerLegado=false, ADR-021). A F14 governa o turno SaaS. Unificar é decisão de fase própria.
+- B18: a entrada SaaS do WhatsApp (recebeEntrada) não marca prévia/não-lido da conversa (o webchat marca).
+- B19: pnpm lint:channels reprova desde a F11 (conectarCanalMock.ts) — o gate não o roda.
+- B20: PostgREST do staging trava depois de reaplicar o baseline por psql — docker restart crm-staging-rest.
+- B21: a guarda do apêndice 9023 enumera os eventos de notificação; a prova ai_real da F15 deixou 1
+  ai.limit_reached em produção e o up.sh da F14 parou na guarda — lista estendida (único código depois de 6b493892).
+
+== O que NÃO foi verificado (fica em FINAL-VALIDATION §3) ==
+Telas no navegador HUMANO (/chat/<slug> embutido num site real, /app/settings/tenant/webchat); Google OAuth
+real (escolha do proprietário); a IA propondo horário a partir do TEXTO (o dublê do provedor não chama a
+tool: o que se mede é execute() → política → fachada); produção respondendo pelo motor herdado (§B8);
+WhatsApp real; realtime do inbox; espelho no funil/timeline do lead pela fachada (a rota herdada da tela
+continua fazendo).

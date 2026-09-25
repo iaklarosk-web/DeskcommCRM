@@ -34,6 +34,8 @@ describe("capabilities do canal intermediado", () => {
       voiceNote: "opus-only",
       groups: "limited",
       costPerMessage: true,
+      // F14: quem chega ao celular da pessoa nunca declara o visitante na página.
+      liveVisitor: false,
     });
   });
 

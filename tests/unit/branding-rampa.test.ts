@@ -110,11 +110,16 @@ describe("rampaDeSemente — catraca de calibração contra o design system", ()
     // por não ter o que comparar — instrumento morto tem cara de teste verde.
     expect(esperados).toHaveLength(11);
     expect(new Set(esperados).size).toBe(11);
-    expect(esperados[K]).toBe("#506d48");
+    // ADR-049 (25/09/2026): a semente do produto passou de `#506d48` (Sage) para
+    // `#0b7374` (turquesa). O stop K continua sendo o hex literal da semente.
+    expect(esperados[K]).toBe("#0b7374");
   });
 
-  it("reproduz os 11 stops Sage a partir de #506d48 com Δ ≤ 2/255 por canal", () => {
-    const derivada = rampaDeSemente("#506d48");
+  it("reproduz os 11 stops do produto a partir do stop 600 com Δ ≤ 2/255 por canal", () => {
+    // A rampa do produto é `rampaDeSemente(esperados[K])` por construção (ADR-049),
+    // então o Δ esperado é zero; a tolerância de 2/255 é a mesma que a Sage tinha,
+    // e continua valendo se alguém retocar um stop à mão.
+    const derivada = rampaDeSemente(esperados[K]!);
     const distancias = esperados.map((esperado, i) => distanciaPorCanal(esperado, derivada[i]!));
     expect(
       Math.max(...distancias),

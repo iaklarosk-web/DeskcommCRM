@@ -21,7 +21,7 @@ export default async function MfaChallengePage({
 
   const { data: factorsData } = await supabase.auth.mfa.listFactors();
   const hasVerified = !!factorsData?.totp?.some((f) => f.status === "verified");
-  if (!hasVerified) redirect("/app/inbox");
+  if (!hasVerified) redirect("/app");
 
   const idioma = normalizarIdioma(
     (user.user_metadata?.locale as string | undefined) ?? null,
@@ -30,8 +30,8 @@ export default async function MfaChallengePage({
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1.5 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">{t("Verificação em duas etapas")}</h1>
+      <div className="space-y-2">
+        <h1 className="text-3xl leading-tight font-bold tracking-tight text-balance sm:text-4xl">{t("Verificação em duas etapas")}</h1>
         <p className="text-sm text-muted-foreground">
           {t("Digite o código de 6 dígitos do seu autenticador.")}
         </p>

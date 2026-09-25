@@ -35,7 +35,14 @@ cd "$(dirname "$0")/.."
 SUPABASE="supabase"
 command -v supabase >/dev/null 2>&1 || SUPABASE="npx supabase"
 
-if ! $SUPABASE status >/dev/null 2>&1; then
+# F06-T08: o sandbox descartável do gate (`scripts/verify/sandbox.sh`) vive num
+# workdir próprio (project_id e portas 5542x). Com `SUPABASE_WORKDIR` apontado
+# para ele, este script lê as chaves DESSE stack — é assim que o CI gera o
+# `.env.e2e` do verify sem um arquivo privado preservado.
+WORKDIR_ARGS=()
+if [ -n "${SUPABASE_WORKDIR:-}" ]; then WORKDIR_ARGS=(--workdir "$SUPABASE_WORKDIR"); fi
+
+if ! $SUPABASE status "${WORKDIR_ARGS[@]}" >/dev/null 2>&1; then
   echo "==> O Supabase local não está de pé. Rode 'npx supabase start' antes." >&2
   exit 1
 fi
@@ -52,12 +59,16 @@ fi
 [ "${#CHAVE_WAHA}" -ge 44 ] || CHAVE_WAHA="$(openssl rand -base64 32)"
 [ "${#CHAVE_AI}" -ge 44 ] || CHAVE_AI="$(openssl rand -base64 32)"
 
-ENVOUT="$($SUPABASE status -o env 2>/dev/null)"
+ENVOUT="$($SUPABASE status "${WORKDIR_ARGS[@]}" -o env 2>/dev/null)"
 ler() { printf '%s\n' "$ENVOUT" | grep "^$1=" | cut -d= -f2- | tr -d '"'; }
 
 API_URL="$(ler API_URL)"
 ANON="$(ler ANON_KEY)"
 SERVICE="$(ler SERVICE_ROLE_KEY)"
+# A URL do banco vem do PRÓPRIO stack (o sandbox do gate escuta em 55422, o de
+# desenvolvimento em 54322); o antigo literal fixo só valia para o segundo.
+DB_URL="$(ler DB_URL)"
+[ -n "$DB_URL" ] || DB_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 
 if [ -z "$API_URL" ] || [ -z "$ANON" ] || [ -z "$SERVICE" ]; then
   echo "==> Não consegui ler as chaves do stack local (API_URL/ANON_KEY/SERVICE_ROLE_KEY)." >&2
@@ -96,7 +107,7 @@ cat > .env.e2e <<EOF
 NEXT_PUBLIC_SUPABASE_URL=$API_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON
 SUPABASE_SERVICE_ROLE_KEY=$SERVICE
-SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+SUPABASE_DB_URL=$DB_URL
 
 # Precisa bater com o baseURL real do Playwright (ver comentário acima).
 NEXT_PUBLIC_APP_URL=http://localhost:$E2E_PORT
@@ -109,6 +120,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:$E2E_PORT
 # eram iguais (\`e2e-placeholder…\` aqui, \`ci-placeholder…\` lá) — a promessa por
 # coincidência durou até a primeira divergência, que custou 8 specs em 401.
 INTERNAL_SECRET=e2e-placeholder-nao-e-segredo
+IMPERSONATE_COOKIE_SECRET=e2e-support-cookie-local-placeholder-32-chars
 # As três abaixo são chaves de CIFRA de verdade: o app exige 32 bytes e recusa
 # um rótulo. Medido — com o placeholder, criar credencial de IA devolvia 500
 # ("AI_CRED_AES_KEY deve ter exatamente 32 bytes (lido: 21)") e todo run do
@@ -122,10 +134,23 @@ WAHA_API_KEY=e2e-placeholder-nao-e-segredo
 WAHA_WEBHOOK_BASE_URL=http://127.0.0.1:3001
 UPSTASH_REDIS_REST_URL=http://127.0.0.1:3998
 UPSTASH_REDIS_REST_TOKEN=e2e-placeholder-nao-e-segredo
+# F12-T03: HMAC do webhook do gateway MOCK — a spec de cobrança paga pelo
+# checkout mock, que assina e entrega o evento ao webhook. Valor de teste.
+BILLING_MOCK_WEBHOOK_SECRET=e2e-billing-mock-webhook-placeholder-nao-e-segredo
+# F19 (ADR-043 §4): o gate roda com o gateway REAL apontado para o Stripe FALSO
+# da bancada (o playwright.config sobe o falso em E2E_PORT+1000 e injeta
+# STRIPE_API_BASE no app). Chaves FICTÍCIAS, rotuladas — nunca credencial.
+BILLING_GATEWAY=stripe
+STRIPE_MODE=test
+STRIPE_SECRET_KEY=sk_test_falso_da_bancada_nao_e_segredo
+STRIPE_WEBHOOK_SECRET=whsec_falso_da_bancada_nao_e_segredo
+STRIPE_PRICE_IDS=price_falsoPlanA:PLAN_A,price_falsoPlanB:PLAN_B,price_falsoPlanC:PLAN_C
+BILLING_TRIAL_DAYS=7
+ADMIN_SUMMARY_TOKEN=e2e-admin-summary-token-placeholder-nao-e-segredo
 NEXT_TELEMETRY_DISABLED=1
-# Telemetria DESLIGADA na suíte, e não é preferência: sem isto o SDK do browser
-# assume o DSN da comunidade (\`lib/sentry/dsn.ts\` → DEFAULT_SENTRY_DSN) e a suíte
-# MANDA DADO para o Sentry de produção do projeto — mesma família do e2e que
+# Telemetria DESLIGADA na suíte, explicitamente. Até §B11 (F11-T00) o vazio
+# fazia o SDK do browser assumir o DSN da comunidade (\`lib/sentry/dsn.ts\`) e a
+# suíte MANDAVA DADO para o Sentry de produção do projeto — mesma família do e2e que
 # escrevia no banco de produção. E o inverso morde igual: em 2026-08-10 a
 # organização do Sentry estava suspensa por cota, o ingest respondeu 429 a tudo, o
 # SDK cuspiu erro de console em toda tela e \`olhar-telas-do-epico\` reprovou. A cor

@@ -112,14 +112,25 @@ export const produtoCreateSchema = z.object({
   // do `produtoPatchSchema` (que é este `.partial()`), e isso é o certo: a
   // linha guarda a moeda com que nasceu.
   custo_cents: z.number().int().min(0).nullable().optional(),
+  // Rótulo configurado de como este produto é vendido (ex.: "cx", "kg").
+  // Não é conversão, fator de embalagem nem autorização de fracionamento.
+  sale_unit: z.string().trim().min(1).max(32).nullable().optional(),
   controla_estoque: z.boolean().default(true),
   quantidade: z.number().int().min(0).default(0),
   ativo: z.boolean().default(true),
   imagem_url: z.string().trim().url().max(2000).optional(),
 });
 
-/** Tudo opcional: o PATCH muda o que veio e não encosta no resto. */
-export const produtoPatchSchema = produtoCreateSchema.partial();
+/**
+ * Tudo opcional: PATCH muda só o que veio. `partial()` sozinho preserva
+ * defaults do schema de criação no Zod e transformaria omissão em escrita de
+ * `true`/`0`; estes três campos precisam perder o default neste contrato.
+ */
+export const produtoPatchSchema = produtoCreateSchema.partial().extend({
+  controla_estoque: z.boolean().optional(),
+  quantidade: z.number().int().min(0).optional(),
+  ativo: z.boolean().optional(),
+});
 
 export type ProdutoCreate = z.infer<typeof produtoCreateSchema>;
 export type ProdutoPatch = z.infer<typeof produtoPatchSchema>;
@@ -134,6 +145,7 @@ export interface Produto {
   preco_cents: number;
   moeda: string;
   custo_cents: number | null;
+  sale_unit: string | null;
   controla_estoque: boolean;
   quantidade: number;
   ativo: boolean;
@@ -144,5 +156,5 @@ export interface Produto {
 
 /** As colunas que a tela e a rota leem — uma lista, não duas. */
 export const COLUNAS_DO_PRODUTO =
-  "id, codigo, nome, descricao, marca, categoria, preco_cents, moeda, custo_cents, " +
+  "id, codigo, nome, descricao, marca, categoria, preco_cents, moeda, custo_cents, sale_unit, " +
   "controla_estoque, quantidade, ativo, origem, imagem_url, updated_at";

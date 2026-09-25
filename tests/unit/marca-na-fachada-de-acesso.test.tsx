@@ -33,6 +33,11 @@ vi.mock("@/lib/branding/saida", () => ({ marcaDaSaida }));
 // próprio layout) e por isso chama `createClient()`, que lê cookies — algo que
 // só existe dentro de uma requisição real. Fora do login quase nunca há
 // sessão, e o mock reflete exatamente isso: nenhum usuário.
+// F23: a casca lê o preço dos planos para o painel de apresentação. Aqui não há
+// banco — o dublê devolve "sem preço", que é o caminho fechado do próprio módulo.
+vi.mock("@/components/auth/preco-de-entrada-do-banco", () => ({
+  precoDeEntradaDoBanco: vi.fn(async () => null),
+}));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
     auth: { getUser: vi.fn(async () => ({ data: { user: null } })) },

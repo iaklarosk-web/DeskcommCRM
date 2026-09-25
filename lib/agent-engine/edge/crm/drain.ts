@@ -19,6 +19,7 @@ import type { Logger } from '../../obs/logger';
 import { enqueueJob } from '../../queue/queue';
 import { TIPOS_DERIVAVEIS, DERIVACAO_TERMINADA } from '@/lib/messaging/media/derivable';
 import { decidirElegibilidadeDaConversa } from '@/lib/ai/elegibilidade/consulta-pg';
+import { motorDaOrganizacao } from '@/src/ai';
 
 const DRAIN_CONSUMER = 'agent-engine';
 
@@ -59,11 +60,7 @@ export interface DrainKnobs {
 const ALLOWLIST_TTL_MS_PADRAO = 21 * 24 * 60 * 60 * 1000;
 
 /** Um tick do drain: claima um lote de eventos e os transforma em jobs. */
-export async function drainTick(
-  pool: pg.Pool,
-  knobs: DrainKnobs,
-  log: Logger,
-): Promise<number> {
+export async function drainTick(pool: pg.Pool, knobs: DrainKnobs, log: Logger): Promise<number> {
   // Reaper de eventos órfãos — barato (update indexado), roda a cada tick.
   await pool.query(
     `update event_log set status = 'pending', updated_at = now()
@@ -107,10 +104,9 @@ export async function drainTick(
         );
         continue;
       }
-      await pool.query(
-        `update event_log set status = 'done', updated_at = now() where id = $1`,
-        [event.id],
-      );
+      await pool.query(`update event_log set status = 'done', updated_at = now() where id = $1`, [
+        event.id,
+      ]);
     } catch (err) {
       const message = (err instanceof Error ? err.message : String(err)).slice(0, 300);
       const terminal = event.attempts >= 5;
@@ -212,6 +208,8 @@ async function processEvent(
   const { rows: capacidade } = await pool.query<{
     tem_agente: boolean;
     tem_roteador: boolean;
+    /** Existe agente NESTA organização, em qualquer estado (F18). */
+    tem_agente_qualquer: boolean;
   }>(
     `select
        exists(
@@ -232,7 +230,7 @@ async function processEvent(
              -- Um roteador cujos membros foram todos pausados continuava
              -- abrindo o portão: a organização pagava o classificador e o turno
              -- inteiro por mensagem recebida, para responder pelo genérico.
-             -- O predicado aqui é o MESMO que loadPublishedAgentConfigById
+             -- O predicado aqui é o MESMO que loadConversationAgentConfigById
              -- aplica na hora de executar (agent-config.ts) — é o que garante
              -- que o portão não promete um agente que o resolvedor vai recusar.
              exists (
@@ -249,16 +247,50 @@ async function processEvent(
                  and ma.archived_at is null and mv.status = 'published'
              )
            )
-       ) as tem_roteador`,
+       ) as tem_roteador,
+       exists (
+         select 1 from ai_agents qa
+          where qa.organization_id = $1
+       ) as tem_agente_qualquer`,
     [event.organization_id, p.channel_session_id],
   );
   const cap = capacidade[0];
   if (cap !== undefined && !cap.tem_agente && !cap.tem_roteador) {
-    log.info('drain: nenhum agente publicado para a sessão — turno pulado (sem gasto)', {
+    // F18-T05 (ADR-040 §1): "tem agente publicado?" é pergunta do motor
+    // HERDADO — é ele que precisa de uma versão publicada para responder.
+    //
+    // O turno SaaS não precisa: ele tem o catálogo, a política por ação, o
+    // prompt da organização (`ai.system_prompt`) e o acervo. Sem esta linha a
+    // unificação seria pela metade e do pior jeito: só as organizações que JÁ
+    // tinham agente herdado seriam atendidas, e uma organização nova — o caso
+    // do SaaS — continuaria sem atendimento automático, em silêncio. Medido na
+    // produção em 19/09/2026: a jornada do motor devolveu `dispatch_turns=0/3`
+    // e o log dizia exatamente isto.
+    //
+    // E a linha vale só para quem NÃO TEM AGENTE NENHUM. Se a organização tem
+    // agente e ele está pausado ou arquivado, isso é uma decisão dela — "pare
+    // de responder" —, e o motor novo não passa por cima: `pausar tem que
+    // parar o gasto` é invariante do produto (tests/invariants/
+    // portao-de-capacidade-mede-quem-executa), e o from-scratch da F18 pegou
+    // esta distinção quando o conserto ainda era grosso demais.
+    const semAgenteNenhum = cap.tem_agente_qualquer === false;
+    const motor = semAgenteNenhum
+      ? await motorDaOrganizacao(
+          { organization_id: event.organization_id, source: 'job' },
+          { pool },
+        ).catch(() => 'legacy' as const)
+      : ('legacy' as const);
+    if (motor !== 'saas') {
+      log.info('drain: nenhum agente publicado para a sessão — turno pulado (sem gasto)', {
+        event_id: event.id,
+        channel_session_id: p.channel_session_id,
+      });
+      return 'processado';
+    }
+    log.info('drain: sem agente publicado, mas a organização usa o motor novo — turno segue', {
       event_id: event.id,
       channel_session_id: p.channel_session_id,
     });
-    return 'processado';
   }
 
   // ANTI-BACKLOG (toda instalação, sem knob): a mensagem que disparou este
@@ -300,9 +332,24 @@ async function processEvent(
   // automação, retomada manual) e dentro da janela. Bloqueio por allowlist =
   // done, sem job, sem gasto — a conversa fica para atendimento humano.
   //
-  // `force_human` / silêncio / dono humano bloqueiam em QUALQUER modo: o turno já
-  // os respeitava (`isLeadInHandoff`), aqui a decisão só se antecipa para não
-  // enfileirar. O turno revalida (defesa em profundidade).
+  // `force_human` / silêncio / dono humano bloqueiam em QUALQUER modo, e é o
+  // TURNO quem garante isso — aqui a decisão só se antecipa para não enfileirar.
+  //
+  // Repare no `!canAssist` do `if` abaixo: com agente assistido publicado no
+  // canal o gate é desligado INTEIRO nesta ponta, de propósito (o rascunho é o
+  // produto do modo assistido, barrar aqui o mataria). A frase que este
+  // comentário trazia — "o turno revalida" — era falsa justamente nesse caso: o
+  // ramo assistido de `createInboundTurnHandler` devolvia antes das guardas de
+  // `runAgentTurn`. As duas checagens agora vivem dentro daquele ramo
+  // (`inbound-turn.ts`, `operationMode === 'assisted'`), e é lá que a defesa em
+  // profundidade realmente acontece.
+  // This is a capability check, never a selection by priority. The canonical
+  // router chooses once in the worker, then automatic eligibility is rechecked.
+  const {rows:assistance}=await pool.query<{available:boolean}>(`select exists(
+    select 1 from ai_agents a join ai_agent_versions v on v.organization_id=a.organization_id and v.id=a.published_version_id
+    where a.organization_id=$1 and a.archived_at is null and a.operation_mode='assisted' and v.status='published'
+    and(v.channel_session_id=$2 or exists(select 1 from ai_routers r where r.organization_id=a.organization_id and r.channel_session_id=$2 and r.is_active and(r.fallback_agent_id=a.id or exists(select 1 from ai_router_members m where m.organization_id=r.organization_id and m.router_id=r.id and m.agent_id=a.id))))) as available`,[event.organization_id,p.channel_session_id]);
+  const canAssist=assistance[0]?.available===true;
   try {
     const elegib = await decidirElegibilidadeDaConversa(pool, {
       organizationId: event.organization_id,
@@ -310,7 +357,7 @@ async function processEvent(
       agora: new Date(),
       ttlMs: knobs.allowlistTtlMs ?? ALLOWLIST_TTL_MS_PADRAO,
     });
-    if (elegib !== null && !elegib.permite) {
+    if (!canAssist && elegib !== null && !elegib.permite) {
       log.info('drain: conversa não elegível para IA — turno pulado (sem gasto)', {
         event_id: event.id,
         conversation_id: p.conversation_id,
@@ -419,10 +466,14 @@ export async function runDrainLoop(
     const waitMs = drained > 0 ? knobs.intervalMs : knobs.idleIntervalMs;
     await new Promise<void>((resolve) => {
       const timer = setTimeout(resolve, waitMs);
-      signal.addEventListener('abort', () => {
-        clearTimeout(timer);
-        resolve();
-      }, { once: true });
+      signal.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        { once: true },
+      );
     });
   }
 }

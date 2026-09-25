@@ -337,30 +337,29 @@ describe("o bloco emitido não pode contradizer o globals.css", () => {
 });
 
 describe("controle positivo — o produto sem marca não pode se mexer", () => {
-  it("a Sage reproduz, pintada, os números do design system", () => {
-    // `#506d48` é a semente do próprio produto: ela não desloca nada, e os pares
-    // pintados têm que dar o que o `globals.css` sempre deu. Se estes números
-    // mudarem, o conserto vazou para quem não pediu.
-    const cor = corDe("#506d48");
+  it("o produto reproduz, pintado, os números do design system", () => {
+    // `#0b7374` é a semente do próprio produto (ADR-049; era `#506d48` na Sage): ela
+    // não desloca nada, e os pares pintados têm que dar o que o `globals.css` dá.
+    // Se estes números mudarem, o conserto vazou para quem não pediu.
+    const cor = corDe("#0b7374");
     expect(cor.derivada?.claro.deslocamento).toBe(0);
     expect(cor.derivada?.escuro.deslocamento).toBe(0);
 
-    const p = pintadosDaSemente("#506d48");
-    // Claro: os dois números que `contraste.ts` documenta como medidos à mão.
-    expect(foco(p.claro, "--color-bg")).toBeCloseTo(3.79, 2);
-    expect(foco(p.claro, "--color-surface-elevated")).toBeCloseTo(3.6, 2);
-    // Escuro: 6,30 e 5,22 na rampa DERIVADA da semente; os literais do
-    // `globals.css` (`#82a077`) dão 6,31 e 5,23 — a rampa reproduz a Sage com
-    // Δ ≤ 2/255 por canal, e a diferença de 0,01 é esse arredondamento.
-    expect(foco(p.escuro, "--color-bg")).toBeCloseTo(6.3, 2);
-    expect(foco(p.escuro, "--color-surface-elevated")).toBeCloseTo(5.22, 2);
+    const p = pintadosDaSemente("#0b7374");
+    // Claro: os dois números que `branding-contraste.test.ts` mede na régua
+    // (3,5315 e 3,1993 — eram 3,79 e 3,60 na Sage).
+    expect(foco(p.claro, "--color-bg")).toBeCloseTo(3.53, 2);
+    expect(foco(p.claro, "--color-surface-elevated")).toBeCloseTo(3.2, 2);
+    // Escuro: a rampa do produto É `rampaDeSemente("#0b7374")` por construção, então
+    // a derivada e os literais do `globals.css` coincidem (Δ 0): 6,5260 e 5,2694.
+    expect(foco(p.escuro, "--color-bg")).toBeCloseTo(6.53, 2);
+    expect(foco(p.escuro, "--color-surface-elevated")).toBeCloseTo(5.27, 2);
     // No escuro o anel NÃO fica apertado contra as bases: quem aperta é o
-    // `-soft` COMPOSTO. 4,58 aqui — é este o par que a prova em tela reportou
-    // como "4,58 no escuro", e não `foco × --color-bg` (6,30). Nos literais do
-    // `globals.css` o mesmo par dá 4,59, e `superficiesDoTema` documenta o trio
-    // 4,99 · 4,59 · 4,02.
-    expect(foco(p.escuro, "--color-accent-soft@--color-surface")).toBeCloseTo(4.58, 2);
-    expect(foco(p.escuro, "--color-accent-soft@--color-surface-elevated")).toBeCloseTo(4.03, 2);
+    // `-soft` COMPOSTO — o trio na régua nova é 5,12 · 4,59 · 4,08 (era
+    // 4,99 · 4,59 · 4,02 na Sage), e o par sobre a superfície continua sendo o
+    // mais justo do tema escuro.
+    expect(foco(p.escuro, "--color-accent-soft@--color-surface")).toBeCloseTo(4.59, 2);
+    expect(foco(p.escuro, "--color-accent-soft@--color-surface-elevated")).toBeCloseTo(4.08, 2);
   });
 
   it("sem marca configurada nada é injetado, e a tela fica como está", () => {
@@ -377,10 +376,15 @@ describe("a navy #0f172a — o defeito que a prova em tela achou", () => {
     // pintava `--color-accent-400: #545f77`, o stop CRU. O tema escuro anda -1,
     // então o anel agora pinta `#828a9d`, o stop 300 da rampa da marca.
     const p = pintadosDaSemente("#0f172a");
-    expect(foco(p.claro, "--color-bg")).toBeCloseTo(10.77, 2);
-    expect(foco(p.claro, "--color-surface-elevated")).toBeCloseTo(10.22, 2);
-    expect(foco(p.escuro, "--color-bg")).toBeCloseTo(5.28, 2);
-    expect(foco(p.escuro, "--color-surface-elevated")).toBeCloseTo(4.39, 2);
+    // Os quatro juntos, para uma reprova mostrar os quatro de uma vez. Remedidos na
+    // ADR-049 sobre as bases areia/marinho (eram 10,77 · 10,22 · 5,28 · 4,39 na Sage).
+    const quatro = [
+      foco(p.claro, "--color-bg"),
+      foco(p.claro, "--color-surface-elevated"),
+      foco(p.escuro, "--color-bg"),
+      foco(p.escuro, "--color-surface-elevated"),
+    ].map((v) => Number(v.toFixed(2)));
+    expect(quatro).toEqual([10.29, 9.32, 5.35, 4.32]);
     for (const superficie of ["--color-bg", "--color-surface-elevated"] as const) {
       expect(foco(p.escuro, superficie), superficie).toBeGreaterThanOrEqual(PISOS.componente);
     }

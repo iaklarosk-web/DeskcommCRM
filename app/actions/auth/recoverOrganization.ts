@@ -58,7 +58,7 @@ export async function recoverOrganization(name: string): Promise<RecoverOrganiza
 
   const user = await requireAuth();
   const activeOrg = await resolveActiveOrg(user);
-  if (activeOrg) redirect("/app/inbox");
+  if (activeOrg) redirect("/app");
 
   const supabase = await createClient();
   const {
@@ -71,7 +71,12 @@ export async function recoverOrganization(name: string): Promise<RecoverOrganiza
     void audit({
       action: "auth.signup_provision_recusado",
       actorUserId: authUser.id,
-      metadata: { motivo: decisao.tipo === "convite" ? "convite_pendente" : decisao.motivo },
+      metadata: {
+        motivo:
+          decisao.tipo === "convite" || decisao.tipo === "convite_curto"
+            ? "convite_pendente"
+            : decisao.motivo,
+      },
     });
     return { ok: false, error: "invite_pending" };
   }
@@ -99,6 +104,6 @@ export async function recoverOrganization(name: string): Promise<RecoverOrganiza
     return { ok: false, error: "provision_failed" };
   }
 
-  revalidatePath("/app/inbox");
+  revalidatePath("/app");
   redirect("/onboarding/welcome");
 }
