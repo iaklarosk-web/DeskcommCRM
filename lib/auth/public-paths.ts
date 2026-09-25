@@ -21,6 +21,10 @@ export const PUBLIC_PATHS: RegExp[] = [
   // F19 (ADR-042 §5): o cockpit da KN, `Authorization: Bearer ADMIN_SUMMARY_TOKEN`
   // conferido DENTRO da rota, em tempo constante — sem cookie, como /cron/.
   /^\/api\/admin\/summary$/,
+  // F24 (Suporte KN): a segunda pergunta do mesmo cockpit — os casos em espera
+  // humana de todas as organizações, para a rotina de aviso do dono. Mesmo
+  // bearer, conferido dentro da rota (`lib/admin/cockpit.ts`). Ancorado.
+  /^\/api\/admin\/handoffs$/,
   // Heartbeat do agente do host (bearer INTERNAL_SECRET/INTERNAL_CRON_SECRET,
   // checado dentro da própria rota) — sem cookie de sessão, igual /cron/.
   /^\/api\/v1\/system\/agent$/,
