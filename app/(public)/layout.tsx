@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { MarcaDaFachada } from "@/components/auth/MarcaDaFachada";
 import { PainelDeApresentacao } from "@/components/auth/PainelDeApresentacao";
+import { precoDeEntradaDoBanco } from "@/components/auth/preco-de-entrada-do-banco";
 import { branding } from "@/lib/branding";
 import { marcaDaSaida } from "@/lib/branding/saida";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
@@ -52,6 +53,8 @@ export default async function PublicLayout({ children }: { children: React.React
   const t = (texto: string) => traduzir(texto, idioma);
   const nome = branding().name;
   const ano = new Date().getFullYear();
+  // Lido aqui, e não dentro do painel: o painel é síncrono (ver o cabeçalho dele).
+  const preco = await precoDeEntradaDoBanco();
 
   return (
     <IdiomaProvider locale={locale}>
@@ -79,7 +82,7 @@ export default async function PublicLayout({ children }: { children: React.React
           </footer>
         </section>
 
-        <PainelDeApresentacao idioma={idioma} />
+        <PainelDeApresentacao idioma={idioma} preco={preco} />
       </div>
     </IdiomaProvider>
   );

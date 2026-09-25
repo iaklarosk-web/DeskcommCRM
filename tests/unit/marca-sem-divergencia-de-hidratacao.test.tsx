@@ -238,7 +238,9 @@ describe("catraca: `branding()` é server-only", () => {
     // por cegueira — o mesmo defeito que ela existe para impedir, do lado do
     // instrumento. Estes quatro são servidores e DEVEM chamar `branding()`.
     const esperados = [
-      "app/(public)/login/page.tsx",
+      // F23 (ADR-049): o nome da marca saiu de `login/page.tsx` e passou a ser
+      // desenhado uma vez só, na casca — `MarcaDaFachada` recebe `branding().name`.
+      "app/(public)/layout.tsx",
       "app/(public)/signup/page.tsx",
       "app/onboarding/layout.tsx",
       "lib/legal/operador.ts",

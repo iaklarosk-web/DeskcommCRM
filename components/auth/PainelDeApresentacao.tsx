@@ -1,12 +1,10 @@
 import Link from "next/link";
 
-import { menorPrecoAnunciavel, type PrecoDeEntrada } from "@/components/auth/preco-de-entrada";
+import type { PrecoDeEntrada } from "@/components/auth/preco-de-entrada";
 import { env } from "@/lib/env";
 import { traduzir } from "@/lib/i18n/dicionario";
 import type { Idioma } from "@/lib/i18n/idiomas";
-import { logger } from "@/lib/logger";
 import { CalendarBlank, Funnel, Inbox, Robot } from "@/lib/ui/icons";
-import { listarPlanos } from "@/src/billing/planos";
 
 /**
  * O painel à direita das telas de acesso — o molde dos OS da KN (PDV, Oferta,
@@ -17,22 +15,12 @@ import { listarPlanos } from "@/src/billing/planos";
  * chat do site e agenda, F15 autonomia por ação, F13 CRM comercial). Não há
  * cliente, número ou depoimento inventado.
  *
- * O preço NÃO é literal: sai de `plans` (D14 — a tela e o Stripe nascem da
- * mesma linha), e a linha some quando nenhum plano é anunciável. A leitura do
- * banco é a única coisa aqui que pode falhar, e ela falha FECHADA para o
- * painel (sem preço), nunca para a tela de entrar: derrubar o login por causa
- * de uma frase promocional seria o pior negócio possível.
+ * O preço NÃO é literal: vem por prop, lido de `plans` pela casca
+ * (`preco-de-entrada-do-banco.ts`, D14), e a linha some quando nenhum plano é
+ * anunciável. O componente é SÍNCRONO de propósito:
+ * `tests/unit/marca-na-fachada-de-acesso.test.tsx` renderiza a casca com
+ * `renderToStaticMarkup`, que não sabe esperar componente assíncrono.
  */
-async function precoDeEntrada(): Promise<PrecoDeEntrada | null> {
-  try {
-    return menorPrecoAnunciavel(await listarPlanos());
-  } catch (erro) {
-    logger.warn("fachada: preço dos planos indisponível; painel sai sem preço", {
-      erro: erro instanceof Error ? erro.message : String(erro),
-    });
-    return null;
-  }
-}
 
 function formatarPreco(preco: PrecoDeEntrada, idioma: Idioma): string {
   return (preco.price_cents / 100).toLocaleString(idioma === "es" ? "es" : "pt-BR", {
@@ -51,7 +39,8 @@ const DESTAQUES = [
   {
     Icone: Robot,
     titulo: "IA com limites",
-    texto: "Por ação, você decide: a IA responde sozinha, propõe ou pede aprovação. Com teto diário.",
+    texto:
+      "Por ação, você decide: a IA responde sozinha, propõe ou pede aprovação. Com teto diário.",
   },
   {
     Icone: CalendarBlank,
@@ -65,9 +54,14 @@ const DESTAQUES = [
   },
 ] as const;
 
-export async function PainelDeApresentacao({ idioma }: { idioma: Idioma }) {
+export function PainelDeApresentacao({
+  idioma,
+  preco,
+}: {
+  idioma: Idioma;
+  preco: PrecoDeEntrada | null;
+}) {
   const t = (texto: string) => traduzir(texto, idioma);
-  const preco = await precoDeEntrada();
   const trial = env.BILLING_TRIAL_DAYS;
 
   return (

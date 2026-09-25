@@ -46,7 +46,7 @@ export function MarcaDaFachada({
           <ChatCircleDots size={18} weight="bold" />
         </span>
       )}
-      <span className="text-lg font-bold leading-none tracking-tight text-text">
+      <span className="text-lg leading-none font-bold tracking-tight text-text">
         {corpo}
         {sufixo && (
           <>
