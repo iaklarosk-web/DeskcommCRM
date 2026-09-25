@@ -1,7 +1,7 @@
 /**
  * A ORGANIZAÇÃO NUNCA FICA SEM ADMIN.
  *
- * Em 25/09/2026 o proprietário saiu do `deka-sucos` por `DELETE` em psql. Antes
+ * Em 25/09/2026 o proprietário saiu de um tenant de cliente por `DELETE` em psql. Antes
  * de apertar o gatilho eu contei os admins na mão e vi que sobrava um. Deu
  * certo — mas a regra morava na minha atenção, não no código, e quem repetisse
  * o comando sem contar deixaria a empresa órfã: sem ninguém que possa convidar,

@@ -1,7 +1,7 @@
 /**
  * "TENTE NOVAMENTE" TEM DE SER UMA INSTRUÇÃO CUMPRÍVEL.
  *
- * 24/09/2026, produção: o convidado do `deka-sucos` criou a conta com sucesso
+ * 24/09/2026, produção: o convidado de um tenant de cliente criou a conta com sucesso
  * às 22:33 (vínculo de admin aceito no mesmo instante). Achando que havia
  * falhado, o proprietário emitiu um convite novo; o convidado tentou de novo às
  * 00:45 e 00:46 e leu *"Não foi possível criar a conta. Tente novamente."* nas
