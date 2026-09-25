@@ -122,7 +122,7 @@ services:
       # (`/signup`, F11) fica DESLIGADO no GoTrue — ninguém de fora cria conta
       # nem recebe e-mail desta instalação. Convites do dono passam pela API
       # admin (service_role) e continuam funcionando. Liberar = "false" + up.
-      GOTRUE_DISABLE_SIGNUP: "true"
+      GOTRUE_DISABLE_SIGNUP: "false"
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
       GOTRUE_JWT_EXP: "3600"
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
