@@ -10,6 +10,7 @@ import {
   type SignupComConviteInput,
 } from "@/lib/auth/schemas";
 import { resolverConvite } from "@/lib/auth/resolver-de-convite";
+import { contaJaExiste } from "@/lib/auth/conta-ja-existe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aceitarConvitePorToken } from "@/src/convites/repositorio";
 import { audit, hashEmail } from "@/lib/audit";
@@ -38,7 +39,7 @@ export type SignUpResult =
     }
   | {
       ok: false;
-      error: "validation_error" | "rate_limited" | "signup_failed";
+      error: "validation_error" | "rate_limited" | "signup_failed" | "conta_ja_existe";
       details?: Record<string, unknown>;
     };
 
@@ -123,14 +124,23 @@ export async function signUp(
       user_metadata: { invite_token: convite },
     });
     if (erroDoServico) {
+      // Conta que JÁ existe não é falha a repetir: a saída é entrar. Dizer isso
+      // só é seguro porque há um convite válido PARA ESTE e-mail em jogo — quem
+      // chegou aqui já sabia que o endereço existe (ver conta-ja-existe.ts).
+      const jaExiste = contaJaExiste(erroDoServico);
       await audit({
         action: "auth.signup_failed",
-        metadata: { email_hash: hashEmail(parsed.data.email), reason: erroDoServico.message, via: "convite" },
+        metadata: {
+          email_hash: hashEmail(parsed.data.email),
+          reason: erroDoServico.message,
+          via: "convite",
+          conta_ja_existe: jaExiste,
+        },
         requestId,
         ip,
         userAgent,
       });
-      return { ok: false, error: "signup_failed" };
+      return { ok: false, error: jaExiste ? "conta_ja_existe" : "signup_failed" };
     }
     await audit({
       action: "auth.signup_requested",

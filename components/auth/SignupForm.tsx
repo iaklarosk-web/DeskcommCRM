@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -33,6 +34,7 @@ export function SignupForm({ convite }: { convite?: ConviteDoSignup }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [contaJaExiste, setContaJaExiste] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
 
   const {
@@ -96,6 +98,12 @@ export function SignupForm({ convite }: { convite?: ConviteDoSignup }) {
         setServerError(t("Muitas tentativas. Aguarde alguns minutos."));
       } else if (res.error === "validation_error") {
         setServerError(t("Dados inválidos. Confira os campos."));
+      } else if (res.error === "conta_ja_existe") {
+        // "Tente novamente" era instrução impossível: nenhuma tentativa cria
+        // uma conta que já existe. A saída é entrar — e com convite válido para
+        // este e-mail, dizer isso não entrega nada a ninguém.
+        setContaJaExiste(true);
+        setServerError(null);
       } else {
         setServerError(t("Não foi possível criar a conta. Tente novamente."));
       }
@@ -177,6 +185,25 @@ export function SignupForm({ convite }: { convite?: ConviteDoSignup }) {
           <p className="text-xs text-destructive">{t(errors.password_confirm.message ?? "")}</p>
         )}
       </div>
+      {contaJaExiste && (
+        <div
+          className="space-y-2 rounded-md border border-border bg-muted/40 px-3 py-3 text-sm"
+          role="status"
+          data-testid="signup-conta-ja-existe"
+        >
+          <p className="font-medium">{t("Você já tem conta com este e-mail.")}</p>
+          <p className="text-muted-foreground">
+            {t("Entre com a sua senha para aceitar o convite. Se não lembrar dela, use “Esqueci minha senha” na tela de entrada.")}
+          </p>
+          <Link
+            href={convite ? `/login?next=${encodeURIComponent(`/i/${convite.token}`)}` : "/login"}
+            className="inline-flex h-10 w-full items-center justify-center rounded-sm bg-accent px-4 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
+            data-testid="signup-ir-para-login"
+          >
+            {t("Entrar com minha senha")}
+          </Link>
+        </div>
+      )}
       {serverError && (
         <div
           className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"

@@ -146,4 +146,34 @@ describe("signUp com convite — a porta do convidado não é a porta pública",
 
     expect(res.ok).toBe(false);
   });
+
+  it("conta que JÁ existe devolve conta_ja_existe — não 'tente novamente'", () => {
+    // 24/09, produção: o convidado leu "Não foi possível criar a conta. Tente
+    // novamente." duas vezes. Nenhuma tentativa ia funcionar — ele já tinha
+    // conta desde as 22:33, com o vínculo de admin já aceito.
+    return (async () => {
+      const email = EMAIL();
+      vi.mocked(resolverConvite).mockResolvedValue({ token: "tok", email, origem: "team_invites" });
+      criarPeloServico.mockResolvedValue({
+        data: { user: null },
+        error: { message: "A user with this email address has already been registered" },
+      });
+
+      const { signUp } = await import("./signUp");
+      const res = await signUp(entrada(email), "tok");
+
+      expect(res).toEqual({ ok: false, error: "conta_ja_existe" });
+    })();
+  });
+
+  it("CONTROLE — outro erro do provedor continua sendo signup_failed", async () => {
+    const email = EMAIL();
+    vi.mocked(resolverConvite).mockResolvedValue({ token: "tok", email, origem: "team_invites" });
+    criarPeloServico.mockResolvedValue({ data: { user: null }, error: { message: "Database error creating new user" } });
+
+    const { signUp } = await import("./signUp");
+    const res = await signUp(entrada(email), "tok");
+
+    expect(res).toEqual({ ok: false, error: "signup_failed" });
+  });
 });

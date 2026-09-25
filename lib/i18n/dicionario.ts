@@ -8586,6 +8586,9 @@ export const DICIONARIO: Traducoes = {
   // F12-T07 (ADR-030): cobrança do dono (/admin/billing) e coluna de assinatura na lista de empresas.
   "sem assinatura (herdada)": {"es":"sin suscripción (heredada)"},
   "Cobrança da plataforma": {"es":"Facturación de la plataforma"},
+  "Você já tem conta com este e-mail.": {"es":"Ya tienes una cuenta con este correo."},
+  "Entre com a sua senha para aceitar o convite. Se não lembrar dela, use “Esqueci minha senha” na tela de entrada.": {"es":"Entra con tu contraseña para aceptar la invitación. Si no la recuerdas, usa «Olvidé mi contraseña» en la pantalla de acceso."},
+  "Entrar com minha senha": {"es":"Entrar con mi contraseña"},
   "Assinaturas por empresa, planos, eventos do gateway e conciliação.": {"es":"Suscripciones por empresa, planes, eventos de la pasarela y conciliación."},
   "Plano, estado da assinatura, uso do período e faturas desta empresa.": {"es":"Plan, estado de la suscripción, uso del período y facturas de esta empresa."},
   "Gateway simulado: nenhuma cobrança real acontece.": {"es":"Pasarela simulada: no ocurre ningún cobro real."},
