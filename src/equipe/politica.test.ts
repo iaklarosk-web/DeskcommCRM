@@ -8,7 +8,7 @@ const C: MembroDaOrganizacao = { user_id: "c", role: "agent" };
 
 describe("política da equipe — a organização nunca fica sem admin", () => {
   it("remover o ÚLTIMO admin é recusado com motivo nomeado", () => {
-    // O estado exato do deka-sucos se o Kayro não tivesse aceitado antes.
+    // O estado exato de um tenant de cliente cujo segundo admin ainda não aceitou.
     expect(podeRemover([A, C], "a")).toEqual({ ok: false, recusa: "ultimo_admin" });
   });
 
