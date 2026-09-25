@@ -208,8 +208,11 @@ async function processEvent(
   const { rows: capacidade } = await pool.query<{
     tem_agente: boolean;
     tem_roteador: boolean;
-    /** Existe agente NESTA organização, em qualquer estado (F18). */
-    tem_agente_qualquer: boolean;
+    /**
+     * Existe agente NESTA organização que JÁ TEVE versão publicada (F18;
+     * F24 restringiu — antes era "existe linha em ai_agents").
+     */
+    tem_agente_ja_publicado: boolean;
   }>(
     `select
        exists(
@@ -249,9 +252,21 @@ async function processEvent(
            )
        ) as tem_roteador,
        exists (
+         -- F24 (Suporte KN, 25/09/2026): conta só agente que JÁ TEVE versão
+         -- publicada (status published/superseded, ou published_at carimbado).
+         -- Antes contava a EXISTÊNCIA da linha em ai_agents, e uma
+         -- organização com só RASCUNHOS — criados pela tela e nunca
+         -- publicados, como a KN Tecnologia em 25/09 — entrava aqui como
+         -- "tem agente", o portão pulava o turno e, com o motor novo, o
+         -- visitante ficava sem resposta nenhuma. Arquivar não resolvia e não
+         -- existe exclusão. Rascunho puro não é "pare de responder": é
+         -- ausência de decisão. Pausado e arquivado-depois-de-publicado
+         -- continuam contando (a decisão de parar continua parando o gasto).
          select 1 from ai_agents qa
+         join ai_agent_versions qv on qv.agent_id = qa.id and qv.organization_id = qa.organization_id
           where qa.organization_id = $1
-       ) as tem_agente_qualquer`,
+            and (qv.status in ('published', 'superseded') or qv.published_at is not null)
+       ) as tem_agente_ja_publicado`,
     [event.organization_id, p.channel_session_id],
   );
   const cap = capacidade[0];
@@ -267,13 +282,15 @@ async function processEvent(
     // produção em 19/09/2026: a jornada do motor devolveu `dispatch_turns=0/3`
     // e o log dizia exatamente isto.
     //
-    // E a linha vale só para quem NÃO TEM AGENTE NENHUM. Se a organização tem
-    // agente e ele está pausado ou arquivado, isso é uma decisão dela — "pare
-    // de responder" —, e o motor novo não passa por cima: `pausar tem que
-    // parar o gasto` é invariante do produto (tests/invariants/
+    // E a linha vale só para quem NUNCA PUBLICOU AGENTE. Se a organização tem
+    // agente que já foi publicado e ele está pausado ou arquivado, isso é uma
+    // decisão dela — "pare de responder" —, e o motor novo não passa por cima:
+    // `pausar tem que parar o gasto` é invariante do produto (tests/invariants/
     // portao-de-capacidade-mede-quem-executa), e o from-scratch da F18 pegou
-    // esta distinção quando o conserto ainda era grosso demais.
-    const semAgenteNenhum = cap.tem_agente_qualquer === false;
+    // esta distinção quando o conserto ainda era grosso demais. Rascunho que
+    // nunca foi publicado NÃO é essa decisão (F24, defeito 0c; casos F24 do
+    // mesmo invariante).
+    const semAgenteNenhum = cap.tem_agente_ja_publicado === false;
     const motor = semAgenteNenhum
       ? await motorDaOrganizacao(
           { organization_id: event.organization_id, source: 'job' },
