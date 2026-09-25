@@ -45,6 +45,7 @@ export default async function AiSettingsPage() {
     system_prompt: config["ai.system_prompt"] ?? "",
     unknown_answer: config["ai.unknown_answer"] ?? "",
     confidence_threshold: config["ai.confidence_threshold"],
+    forbidden_topics: config["ai.forbidden_topics"],
   };
 
   // O acervo desta organização — e só dela. O predicado é o de

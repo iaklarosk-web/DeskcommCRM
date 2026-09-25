@@ -28,6 +28,16 @@ export interface ConfiguracaoDeIa {
   system_prompt: string;
   unknown_answer: string;
   confidence_threshold: number;
+  /** F24: `ai.forbidden_topics` — na tela, um tema por linha. */
+  forbidden_topics: string[];
+}
+
+/** Um tema por linha: aparado, sem linha em branco. */
+export function temasDasLinhas(texto: string): string[] {
+  return texto
+    .split(/\r?\n/)
+    .map((linha) => linha.trim())
+    .filter((linha) => linha.length > 0);
 }
 
 const ROTA_DE_CONFIG = "/api/v1/settings/ai";
@@ -50,6 +60,7 @@ export function FormularioDeIa({
   const t = useT();
   const router = useRouter();
   const [form, setForm] = useState<ConfiguracaoDeIa>(inicial);
+  const [temas, setTemas] = useState<string>(inicial.forbidden_topics.join("\n"));
   const [aviso, setAviso] = useState<string>("");
   const [avisoDoAcervo, setAvisoDoAcervo] = useState<string>("");
   const [arquivo, setArquivo] = useState<File | null>(null);
@@ -68,6 +79,7 @@ export function FormularioDeIa({
           "ai.system_prompt": form.system_prompt.trim() === "" ? null : form.system_prompt,
           "ai.unknown_answer": form.unknown_answer.trim() === "" ? null : form.unknown_answer,
           "ai.confidence_threshold": form.confidence_threshold,
+          "ai.forbidden_topics": temasDasLinhas(temas),
         }),
       });
       if (!resposta.ok) {
@@ -182,6 +194,23 @@ export function FormularioDeIa({
             <p className="text-xs text-muted-foreground">
               {t(
                 "Abaixo disso, o agente não responde: chama uma pessoa. Perto de 0 ele arrisca; perto de 1 quase tudo vira atendimento humano.",
+              )}
+            </p>
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="ia-temas-proibidos">{t("Temas que a IA não responde")}</Label>
+            <Textarea
+              id="ia-temas-proibidos"
+              data-testid="ia-temas-proibidos"
+              rows={4}
+              value={temas}
+              disabled={salvando}
+              onChange={(e) => setTemas(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "Um por linha. Se a mensagem do cliente tocar num destes temas, a IA não responde: a conversa vai para uma pessoa (motivo: regra da empresa). Exemplos: preço, desconto, cobrança, dados da conta.",
               )}
             </p>
           </div>
