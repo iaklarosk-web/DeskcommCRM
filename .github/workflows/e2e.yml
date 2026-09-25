@@ -616,6 +616,7 @@ jobs:
         f18-motor-unico.spec.ts
         f19-cobranca-stripe.spec.ts
         f20-convites.spec.ts
+        f21-equipe-no-admin.spec.ts
 
       FORA_DO_CI: >-
         vps-fresh-onboarding.spec.ts
