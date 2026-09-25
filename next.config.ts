@@ -1,6 +1,8 @@
 import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
+import { CABECALHOS_DE_SEGURANCA } from "./lib/http/cabecalhos-de-seguranca";
+
 /** Performance budget (EPIC-12 §S-12.05):
  *  - LCP < 2.5s p75
  *  - CLS < 0.1 p75
@@ -52,33 +54,12 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "*.supabase.in" },
     ],
   },
+  // As regras moram em `lib/http/cabecalhos-de-seguranca.ts` para a suíte
+  // medi-las com o casador do próprio Next (F24: `X-Frame-Options: DENY` não
+  // alcança `/chat/<slug>` nem `/embed/<slug>.js` — quem decide a moldura da
+  // página do chat é o `frame-ancestors` que a rota emite por organização).
   async headers() {
-    return [
-      {
-        source: "/notify-sw.js",
-        headers: [
-          { key: "Cache-Control", value: "no-cache" },
-          { key: "Service-Worker-Allowed", value: "/" },
-        ],
-      },
-      {
-        source: "/(.*)",
-        headers: [
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "X-Frame-Options", value: "DENY" },
-          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          // microphone=(self): o gravador de voz do composer (PTT estilo WhatsApp)
-          // usa getUserMedia({audio}); microphone=() bloquearia em TODA origem,
-          // inclusive a própria — daria "microphone is not allowed in this document".
-          // Câmera e geolocalização seguem bloqueadas (não usadas).
-          // notifications=(self): bandeja do SO quando a janela está minimizada.
-          {
-            key: "Permissions-Policy",
-            value: "camera=(), microphone=(self), geolocation=(), notifications=(self)",
-          },
-        ],
-      },
-    ];
+    return CABECALHOS_DE_SEGURANCA.map((regra) => ({ source: regra.source, headers: regra.headers.map((h) => ({ ...h })) }));
   },
 };
 

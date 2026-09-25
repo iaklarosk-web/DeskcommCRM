@@ -12,23 +12,67 @@
  * O token da sessão vive em `localStorage` sob a chave do slug; a página o
  * manda no cabeçalho `x-webchat-token`. Nada do produto é exposto além do
  * nome da organização.
+ *
+ * F24 (Suporte KN, 25/09/2026), o que a página passou a fazer:
+ *  - O id da mensagem (`client_message_id`, o árbitro da reentrega) é UUID v4
+ *    SEMPRE. `crypto.randomUUID` só existe em contexto seguro, e um iframe
+ *    https dentro de uma página http NÃO é contexto seguro (medido:
+ *    `isSecureContext=false`); o fallback antigo não era UUID, o servidor
+ *    respondia 422 e o visitante lia "tente de novo" para sempre.
+ *  - Rede que falha e servidor que recusa são avisos DIFERENTES
+ *    (`semRede` × `recusada`): antes o `fetch` rejeitado nem chegava a mostrar
+ *    aviso (a promessa morria sem `catch`).
+ *  - Fila com prazo (`fila.modo = retorno`): "Recebemos sua pergunta.
+ *    {empresa} responde por {contato} em até {prazo}." no lugar de "na fila
+ *    para um atendente"; `{contato}` é o que a sessão devolve em
+ *    `visitor_contact` (o que a pessoa informou na identificação).
+ *  - Pré-preenchimento (`preenchimento`): `value=` nos dois campos da
+ *    identificação, que continuam `required` e editáveis. Identidade
+ *    DECLARADA, não autenticada.
  */
 import { TEXTOS_DA_PAGINA, type IdiomaDaPagina } from "./textos";
+
+export interface ConfiguracaoDaFila {
+  readonly modo: "atendente" | "retorno";
+  readonly prazo: string;
+}
+
+export interface Preenchimento {
+  readonly name?: string;
+  readonly contact?: string;
+}
 
 export interface DadosDaPagina {
   readonly slug: string;
   readonly nomeDaOrganizacao: string;
   readonly idioma: IdiomaDaPagina;
+  /** Ausente = `atendente`, o comportamento de sempre. */
+  readonly fila?: ConfiguracaoDaFila;
+  readonly preenchimento?: Preenchimento;
 }
+
+const FILA_PADRAO: ConfiguracaoDaFila = { modo: "atendente", prazo: "1 dia útil" };
 
 function escapar(texto: string): string {
   return texto.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
 }
 
+/** JSON que pode entrar em `<script>`: `<` nunca fecha a tag. */
+function paraScript(valor: unknown): string {
+  return JSON.stringify(valor).replace(/</g, "\\u003c");
+}
+
+function atributoValue(valor: string | undefined): string {
+  return valor === undefined ? "" : ` value="${escapar(valor)}"`;
+}
+
 export function htmlDaPagina(dados: DadosDaPagina): string {
   const t = TEXTOS_DA_PAGINA[dados.idioma];
   const nome = escapar(dados.nomeDaOrganizacao);
-  const textos = JSON.stringify(t).replace(/</g, "\\u003c");
+  const textos = paraScript(t);
+  const fila = paraScript(dados.fila ?? FILA_PADRAO);
+  const nomeNoScript = paraScript(dados.nomeDaOrganizacao);
+  const preenchido = dados.preenchimento ?? {};
   return `<!doctype html>
 <html lang="${dados.idioma}">
 <head>
@@ -65,8 +109,8 @@ export function htmlDaPagina(dados: DadosDaPagina): string {
   <header><span class="nome">${nome}</span><span class="estado" data-estado></span></header>
   <main data-mensagens aria-live="polite"></main>
   <form class="ident" data-form-ident hidden>
-    <input name="name" required minlength="2" maxlength="120" autocomplete="name" data-nome>
-    <input name="contact" required minlength="5" maxlength="200" autocomplete="email" data-contato>
+    <input name="name" required minlength="2" maxlength="120" autocomplete="name"${atributoValue(preenchido.name)} data-nome>
+    <input name="contact" required minlength="5" maxlength="200" autocomplete="email"${atributoValue(preenchido.contact)} data-contato>
     <button type="submit" data-continuar></button>
   </form>
   <form data-form-msg hidden>
@@ -77,6 +121,8 @@ export function htmlDaPagina(dados: DadosDaPagina): string {
 <script>
 (function () {
   var T = ${textos};
+  var FILA = ${fila};
+  var EMPRESA = ${nomeNoScript};
   var raiz = document.querySelector('.chat');
   var slug = raiz.getAttribute('data-slug');
   var base = '/api/public/webchat/' + slug;
@@ -93,6 +139,21 @@ export function htmlDaPagina(dados: DadosDaPagina): string {
   raiz.querySelector('[data-corpo]').placeholder = T.escrever;
   raiz.querySelector('[data-enviar]').textContent = T.enviar;
 
+  // UUID v4 em qualquer contexto: randomUUID só existe em contexto seguro
+  // (iframe https dentro de página http NÃO é), getRandomValues existe em
+  // todo navegador vivo, e Math.random fecha o que sobrar.
+  function uuid() {
+    var c = (typeof crypto !== 'undefined' && crypto) ? crypto : null;
+    if (c && typeof c.randomUUID === 'function') return c.randomUUID();
+    var b = new Uint8Array(16), i;
+    if (c && typeof c.getRandomValues === 'function') c.getRandomValues(b);
+    else for (i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256);
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    var h = '';
+    for (i = 0; i < 16; i++) h += (b[i] + 256).toString(16).slice(1);
+    return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' + h.slice(16, 20) + '-' + h.slice(20);
+  }
   function aviso(texto, nome) {
     var el = document.createElement('div');
     el.className = 'aviso';
@@ -115,40 +176,48 @@ export function htmlDaPagina(dados: DadosDaPagina): string {
     main.appendChild(el);
     main.scrollTop = main.scrollHeight;
   }
+  // status 0 = a rede falhou (fetch rejeitado): não é recusa do servidor.
   function pedir(caminho, opcoes) {
     opcoes = opcoes || {};
     var headers = { 'content-type': 'application/json' };
     if (token) headers['x-webchat-token'] = token;
     return fetch(base + caminho, { method: opcoes.method || 'GET', headers: headers, body: opcoes.body ? JSON.stringify(opcoes.body) : undefined })
-      .then(function (r) { return r.json().then(function (j) { return { status: r.status, json: j }; }); });
+      .then(function (r) {
+        return r.json().then(function (j) { return { status: r.status, json: j }; }, function () { return { status: r.status, json: null }; });
+      }, function () { return { status: 0, json: null }; });
   }
   function horaLocal(iso, tz) {
     try { return new Intl.DateTimeFormat(document.documentElement.lang, { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)); }
     catch (e) { return iso; }
   }
+  function textoDaFila(d) {
+    if (FILA.modo !== 'retorno') return T.aguardandoHumano;
+    var contato = (d && typeof d.visitor_contact === 'string' && d.visitor_contact) ? d.visitor_contact : T.seuContato;
+    return T.retornoCombinado.replace('{empresa}', EMPRESA).replace('{contato}', contato).replace('{prazo}', FILA.prazo);
+  }
   function mostrarHorario(d) {
     if (d.human_available) { if (avisoHorario) { avisoHorario.remove(); avisoHorario = null; } estado.textContent = ''; return; }
     var texto = T.foraDoHorario.replace('{hora}', horaLocal(d.next_human_at, d.window && d.window.timezone));
     if (!avisoHorario) avisoHorario = aviso(texto, 'fora-do-horario'); else avisoHorario.textContent = texto;
-    estado.textContent = d.waiting_human ? T.aguardandoHumano : '';
+    estado.textContent = d.waiting_human ? textoDaFila(d) : '';
   }
   function ler() {
     if (!token) return Promise.resolve();
     return pedir('/messages' + (visto ? '?after=' + encodeURIComponent(visto) : '')).then(function (r) {
       if (r.status === 404) { token = null; try { localStorage.removeItem(chave); } catch (e) {} return abrir(); }
-      if (r.status !== 200) return;
+      if (r.status !== 200 || !r.json || !r.json.data) return;
       var d = r.json.data;
       identificado = !!d.identified;
       formIdent.hidden = identificado;
       formMsg.hidden = !identificado;
       (d.messages || []).forEach(function (m) { bolha(m); visto = m.created_at; });
       mostrarHorario(d);
-      if (d.waiting_human && !raiz.querySelector('[data-aviso="fila"]')) aviso(T.aguardandoHumano, 'fila');
+      if (d.waiting_human && !raiz.querySelector('[data-aviso="fila"]')) aviso(textoDaFila(d), 'fila');
     });
   }
   function abrir() {
     return pedir('/session', { method: 'POST', body: { page_url: document.referrer || location.href } }).then(function (r) {
-      if (r.status !== 201) { aviso(r.status === 429 ? T.muitasMensagens : T.indisponivel, 'indisponivel'); return; }
+      if (r.status !== 201) { aviso(r.status === 429 ? T.muitasMensagens : r.status === 0 ? T.semRede : T.indisponivel, 'indisponivel'); return; }
       token = r.json.data.token;
       try { localStorage.setItem(chave, token); } catch (e) {}
       formIdent.hidden = false;
@@ -161,17 +230,17 @@ export function htmlDaPagina(dados: DadosDaPagina): string {
     pedir('/identify', { method: 'POST', body: { name: raiz.querySelector('[data-nome]').value, contact: raiz.querySelector('[data-contato]').value } })
       .then(function (r) {
         botao.disabled = false;
-        if (r.status !== 200) { aviso(T.erro, 'erro'); return; }
+        if (r.status !== 200) { aviso(r.status === 0 ? T.semRede : T.erro, r.status === 0 ? 'sem-rede' : 'erro'); return; }
         identificado = true; formIdent.hidden = true; formMsg.hidden = false;
         var fila = pendente.splice(0); fila.forEach(enviar);
         raiz.querySelector('[data-corpo]').focus();
       });
   });
   function enviar(corpo) {
-    var id = (crypto.randomUUID ? crypto.randomUUID() : (Date.now() + '-' + Math.random()).replace('.', ''));
-    return pedir('/messages', { method: 'POST', body: { client_message_id: id, body: corpo } }).then(function (r) {
+    return pedir('/messages', { method: 'POST', body: { client_message_id: uuid(), body: corpo } }).then(function (r) {
+      if (r.status === 0) { aviso(T.semRede, 'sem-rede'); return; }
       if (r.status === 429) { aviso(T.muitasMensagens, 'freio'); return; }
-      if (r.status !== 202) { aviso(T.erro, 'erro'); return; }
+      if (r.status !== 202) { aviso(T.recusada, 'recusada'); return; }
       return ler();
     });
   }

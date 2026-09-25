@@ -72,6 +72,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
   return ok(
     {
       identified: sessao.identified_at !== null,
+      // F24: o contato que o visitante informou — é o `{contato}` da frase de
+      // retorno (`webchat.handoff_mode = retorno`). É dado dele, para ele.
+      visitor_contact: sessao.visitor_contact,
       messages: mensagens,
       waiting_human: estado.waiting_human,
       human_available: humano.human_available,
