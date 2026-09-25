@@ -259,6 +259,12 @@ const MARCA_CONGELADA: Record<string, EntradaDeMarca> = {
       "chave de localStorage do tema, lida no script anti-flash. Renomear faz todo mundo voltar ao tema claro no próximo acesso — e o par com lib/theme.tsx tem de mudar junto",
     marcas: ["deskcomm-theme"],
   },
+  "lib/auth/lembrar-email.ts": {
+    categoria: "INFRA",
+    motivo:
+      "chave de localStorage do 'Lembrar meu e-mail neste aparelho' (F23). Vive no navegador de quem marcou; renomear apaga a lembrança de todo mundo em silêncio. Nunca é exibida",
+    marcas: ["deskcomm-lembrar-email"],
+  },
   "lib/theme.tsx": {
     categoria: "INFRA",
     motivo: "a mesma chave de localStorage do script do layout; as duas são um par só",
