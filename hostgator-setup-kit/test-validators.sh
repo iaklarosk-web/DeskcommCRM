@@ -988,14 +988,20 @@ else
 fi
 
 # (6) Hex inválido no .env não pode virar CSS quebrado no e-mail: cai no accent
-#     do produto, que é o mesmo piso de lib/branding/saida.ts.
+#     do produto, que é o mesmo piso de lib/branding/saida.ts (`#0b7374`,
+#     Turquesa — ADR-049). O botão vem em PAR (`background: <fallback>;
+#     background: __ACCENT__;`): com o accent do produto, os dois lados são
+#     iguais. Procura-se o PAR, não "as duas primeiras background: do arquivo" —
+#     os modelos da F23 têm o fundo da página (#f5f4ef) antes do botão, e a
+#     versão anterior desta régua lia o fundo e reprovava o gate por isso.
 SUPABASE_ACCESS_TOKEN= APP_NAME='Marca Torta' APP_ACCENT_HEX='verde-limão' \
   bash ./marca-emails.sh --env /dev/null --render-em "$ME_TMP/torto" >/dev/null 2>&1
-if grep -q 'background: #506d48; background: #506d48' "$ME_TMP/torto/confirmation.html" 2>/dev/null; then
+if grep -q 'background: #0b7374; background: #0b7374' "$ME_TMP/torto/confirmation.html" 2>/dev/null \
+   && ! grep -q 'verde-lim' "$ME_TMP/torto/confirmation.html" 2>/dev/null; then
   printf '  ✓ APP_ACCENT_HEX inválido cai no accent do produto\n'
 else
   printf '  ✗ APP_ACCENT_HEX inválido virou CSS inválido: %s\n' \
-    "$(grep -o 'background: [^;]*;' "$ME_TMP/torto/confirmation.html" 2>/dev/null | head -2 | tr '\n' ' ')"; fail=1
+    "$(grep -o 'background: [^;]*; background: [^;]*;' "$ME_TMP/torto/confirmation.html" 2>/dev/null | head -1)"; fail=1
 fi
 
 rm -rf "$ME_TMP"

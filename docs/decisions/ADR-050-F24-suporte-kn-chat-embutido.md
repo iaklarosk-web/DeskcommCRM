@@ -167,6 +167,15 @@ e o inventário da F24 herda o delas — mudança de uma linha, por ADR.
   (`subscription_blocked`), conversa em `waiting_human`; `origin=operator`
   ativa: permitido, sem gateway/carência; organização suspensa: sessão
   recusada (`unknown_organization`).
+- Gate `f24-gate-01` (staging, 25/09 18:58): typecheck, lint, lint-channels
+  e build verdes; `shell` reprovou no caso (6) de
+  `hostgator-setup-kit/test-validators.sh` — hex inválido em `APP_ACCENT_HEX`
+  deveria cair no accent do produto, mas o gerador (`marca-emails.sh`) ainda
+  caía na Sage `#506d48` e a régua lia "as duas primeiras `background:`" do
+  e-mail, que nos modelos da F23 são o fundo `#f5f4ef`. Defeito da base (F23),
+  consertado aqui: fallback `#0b7374` (grau 600 da régua, ADR-049) e a régua
+  passou a procurar o PAR do botão. O gate foi interrompido (veredito já
+  condenado) e relançado como `f24-gate-02`.
 - Não medido nesta entrega: `next build`, Playwright contra `next start`, e a
   prova visual em site externo — ficam para o `verify.sh` e para o fundador
   no staging (o `.env` de lá recebe `SUPPORT_WEBCHAT_SLUG` para provar o

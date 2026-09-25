@@ -112,9 +112,12 @@ APP_NOME="${APP_NAME:-}"
 [ -n "${APP_NOME//[[:space:]]/}" ] || APP_NOME="DeskcommCRM"
 APP_URL="${NEXT_PUBLIC_APP_URL:-}"
 
-# `#506d48` é o accent do tema claro do produto (grau 600 da rampa em
-# lib/branding/regua-do-produto.ts) — o mesmo piso que `lib/branding/saida.ts`
-# usa nos e-mails. Não é uma cor inventada aqui.
+# `#0b7374` é o accent do tema claro do produto (grau 600 da rampa em
+# lib/branding/regua-do-produto.ts — Turquesa, ADR-049; era `#506d48`, a Sage,
+# até a F23) — o mesmo piso que `lib/branding/saida.ts` usa nos e-mails e o
+# mesmo `<fallback>` escrito nos modelos de `supabase/templates/`. Não é uma
+# cor inventada aqui: quando a régua do produto mudar, muda aqui também, e o
+# caso (6) de `test-validators.sh` é quem cobra.
 #
 # A cor sai do `.env`, e desde 2026-08-14 o `install.sh` PERGUNTA e grava
 # `APP_ACCENT_HEX` (campo em `FIELDS`, validado por `v_hex`, escrito pelo `envq`
@@ -137,7 +140,7 @@ APP_URL="${NEXT_PUBLIC_APP_URL:-}"
 ACCENT="${APP_ACCENT_HEX:-}"
 case "$ACCENT" in
   \#[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]) ;;
-  *) ACCENT="#506d48";;
+  *) ACCENT="#0b7374";;
 esac
 
 # A frente do botão: preto ou branco, pela luminância relativa da cor de fundo.
