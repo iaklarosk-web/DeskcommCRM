@@ -4,7 +4,7 @@ head_commit: 90467f0b5   # código VALIDADO pelo gate f20-gate-11 (READY (stagin
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
 plan_version: "2.16 (2026-09-23); D38–D61; ADR-006…045"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
-current_phase: F20
+current_phase: F21
 next_task: F17                 # 24/09/2026: F20 FECHADA (READY (staging) no f20-gate-09) e NA PRODUÇÃO. Pendências do proprietário: emitir o convite do Kayro em /admin/tenants/7923b561-8f48-4dad-b7dc-6b906f839a90/convites (papel admin) e, DEPOIS do aceite dele, pedir a remoção da membership dele próprio no deka-sucos (D60 c: organizações existentes não mudaram sozinhas)
 status: READY_STAGING          # IN_PROGRESS | BLOCKED | READY_STAGING — F20 READY (staging) em 2085c4d1a e implantada na produção em 24/09. BLOCKER-PROD aberto por desenho não vira BLOCKED (§8.9, D26)
 baseline_n0: 8997

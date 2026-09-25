@@ -40,6 +40,12 @@ export const adminInviteSchema = z.object({
 });
 export type AdminInviteInput = z.infer<typeof adminInviteSchema>;
 
+/** F21 (ADR-048): mudar o papel de um membro pelo painel do dono. */
+export const adminMudarPapelSchema = z.object({
+  role: z.enum(["viewer", "agent", "manager", "admin"]),
+});
+export type AdminMudarPapelInput = z.infer<typeof adminMudarPapelSchema>;
+
 export const acceptInviteSchema = z.object({
   token: z.string().min(20),
 });

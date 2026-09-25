@@ -145,6 +145,13 @@ export const AUDIT_ACTIONS = [
   "platform_admin.conversation_viewed",
   "platform_admin.tenants_listed",
   "platform_admin.tenant_viewed",
+  // F21 (ADR-048): a aba Equipe do /admin. Nasceram porque, em 25/09/2026, a
+  // saída do proprietário de um tenant teve de sair por SQL direto — sem tela,
+  // sem regra em código e sem rastro nenhum aqui.
+  "admin.membership_role_changed",
+  "admin.membership_role_denied",
+  "admin.membership_removed",
+  "admin.membership_removal_denied",
   "tenant.created_by_platform_admin",
   "platform_admin.tenant_health_viewed",
   "platform_admin.impersonate_started",

@@ -8586,6 +8586,10 @@ export const DICIONARIO: Traducoes = {
   // F12-T07 (ADR-030): cobrança do dono (/admin/billing) e coluna de assinatura na lista de empresas.
   "sem assinatura (herdada)": {"es":"sin suscripción (heredada)"},
   "Cobrança da plataforma": {"es":"Facturación de la plataforma"},
+  "Quem tem acesso a esta empresa. Para dar acesso a alguém novo, use a aba Convites — a pessoa precisa aceitar.": {"es":"Quién tiene acceso a esta empresa. Para dar acceso a alguien nuevo, usa la pestaña Invitaciones — la persona debe aceptar."},
+  "Não foi possível carregar a equipe.": {"es":"No se pudo cargar el equipo."},
+  "A ação não pôde ser concluída.": {"es":"No se pudo completar la acción."},
+  "Esta empresa ainda não tem nenhum membro. Um convite pendente pode estar esperando aceite.": {"es":"Esta empresa aún no tiene ningún miembro. Puede haber una invitación pendiente esperando aceptación."},
   "Você já tem conta com este e-mail.": {"es":"Ya tienes una cuenta con este correo."},
   "Entre com a sua senha para aceitar o convite. Se não lembrar dela, use “Esqueci minha senha” na tela de entrada.": {"es":"Entra con tu contraseña para aceptar la invitación. Si no la recuerdas, usa «Olvidé mi contraseña» en la pantalla de acceso."},
   "Entrar com minha senha": {"es":"Entrar con mi contraseña"},

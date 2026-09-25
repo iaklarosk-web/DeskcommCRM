@@ -47,7 +47,9 @@ const TABS: TabItem[] = [
   // aqui o dono da plataforma copia de novo, reenvia e cancela, com a própria
   // autoridade, sem precisar entrar na empresa do cliente.
   { label: "Convites", href: "/convites", disabled: false },
-  { label: "Equipe", href: "/team", disabled: true },
+  // F21 (ADR-048): deixou de ser vitrine. A ausência dela custou uma escrita
+  // sem auditoria no banco de produção em 25/09.
+  { label: "Equipe", href: "/team", disabled: false },
   { label: "Uso", href: "/usage", disabled: true },
 ];
 

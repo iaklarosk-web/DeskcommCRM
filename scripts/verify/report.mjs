@@ -20,7 +20,7 @@ const integer = (n) => Number.isSafeInteger(n) && n >= 0;
 // ADR-039: F14 (chat do site/agenda) fecha DEPOIS da F15 e mede a linha `channels:`.
 // ADR-041: F18 (um motor de IA só) fecha DEPOIS da F14 e mede a linha `engine:`.
 // ADR-043: F19 (cobrança real por Stripe) fecha DEPOIS da F18 e mede a linha `stripe:`.
-const GATED_PHASES = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F08", "F11", "F12", "F13", "F15", "F14", "F18", "F19", "F20"];
+const GATED_PHASES = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F08", "F11", "F12", "F13", "F15", "F14", "F18", "F19", "F20", "F21"];
 
 /** §8.3: cada campo passa a ser obrigatório a partir da fase que o cria. */
 const phaseNumber = (phase) => Number(phase.slice(1));
@@ -41,7 +41,7 @@ const requiresReplicability = (phase) => phaseNumber(phase) >= phaseNumber("F07"
 // ADR-037: a F15 fecha DEPOIS da F13 e mede `autonomy:`; ADR-039: a F14 fecha
 // DEPOIS da F15 e mede `channels:`. Fases fora da ordem escrita (F09, F10,
 // F16+) contam pelo número contra a ÚLTIMA fase da ordem.
-const CLOSING_ORDER = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F11", "F12", "F08", "F13", "F15", "F14", "F18", "F19", "F20"];
+const CLOSING_ORDER = ["F00", "F01", "F02", "F03", "F04", "F05", "F06", "F07", "F11", "F12", "F08", "F13", "F15", "F14", "F18", "F19", "F20", "F21"];
 const ULTIMA_DA_ORDEM = CLOSING_ORDER[CLOSING_ORDER.length - 1];
 // Fase NA ordem escrita conta pela posição; fase FORA dela (F09, F10, F16+)
 // conta pelo número contra a última da ordem. As duas cláusulas não se somam:

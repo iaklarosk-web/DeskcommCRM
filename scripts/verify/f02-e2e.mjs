@@ -172,6 +172,13 @@ export const REQUIRED_F20_E2E_SPECS = Object.freeze([
 ]);
 export const EXPECTED_F20_E2E_TESTS = EXPECTED_F19_E2E_TESTS + 7;
 
+/** F21 (ADR-048): a aba Equipe do /admin — três jornadas de tela. */
+export const REQUIRED_F21_E2E_SPECS = Object.freeze([
+  ...REQUIRED_F20_E2E_SPECS,
+  "tests/e2e/f21-equipe-no-admin.spec.ts",
+]);
+export const EXPECTED_F21_E2E_TESTS = EXPECTED_F20_E2E_TESTS + 3;
+
 /** Tenants do seed que a F07 percorre, na ordem (§7.8 T02: deka, depois demo2). */
 export const REPLICABILITY_TENANTS = Object.freeze(["deka", "demo2"]);
 
@@ -192,6 +199,7 @@ const CLOSED_E2E_PHASES = Object.freeze({
   F18: { specs: REQUIRED_F18_E2E_SPECS, tests: EXPECTED_F18_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
   F19: { specs: REQUIRED_F19_E2E_SPECS, tests: EXPECTED_F19_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
   F20: { specs: REQUIRED_F20_E2E_SPECS, tests: EXPECTED_F20_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
+  F21: { specs: REQUIRED_F21_E2E_SPECS, tests: EXPECTED_F21_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
 });
 
 /**
