@@ -13,7 +13,7 @@ ninguém tinha tirado da lista.** Estão no §0.
 
 ---
 
-## §0. Já feito — sai da lista de pendências (apurado em 24/09)
+## §0. Já feito — sai da lista de pendências (apurado em 24/09, revisto em 25/09)
 
 | Item | Estava como | A prova |
 |---|---|---|
@@ -65,7 +65,8 @@ Estas são **honestas**: a tela diz que a função não existe. Por isso não vi
 
 | Item | Impede? |
 |---|---|
-| Abas **Equipe** e **Uso** do `/admin` (desligadas, sem rota) | não |
+| ~~Aba **Equipe** do `/admin`~~ — **CONSTRUÍDA na F21** (25/09), depois de a ausência dela custar uma escrita sem auditoria no banco de produção | — |
+| Aba **Uso** do `/admin` (desligada, sem rota) | não |
 | "Impersonate" no inbox do admin (S-11.07) | não |
 | Seção "Em breve — Fase 2" em cobrança | não |
 | Trocar e-mail, upload de arquivo, listagem de sessões | não |
@@ -127,6 +128,16 @@ bloco, quando alguma fizer falta na operação. A régua fail-closed do inventá
 impede que uma ferramenta apareça para a IA sem essa decisão.
 
 ---
+
+## Onde mora a lista COMPLETA de telas que faltam
+
+`docs/design-system/screen-flow/03-screen-inventory.md`, no bloco
+`inventario:nao-construido`. Ele já listava as abas Equipe e Uso como
+"planejado e ainda não construído" quando o proprietário estranhou na tela — mas
+nenhum documento de ESTADO apontava para ele, então valia o mesmo que não
+existir. Uma régua do gate garante que essa lista só encolhe.
+
+Quem for cobrar o que falta na interface: comece por lá, não por aqui.
 
 ## Como ler este documento daqui a um mês
 
