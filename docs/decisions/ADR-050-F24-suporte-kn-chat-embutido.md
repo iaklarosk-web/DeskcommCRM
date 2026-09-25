@@ -136,6 +136,17 @@ novo atende. Três casos novos no invariante
   porque é o `/identify` que o devolve) e ganhou `semRede`, `recusada`,
   `retornoCombinado`, `seuContato` nos dois idiomas.
 
+## Gate
+
+A F24 entra no `verify.sh` sem linha nova e sem spec nova, como a F06
+(ADR-028): `scripts/verify.sh` (`F24) EXPECTED_SPECS=19`),
+`scripts/verify/f02-e2e.mjs` (`REQUIRED_F24_E2E_SPECS = REQUIRED_F21_E2E_SPECS`)
+e `scripts/verify/report.mjs` (`F24` em `GATED_PHASES` e no fim de
+`CLOSING_ORDER`, herdando todas as linhas exigidas até F21). O gate corre no
+staging (ADR-028 §2) como `f24-gate-01`. F22 e F23 fecham nas próprias
+branches; quando forem mescladas, a ordem passa a ser F21 → F22 → F23 → F24
+e o inventário da F24 herda o delas — mudança de uma linha, por ADR.
+
 ## Provas (25/09/2026, worktree `~/projetos/_worktrees/crm-suporte-kn`, branch `feat/F24-suporte-kn`)
 
 - Unidade F24: 8 arquivos, 59/59 (`tests/unit/f24-*`); suíte inteira
