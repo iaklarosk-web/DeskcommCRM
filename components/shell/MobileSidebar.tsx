@@ -38,7 +38,10 @@ export function MobileSidebar() {
       </SheetTrigger>
       <SheetContent
         side="left"
-        className="flex w-72 max-w-[calc(100vw-2rem)] flex-col gap-0 p-0 sm:max-w-xs"
+        // O mesmo escopo do trilho de tela larga (ADR-049): a folha do celular é
+        // a mesma barra, e sai escura pelo mesmo motivo.
+        data-trilho="escuro"
+        className="flex w-72 max-w-[calc(100vw-2rem)] flex-col gap-0 p-0 text-text sm:max-w-xs"
       >
         <SheetTitle className="sr-only">{t("Navegação principal")}</SheetTitle>
         <SidebarContent
