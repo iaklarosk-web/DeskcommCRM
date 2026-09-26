@@ -185,6 +185,20 @@ e o inventário da F24 herda o delas — mudança de uma linha, por ADR.
   spec `f03-inbox` isolada passou 2/2 depois do rebuild. Lição registrada:
   tela nova ou casca tocada se prova com `next build` + `next start`, não só
   com a suíte de unidade — o gate relançou como `f24-gate-03`.
+- Gate `f24-gate-03` (21:37 → 00:13, 9.360 s): `STATUS: NOT READY` por UMA
+  violação — `tenantReferences: deve ser zero (medido=1)`, a palavra do
+  primeiro piloto num comentário de `src/tenant-config/schema.ts` (a mesma
+  régua que pegou a F19 no gate-02). Todo o resto: build/lint/typecheck/shell
+  ok, unit 8699/8699, integration 274/274, db 1698/1698, e2e 96/96 em 19
+  specs nos dois tenants (`deka` 2.194 s, `demo2` 2.147 s), replicabilidade
+  `src_diff_lines=0`, mutantes 91/91, secrets 596 arquivos/0 achados,
+  `channels: webchat_sessions=96 identified=12/12 …`. Comentário limpo e
+  relançado como `f24-gate-04`, já com a régua `fronteira-cliente`
+  (cherry-pick de d6575b870 e 933127fcd da frente F22) que acusa o defeito do
+  gate-02 na árvore anterior e passa na atual.
+- Pendência para a régua genérica: `fronteira-cliente-servidor.mjs` trata
+  export em maiúscula como componente, só lê `import { }` nomeado e só varre
+  `app/` — limites declarados pela autora; endurecer com AST é decisão futura.
 - Não medido nesta entrega: `next build`, Playwright contra `next start`, e a
   prova visual em site externo — ficam para o `verify.sh` e para o fundador
   no staging (o `.env` de lá recebe `SUPPORT_WEBCHAT_SLUG` para provar o

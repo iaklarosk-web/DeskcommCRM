@@ -157,7 +157,7 @@ export const SETTINGS_SCHEMA: readonly SettingEntry[] = [
   // atendente"); `retorno` = "Recebemos sua pergunta. {empresa} responde por
   // {contato} em até {prazo}" — o contato é o que ele informou na
   // identificação, o prazo é `return_deadline_text`. Padrão declarado = o
-  // comportamento antigo (Deka não muda); "1 dia útil" é a decisão do
+  // comportamento antigo (o primeiro piloto não muda); "1 dia útil" é a decisão do
   // fundador para o suporte da KN, e a organização troca pela tela.
   { key: "webchat.handoff_mode", tipo: "enum", default: "atendente", valores: ["atendente", "retorno"] },
   { key: "webchat.return_deadline_text", tipo: "string", default: "1 dia útil" },
