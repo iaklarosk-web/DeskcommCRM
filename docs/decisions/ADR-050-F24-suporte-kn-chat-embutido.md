@@ -176,6 +176,15 @@ e o inventário da F24 herda o delas — mudança de uma linha, por ADR.
   consertado aqui: fallback `#0b7374` (grau 600 da régua, ADR-049) e a régua
   passou a procurar o PAR do botão. O gate foi interrompido (veredito já
   condenado) e relançado como `f24-gate-02`.
+- Gate `f24-gate-02` (19:20): unit, integration, db, shell, secrets e
+  divergência verdes; `e2e-deka` 2/96 — o layout de `/app` chamava
+  `slugDoSuporte()` exportada de um módulo `"use client"`, e o `next start`
+  recusa ("Attempted to call slugDoSuporte() from the server"): toda render de
+  `/app` caía; `next dev` e o jsdom não acusam. A função foi para
+  `lib/suporte/slug-do-suporte.ts` (módulo neutro), com régua de unidade; a
+  spec `f03-inbox` isolada passou 2/2 depois do rebuild. Lição registrada:
+  tela nova ou casca tocada se prova com `next build` + `next start`, não só
+  com a suíte de unidade — o gate relançou como `f24-gate-03`.
 - Não medido nesta entrega: `next build`, Playwright contra `next start`, e a
   prova visual em site externo — ficam para o `verify.sh` e para o fundador
   no staging (o `.env` de lá recebe `SUPPORT_WEBCHAT_SLUG` para provar o

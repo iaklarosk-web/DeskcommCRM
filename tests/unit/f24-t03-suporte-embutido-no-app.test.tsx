@@ -13,7 +13,8 @@ import { join } from "node:path";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { slugDoSuporte, SuporteEmbutido } from "@/app/app/_components/SuporteEmbutido";
+import { SuporteEmbutido } from "@/app/app/_components/SuporteEmbutido";
+import { slugDoSuporte } from "@/lib/suporte/slug-do-suporte";
 
 declare global {
   interface Window {
@@ -80,6 +81,10 @@ describe("F24-T03 — a casca do /app só liga o suporte pela variável de ambie
     const layout = readFileSync(join(raiz, "app/app/layout.tsx"), "utf8");
     expect(layout).toContain("slugDoSuporte(env.SUPPORT_WEBCHAT_SLUG)");
     expect(layout).toContain("<SuporteEmbutido");
+    // A função chamada pelo SERVIDOR vem de módulo neutro, nunca do componente cliente.
+    expect(layout).toContain('from "@/lib/suporte/slug-do-suporte"');
+    expect(readFileSync(join(raiz, "lib/suporte/slug-do-suporte.ts"), "utf8")).not.toMatch(/^\s*["']use client["']/m);
+    expect(readFileSync(join(raiz, "app/app/_components/SuporteEmbutido.tsx"), "utf8")).not.toMatch(/export function slugDoSuporte/);
     const envTs = readFileSync(join(raiz, "lib/env.ts"), "utf8");
     expect(envTs).toMatch(/^\s{2}SUPPORT_WEBCHAT_SLUG:/m);
     const exemplo = readFileSync(join(raiz, ".env.example"), "utf8");

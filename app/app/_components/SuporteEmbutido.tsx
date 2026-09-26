@@ -18,17 +18,13 @@
  */
 import { useEffect } from "react";
 
-const SLUG_VALIDO = /^[a-z0-9][a-z0-9-]{1,62}$/;
+// `slugDoSuporte` vive em `lib/suporte/slug-do-suporte.ts` (sem "use client"):
+// o layout do servidor a chama, e função exportada de módulo cliente não pode
+// ser invocada pelo servidor no `next start` (foi o que derrubou o f24-gate-02).
 
 interface JanelaComSuporte extends Window {
   __crmWebchat?: boolean;
   __crmWebchatPrefill?: { name?: string; contact?: string };
-}
-
-/** Só um slug de organização válido liga o embed; vazio, indefinido ou lixo = desligado. */
-export function slugDoSuporte(bruto: string | null | undefined): string | null {
-  const slug = (bruto ?? "").trim();
-  return SLUG_VALIDO.test(slug) ? slug : null;
 }
 
 export function SuporteEmbutido({ slug, nome, contato }: { slug: string; nome: string | null; contato: string }) {
