@@ -169,6 +169,13 @@ valor no chat:
    o próprio cartão: trial de 7 dias → R$ 0 no ato) pagar.
 5. O cockpit da KN lê `GET /api/admin/summary` com `Authorization: Bearer
    <ADMIN_SUMMARY_TOKEN>` (gerado por `secrets.sh`; o valor é do proprietário).
+6. Com o mesmo bearer, `GET /api/admin/handoffs` (F24, ADR-050) lista os casos
+   que esperam uma pessoa em todas as organizações (`?slug=a&slug=b` filtra;
+   `?limit=` 1..200), com `inbox_path` e `admin_path` — é o que a rotina de
+   aviso do Núcleo lê. Só leitura. E `SUPPORT_WEBCHAT_SLUG=suporte-crm-os` no
+   `crm-prod.env` liga o chat de suporte dentro da área logada do produto
+   (vazia = nada muda); a organização precisa existir, ter `webchat.enabled` e
+   assinatura provisionada na mão (`origin=operator`).
 
 Registrar o endpoint no Dashboard (se a chave não tiver `webhook_endpoints:
 write`): Developers → Webhooks → Add endpoint, modo LIVE, URL acima, eventos

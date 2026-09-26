@@ -169,7 +169,7 @@ export default async function AdminBillingPage() {
                 <td className="py-1">{s.display_name} <span className="font-mono text-xs text-muted-foreground">{s.slug}</span></td>
                 <td className="py-1">{s.plan_code}</td>
                 <td className="py-1">{s.status}</td>
-                <td className="py-1">{s.origin}</td>
+                <td className="py-1" data-testid="admin-billing-origem" data-origin={s.origin}>{s.origin === "operator" ? traduzir("interna (provisionada na mão)", idioma) : s.origin}</td>
                 <td className="py-1">{data(s.current_period_end)}</td>
                 <td className="py-1">{data(s.grace_until)}</td>
                 <td className="py-1 tabular-nums">{s.invoices_paid}</td>

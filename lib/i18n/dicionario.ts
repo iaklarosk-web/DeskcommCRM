@@ -8788,6 +8788,22 @@ export const DICIONARIO: Traducoes = {
   "dias grátis": { es: "días gratis" },
   "Conhecer os planos": { es: "Conocer los planes" },
   "Lembrar meu e-mail neste aparelho": { es: "Recordar mi correo en este dispositivo" },
+  // F24 — Suporte KN (25/09/2026): fila com prazo, pré-preenchimento, temas proibidos, organização interna
+  "Quando a conversa vai para uma pessoa": { es: "Cuando la conversación pasa a una persona" },
+  "O visitante já informou nome e contato antes da primeira resposta. Escolha o que ele lê enquanto espera.": { es: "El visitante ya informó nombre y contacto antes de la primera respuesta. Elige lo que lee mientras espera." },
+  "Fila para um atendente (padrão)": { es: "Fila para un agente (predeterminado)" },
+  "Sua conversa está na fila para um atendente.": { es: "Tu conversación está en la fila para un agente." },
+  "Retorno combinado: avisar o prazo": { es: "Respuesta acordada: avisar el plazo" },
+  "Recebemos sua pergunta. {empresa} responde por {contato} em até {prazo}.": { es: "Recibimos tu pregunta. {empresa} responde por {contato} en hasta {prazo}." },
+  "e-mail ou telefone informado": { es: "correo o teléfono informado" },
+  "1 dia útil": { es: "1 día hábil" },
+  "Prazo de retorno": { es: "Plazo de respuesta" },
+  "Salvar fila": { es: "Guardar fila" },
+  "Pré-preenchimento: o site pode definir window.__crmWebchatPrefill = { name, contact } antes do script. Os campos chegam preenchidos e continuam editáveis.": { es: "Prellenado: el sitio puede definir window.__crmWebchatPrefill = { name, contact } antes del script. Los campos llegan rellenados y siguen editables." },
+  "A identidade do visitante é declarada, não autenticada: o CRM registra o que foi digitado ou pré-preenchido.": { es: "La identidad del visitante es declarada, no autenticada: el CRM registra lo que fue escrito o prellenado." },
+  "Temas que a IA não responde": { es: "Temas que la IA no responde" },
+  "Um por linha. Se a mensagem do cliente tocar num destes temas, a IA não responde: a conversa vai para uma pessoa (motivo: regra da empresa). Exemplos: preço, desconto, cobrança, dados da conta.": { es: "Uno por línea. Si el mensaje del cliente toca uno de estos temas, la IA no responde: la conversación pasa a una persona (motivo: regla de la empresa). Ejemplos: precio, descuento, cobro, datos de la cuenta." },
+  "interna (provisionada na mão)": { es: "interna (aprovisionada a mano)" },
 };
 
 /**

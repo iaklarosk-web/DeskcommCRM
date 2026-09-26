@@ -40,8 +40,16 @@ const pool = new pg.Pool({
 });
 const log = createLogger();
 
-const ORG = "cca00000-0000-4000-8000-000000000001";
+const ORG_PADRAO = "cca00000-0000-4000-8000-000000000001";
+const ORG = ORG_PADRAO;
 const CONTACT = "cca00000-0000-4000-8000-000000000002";
+// F24: os cenários de RASCUNHO precisam de organização PRÓPRIA — a pergunta do
+// portão ("esta organização já publicou agente?") é por organização, e a ORG
+// acima já tem agentes publicados pelos outros casos deste arquivo.
+const ORG_SO_RASCUNHOS = "cca00000-0000-4000-8000-0000000000a1";
+const CONTACT_SO_RASCUNHOS = "cca00000-0000-4000-8000-0000000000a2";
+const ORG_PAUSADO_E_RASCUNHO = "cca00000-0000-4000-8000-0000000000b1";
+const CONTACT_PAUSADO_E_RASCUNHO = "cca00000-0000-4000-8000-0000000000b2";
 
 const DRAIN_KNOBS = {
   batchSize: 20,
@@ -56,6 +64,8 @@ interface Cenario {
   session: string;
   conv: string;
   msg: string;
+  org: string;
+  contact: string;
 }
 
 let seq = 0;
@@ -64,10 +74,12 @@ function proximoId(): string {
   return `cca00000-0000-4000-8000-${String(seq).padStart(12, "0")}`;
 }
 
-async function montarCenario(nome: string): Promise<Cenario> {
+async function montarCenario(nome: string, org = ORG, contact = CONTACT): Promise<Cenario> {
   const session = proximoId();
   const conv = proximoId();
   const msg = proximoId();
+  const ORG = org;
+  const CONTACT = contact;
   await pool.query(
     `insert into channel_sessions (id, organization_id, waha_session_name, status, webhook_secret_encrypted)
      values ($1, $2, $3, 'WORKING', '\\x00'::bytea)`,
@@ -84,7 +96,7 @@ async function montarCenario(nome: string): Promise<Cenario> {
      values ($1, $2, $3, $4, $5, 'text', 'inbound', 'delivered', 'oi', 'external_device', now())`,
     [msg, ORG, conv, session, CONTACT],
   );
-  return { session, conv, msg };
+  return { session, conv, msg, org, contact };
 }
 
 /**
@@ -95,10 +107,11 @@ async function montarCenario(nome: string): Promise<Cenario> {
  */
 async function criarAgente(
   sessionId: string,
-  opts: { publicado: boolean; nome: string },
+  opts: { publicado: boolean; nome: string; rascunho?: boolean; org?: string },
 ): Promise<string> {
   const agent = proximoId();
   const version = proximoId();
+  const ORG = opts.org ?? ORG_PADRAO;
   // O nome vem de fora porque `ai_agents_name_unique` é por organização, e
   // todos os cenários deste arquivo dividem a mesma org: um literal fixo aqui
   // faz o segundo insert morrer em 23505 e o caso nunca chega a exercitar o
@@ -108,11 +121,22 @@ async function criarAgente(
      values ($1, $2, $3, 'você é um atendente', 'mcp_agent')`,
     [agent, ORG, `Agente Portão ${opts.nome}`],
   );
+  // `rascunho` reproduz o que a tela deixa quando alguém cria um agente e
+  // NUNCA publica: versão `draft`, `published_at` nulo, `published_version_id`
+  // nulo. É o estado da organização KN Tecnologia em 25/09/2026 (dois
+  // rascunhos de teste de 14 e 15/09), que ficava em silêncio — ver abaixo.
   await pool.query(
     `insert into ai_agent_versions (id, organization_id, agent_id, version_number, system_prompt,
                                     provider, model, channel_session_id, status, published_at)
-     values ($1, $2, $3, 1, 'você é um atendente', 'anthropic', 'claude-sonnet-4-6', $4, $5, now())`,
-    [version, ORG, agent, sessionId, opts.publicado ? "published" : "superseded"],
+     values ($1, $2, $3, 1, 'você é um atendente', 'anthropic', 'claude-sonnet-4-6', $4, $5, $6)`,
+    [
+      version,
+      ORG,
+      agent,
+      sessionId,
+      opts.rascunho ? "draft" : opts.publicado ? "published" : "superseded",
+      opts.rascunho ? null : new Date(),
+    ],
   );
   if (opts.publicado) {
     await pool.query(`update ai_agents set published_version_id = $1 where id = $2`, [version, agent]);
@@ -142,6 +166,8 @@ async function criarRouter(
 
 /** Drena o evento do cenário e responde: nasceu job? */
 async function drenaEGeraJob(c: Cenario): Promise<boolean> {
+  const ORG = c.org;
+  const CONTACT = c.contact;
   const { rows } = await pool.query<{ id: string }>(
     `insert into event_log (organization_id, event_type, entity_kind, entity_id, payload, status)
      values ($1::uuid, 'ai_agent.dispatch_requested', 'message', $2::uuid,
@@ -164,17 +190,24 @@ async function drenaEGeraJob(c: Cenario): Promise<boolean> {
 }
 
 beforeAll(async () => {
-  await pool.query(
-    `insert into organizations (id, slug, legal_name, display_name)
-     values ($1, 'portao-capacidade', 'Portao Capacidade', 'Portao Capacidade')
-     on conflict (id) do nothing`,
-    [ORG],
-  );
-  await pool.query(
-    `insert into contacts (id, organization_id, name, phone_number)
-     values ($1, $2, 'Lead Portão', '+5511900000099') on conflict (id) do nothing`,
-    [CONTACT, ORG],
-  );
+  const organizacoes: [string, string, string, string][] = [
+    [ORG, "portao-capacidade", CONTACT, "+5511900000099"],
+    [ORG_SO_RASCUNHOS, "portao-so-rascunhos", CONTACT_SO_RASCUNHOS, "+5511900000098"],
+    [ORG_PAUSADO_E_RASCUNHO, "portao-pausado-e-rascunho", CONTACT_PAUSADO_E_RASCUNHO, "+5511900000097"],
+  ];
+  for (const [org, slug, contact, telefone] of organizacoes) {
+    await pool.query(
+      `insert into organizations (id, slug, legal_name, display_name)
+       values ($1, $2, $3, $3)
+       on conflict (id) do nothing`,
+      [org, slug, `Portao ${slug}`],
+    );
+    await pool.query(
+      `insert into contacts (id, organization_id, name, phone_number)
+       values ($1, $2, 'Lead Portão', $3) on conflict (id) do nothing`,
+      [contact, org, telefone],
+    );
+  }
 });
 
 afterAll(async () => {
@@ -231,6 +264,47 @@ describe("portão de capacidade do drain — mede quem EXECUTA", () => {
     await criarRouter(c.session, { fallback });
 
     expect(await drenaEGeraJob(c)).toBe(true);
+  });
+
+  /**
+   * F24-T00 (Suporte KN, 25/09/2026), defeito 0c: o braço "a organização tem
+   * agente NENHUM?" media `exists(select 1 from ai_agents)`, sem olhar se
+   * alguma versão chegou a ser publicada. Uma organização com só RASCUNHOS —
+   * agente criado pela tela e nunca publicado — contava como "tem agente", o
+   * portão pulava o turno ("nenhum agente publicado para a sessão — turno
+   * pulado") e, com o motor novo (`ai.engine=saas`, o padrão), o visitante
+   * não recebia resposta nenhuma. Arquivar pela tela não resolvia (o agente
+   * continua existindo) e não existe exclusão.
+   *
+   * A pergunta certa é "já TEVE versão publicada?": rascunho puro não é a
+   * decisão "pare de responder" — é ausência de decisão, e o motor novo
+   * atende. Pausado (superseded) e arquivado-depois-de-publicado continuam
+   * sendo a decisão da organização, e continuam parando o gasto (casos acima).
+   */
+  it("F24: só RASCUNHOS nunca publicados, motor novo (padrão): o turno SEGUE — não é decisão de parar", async () => {
+    const c = await montarCenario("rascunho", ORG_SO_RASCUNHOS, CONTACT_SO_RASCUNHOS);
+    await criarAgente(c.session, { publicado: false, rascunho: true, nome: "rascunho 1", org: c.org });
+    await criarAgente(c.session, { publicado: false, rascunho: true, nome: "rascunho 2", org: c.org });
+
+    expect(await drenaEGeraJob(c)).toBe(true);
+  });
+
+  it("F24: rascunho nunca publicado e depois ARQUIVADO pela tela: o turno SEGUE do mesmo jeito", async () => {
+    const c = await montarCenario("rascunho-arquivado", ORG_SO_RASCUNHOS, CONTACT_SO_RASCUNHOS);
+    const agente = await criarAgente(c.session, { publicado: false, rascunho: true, nome: "rascunho arquivado", org: c.org });
+    await pool.query(`update ai_agents set archived_at = now(), published_version_id = null where id = $1`, [agente]);
+
+    expect(await drenaEGeraJob(c)).toBe(true);
+  });
+
+  it("F24: rascunho novo AO LADO de um agente pausado: pausar continua parando o gasto", async () => {
+    // A organização decidiu parar (pausou o que tinha); um rascunho criado
+    // depois não reabre o portão por baixo dessa decisão.
+    const c = await montarCenario("pausado-mais-rascunho", ORG_PAUSADO_E_RASCUNHO, CONTACT_PAUSADO_E_RASCUNHO);
+    await criarAgente(c.session, { publicado: false, nome: "pausado ao lado", org: c.org });
+    await criarAgente(c.session, { publicado: false, rascunho: true, nome: "rascunho ao lado", org: c.org });
+
+    expect(await drenaEGeraJob(c)).toBe(false);
   });
 
   it("agente ARQUIVADO com versão publicada: nada é enfileirado", async () => {

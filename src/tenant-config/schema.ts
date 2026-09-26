@@ -152,6 +152,15 @@ export const SETTINGS_SCHEMA: readonly SettingEntry[] = [
   { key: "ai.engine", tipo: "enum", default: "saas", valores: ["saas", "legacy"] },
   { key: "webchat.enabled", tipo: "boolean", default: false },
   { key: "webchat.allowed_origins", tipo: "string_array", default: [] },
+  // F24 (Suporte KN, 25/09/2026): o que o visitante lê quando a conversa
+  // espera uma pessoa. `atendente` = a frase de sempre ("na fila para um
+  // atendente"); `retorno` = "Recebemos sua pergunta. {empresa} responde por
+  // {contato} em até {prazo}" — o contato é o que ele informou na
+  // identificação, o prazo é `return_deadline_text`. Padrão declarado = o
+  // comportamento antigo (o primeiro piloto não muda); "1 dia útil" é a decisão do
+  // fundador para o suporte da KN, e a organização troca pela tela.
+  { key: "webchat.handoff_mode", tipo: "enum", default: "atendente", valores: ["atendente", "retorno"] },
+  { key: "webchat.return_deadline_text", tipo: "string", default: "1 dia útil" },
 ] as const;
 
 const POR_CHAVE = new Map(SETTINGS_SCHEMA.map((e) => [e.key, e]));

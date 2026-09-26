@@ -42,6 +42,10 @@ const patchSchema = z
     "ai.system_prompt": z.string().trim().max(4000).nullable(),
     "ai.unknown_answer": z.string().trim().max(1000).nullable(),
     "ai.confidence_threshold": z.number().min(0).max(1),
+    // F24: um tema por item; ≤ 50 itens de ≤ 120 caracteres. Em branco é
+    // descartado ANTES de gravar — tópico vazio casaria com qualquer mensagem
+    // (ver `assuntoProibidoDoTenant`, que também o ignora, por segurança).
+    "ai.forbidden_topics": z.array(z.string().trim().max(120)).max(50),
   })
   .partial()
   .refine((corpo) => Object.keys(corpo).length > 0, {
@@ -108,7 +112,11 @@ export async function PATCH(req: Request): Promise<Response> {
       // Texto em branco significa "não configurei" — e `null` é o que o schema
       // chama de não configurado. Gravar `""` faria o turno responder uma
       // string vazia ao cliente achando que era o texto do tenant.
-      const normalizado = typeof valor === "string" && valor.length === 0 ? null : valor;
+      const normalizado = Array.isArray(valor)
+        ? valor.map((tema) => tema.trim()).filter((tema) => tema.length > 0)
+        : typeof valor === "string" && valor.length === 0
+          ? null
+          : valor;
       await setSetting(ctx, chave, normalizado, "tenant_admin");
     }
     return ok(await lerConfiguracaoDeIa(ctx), { requestId });

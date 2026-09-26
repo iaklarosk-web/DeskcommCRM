@@ -1,0 +1,67 @@
+# Evidência de construção — F24 (Suporte KN: chat do site embutido nos sistemas da KN, ADR-050)
+# 2026-09-26, branch feat/F24-suporte-kn (base 3e1685943 = produção da F23), worktree crm-suporte-kn
+# STATUS: READY (staging) no f24-gate-04 sobre 12a0dabe1 (00:16:48 → 02:41:58, ~8.700 s), 0 violações.
+# Evidência bruta: .verify-logs/f24-gate-04/run.KWd9TdQY/ (não versionada). PR iaklarosk-web/DeskcommCRM#10.
+
+## O que este PR faz
+Três defeitos do teste visual de 25/09 (0a origem interna no embed + DENY na página do chat;
+0b UUID inexistente em site http + avisos de rede; 0c rascunho de agente que emudecia a
+organização) e seis mudanças de produto: fila com prazo por organização
+(`webchat.handoff_mode`, `webchat.return_deadline_text`), pré-preenchimento
+(`window.__crmWebchatPrefill`), suporte embutido no /app (`SUPPORT_WEBCHAT_SLUG`), temas
+proibidos na tela de IA, `GET /api/admin/handoffs` (bearer do cockpit) e a medição do item 6
+(assinatura × chat público; isenção interna = `origin=operator`). De carona: régua do kit
+(`APP_ACCENT_HEX` inválido cai no accent da ADR-049) e a régua `fronteira-cliente`
+(cherry-pick da frente F22).
+
+## Gates
+f24-gate-01 (18:58) — shell reprovou: régua do kit lia "as duas primeiras background:" e o gerador
+  caía na Sage #506d48 (defeito da base F23). Consertado (cc28d2e25). Interrompido.
+f24-gate-02 (19:20) — e2e-deka 2/96: layout de /app chamava slugDoSuporte() de módulo "use client";
+  next start recusa e toda render de /app caía (next dev e jsdom não acusam). Consertado (539f17eef).
+  Interrompido.
+f24-gate-03 (21:37 → 00:13) — NOT READY por 1 violação: tenantReferences=1 (palavra do primeiro
+  piloto num comentário de src/). Consertado (12a0dabe1). Tudo o mais verde.
+f24-gate-04 (00:16 → 02:41) — READY (staging), 0 violações. Janela 00:19–00:22 com um gate vizinho
+  sobreposto por engano (morto pela outra sessão antes do navegador; typecheck 136 s em vez de 15 s).
+
+## VERIFY SUMMARY (f24-gate-04)
+scope=phase phase=F24 current_phase=F24 environment=staging
+build=ok lint=ok typecheck=ok shell=ok
+unit=8699/8699 integration=274/274 db=1698/1698 e2e=96/96 baseline_n0=8997
+baseline_comparable: scope=unit+db passed=10397 required=8738 full_n0=pending
+e2e_scope: F24-required passed=96/96 specs=19/19
+isolation: tables=140 ops=4 dirs=2 leaks=0 (material_cross_org=98/140)
+rls-coverage: tables_with_org_id=140 policies_found=116 missing=0 service_only_with_grant=0
+rbac: roles=4 denied_expected=32 denied_actual=32
+entitlement: usage_events_written=23
+ai_eval: cases=30 pass=30/30 unknown=6 injection=10 cross_tenant=5 provider_calls_at_zero_balance=0
+handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3 notify=3 notify_rows=6 msgs_after=3 provider_calls_after=0
+reminder: runs=2 sent=1 duplicates=0 tables_summed=3
+webhook: replay=2 stored=1 tables_checked=7
+logs: routes=302 routes_logged=302 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
+rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=302 routes_with_schema=302 routes_reading_input=165 validated=165
+lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2
+admin: tenants_listed=3/3 support_sessions=2 support_reason=2/2 support_scope_denied=25/32 support_writes_denied=5/5 full_mode_rejected=1/1 signup_awaiting_payment=1/1 orgs_without_subscription=0/3
+billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1/1 blocked_writes_denied=5/5 grace_days=7 reconciliation_mismatch=0/3 cancellations=1/1 data_preserved=7/7
+crm: fields_defined=6 values_rejected=3/3 values_preserved=4/4 queue_size=5 distributed=5/5 balanced=1 second_claim_rejected=1/1 history_types=3 orders_linked=1/1 cross_org_link_denied=1/1 report_indicators=14/14 roles_denied=3/3
+autonomy: policy_modes=4/4 ai_task_created=1/1 limit_hits=1/1 calls_after_limit=0/3 paused=1/1 resumed=1/1 handoffs=4 balanced=1 assignees_distinct=3 rules=4 runs=4/4 replays=4 duplicate_runs=0 outside_catalog_denied=1/1 reindexed=2/2 unchanged_skipped=4/4 sources_cited=1/1 roles_denied=3/3
+channels: webchat_sessions=96 identified=12/12 contacts_created=11/11 messages_in=56 ai_replies=1/1 ai_outside_window=1/1 handoff_queued=1/1 ip_limited=1/1 org_limited=1/1 flood_calls_capped=1/1 cross_org_denied=1/1 appointments=7 conflicts_blocked=1/1 revoked_blocked=1/1 tz_ok=1/1 proposed=2/2 approved=1/1 denied_by_policy=1/1 roles_denied=2/2
+engine: saas_turns=1 legacy_turns=1 volta_atras=1/1 heranca_prompt=1/1 heranca_acervo=1/1 limite_diario_nega=1/1 cancel_allow=1/1 cancel_passado_negado=1/1 cancel_auditado=1/1 policy_approve_pendura=1/1 tools_migradas=13/13 auditoria=5/5 roles_denied=2/2 fora_do_catalogo_negado=1/1 inventadas_descartadas=1/1
+invites: link_len=47/64 reenvio_revoga=1/1 aceite=1/1 email_apagado_no_aceite=1/1 duas_aceitacoes=1/1 revogado_recusado=1/1 pendentes_listados=2
+stripe: signature_rejected=1/1 livemode_mismatch=1/1 price_outside_list=1/1 checkout_created=1/1 activated=1/1 trialing_mapped=1/1 duplicates=1 out_of_order=1 state_from_provider=1/1 past_due=1/1 blocked_after_grace=1/1 cancelled_preserved=7/7 portal_link=1/1 admin_actions=5/5 summary_ok=1/1
+replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=96/96 demo2=96/96 specs=19/19 org_a=seed-replica)
+secrets: files_scanned=597 findings=0
+tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=91/91
+debt_known=0 skip_only_occurrences=15 violations=0
+STATUS: READY (staging)
+
+## Passos (s)
+typecheck 136 · lint 100 · lint-channels 1 · build 73 · shell 58 · unit 1683 · integration 111 · db 897 ·
+secrets 0 · divergencia-ambiente 0 · fronteira-cliente 1 · e2e-plan 2 · e2e-deka 2154 · e2e-demo2 2143 ·
+replicability 0 · mutantes 91/91 · inputs 3
+
+## Não verificado
+Prova visual num site http/https EXTERNO embutindo o chat (o gate mede a página e o script, não o
+iframe dentro de um site de terceiro); `SUPPORT_WEBCHAT_SLUG` definida no staging (a variável fica
+vazia no gate: nada muda); as cinco organizações `suporte-*` (ato do fundador no /admin).

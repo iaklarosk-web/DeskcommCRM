@@ -1,24 +1,24 @@
 ---
-updated_at: 2026-09-25T12:30:00Z
-head_commit: 1a8f458f4   # VALIDADO pelo f21-gate-04 (READY (staging)) e o que a PRODUÇÃO roda — `docker exec crm-prod-app cat /app/COMMIT`
+updated_at: 2026-09-26T05:45:00Z
+head_commit: 12a0dabe1   # VALIDADO pelo f24-gate-04 (READY (staging)); a PRODUÇÃO roda 3e1685943 (F23) — `docker exec crm-prod-app cat /app/COMMIT`
 f00_commit: c85f7d72eebe33649812fe5cae174b7dd80e0e9f   # HEAD auditado do Deskcomm; verify.sh conta tests_deleted a partir dele
 plan_version: "2.16 (2026-09-23); D38–D61; ADR-006…045"
 integrated_release: db58c3fb3ef7acbf6ae9d0eaec278cb968958c5d   # v1.17.0; revalidada com dívida nominal herdada
-current_phase: F21
+current_phase: F24
 next_task: F17                 # 25/09/2026: F21 fechada e na produção. A aba Uso do /admin segue declarada e desligada (BACKLOG §3). Pendências do proprietário: o convidado concluir o onboarding, WhatsApp real, primeiro pagamento, cadastro público
-status: READY_STAGING          # F21 READY (staging) em 1a8f458f4 e implantada em 25/09
+status: READY_STAGING          # F24 READY (staging) em 12a0dabe1 (f24-gate-04, 26/09); NÃO implantada — o fundador aplica (PR #10)
 baseline_n0: 8997
 baseline_detail: "unit=7502/7503 integration=n/a db=1236/1238 e2e=259/290 @ c85f7d72; comandos: pnpm test:unit / test:db / test:e2e (E2E_PORT=3101, VITEST_MAX_THREADS=2, VITEST_MAX_FORKS=2; 11 falhas de e2e por ambiente, cinco itens no deskcomm-audit.md §1)"
 hosting_confirmed: yes         # D50 (11/09/2026): staging nesta VPS, Docker Compose com Supabase local, acesso só por Tailscale — ADR-027
 build_env: "Claude Code na VPS (4 núcleos/16 GB), worktree DeskcommCRM-v1.17.0; validação em serviços/bancos descartáveis e no staging; WHATSAPP_MODE=mock AI_PROVIDER=mock; F15: 3 chamadas reais à Anthropic (ai_real:); F14: 12 turnos Haiku reais no chat do site da organização do dono (webchat_real:, teto 20)"
-verify_summary_last_context: "f21-gate-04 aprovado em 25/09/2026 sobre 1a8f458f4: unit 8621/8621, e2e 96/96 em 19 specs, mutantes 89/89, violations 0. QUATRO tentativas, NENHUMA por defeito de produto — o produto passou em tudo desde a primeira. Reprovaram réguas da casa sobre descuido meu: 01 com a spec nova fora da lista do CI e a tela ainda listada como 'não construída' no inventário de design (catraca que só encolhe); 02 e 03 com `tenantReferences`, o nome de um cliente real em comentário — a terceira ocorrência citava também o primeiro nome de uma pessoa, e só apareceu quando conferi pelo critério DA RÉGUA (src/ inteiro, testes incluídos) em vez do meu. Antes do gate, a spec avulsa deu 3 falhas FALSAS por rodar contra um build anterior à rota nova: `next start` não recompila. READY (staging); owner_validated em branco."
+verify_summary_last_context: "f24-gate-04 aprovado em 26/09/2026 sobre 12a0dabe1: unit 8699/8699, integration 274/274, db 1698/1698, e2e 96/96 em 19 specs ×2 (inventário de F21), mutantes 91/91, violations 0. QUATRO tentativas: 01 régua do kit (defeito da base F23), 02 slugDoSuporte em módulo cliente (defeito da F24, só o next start acusa), 03 palavra do piloto em comentário; nenhuma por defeito de produto visível ao cliente. Evidência: docs/migration/evidence/construction-f24-20260926.txt"
 verify_summary_last: |
   VERIFY SUMMARY
-  scope=phase phase=F21 current_phase=F21 environment=staging
+  scope=phase phase=F24 current_phase=F24 environment=staging
   build=ok lint=ok typecheck=ok shell=ok
-  unit=8621/8621 integration=270/270 db=1695/1695 e2e=96/96 baseline_n0=8997
-  baseline_comparable: scope=unit+db passed=10316 required=8738 full_n0=pending
-  e2e_scope: F21-required passed=96/96 specs=19/19
+  unit=8699/8699 integration=274/274 db=1698/1698 e2e=96/96 baseline_n0=8997
+  baseline_comparable: scope=unit+db passed=10397 required=8738 full_n0=pending
+  e2e_scope: F24-required passed=96/96 specs=19/19
   isolation: tables=140 ops=4 dirs=2 leaks=0 (material_cross_org=98/140)
   rls-coverage: tables_with_org_id=140 policies_found=116 missing=0 service_only_with_grant=0
   rbac: roles=4 denied_expected=32 denied_actual=32
@@ -27,8 +27,8 @@ verify_summary_last: |
   handoff: handoffs=3 ai_msgs_after_handoff=0 summary=7/7 assignee=3 notify=3 notify_rows=6 msgs_after=3 provider_calls_after=0
   reminder: runs=2 sent=1 duplicates=0 tables_summed=3
   webhook: replay=2 stored=1 tables_checked=7
-  logs: routes=301 routes_logged=301 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
-  rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=301 routes_with_schema=301 routes_reading_input=164 validated=164
+  logs: routes=302 routes_logged=302 workers=4 workers_logged=4 request_log_org_id=1/1 sentry_mock_captured=1 pii_fields=4/7
+  rate-limit: requests=101 status_429=1 auth_requests=101 auth_blocked=1 routes=302 routes_with_schema=302 routes_reading_input=165 validated=165
   lgpd: tables=9 rows=11 rows_remaining=0 audit_rows=2
   admin: tenants_listed=3/3 support_sessions=2 support_reason=2/2 support_scope_denied=25/32 support_writes_denied=5/5 full_mode_rejected=1/1 signup_awaiting_payment=1/1 orgs_without_subscription=0/3
   billing: plans=3 events=6 duplicates=1 out_of_order=1 activations=1/1 blocked_writes_denied=5/5 grace_days=7 reconciliation_mismatch=0/3 cancellations=1/1 data_preserved=7/7
@@ -39,11 +39,10 @@ verify_summary_last: |
   invites: link_len=47/64 reenvio_revoga=1/1 aceite=1/1 email_apagado_no_aceite=1/1 duas_aceitacoes=1/1 revogado_recusado=1/1 pendentes_listados=2
   stripe: signature_rejected=1/1 livemode_mismatch=1/1 price_outside_list=1/1 checkout_created=1/1 activated=1/1 trialing_mapped=1/1 duplicates=1 out_of_order=1 state_from_provider=1/1 past_due=1/1 blocked_after_grace=1/1 cancelled_preserved=7/7 portal_link=1/1 admin_actions=5/5 summary_ok=1/1
   replicability: e2e[deka]=ok e2e[demo2]=ok src_diff_lines=0 grep_deka_in_src=0 (deka=96/96 demo2=96/96 specs=19/19 org_a=seed-replica)
-  secrets: files_scanned=595 findings=0
-  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=89/89
+  secrets: files_scanned=597 findings=0
+  tests_deleted=0 tests_skipped=0 expected_failures=0 tests_failed=0 tests_pending=0 mutants_killed=91/91
   debt_known=0 skip_only_occurrences=15 violations=0
   STATUS: READY (staging)
-  exit=0
 restore: tables=184 tables_restored=184 rows=33004 rows_diff=0 dump=staging-20260919T223051Z.dump target=restore_20260919_223052 seconds=13 at=20260919T223052Z
 smoke: steps=10 pass=10/10 customers[deka]=0/0 customers[demo2]=3/3 inbox_new=1 logins=2/2 products[deka]=0/0 products[demo2]=4/4 webhook_accepted=1/1 reminder_listed=1/1 owner_login=1/1 subscriptions[deka]=active/full subscriptions[demo2]=active/full orgs_without_subscription=0/3 webchat_disabled_denied=2/2 engine_saas=2/2 webhook_stripe_unsigned_rejected=1/1 tenants=deka,demo2
 p95_ms: endpoints=3/3 health=21 contacts=394 conversations=510 samples=20 url=http://127.0.0.1:3200
@@ -847,6 +846,7 @@ A prova reproduzível de atualização a partir do baseline F01 está em [script
 | F19 | Cobrança real por Stripe + padrão KN do `/admin` (D57; ADR-042/043) | done(verify=2026-09-19 e3c34195) — READY (staging) no f19-gate-03 (17 specs, linha `stripe:`; mutantes 82/82); T00–T05 concluídas; produção com o código da F19 e `billing_gateway=mock` (D57 f); **T06 (ADR-044, D58: planos reais + Stripe LIVE) EM ANDAMENTO/PAUSADA** — gate f19-gate-04 READY (staging) sobre a3a5a01e; demo3 e from-scratch verdes em 21/09; faltam produção live e `stripe_live:` |
 | F20 | Convite curto com ciclo de vida, ação no `/admin` e membership do criador (D59/D60; ADR-045/046/047) | done(verify=2026-09-24 2085c4d1a) — READY (staging) no f20-gate-09 (18 specs, 93 testes, linha `invites:`; mutantes 89/89); NA PRODUÇÃO em 24/09 (migrations 9035/9036/9037 conferidas no banco; `prova.sh sha=2085c4d1a`). T07 (ADR-047) entrou DEPOIS, por defeito medido com convidado real: o link curto ia para `/signup?invite=`, que só entendia o token HMAC legado, e a produção recusa cadastro (`GOTRUE_DISABLE_SIGNUP=true`; staging `false`). Entram o resolvedor dos dois formatos, a criação por service role SÓ com convite vivo, a jornada do convidado sem conta (+2 testes) e a régua `divergencia-de-ambiente`. **demo3 e from-scratch NÃO executados** (deploy direto autorizado pelo proprietário). Pendente do proprietário: emitir o convite do Kayro e, após o aceite, remover a própria membership no `deka-sucos` (D60 c) |
 | F21 | A aba Equipe do `/admin`: ver membros, mudar papel, remover (ADR-048) | done(verify=2026-09-25 1a8f458f4) — READY (staging) no f21-gate-04 (19 specs, 96 testes; mutantes 89/89); NA PRODUÇÃO em 25/09. Nasceu de uma ausência que cobrou: fechado o D60, a saída do proprietário de um tenant de cliente teve de sair por `DELETE` em psql, sem tela, sem rastro em `api_audit_log` e com a regra do último admin conferida NA MÃO. Agora a regra é código, roda dentro da transação com `for update`, e recusa remover OU rebaixar o último admin. NÃO adiciona membro — isso é o convite (F20). Escrita exige escopo `full`; acompanhamento segue só leitura (D51). Fora da fase: a aba **Uso**, que segue declarada e desligada |
+| F24 | Suporte KN: chat do site embutido nos sistemas da KN — 3 defeitos do teste visual, fila com prazo, pré-preenchimento, suporte no /app, temas proibidos, /api/admin/handoffs (D62; ADR-050) | done(verify=2026-09-26 12a0dabe1) — READY (staging) no f24-gate-04 (inventário de F21, 19 specs ×2, mutantes 91/91, 0 violações); NÃO implantada — PR #10 |
 
 Dependência técnica: F00/F01 → F02 → F03 → F04 → F05 → F06 → F07 → (D51) F11+F12. F11/F12 fecharam juntas o onboarding pago em staging (13/09/2026); F13 fechou em 14/09/2026; F15 fechou em 15/09/2026 (D54); F14 fechou em 18/09/2026 (D55); F16 avança com contratos definidos. F08 depende das entradas/autorização para serviços reais. D48 permite concluir a construção F11–F17 antes das evidências reais F09/F10; piloto e validação de mercado permanecem marcos separados, sem bloquear o software. F17 reúne a jornada comercial e os critérios de operação. Nenhuma fase futura recebe `done` por existir código equivalente no upstream.
 

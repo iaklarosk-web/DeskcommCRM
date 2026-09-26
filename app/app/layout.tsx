@@ -6,6 +6,8 @@ import { DEFAULT_VISIBILITY_MODE, type VisibilityMode } from "@/lib/auth/types";
 import { AuthProvider } from "@/hooks/auth/AuthProvider";
 import { AppShell } from "./_components/AppShell";
 import { EstiloDaMarcaDaOrganizacao } from "./_components/EstiloDaMarcaDaOrganizacao";
+import { SuporteEmbutido } from "./_components/SuporteEmbutido";
+import { slugDoSuporte } from "@/lib/suporte/slug-do-suporte";
 import { MfaEnrollGate } from "@/components/auth/MfaEnrollGate";
 import { cssDaMarca, ESCOPO_DA_ORGANIZACAO } from "@/lib/branding/css";
 import { marcaDaInstalacao } from "@/lib/branding/instalacao";
@@ -146,6 +148,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     activeOrg?.orgId,
   );
   const shell = <AppShell sidebarCollapsed={collapsed}>{children}</AppShell>;
+  // F24 (Suporte KN): o chat de suporte deste produto, embutido na área
+  // logada, só quando a instalação diz qual organização atende
+  // (`SUPPORT_WEBCHAT_SLUG`). Sem a variável, nada é montado.
+  const suporte = slugDoSuporte(env.SUPPORT_WEBCHAT_SLUG);
 
   return (
     // O idioma envolve a árvore inteira e recebe o código PRONTO — ele não
@@ -174,6 +180,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <ImpersonateBanner impersonating={impersonating} />
         <ConexaoCaidaBanner caidas={conexoesCaidas} />
         <AvisoDaAssinatura acesso={acesso} />
+        {suporte !== null ? <SuporteEmbutido slug={suporte} nome={user.full_name} contato={user.email} /> : null}
         {needsMfaGate ? (
           // Gate always mounted for MFA-required roles; it latches the blocking
           // decision client-side so the enroll Server Action's revalidation

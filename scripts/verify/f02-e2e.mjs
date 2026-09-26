@@ -179,6 +179,18 @@ export const REQUIRED_F21_E2E_SPECS = Object.freeze([
 ]);
 export const EXPECTED_F21_E2E_TESTS = EXPECTED_F20_E2E_TESTS + 3;
 
+/**
+ * F24 (ADR-050, Suporte KN) não cria tela: consertos do chat do site, duas
+ * configurações na tela do webchat, um campo na tela de IA, uma rota do
+ * cockpit e o embed do suporte por variável de ambiente. O inventário é o de
+ * F21, como F06 herdou o de F05 (ADR-028); as provas próprias da F24 são de
+ * unidade (a página do visitante executada no jsdom), o invariante do portão
+ * e a integração da assinatura. F22/F23 fecham em branch própria e entram na
+ * ordem quando forem mescladas.
+ */
+export const REQUIRED_F24_E2E_SPECS = REQUIRED_F21_E2E_SPECS;
+export const EXPECTED_F24_E2E_TESTS = EXPECTED_F21_E2E_TESTS;
+
 /** Tenants do seed que a F07 percorre, na ordem (§7.8 T02: deka, depois demo2). */
 export const REPLICABILITY_TENANTS = Object.freeze(["deka", "demo2"]);
 
@@ -200,6 +212,7 @@ const CLOSED_E2E_PHASES = Object.freeze({
   F19: { specs: REQUIRED_F19_E2E_SPECS, tests: EXPECTED_F19_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
   F20: { specs: REQUIRED_F20_E2E_SPECS, tests: EXPECTED_F20_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
   F21: { specs: REQUIRED_F21_E2E_SPECS, tests: EXPECTED_F21_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
+  F24: { specs: REQUIRED_F24_E2E_SPECS, tests: EXPECTED_F24_E2E_TESTS, tenants: REPLICABILITY_TENANTS },
 });
 
 /**
