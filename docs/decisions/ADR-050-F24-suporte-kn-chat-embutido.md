@@ -1,6 +1,6 @@
 # ADR-050 — F24: Suporte KN — o chat do site embutido nos sistemas da KN
 
-**Data:** 2026-09-25 · **Estado:** proposto (branch `feat/F24-suporte-kn`, sem deploy) · **Fase:** F24 · Pedido do fundador em `Nucleo/operacoes/suporte-kn/README.md` e `Nucleo/operacoes/PARECER-ATENDIMENTO-PROPRIO-20260925.md` (decisões de 25/09/2026).
+**Data:** 2026-09-25 · **Estado:** aceito — READY (staging) no f24-gate-04 sobre 12a0dabe1 (26/09/2026); sem deploy, o fundador aplica · **Fase:** F24 · Pedido do fundador em `Nucleo/operacoes/suporte-kn/README.md` e `Nucleo/operacoes/PARECER-ATENDIMENTO-PROPRIO-20260925.md` (decisões de 25/09/2026).
 
 ## Contexto
 
@@ -199,6 +199,11 @@ e o inventário da F24 herda o delas — mudança de uma linha, por ADR.
 - Pendência para a régua genérica: `fronteira-cliente-servidor.mjs` trata
   export em maiúscula como componente, só lê `import { }` nomeado e só varre
   `app/` — limites declarados pela autora; endurecer com AST é decisão futura.
+- Gate `f24-gate-04` (00:16 → 02:41): **`STATUS: READY (staging)`, 0 violações**
+  — unit 8699/8699, integration 274/274, db 1698/1698, e2e 96/96 ×2 (deka
+  2.154 s, demo2 2.143 s), replicabilidade 0 linhas, mutantes 91/91,
+  `fronteira-cliente` ok, secrets 597/0. Evidência em
+  `docs/migration/evidence/construction-f24-20260926.txt`.
 - Não medido nesta entrega: `next build`, Playwright contra `next start`, e a
   prova visual em site externo — ficam para o `verify.sh` e para o fundador
   no staging (o `.env` de lá recebe `SUPPORT_WEBCHAT_SLUG` para provar o
