@@ -24,6 +24,23 @@
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 
+/**
+ * RAIZ explícita, e SEMPRE impressa.
+ *
+ * A primeira versão lia só o CWD e ignorava argumento. Outra frente passou o
+ * caminho da árvore dela por argv, de dentro da minha, e a régua mediu a MINHA
+ * duas vezes — devolvendo `ok: true` com um número confiante sobre a árvore
+ * errada. Medição silenciosamente errada é pior que erro: ela convence.
+ *
+ * Agora a raiz vem de argv[2] ou do CWD, some do jeito nenhum do relatório, e
+ * caminho inexistente PARA em vez de cair no CWD.
+ */
+const RAIZ = process.argv[2] ? path.resolve(process.argv[2]) : process.cwd();
+if (process.argv[2] && !existsSync(RAIZ)) {
+  console.error(`[verify] fronteira cliente/servidor: raiz inexistente: ${RAIZ}`);
+  process.exit(2);
+}
+
 const IGNORAR = new Set(["node_modules", ".next", ".git", ".verify-logs", ".prod", ".staging", "test-results"]);
 const CODIGO = /\.(ts|tsx)$/;
 
@@ -41,7 +58,7 @@ function varrer(raiz) {
   return saida;
 }
 
-const todos = ["app", "components", "lib", "src"].flatMap(varrer);
+const todos = ["app", "components", "lib", "src"].map((d) => path.join(RAIZ, d)).flatMap(varrer);
 const ehCliente = (txt) => /^\s*["']use client["']/m.test(txt.split("\n").slice(0, 3).join("\n"));
 
 /** Export que NÃO é componente: nome começando em minúscula. */
@@ -77,7 +94,7 @@ let servidoresVarridos = 0;
 for (const f of todos) {
   const txt = readFileSync(f, "utf8");
   if (ehCliente(txt)) continue;      // arquivo de cliente pode chamar à vontade
-  if (!/^app\//.test(f)) continue;   // só o que o Next renderiza no servidor
+  if (!/^app\//.test(path.relative(RAIZ, f))) continue;   // só o que o Next renderiza no servidor
   servidoresVarridos++;
 
   for (const m of txt.matchAll(/import\s*\{([^}]+)\}\s*from\s*["']([^"']+)["']/g)) {
@@ -95,7 +112,7 @@ for (const f of todos) {
       const linhas = txt.split("\n").filter((l) => !/^\s*import\b/.test(l));
       if (chamada.test(linhas.join("\n"))) {
         problemas.push(
-          `${f} CHAMA ${local}() importado de ${alvo}, que é "use client". O next start recusa e a rota inteira cai — mova a função para um módulo neutro.`,
+          `${path.relative(RAIZ, f)} CHAMA ${local}() importado de ${path.relative(RAIZ, alvo)}, que é "use client". O next start recusa e a rota inteira cai — mova a função para um módulo neutro.`,
         );
       }
     }
@@ -104,6 +121,7 @@ for (const f of todos) {
 
 const resultado = {
   ok: problemas.length === 0,
+  raiz: RAIZ,
   modulos_cliente_com_funcao: clientes.size,
   arquivos_de_servidor_varridos: servidoresVarridos,
   problemas,
